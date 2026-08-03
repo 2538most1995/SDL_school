@@ -2,16 +2,6 @@
 
 declare(strict_types=1);
 
-if (PHP_VERSION_ID < 80200) {
-    header('Content-Type: text/html; charset=utf-8', true, 500);
-    echo '<h2>PHP Version Error</h2><p>Laravel 11 requires PHP >= 8.2.0. Server PHP version: '.PHP_VERSION.'</p>';
-    exit;
-}
-
-@unlink(__DIR__.'/laravel-app/bootstrap/cache/config.php');
-@unlink(__DIR__.'/laravel-app/bootstrap/cache/routes-v7.php');
-@unlink(__DIR__.'/laravel-app/bootstrap/cache/routes.php');
-
 $scriptName = str_replace('\\', '/', (string) ($_SERVER['SCRIPT_NAME'] ?? ''));
 $basePath = rtrim(dirname($scriptName), '/.');
 $requestUri = (string) ($_SERVER['REQUEST_URI'] ?? '');
@@ -44,14 +34,5 @@ if ($_SERVER['SENA_APP_BASE_PATH'] !== '' && ! isset($routePath)) {
     $_SERVER['PHP_SELF'] = $_SERVER['SCRIPT_NAME'];
 }
 
+require __DIR__.'/laravel-app/public/index.php';
 
-try {
-    require __DIR__.'/laravel-app/public/index.php';
-} catch (\Throwable $e) {
-    header('Content-Type: text/plain; charset=utf-8', true, 500);
-    echo "TOP LEVEL EXCEPTION:\n";
-    echo get_class($e).': '.$e->getMessage()."\n";
-    echo "File: ".$e->getFile().":".$e->getLine()."\n\n";
-    echo $e->getTraceAsString();
-    exit;
-}
