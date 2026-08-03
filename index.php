@@ -35,4 +35,13 @@ if ($_SERVER['SENA_APP_BASE_PATH'] !== '' && ! isset($routePath)) {
 }
 
 
-require __DIR__.'/laravel-app/public/index.php';
+try {
+    require __DIR__.'/laravel-app/public/index.php';
+} catch (\Throwable $e) {
+    header('Content-Type: text/plain; charset=utf-8', true, 500);
+    echo "TOP LEVEL EXCEPTION:\n";
+    echo get_class($e).': '.$e->getMessage()."\n";
+    echo "File: ".$e->getFile().":".$e->getLine()."\n\n";
+    echo $e->getTraceAsString();
+    exit;
+}
