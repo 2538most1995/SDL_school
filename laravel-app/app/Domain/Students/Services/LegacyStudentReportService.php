@@ -224,18 +224,19 @@ final readonly class LegacyStudentReportService
                     }
 
                     $isCurrentTermRegistration = $isTermMatch || in_array($gradeVal, ['', '-'], true);
+                    $isElective = in_array($subType, ['2', '3'], true);
 
                     if ($isNumericPassed) {
-                        if ($subType === '1') {
-                            $studentMetrics[$code]['compulsory_earned'] += $credit;
-                        } else {
+                        if ($isElective) {
                             $studentMetrics[$code]['elective_earned'] += $credit;
+                        } else {
+                            $studentMetrics[$code]['compulsory_earned'] += $credit;
                         }
                     } elseif ($isCurrentTermRegistration) {
-                        if ($subType === '1') {
-                            $studentMetrics[$code]['compulsory_registered'] += $credit;
-                        } else {
+                        if ($isElective) {
                             $studentMetrics[$code]['elective_registered'] += $credit;
+                        } else {
+                            $studentMetrics[$code]['compulsory_registered'] += $credit;
                         }
                     }
                 }
@@ -261,8 +262,8 @@ final readonly class LegacyStudentReportService
                     $hasStudentFlag = in_array($nnetVal, ['1', 'Y', 'P', 'PASS', 'PASSED', 'สอบแล้ว', 'ผ่าน'], true);
                     $isExamTaken = ! empty($m['exam_taken']) || $hasStudentFlag;
 
-                    // Active student passes graduation criteria
-                    if ($compTotal >= $reqComp && $elecTotal >= $reqElec && $grandTotal >= $reqTotal) {
+                    // Active student qualifies for expected graduation if total credits meet or approach graduation requirements
+                    if ($grandTotal >= $reqTotal || ($compTotal >= $reqComp && $elecTotal >= $reqElec)) {
                         $rows[] = [
                             'id' => "{$set->districtId}-{$set->level}-{$code}",
                             'primary' => $this->fullName($sRow),
