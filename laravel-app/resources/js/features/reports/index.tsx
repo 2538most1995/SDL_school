@@ -58,6 +58,7 @@ type AcademicSubjectRow = {
     code: string;
     name: string;
     credits: number;
+    type: 'compulsory' | 'elective';
     grade: string | null;
     attended: boolean;
 };
@@ -301,19 +302,54 @@ function AcademicStudentDetailDialog({ kind, student, term, onClose }: { kind: R
         const code = String(nestedSubject?.code ?? item.code ?? '');
         const name = String(nestedSubject?.name ?? item.name ?? 'ไม่พบชื่อรายวิชา');
         const grade = item.grade === null || item.grade === undefined ? null : String(item.grade);
+        const rawType = String(nestedSubject?.type ?? item.type ?? item.subject_type ?? item.subjectType ?? '');
+        const isElective = rawType === 'elective' || rawType === '2' || rawType === '3';
         return {
             id: `${term}-${code || index}`,
             code,
             name,
             credits: Number(nestedSubject?.credits ?? item.credits ?? 0),
+            type: isElective ? 'elective' : 'compulsory',
             grade,
             attended: Boolean(item.exam_attended),
         };
     }), [detail.data, term]);
+
+    const creditSummary = useMemo(() => {
+        let compulsory = 0;
+        let elective = 0;
+        for (const row of subjectRows) {
+            if (row.type === 'elective') {
+                elective += Number(row.credits || 0);
+            } else {
+                compulsory += Number(row.credits || 0);
+            }
+        }
+        return {
+            compulsory,
+            elective,
+            total: compulsory + elective,
+        };
+    }, [subjectRows]);
+
     const columns = useMemo<ColumnDef<AcademicSubjectRow>[]>(() => [
         { accessorKey: 'code', header: 'รหัสวิชา', size: 100, meta: { compactSize: 74 }, cell: ({ getValue }) => <span className="font-mono text-xs font-bold text-slate-600">{getValue<string>()}</span> },
-        { accessorKey: 'name', header: 'รายวิชา', size: 320, meta: { compactSize: 164 }, cell: ({ getValue }) => <span className="font-bold text-slate-950">{getValue<string>()}</span> },
-        { accessorKey: 'credits', header: 'หน่วยกิต', size: 92, meta: { compactSize: 58, compactTextAlign: 'center' }, cell: ({ getValue }) => Number(getValue<number>()).toFixed(1) },
+        { accessorKey: 'name', header: 'รายวิชา', size: 280, meta: { compactSize: 150 }, cell: ({ getValue }) => <span className="font-bold text-slate-950">{getValue<string>()}</span> },
+        {
+            accessorKey: 'type',
+            header: 'ประเภทวิชา',
+            size: 110,
+            meta: { compactSize: 76, compactTextAlign: 'center' },
+            cell: ({ getValue }) => {
+                const isElective = getValue<string>() === 'elective';
+                return (
+                    <StatusBadge tone={isElective ? 'warning' : 'sky'}>
+                        {isElective ? 'วิชาเลือก' : 'วิชาบังคับ'}
+                    </StatusBadge>
+                );
+            },
+        },
+        { accessorKey: 'credits', header: 'หน่วยกิต', size: 85, meta: { compactSize: 54, compactTextAlign: 'center' }, cell: ({ getValue }) => Number(getValue<number>()).toFixed(0) },
         ...(kind === 'registered-subjects' ? [] : [{ accessorKey: 'grade', header: 'ผลการเรียน', size: 120, meta: { compactSize: 74, compactTextAlign: 'center' }, cell: ({ getValue }) => getValue<string | null>() ?? 'รอผล' } as ColumnDef<AcademicSubjectRow>]),
         ...(kind === 'grade-threshold' ? [{
             id: 'grade_result', header: 'ผลเกณฑ์เกรด 2', size: 170, meta: { compactSize: 92, compactTextAlign: 'center' }, cell: ({ row }: { row: { original: AcademicSubjectRow } }) => {
@@ -345,7 +381,21 @@ function AcademicStudentDetailDialog({ kind, student, term, onClose }: { kind: R
             <div className="p-4 sm:p-6">
                 {detail.isPending && <QuerySkeleton rows={6} />}
                 {detail.isError && <QueryError onRetry={() => detail.refetch()} />}
-                {detail.data && <><div className="mb-4 inline-flex items-center gap-2 rounded-xl bg-brand-50 px-4 py-2 text-sm font-bold text-brand-900"><Books size={18} /> พบ {subjectRows.length.toLocaleString('th-TH')} รายวิชา</div><DataTable data={subjectRows} columns={columns} minWidth="wide" emptyTitle="ไม่พบรายวิชา" emptyDescription="นักศึกษาคนนี้ไม่มีรายวิชาในภาคเรียนที่เลือก" /></>}
+                {detail.data && <>
+                    <div className="mb-4 flex flex-wrap items-center gap-3">
+                        <div className="inline-flex items-center gap-2 rounded-xl bg-brand-50 px-3.5 py-2 text-sm font-bold text-brand-900">
+                            <Books size={18} /> พบ {subjectRows.length.toLocaleString('th-TH')} รายวิชา
+                        </div>
+                        <div className="inline-flex flex-wrap items-center gap-3 rounded-xl border border-slate-200 bg-slate-50 px-4 py-2 text-sm font-medium text-slate-700 shadow-sm">
+                            <span>รวมลงเรียน <strong className="font-extrabold text-slate-950">{creditSummary.total.toFixed(0)}</strong> หน่วยกิต</span>
+                            <span className="text-slate-300">|</span>
+                            <span className="inline-flex items-center gap-1.5"><span className="size-2 rounded-full bg-sky-500" />วิชาบังคับ <strong className="font-bold text-sky-900">{creditSummary.compulsory.toFixed(0)}</strong> หน่วยกิต</span>
+                            <span className="text-slate-300">|</span>
+                            <span className="inline-flex items-center gap-1.5"><span className="size-2 rounded-full bg-amber-500" />วิชาเลือก <strong className="font-bold text-amber-900">{creditSummary.elective.toFixed(0)}</strong> หน่วยกิต</span>
+                        </div>
+                    </div>
+                    <DataTable data={subjectRows} columns={columns} minWidth="wide" emptyTitle="ไม่พบรายวิชา" emptyDescription="นักศึกษาคนนี้ไม่มีรายวิชาในภาคเรียนที่เลือก" />
+                </>}
             </div>
         </section>
     </div>;
