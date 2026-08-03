@@ -114,6 +114,13 @@ final readonly class StudentReportService
             'examStatus' => $student->creditsEarned >= $student->creditsRequired ? 'สอบแล้ว' : 'ยังไม่ได้สอบ',
         ], $students);
 
+        $examStatusFilter = trim((string) ($filters['exam_status'] ?? ''));
+        if ($examStatusFilter === 'taken') {
+            $rows = array_values(array_filter($rows, static fn (array $row): bool => ($row['examStatus'] ?? '') === 'สอบแล้ว'));
+        } elseif ($examStatusFilter === 'not_taken') {
+            $rows = array_values(array_filter($rows, static fn (array $row): bool => ($row['examStatus'] ?? '') === 'ยังไม่ได้สอบ'));
+        }
+
         return ['total' => count($rows), 'active' => count($rows), 'groups' => count(array_unique(array_column($rows, 'group'))), 'rows' => $rows];
     }
 

@@ -407,6 +407,7 @@ export function ReportPage({ kind }: { kind: ReportKind }) {
     const [search, setSearch] = useState('');
     const [level, setLevel] = useState('');
     const [group, setGroup] = useState('');
+    const [examStatus, setExamStatus] = useState('');
     const [viewMode, setViewMode] = useState<ViewMode>('subject');
     const [selectedStudent, setSelectedStudent] = useState<ReportRow | null>(null);
     const [selectedSubject, setSelectedSubject] = useState<ReportRow | null>(null);
@@ -425,7 +426,7 @@ export function ReportPage({ kind }: { kind: ReportKind }) {
         return { groups: meta?.filter_options?.groups ?? [] };
     }, [directoryOptions.data]);
     const report = useQuery({
-        queryKey: ['report', kind, term, deferredSearch, level, canFilterGroups ? group : '', viewMode],
+        queryKey: ['report', kind, term, deferredSearch, level, canFilterGroups ? group : '', viewMode, examStatus],
         queryFn: async ({ signal }) => {
             const params = new URLSearchParams({ search: deferredSearch });
             if (term) params.set('term', term);
@@ -434,6 +435,7 @@ export function ReportPage({ kind }: { kind: ReportKind }) {
             }
             if (level) params.set('level', level);
             if (canFilterGroups && group) params.set('group', group);
+            if (kind === 'expected-graduates' && examStatus) params.set('exam_status', examStatus);
             const response = await getFeatureDataWithDemo<unknown>(`${config.endpoint}?${params.toString()}`, config.demo, signal);
             return { ...response, data: normalizeReportPayload(kind, response.data, { total: 0, active: 0, groups: 0, rows: [] }, viewMode) };
         },
@@ -529,7 +531,7 @@ export function ReportPage({ kind }: { kind: ReportKind }) {
                     </div>
                 </div>}
 
-                <div className={`mb-5 grid gap-3 ${canFilterGroups ? 'md:grid-cols-3' : 'md:grid-cols-2'}`}>
+                <div className={`mb-5 grid gap-3 ${kind === 'expected-graduates' ? (canFilterGroups ? 'md:grid-cols-4' : 'md:grid-cols-3') : (canFilterGroups ? 'md:grid-cols-3' : 'md:grid-cols-2')}`}>
                     <label>
                         <span className="mb-2 block text-sm font-bold text-slate-700">ค้นหาในรายงาน</span>
                         <span className="relative block">
@@ -539,6 +541,16 @@ export function ReportPage({ kind }: { kind: ReportKind }) {
                     </label>
                     <label><span className="mb-2 block text-sm font-bold text-slate-700">ระดับการศึกษา</span><select value={level} onChange={(event) => { setLevel(event.target.value); setGroup(''); }} className="h-11 w-full rounded-xl border border-slate-300 bg-white px-3 text-sm"><option value="">ทุกระดับ</option><option value="1">ประถมศึกษา</option><option value="2">มัธยมศึกษาตอนต้น</option><option value="3">มัธยมศึกษาตอนปลาย</option></select></label>
                     {canFilterGroups && <label><span className="mb-2 block text-sm font-bold text-slate-700">กลุ่มเรียน</span><select value={group} onChange={(event) => setGroup(event.target.value)} className="h-11 w-full rounded-xl border border-slate-300 bg-white px-3 text-sm"><option value="">ทุกกลุ่มเรียน</option>{filterOptions.groups.map((option) => <option key={String(option.value)} value={String(option.value)}>{option.label}</option>)}</select></label>}
+                    {kind === 'expected-graduates' && (
+                        <label>
+                            <span className="mb-2 block text-sm font-bold text-slate-700">สถานะ N-Net / E-Exam</span>
+                            <select value={examStatus} onChange={(event) => setExamStatus(event.target.value)} className="h-11 w-full rounded-xl border border-slate-300 bg-white px-3 text-sm">
+                                <option value="">ทุกสถานะการสอบ</option>
+                                <option value="taken">สอบแล้ว</option>
+                                <option value="not_taken">ยังไม่ได้สอบ</option>
+                            </select>
+                        </label>
+                    )}
                 </div>
                 {report.isPending && <QuerySkeleton />}
                 {report.isError && <QueryError onRetry={() => report.refetch()} />}

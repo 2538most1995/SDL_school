@@ -281,6 +281,14 @@ final readonly class LegacyStudentReportService
                         || $ntSara1Val !== '' || $ntSara2Val !== '' || $ntSemVal !== '' || $ntNosemVal !== '';
                     $isExamTaken = ! empty($m['exam_taken']) || $hasStudentFlag;
 
+                    $examStatusFilter = trim((string) ($filters['exam_status'] ?? ''));
+                    if ($examStatusFilter === 'taken' && ! $isExamTaken) {
+                        continue;
+                    }
+                    if ($examStatusFilter === 'not_taken' && $isExamTaken) {
+                        continue;
+                    }
+
                     // Active student qualifies for expected graduation if total credits meet or approach graduation requirements
                     if ($grandTotal >= $reqTotal || ($compTotal >= $reqComp && $elecTotal >= $reqElec)) {
                         $rows[] = [

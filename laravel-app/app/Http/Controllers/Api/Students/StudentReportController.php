@@ -102,6 +102,7 @@ final class StudentReportController extends StudentsApiController
             'search' => ['nullable', 'string', 'max:100'],
             'subject' => ['nullable', 'string', 'max:30'],
             'view' => ['nullable', Rule::in(['subject', 'student'])],
+            'exam_status' => ['nullable', 'string', Rule::in(['taken', 'not_taken'])],
         ]);
     }
 
