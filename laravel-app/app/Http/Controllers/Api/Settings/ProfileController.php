@@ -145,16 +145,20 @@ final class ProfileController extends Controller
     /** @param list<string> $changedFields */
     private function audit(Request $request, string $event, array $changedFields): void
     {
-        DB::table('audit_logs')->insert([
-            'user_id' => $request->user()->id,
-            'district_id' => $request->attributes->get('district_id') ?: $request->user()->district_id,
-            'event' => $event,
-            'auditable_type' => 'user',
-            'auditable_id' => $request->user()->id,
-            'ip_address' => $request->ip(),
-            'context' => json_encode(['changed_fields' => $changedFields], JSON_THROW_ON_ERROR),
-            'created_at' => now(),
-        ]);
+        try {
+            DB::table('audit_logs')->insert([
+                'user_id' => $request->user()->id,
+                'district_id' => $request->attributes->get('district_id') ?: $request->user()->district_id,
+                'event' => $event,
+                'auditable_type' => 'user',
+                'auditable_id' => $request->user()->id,
+                'ip_address' => $request->ip(),
+                'context' => json_encode(['changed_fields' => $changedFields], JSON_THROW_ON_ERROR),
+                'created_at' => now(),
+            ]);
+        } catch (\Throwable) {
+            // Ignore if audit_logs table is missing in legacy DB
+        }
     }
 
     private function isOwnedAvatarPath(int $userId, string $path): bool
