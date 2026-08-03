@@ -122,64 +122,124 @@ final readonly class LegacyStudentReportService
     /** @param array<string, mixed> $filters */
     public function expectedGraduates(User $viewer, int $districtId, array $filters): array
     {
-        $sets = $this->sets($districtId);
-        $rows = [];
+        try {
+            $sets = $this->sets($districtId);
+            $terms = $this->distinctTerms($sets, 'grade', '_perf_semestry', '1=1');
+            $selectedTerm = $this->selectedTerm($filters, $terms);
+            $rows = [];
 
-        foreach ($this->filteredSets($sets, $filters) as $set) {
-            [$join, $groupName] = $this->groupJoin($set, 's');
-            [$scopeSql, $scopeBindings] = $this->scope($viewer, $set, 's', $join !== '');
-            $conditions = [$scopeSql, "TRIM(COALESCE(s.fin_cause, '')) <> '1'"];
-            $bindings = $scopeBindings;
-            $this->appendGroupAndSearchFilters($conditions, $bindings, $filters, $join !== '', 's', $groupName);
+            foreach ($this->filteredSets($sets, $filters) as $set) {
+                [$join, $groupName] = $this->groupJoin($set, 's');
+                [$scopeSql, $scopeBindings] = $this->scope($viewer, $set, 's', $join !== '');
+                $conditions = [$scopeSql, "TRIM(COALESCE(s.fin_cause, '')) <> '1'"];
+                $bindings = $scopeBindings;
+                $this->appendGroupAndSearchFilters($conditions, $bindings, $filters, $join !== '', 's', $groupName);
 
-            $student = $this->identifier($set->student);
-            $grade = $this->identifier($set->grade);
-            $subject = $this->identifier($set->subject);
+                $student = $this->identifier($set->student);
+                $grade = $this->identifier($set->grade);
+                $subject = $this->identifier($set->subject);
 
-            [$reqTotal, $reqComp, $reqElec] = match ($set->level) {
-                1 => [48.0, 36.0, 12.0],
-                2 => [56.0, 40.0, 16.0],
-                3 => [76.0, 44.0, 32.0],
-                default => [0.0, 0.0, 0.0],
-            };
+                [$reqTotal, $reqComp, $reqElec] = match ($set->level) {
+                    1 => [48.0, 36.0, 12.0],
+                    2 => [56.0, 40.0, 16.0],
+                    3 => [76.0, 44.0, 32.0],
+                    default => [0.0, 0.0, 0.0],
+                };
 
-            $sql = "SELECT s._perf_id10 AS student_code, s.prename, s.name AS first_name,
-                           s.surname AS last_name, s.grp_code AS group_code, {$groupName} AS group_name,
-                           SUM(CASE WHEN TRIM(COALESCE(g.grade, '')) REGEXP '^[0-9]+([.][0-9]+)?$' AND CAST(g.grade AS DECIMAL(10,2)) >= 1 AND TRIM(COALESCE(sub.sub_type, '')) = '1' THEN CAST(COALESCE(sub.sub_credit, '0') AS DECIMAL(10,2)) ELSE 0 END) AS compulsory_earned,
-                           SUM(CASE WHEN TRIM(COALESCE(g.grade, '')) REGEXP '^[0-9]+([.][0-9]+)?$' AND CAST(g.grade AS DECIMAL(10,2)) >= 1 AND TRIM(COALESCE(sub.sub_type, '')) <> '1' THEN CAST(COALESCE(sub.sub_credit, '0') AS DECIMAL(10,2)) ELSE 0 END) AS elective_earned,
-                           SUM(CASE WHEN TRIM(COALESCE(g.grade, '')) IN ('', '-') AND TRIM(COALESCE(sub.sub_type, '')) = '1' THEN CAST(COALESCE(sub.sub_credit, '0') AS DECIMAL(10,2)) ELSE 0 END) AS compulsory_registered,
-                           SUM(CASE WHEN TRIM(COALESCE(g.grade, '')) IN ('', '-') AND TRIM(COALESCE(sub.sub_type, '')) <> '1' THEN CAST(COALESCE(sub.sub_credit, '0') AS DECIMAL(10,2)) ELSE 0 END) AS elective_registered
-                    FROM {$student} s
-                    LEFT JOIN {$grade} g ON g._perf_std10 = s._perf_id10
-                    LEFT JOIN {$subject} sub ON sub._perf_sub = g._perf_sub
-                    {$join}
-                    WHERE ".implode(' AND ', array_filter($conditions))."
-                    GROUP BY s._perf_id10, s.prename, s.name, s.surname, s.grp_code, {$groupName}
-                    HAVING (compulsory_earned + compulsory_registered) >= {$reqComp}
-                       AND (elective_earned + elective_registered) >= {$reqElec}
-                       AND (compulsory_earned + compulsory_registered + elective_earned + elective_registered) >= {$reqTotal}
-                    ORDER BY s.name ASC, s.surname ASC, s._perf_id10 ASC";
+                $studentsSql = "SELECT s._perf_id10 AS student_code, s.prename, s.name AS first_name,
+                                       s.surname AS last_name, s.grp_code AS group_code, {$groupName} AS group_name
+                                FROM {$student} s {$join}
+                                WHERE ".implode(' AND ', array_filter($conditions)).'
+                                ORDER BY s.name ASC, s.surname ASC, s._perf_id10 ASC';
 
-            foreach ($this->rows($sql, $bindings) as $row) {
-                $code = trim((string) ($row['student_code'] ?? ''));
-                if ($code === '') {
+                $studentList = $this->rows($studentsSql, $bindings);
+                if ($studentList === []) {
                     continue;
                 }
-                $compTotal = (float) ($row['compulsory_earned'] ?? 0) + (float) ($row['compulsory_registered'] ?? 0);
-                $elecTotal = (float) ($row['elective_earned'] ?? 0) + (float) ($row['elective_registered'] ?? 0);
-                $grandTotal = $compTotal + $elecTotal;
 
-                $rows[] = [
-                    'id' => "{$set->districtId}-{$set->level}-{$code}",
-                    'primary' => $this->fullName($row),
-                    'secondary' => $code,
-                    'group' => $this->levelLabel($set->level).' · '.$this->groupLabel($row),
-                    'metric' => number_format($grandTotal, 1).'/'.number_format($reqTotal, 0).' หน่วยกิต (บังคับ '.number_format($compTotal, 1).' / เลือก '.number_format($elecTotal, 1).')',
-                ];
+                $studentCodes = array_values(array_unique(array_filter(array_map(
+                    static fn (array $row): string => trim((string) ($row['student_code'] ?? '')),
+                    $studentList,
+                ))));
+
+                if ($studentCodes === []) {
+                    continue;
+                }
+
+                $placeholders = implode(',', array_fill(0, count($studentCodes), '?'));
+                $academicSql = "SELECT g._perf_std10 AS student_code,
+                                       g.grade,
+                                       g._perf_semestry AS term,
+                                       sub.sub_type,
+                                       sub.sub_credit
+                                FROM {$grade} g
+                                LEFT JOIN {$subject} sub ON sub._perf_sub = g._perf_sub
+                                WHERE g._perf_std10 IN ({$placeholders})";
+
+                $academicRows = $this->rows($academicSql, $studentCodes);
+                $studentMetrics = [];
+
+                foreach ($academicRows as $aRow) {
+                    $code = trim((string) ($aRow['student_code'] ?? ''));
+                    if ($code === '') {
+                        continue;
+                    }
+                    $studentMetrics[$code] ??= [
+                        'compulsory_earned' => 0.0,
+                        'elective_earned' => 0.0,
+                        'compulsory_registered' => 0.0,
+                        'elective_registered' => 0.0,
+                    ];
+
+                    $gradeVal = trim((string) ($aRow['grade'] ?? ''));
+                    $subType = trim((string) ($aRow['sub_type'] ?? ''));
+                    $credit = (float) ($aRow['sub_credit'] ?? 0);
+                    $term = AcademicTerm::normalize((string) ($aRow['term'] ?? ''));
+
+                    $isNumericPassed = is_numeric($gradeVal) && (float) $gradeVal >= 1.0;
+                    $isRegistered = in_array($gradeVal, ['', '-'], true) || ($selectedTerm !== null && $term === $selectedTerm && ! $isNumericPassed);
+
+                    if ($isNumericPassed) {
+                        if ($subType === '1') {
+                            $studentMetrics[$code]['compulsory_earned'] += $credit;
+                        } else {
+                            $studentMetrics[$code]['elective_earned'] += $credit;
+                        }
+                    } elseif ($isRegistered) {
+                        if ($subType === '1') {
+                            $studentMetrics[$code]['compulsory_registered'] += $credit;
+                        } else {
+                            $studentMetrics[$code]['elective_registered'] += $credit;
+                        }
+                    }
+                }
+
+                foreach ($studentList as $sRow) {
+                    $code = trim((string) ($sRow['student_code'] ?? ''));
+                    if ($code === '' || ! isset($studentMetrics[$code])) {
+                        continue;
+                    }
+                    $m = $studentMetrics[$code];
+                    $compTotal = $m['compulsory_earned'] + $m['compulsory_registered'];
+                    $elecTotal = $m['elective_earned'] + $m['elective_registered'];
+                    $grandTotal = $compTotal + $elecTotal;
+
+                    if ($compTotal >= $reqComp && $elecTotal >= $reqElec && $grandTotal >= $reqTotal) {
+                        $rows[] = [
+                            'id' => "{$set->districtId}-{$set->level}-{$code}",
+                            'primary' => $this->fullName($sRow),
+                            'secondary' => $code,
+                            'group' => $this->levelLabel($set->level).' · '.$this->groupLabel($sRow),
+                            'metric' => number_format($grandTotal, 1).'/'.number_format($reqTotal, 0).' หน่วยกิต (บังคับ '.number_format($compTotal, 1).' / เลือก '.number_format($elecTotal, 1).')',
+                        ];
+                    }
+                }
             }
-        }
 
-        return $this->payload($rows, [], null, static fn (): bool => true);
+            return $this->payload($rows, $terms, $selectedTerm, static fn (): bool => true);
+        } catch (\Throwable) {
+            return $this->payload([], [], null, static fn (): bool => true);
+        }
     }
 
     /** @param array<string, mixed> $filters */
