@@ -30,7 +30,11 @@ final class LegacyDatabaseCredentials
 
         $path = (string) (env('SENA_LEGACY_CONFIG_PATH') ?: storage_path('app/private/legacy-database.credentials'));
 
-        return self::fromLegacyConfig($path);
+        try {
+            return self::fromLegacyConfig($path);
+        } catch (\Throwable) {
+            return $credentials;
+        }
     }
 
     /** @return array{host: string, port: int, database: string, username: string, password: string} */
