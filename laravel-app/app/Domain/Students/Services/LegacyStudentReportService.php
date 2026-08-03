@@ -146,8 +146,12 @@ final readonly class LegacyStudentReportService
                     default => [0.0, 0.0, 0.0],
                 };
 
+                $nnetCol = $this->firstExistingColumn($set->student, ['nnet', 'n_net', 'eexam', 'e_exam', 'nnet_stat', 'exm_status']);
+                $nnetSql = $nnetCol !== null ? ", s.{$nnetCol} AS nnet_val" : ", '' AS nnet_val";
+
                 $studentsSql = "SELECT s._perf_id10 AS student_code, s.prename, s.name AS first_name,
                                        s.surname AS last_name, s.grp_code AS group_code, {$groupName} AS group_name
+                                       {$nnetSql}
                                 FROM {$student} s {$join}
                                 WHERE ".implode(' AND ', array_filter($conditions)).'
                                 ORDER BY s.name ASC, s.surname ASC, s._perf_id10 ASC';
@@ -172,7 +176,9 @@ final readonly class LegacyStudentReportService
                                        g.typ_code,
                                        g._perf_semestry AS term,
                                        sub.sub_type,
-                                       sub.sub_credit
+                                       sub.sub_credit,
+                                       sub.sub_code,
+                                       sub.sub_name
                                 FROM {$grade} g
                                 LEFT JOIN {$subject} sub ON sub._perf_sub = g._perf_sub
                                 WHERE g._perf_std10 IN ({$placeholders})";
@@ -197,6 +203,8 @@ final readonly class LegacyStudentReportService
                     $gradeVal = trim((string) ($aRow['grade'] ?? ''));
                     $subType = trim((string) ($aRow['sub_type'] ?? ''));
                     $typCode = trim((string) ($aRow['typ_code'] ?? ''));
+                    $subCode = strtoupper(trim((string) ($aRow['sub_code'] ?? '')));
+                    $subName = strtoupper(trim((string) ($aRow['sub_name'] ?? '')));
                     $credit = (float) ($aRow['sub_credit'] ?? 0);
                     $term = AcademicTerm::normalize((string) ($aRow['term'] ?? ''));
 
@@ -205,7 +213,9 @@ final readonly class LegacyStudentReportService
                     }
 
                     $isNumericPassed = is_numeric($gradeVal) && (float) $gradeVal >= 1.0;
-                    if ($isNumericPassed || in_array($typCode, ['2', '3'], true)) {
+                    $isExamSubject = str_contains($subCode, 'NET') || str_contains($subCode, 'EXAM') || str_contains($subName, 'N-NET') || str_contains($subName, 'E-EXAM');
+
+                    if ($isNumericPassed || in_array($typCode, ['2', '3'], true) || ($isExamSubject && ! in_array($gradeVal, ['', '-'], true))) {
                         $studentMetrics[$code]['exam_taken'] = true;
                     }
 
@@ -242,6 +252,10 @@ final readonly class LegacyStudentReportService
                     $elecTotal = $m['elective_earned'] + $m['elective_registered'];
                     $grandTotal = $compTotal + $elecTotal;
 
+                    $nnetVal = strtoupper(trim((string) ($sRow['nnet_val'] ?? '')));
+                    $hasStudentFlag = in_array($nnetVal, ['1', 'Y', 'P', 'PASS', 'PASSED', 'สอบแล้ว', 'ผ่าน'], true);
+                    $isExamTaken = ! empty($m['exam_taken']) || $hasStudentFlag;
+
                     if ($compTotal >= $reqComp && $elecTotal >= $reqElec && $grandTotal >= $reqTotal) {
                         $rows[] = [
                             'id' => "{$set->districtId}-{$set->level}-{$code}",
@@ -249,7 +263,7 @@ final readonly class LegacyStudentReportService
                             'secondary' => $code,
                             'group' => $this->levelLabel($set->level).' · '.$this->groupLabel($sRow),
                             'metric' => number_format($grandTotal, 0).'/'.number_format($reqTotal, 0).' หน่วยกิต (บังคับ '.number_format($compTotal, 0).' / เลือก '.number_format($elecTotal, 0).')',
-                            'examStatus' => ! empty($m['exam_taken']) ? 'สอบแล้ว' : 'ยังไม่ได้สอบ',
+                            'examStatus' => $isExamTaken ? 'สอบแล้ว' : 'ยังไม่ได้สอบ',
                         ];
                     }
                 }
