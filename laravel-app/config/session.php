@@ -18,7 +18,18 @@ return [
     |
     */
 
-    'driver' => env('SESSION_DRIVER', 'file'),
+    'driver' => (function () {
+        $driver = env('SESSION_DRIVER', 'file');
+        if ($driver === 'database') {
+            $legacyEnabled = env('SENA_DATA_SOURCE', 'demo') === 'legacy';
+            $dbConnection = env('DB_CONNECTION', 'sqlite');
+            if ($legacyEnabled || $dbConnection === 'mysql') {
+                return 'file';
+            }
+        }
+
+        return $driver;
+    })(),
 
     /*
     |--------------------------------------------------------------------------
