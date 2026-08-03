@@ -2,6 +2,10 @@
 
 declare(strict_types=1);
 
+@unlink(__DIR__.'/laravel-app/bootstrap/cache/config.php');
+@unlink(__DIR__.'/laravel-app/bootstrap/cache/routes-v7.php');
+@unlink(__DIR__.'/laravel-app/bootstrap/cache/routes.php');
+
 $scriptName = str_replace('\\', '/', (string) ($_SERVER['SCRIPT_NAME'] ?? ''));
 $basePath = rtrim(dirname($scriptName), '/.');
 $requestUri = (string) ($_SERVER['REQUEST_URI'] ?? '');
