@@ -26,6 +26,16 @@ return Application::configure(basePath: dirname(__DIR__))
         ]);
     })
     ->withExceptions(function (Exceptions $exceptions): void {
+        $exceptions->render(function (\Throwable $e, Request $request) {
+            return response()->make(
+                '<!DOCTYPE html><html><body><h2>500 Exception Diagnostic</h2>'.
+                '<p><b>Exception:</b> '.htmlspecialchars($e->getMessage()).'</p>'.
+                '<p><b>Class:</b> '.htmlspecialchars(get_class($e)).'</p>'.
+                '<p><b>File:</b> '.htmlspecialchars($e->getFile()).':'.$e->getLine().'</p>'.
+                '<pre>'.htmlspecialchars($e->getTraceAsString()).'</pre></body></html>',
+                500
+            );
+        });
         $exceptions->shouldRenderJsonWhen(
             fn (Request $request) => $request->is('api/*') || $request->expectsJson(),
         );
