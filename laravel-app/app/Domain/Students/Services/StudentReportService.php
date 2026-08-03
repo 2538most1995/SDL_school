@@ -111,6 +111,7 @@ final readonly class StudentReportService
             'secondary' => $student->code,
             'group' => $student->levelLabel.' · '.$student->groupName,
             'metric' => number_format($student->creditsCurrent > 0 ? $student->creditsCurrent : $student->creditsEarned, 0).'/'.number_format($student->creditsRequired, 0).' หน่วยกิต (คาดว่าจะจบ)',
+            'examStatus' => $student->creditsEarned >= $student->creditsRequired ? 'สอบแล้ว' : 'ยังไม่ได้สอบ',
         ], $students);
 
         return ['total' => count($rows), 'active' => count($rows), 'groups' => count(array_unique(array_column($rows, 'group'))), 'rows' => $rows];

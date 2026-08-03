@@ -35,6 +35,7 @@ type ReportRow = {
     secondary: string;
     group: string;
     metric: string;
+    examStatus?: string;
     registeredCount?: number;
     successfulCount?: number;
     absentCount?: number;
@@ -102,7 +103,7 @@ const reportConfig: Record<ReportKind, {
         primaryLabel: 'นักศึกษา', secondaryLabel: 'รหัสนักศึกษา', groupLabel: 'ระดับและกลุ่ม', metricLabel: 'สรุปหน่วยกิต',
         endpoint: '/api/v1/reports/expected-graduates',
         activeLabel: 'คาดว่าจะจบ', activeDetail: 'ผ่านเกณฑ์บังคับและเลือก',
-        demo: { total: 24, active: 24, groups: 5, rows: commonStudents.map((row) => ({ ...row, metric: '56/56 หน่วยกิต (บังคับ 40 / เลือก 16)' })) },
+        demo: { total: 24, active: 24, groups: 5, rows: commonStudents.map((row, index) => ({ ...row, metric: '56/56 หน่วยกิต (บังคับ 40 / เลือก 16)', examStatus: index % 3 === 0 ? 'ยังไม่ได้สอบ' : 'สอบแล้ว' })) },
     },
     transfers: {
         title: 'ข้อมูลเทียบโอน', description: 'ดูรายวิชา หน่วยกิต และผลการเทียบโอนของนักศึกษา', category: 'รายงานวิชา', icon: ArrowsLeftRight,
@@ -454,6 +455,21 @@ export function ReportPage({ kind }: { kind: ReportKind }) {
         },
         { accessorKey: 'group', header: isAcademicReport && viewMode === 'student' ? 'ระดับ / กลุ่มเรียน' : config.groupLabel, size: 230, meta: { compactSize: 116 } },
         { accessorKey: 'metric', header: isAcademicReport && viewMode === 'student' ? (kind === 'registered-subjects' ? 'วิชาลงทะเบียน' : config.metricLabel) : config.metricLabel, size: 170, meta: { compactSize: 84, compactTextAlign: 'center' } },
+        ...(kind === 'expected-graduates' ? [{
+            id: 'exam_status',
+            header: 'การสอบ N-Net / E-Exam',
+            size: 180,
+            meta: { compactSize: 96, compactTextAlign: 'center' },
+            cell: ({ row }: { row: { original: ReportRow } }) => {
+                const status = row.original.examStatus ?? 'สอบแล้ว';
+                const isPassed = status === 'สอบแล้ว';
+                return (
+                    <StatusBadge tone={isPassed ? 'success' : 'warning'}>
+                        {status}
+                    </StatusBadge>
+                );
+            },
+        } as ColumnDef<ReportRow>] : []),
         ...(isAcademicReport ? [{
             id: 'details', header: 'รายละเอียด', size: 145, meta: { compactSize: 52, compactTextAlign: 'center' }, enableSorting: false,
             cell: ({ row }: { row: { original: ReportRow } }) => viewMode === 'student'

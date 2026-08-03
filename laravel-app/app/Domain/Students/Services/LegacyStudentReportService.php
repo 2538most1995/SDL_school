@@ -169,6 +169,7 @@ final readonly class LegacyStudentReportService
                 $placeholders = implode(',', array_fill(0, count($studentCodes), '?'));
                 $academicSql = "SELECT g._perf_std10 AS student_code,
                                        g.grade,
+                                       g.typ_code,
                                        g._perf_semestry AS term,
                                        sub.sub_type,
                                        sub.sub_credit
@@ -190,10 +191,12 @@ final readonly class LegacyStudentReportService
                         'elective_earned' => 0.0,
                         'compulsory_registered' => 0.0,
                         'elective_registered' => 0.0,
+                        'exam_taken' => false,
                     ];
 
                     $gradeVal = trim((string) ($aRow['grade'] ?? ''));
                     $subType = trim((string) ($aRow['sub_type'] ?? ''));
+                    $typCode = trim((string) ($aRow['typ_code'] ?? ''));
                     $credit = (float) ($aRow['sub_credit'] ?? 0);
                     $term = AcademicTerm::normalize((string) ($aRow['term'] ?? ''));
 
@@ -202,6 +205,10 @@ final readonly class LegacyStudentReportService
                     }
 
                     $isNumericPassed = is_numeric($gradeVal) && (float) $gradeVal >= 1.0;
+                    if ($isNumericPassed || in_array($typCode, ['2', '3'], true)) {
+                        $studentMetrics[$code]['exam_taken'] = true;
+                    }
+
                     $isCurrentTermRegistration = ($selectedTerm !== null && $term === $selectedTerm) || in_array($gradeVal, ['', '-'], true);
 
                     if ($isNumericPassed) {
@@ -242,6 +249,7 @@ final readonly class LegacyStudentReportService
                             'secondary' => $code,
                             'group' => $this->levelLabel($set->level).' · '.$this->groupLabel($sRow),
                             'metric' => number_format($grandTotal, 0).'/'.number_format($reqTotal, 0).' หน่วยกิต (บังคับ '.number_format($compTotal, 0).' / เลือก '.number_format($elecTotal, 0).')',
+                            'examStatus' => ! empty($m['exam_taken']) ? 'สอบแล้ว' : 'ยังไม่ได้สอบ',
                         ];
                     }
                 }
