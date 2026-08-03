@@ -147,12 +147,17 @@ final readonly class LegacyStudentReportService
                     default => [0.0, 0.0, 0.0],
                 };
 
+                $ntCol1 = $this->firstExistingColumn($set->student, ['nt_sara1', 'nt_sem']);
+                $ntCol2 = $this->firstExistingColumn($set->student, ['nt_sara2', 'nt_nosem']);
                 $nnetCol = $this->firstExistingColumn($set->student, ['nnet', 'n_net', 'eexam', 'e_exam', 'nnet_stat', 'exm_status']);
+
+                $ntSql1 = $ntCol1 !== null ? ", s.{$ntCol1} AS nt_val1" : ", '' AS nt_val1";
+                $ntSql2 = $ntCol2 !== null ? ", s.{$ntCol2} AS nt_val2" : ", '' AS nt_val2";
                 $nnetSql = $nnetCol !== null ? ", s.{$nnetCol} AS nnet_val" : ", '' AS nnet_val";
 
                 $studentsSql = "SELECT s._perf_id10 AS student_code, s.prename, s.name AS first_name,
                                        s.surname AS last_name, s.grp_code AS group_code, {$groupName} AS group_name
-                                       {$nnetSql}
+                                       {$ntSql1} {$ntSql2} {$nnetSql}
                                 FROM {$student} s {$join}
                                 WHERE ".implode(' AND ', array_filter($conditions)).'
                                 ORDER BY s.name ASC, s.surname ASC, s._perf_id10 ASC';
@@ -219,7 +224,7 @@ final readonly class LegacyStudentReportService
                     $isNumericPassed = is_numeric($gradeVal) && (float) $gradeVal >= 1.0;
                     $isExamSubject = str_contains($subCode, 'NET') || str_contains($subCode, 'EXAM') || str_contains($subName, 'N-NET') || str_contains($subName, 'E-EXAM');
 
-                    if ($isNumericPassed || in_array($typCode, ['2', '3'], true) || ($isExamSubject && ! in_array($gradeVal, ['', '-'], true))) {
+                    if (($isExamSubject || in_array($typCode, ['2', '3'], true)) && ! in_array($gradeVal, ['', '-'], true)) {
                         $studentMetrics[$code]['exam_taken'] = true;
                     }
 
@@ -263,7 +268,10 @@ final readonly class LegacyStudentReportService
                     $grandTotal = $compTotal + $elecTotal;
 
                     $nnetVal = strtoupper(trim((string) ($sRow['nnet_val'] ?? '')));
-                    $hasStudentFlag = in_array($nnetVal, ['1', 'Y', 'P', 'PASS', 'PASSED', 'สอบแล้ว', 'ผ่าน'], true);
+                    $ntVal1 = trim((string) ($sRow['nt_val1'] ?? ''));
+                    $ntVal2 = trim((string) ($sRow['nt_val2'] ?? ''));
+                    $hasStudentFlag = in_array($nnetVal, ['1', 'Y', 'P', 'PASS', 'PASSED', 'สอบแล้ว', 'ผ่าน'], true)
+                        || $ntVal1 !== '' || $ntVal2 !== '';
                     $isExamTaken = ! empty($m['exam_taken']) || $hasStudentFlag;
 
                     // Active student qualifies for expected graduation if total credits meet or approach graduation requirements
