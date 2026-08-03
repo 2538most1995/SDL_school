@@ -140,18 +140,18 @@
 
 [data-ui-mode='dark'] {
     color-scheme: dark;
-    --ui-page: #07101f;
-    --ui-page-top: #0b1628;
-    --ui-surface: #101c30;
-    --ui-surface-muted: #14233a;
-    --ui-surface-subtle: #1a2b46;
-    --ui-border: #293a55;
-    --ui-border-strong: #3a4e6c;
-    --ui-text: #eef4ff;
-    --ui-text-muted: #b9c6d9;
-    --ui-text-soft: #93a4bb;
+    --ui-page: #080f1e;
+    --ui-page-top: #0d192d;
+    --ui-surface: #112038;
+    --ui-surface-muted: #162844;
+    --ui-surface-subtle: #1e3354;
+    --ui-border: #2c4263;
+    --ui-border-strong: #405b82;
+    --ui-text: #f8fafc;
+    --ui-text-muted: #cbd5e1;
+    --ui-text-soft: #94a3b8;
     --ui-shadow: 0 0 0;
-    --ui-shadow-card: 0 14px 34px rgb(0 0 0 / 0.18), 0 1px 2px rgb(0 0 0 / 0.18);
+    --ui-shadow-card: 0 14px 34px rgb(0 0 0 / 0.28), 0 1px 2px rgb(0 0 0 / 0.22);
 }
 
 .sena-material-root {
@@ -720,12 +720,16 @@ textarea {
     background-color: var(--ui-surface-muted);
 }
 
-[data-ui-mode='dark'] .portal-shell :where(.text-slate-950, .text-slate-900, .text-slate-800) {
-    color: var(--ui-text);
+[data-ui-mode='dark'] :where(.text-slate-950, .text-slate-900, .text-slate-800, .text-gray-900, .text-gray-800) {
+    color: #f8fafc;
 }
 
-[data-ui-mode='dark'] .portal-shell :where(.text-slate-700, .text-slate-600, .text-slate-500, .text-slate-400) {
-    color: var(--ui-text-muted);
+[data-ui-mode='dark'] :where(.text-slate-700, .text-slate-600, .text-slate-500, .text-gray-700, .text-gray-600, .text-gray-500) {
+    color: #cbd5e1;
+}
+
+[data-ui-mode='dark'] :where(.text-slate-400, .text-slate-300, .text-gray-400) {
+    color: #94a3b8;
 }
 
 [data-ui-mode='dark'] .portal-shell :where(.border-slate-100, .border-slate-200, .border-slate-300, .border-brand-100, .border-brand-200, .border-sky-100, .border-sky-200, .border-violet-100, .border-violet-200, .border-amber-100, .border-amber-200, .border-rose-100, .border-rose-200) {

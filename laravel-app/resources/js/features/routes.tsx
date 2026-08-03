@@ -39,6 +39,7 @@ export const featureRouteCatalog: FeatureRoute[] = [
 
     { path: '/reports/new-students', label: 'นักศึกษาใหม่', roles: ['teacher', 'admin', 'super_admin'], element: <ReportPage kind="new-students" /> },
     { path: '/reports/graduates', label: 'ผู้จบหลักสูตร', roles: ['teacher', 'admin', 'super_admin'], element: <ReportPage kind="graduates" /> },
+    { path: '/reports/expected-graduates', label: 'นักศึกษาคาดว่าจะจบ', roles: ['teacher', 'admin', 'super_admin'], element: <ReportPage kind="expected-graduates" /> },
     { path: '/reports/transfers', label: 'ข้อมูลเทียบโอน', roles: ['teacher', 'admin', 'super_admin'], element: <ReportPage kind="transfers" /> },
     { path: '/reports/registered-subjects', label: 'วิชาลงทะเบียน', roles: ['teacher', 'admin', 'super_admin'], element: <ReportPage kind="registered-subjects" /> },
     { path: '/reports/grade-threshold', label: 'สถิติเกรด 2 ขึ้นไป', roles: ['teacher', 'admin', 'super_admin'], element: <ReportPage kind="grade-threshold" /> },

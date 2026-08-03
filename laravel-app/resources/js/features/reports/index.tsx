@@ -1,6 +1,7 @@
 import {
     ArrowsLeftRight,
     Books,
+    Certificate,
     ChartBar,
     CheckSquare,
     Eye,
@@ -26,7 +27,7 @@ import { StatusBadge } from '../../components/StatusBadge';
 import { useDemoRole } from '../../context/DemoRoleContext';
 import { getFeatureDataWithDemo } from '../api';
 
-export type ReportKind = 'new-students' | 'graduates' | 'transfers' | 'registered-subjects' | 'grade-threshold' | 'exam-attendance';
+export type ReportKind = 'new-students' | 'graduates' | 'expected-graduates' | 'transfers' | 'registered-subjects' | 'grade-threshold' | 'exam-attendance';
 
 type ReportRow = {
     id: string;
@@ -95,6 +96,13 @@ const reportConfig: Record<ReportKind, {
         endpoint: '/api/v1/reports/graduates',
         activeLabel: 'จบหลักสูตร', activeDetail: 'ยืนยันผลจบแล้ว',
         demo: { total: 32, active: 32, groups: 3, rows: commonStudents.map((row, index) => ({ ...row, metric: index === 0 ? '2/2568' : '1/2568' })) },
+    },
+    'expected-graduates': {
+        title: 'นักศึกษาคาดว่าจะจบ', description: 'ตรวจสอบรายชื่อนักศึกษาที่มีหน่วยกิตผ่านเกณฑ์การจบรวมวิชาที่ลงทะเบียนภาคเรียนปัจจุบัน', category: 'รายงานคาดว่าจะจบ', icon: Certificate,
+        primaryLabel: 'นักศึกษา', secondaryLabel: 'รหัสนักศึกษา', groupLabel: 'ระดับและกลุ่ม', metricLabel: 'สรุปหน่วยกิต',
+        endpoint: '/api/v1/reports/expected-graduates',
+        activeLabel: 'คาดว่าจะจบ', activeDetail: 'ผ่านเกณฑ์บังคับและเลือก',
+        demo: { total: 24, active: 24, groups: 5, rows: commonStudents.map((row) => ({ ...row, metric: '76.0/76.0 หน่วยกิต (ผ่านเกณฑ์รวมภาคปัจจุบัน)' })) },
     },
     transfers: {
         title: 'ข้อมูลเทียบโอน', description: 'ดูรายวิชา หน่วยกิต และผลการเทียบโอนของนักศึกษา', category: 'รายงานวิชา', icon: ArrowsLeftRight,

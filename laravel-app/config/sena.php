@@ -30,6 +30,7 @@ return [
             'items' => [
                 ['key' => 'new-students', 'label' => 'นักศึกษาใหม่', 'description' => 'นักศึกษาใหม่ภาคเรียนปัจจุบัน', 'route' => '/reports/new-students', 'icon' => 'user-plus', 'roles' => ['teacher', 'admin', 'super_admin']],
                 ['key' => 'graduates', 'label' => 'ผู้จบหลักสูตร', 'description' => 'สถานะจบและภาคเรียนที่จบ', 'route' => '/reports/graduates', 'icon' => 'medal', 'roles' => ['teacher', 'admin', 'super_admin']],
+                ['key' => 'expected-graduates', 'label' => 'นักศึกษาคาดว่าจะจบ', 'description' => 'นักศึกษาผ่านเกณฑ์หน่วยกิตรวมภาคเรียนปัจจุบัน', 'route' => '/reports/expected-graduates', 'icon' => 'certificate', 'roles' => ['teacher', 'admin', 'super_admin']],
                 ['key' => 'transfers', 'label' => 'ข้อมูลเทียบโอน', 'description' => 'รายวิชาและผลการเทียบโอน', 'route' => '/reports/transfers', 'icon' => 'arrows', 'roles' => ['teacher', 'admin', 'super_admin']],
                 ['key' => 'subjects', 'label' => 'วิชาลงทะเบียน', 'description' => 'รายวิชาที่ลงทะเบียนตามภาคเรียน', 'route' => '/reports/registered-subjects', 'icon' => 'books', 'roles' => ['teacher', 'admin', 'super_admin']],
                 ['key' => 'grade-threshold', 'label' => 'สถิติเกรด 2 ขึ้นไป', 'description' => 'สรุปผลสัมฤทธิ์ตามระดับและกลุ่ม', 'route' => '/reports/grade-threshold', 'icon' => 'trend', 'roles' => ['teacher', 'admin', 'super_admin']],

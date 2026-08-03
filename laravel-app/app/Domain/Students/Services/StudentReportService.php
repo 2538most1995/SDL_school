@@ -91,6 +91,34 @@ final readonly class StudentReportService
     /** @param array<string, mixed> $filters
      * @return array{total: int, active: int, groups: int, rows: list<array<string, string>>}
      */
+    public function expectedGraduates(User $viewer, array $filters = []): array
+    {
+        $students = array_values(array_filter(
+            $this->students($viewer, $filters),
+            static function (Student $student): bool {
+                if ($student->status !== 'studying') {
+                    return false;
+                }
+                $current = $student->creditsCurrent > 0 ? $student->creditsCurrent : $student->creditsEarned;
+
+                return $current >= $student->creditsRequired;
+            },
+        ));
+
+        $rows = array_map(static fn (Student $student): array => [
+            'id' => "{$student->districtId}-{$student->level}-{$student->code}",
+            'primary' => $student->fullName(),
+            'secondary' => $student->code,
+            'group' => $student->levelLabel.' · '.$student->groupName,
+            'metric' => number_format($student->creditsCurrent > 0 ? $student->creditsCurrent : $student->creditsEarned, 1).'/'.number_format($student->creditsRequired, 0).' หน่วยกิต (คาดว่าจะจบ)',
+        ], $students);
+
+        return ['total' => count($rows), 'active' => count($rows), 'groups' => count(array_unique(array_column($rows, 'group'))), 'rows' => $rows];
+    }
+
+    /** @param array<string, mixed> $filters
+     * @return array{total: int, active: int, groups: int, rows: list<array<string, string>>}
+     */
     public function transfers(User $viewer, array $filters = []): array
     {
         $term = (string) ($filters['term'] ?? '');

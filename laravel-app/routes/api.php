@@ -104,6 +104,7 @@ Route::prefix('v1')->group(function (): void {
         Route::get('/reports/students/overview', [StudentReportController::class, 'overview']);
         Route::get('/reports/new-students', [StudentReportController::class, 'newStudents']);
         Route::get('/reports/graduates', [StudentReportController::class, 'graduates']);
+        Route::get('/reports/expected-graduates', [StudentReportController::class, 'expectedGraduates']);
         Route::get('/reports/transfers', [StudentReportController::class, 'transfers']);
         Route::get('/reports/registered-subjects', [StudentReportController::class, 'registeredSubjects']);
         Route::get('/reports/students/grades-above-two', [StudentReportController::class, 'gradesAboveTwo']);

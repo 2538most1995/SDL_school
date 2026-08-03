@@ -51,6 +51,16 @@ final class StudentReportController extends StudentsApiController
         return $this->reportResponse($request, $data, false);
     }
 
+    public function expectedGraduates(Request $request): JsonResponse
+    {
+        $filters = $this->filters($request);
+        $data = config('legacy.student_enabled')
+            ? $this->legacyReports->expectedGraduates($request->user(), (int) $request->attributes->get('district_id'), $filters)
+            : $this->reports->expectedGraduates($request->user(), $filters);
+
+        return $this->reportResponse($request, $data, false);
+    }
+
     public function transfers(Request $request): JsonResponse
     {
         $filters = $this->filters($request);
