@@ -102,7 +102,7 @@ const reportConfig: Record<ReportKind, {
         primaryLabel: 'นักศึกษา', secondaryLabel: 'รหัสนักศึกษา', groupLabel: 'ระดับและกลุ่ม', metricLabel: 'สรุปหน่วยกิต',
         endpoint: '/api/v1/reports/expected-graduates',
         activeLabel: 'คาดว่าจะจบ', activeDetail: 'ผ่านเกณฑ์บังคับและเลือก',
-        demo: { total: 24, active: 24, groups: 5, rows: commonStudents.map((row) => ({ ...row, metric: '76.0/76.0 หน่วยกิต (ผ่านเกณฑ์รวมภาคปัจจุบัน)' })) },
+        demo: { total: 24, active: 24, groups: 5, rows: commonStudents.map((row) => ({ ...row, metric: '56/56 หน่วยกิต (บังคับ 40 / เลือก 16)' })) },
     },
     transfers: {
         title: 'ข้อมูลเทียบโอน', description: 'ดูรายวิชา หน่วยกิต และผลการเทียบโอนของนักศึกษา', category: 'รายงานวิชา', icon: ArrowsLeftRight,

@@ -110,7 +110,7 @@ final readonly class StudentReportService
             'primary' => $student->fullName(),
             'secondary' => $student->code,
             'group' => $student->levelLabel.' · '.$student->groupName,
-            'metric' => number_format($student->creditsCurrent > 0 ? $student->creditsCurrent : $student->creditsEarned, 1).'/'.number_format($student->creditsRequired, 0).' หน่วยกิต (คาดว่าจะจบ)',
+            'metric' => number_format($student->creditsCurrent > 0 ? $student->creditsCurrent : $student->creditsEarned, 0).'/'.number_format($student->creditsRequired, 0).' หน่วยกิต (คาดว่าจะจบ)',
         ], $students);
 
         return ['total' => count($rows), 'active' => count($rows), 'groups' => count(array_unique(array_column($rows, 'group'))), 'rows' => $rows];

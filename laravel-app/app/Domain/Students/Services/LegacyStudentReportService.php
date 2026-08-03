@@ -178,6 +178,7 @@ final readonly class LegacyStudentReportService
 
                 $academicRows = $this->rows($academicSql, $studentCodes);
                 $studentMetrics = [];
+                $registeredInSelectedTerm = [];
 
                 foreach ($academicRows as $aRow) {
                     $code = trim((string) ($aRow['student_code'] ?? ''));
@@ -196,8 +197,12 @@ final readonly class LegacyStudentReportService
                     $credit = (float) ($aRow['sub_credit'] ?? 0);
                     $term = AcademicTerm::normalize((string) ($aRow['term'] ?? ''));
 
+                    if ($selectedTerm !== null && $term === $selectedTerm) {
+                        $registeredInSelectedTerm[$code] = true;
+                    }
+
                     $isNumericPassed = is_numeric($gradeVal) && (float) $gradeVal >= 1.0;
-                    $isRegistered = in_array($gradeVal, ['', '-'], true) || ($selectedTerm !== null && $term === $selectedTerm && ! $isNumericPassed);
+                    $isCurrentTermRegistration = ($selectedTerm !== null && $term === $selectedTerm) || in_array($gradeVal, ['', '-'], true);
 
                     if ($isNumericPassed) {
                         if ($subType === '1') {
@@ -205,7 +210,7 @@ final readonly class LegacyStudentReportService
                         } else {
                             $studentMetrics[$code]['elective_earned'] += $credit;
                         }
-                    } elseif ($isRegistered) {
+                    } elseif ($isCurrentTermRegistration) {
                         if ($subType === '1') {
                             $studentMetrics[$code]['compulsory_registered'] += $credit;
                         } else {
@@ -219,6 +224,12 @@ final readonly class LegacyStudentReportService
                     if ($code === '' || ! isset($studentMetrics[$code])) {
                         continue;
                     }
+
+                    // Only include students who registered in the selected academic term
+                    if ($selectedTerm !== null && empty($registeredInSelectedTerm[$code])) {
+                        continue;
+                    }
+
                     $m = $studentMetrics[$code];
                     $compTotal = $m['compulsory_earned'] + $m['compulsory_registered'];
                     $elecTotal = $m['elective_earned'] + $m['elective_registered'];
@@ -230,7 +241,7 @@ final readonly class LegacyStudentReportService
                             'primary' => $this->fullName($sRow),
                             'secondary' => $code,
                             'group' => $this->levelLabel($set->level).' · '.$this->groupLabel($sRow),
-                            'metric' => number_format($grandTotal, 1).'/'.number_format($reqTotal, 0).' หน่วยกิต (บังคับ '.number_format($compTotal, 1).' / เลือก '.number_format($elecTotal, 1).')',
+                            'metric' => number_format($grandTotal, 0).'/'.number_format($reqTotal, 0).' หน่วยกิต (บังคับ '.number_format($compTotal, 0).' / เลือก '.number_format($elecTotal, 0).')',
                         ];
                     }
                 }
