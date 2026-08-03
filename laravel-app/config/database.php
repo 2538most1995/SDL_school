@@ -35,21 +35,29 @@ return [
 
     'connections' => [
 
-        'sqlite' => [
-            'driver' => 'sqlite',
-            'url' => env('DB_URL'),
-            'database' => env('DB_DATABASE', database_path('database.sqlite')),
-            'prefix' => '',
-            'foreign_key_constraints' => env('DB_FOREIGN_KEYS', true),
-            // The queue, cache and web requests can write concurrently on
-            // shared hosting. WAL lets readers continue while a worker writes,
-            // and the busy timeout avoids transient "database is locked"
-            // failures instead of failing immediately.
-            'busy_timeout' => (int) env('DB_BUSY_TIMEOUT', 10_000),
-            'journal_mode' => env('DB_JOURNAL_MODE', 'WAL'),
-            'synchronous' => env('DB_SYNCHRONOUS', 'NORMAL'),
-            'transaction_mode' => 'DEFERRED',
-        ],
+        'sqlite' => (function () {
+            $sqliteDb = (string) env('DB_DATABASE', '');
+            if ($sqliteDb === '' || $sqliteDb === 'laravel') {
+                $sqliteDb = database_path('database.sqlite');
+            } elseif ($sqliteDb !== ':memory:' && ! str_starts_with($sqliteDb, '/') && ! preg_match('/^[A-Za-z]:[\\\\\/]/', $sqliteDb)) {
+                $sqliteDb = str_ends_with($sqliteDb, '.sqlite') ? database_path($sqliteDb) : database_path($sqliteDb.'.sqlite');
+            }
+            if ($sqliteDb !== ':memory:' && ! file_exists($sqliteDb)) {
+                @touch($sqliteDb);
+            }
+
+            return [
+                'driver' => 'sqlite',
+                'url' => env('DB_URL'),
+                'database' => $sqliteDb,
+                'prefix' => '',
+                'foreign_key_constraints' => env('DB_FOREIGN_KEYS', true),
+                'busy_timeout' => (int) env('DB_BUSY_TIMEOUT', 10_000),
+                'journal_mode' => env('DB_JOURNAL_MODE', 'WAL'),
+                'synchronous' => env('DB_SYNCHRONOUS', 'NORMAL'),
+                'transaction_mode' => 'DEFERRED',
+            ];
+        })(),
 
         'mysql' => [
             'driver' => 'mysql',
