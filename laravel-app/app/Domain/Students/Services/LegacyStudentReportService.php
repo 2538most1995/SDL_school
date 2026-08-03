@@ -991,6 +991,36 @@ final readonly class LegacyStudentReportService
         return $terms;
     }
 
+    /** @param list<string> $candidates */
+    private function firstExistingColumn(string $table, array $candidates): ?string
+    {
+        static $columnsByTable = [];
+
+        if (! array_key_exists($table, $columnsByTable)) {
+            $columns = [];
+            foreach ($this->rows(
+                'SELECT COLUMN_NAME AS column_name
+                 FROM INFORMATION_SCHEMA.COLUMNS
+                 WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = ?',
+                [$table],
+            ) as $row) {
+                $column = strtolower(trim((string) ($row['column_name'] ?? '')));
+                if ($column !== '') {
+                    $columns[$column] = true;
+                }
+            }
+            $columnsByTable[$table] = $columns;
+        }
+
+        foreach ($candidates as $candidate) {
+            if (isset($columnsByTable[$table][strtolower($candidate)])) {
+                return $candidate;
+            }
+        }
+
+        return null;
+    }
+
     /** @param list<string> $terms */
     private function selectedTerm(array $filters, array $terms): ?string
     {
