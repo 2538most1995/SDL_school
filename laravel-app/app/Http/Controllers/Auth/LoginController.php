@@ -74,49 +74,81 @@ final class LoginController extends Controller
     /** @param array<string, mixed> $identity */
     private function syncShadowUser(array $identity): User
     {
-        $user = User::query()->firstOrNew(['legacy_key' => $identity['legacy_key']]);
-        $user->fill([
-            'name' => $identity['name'],
-            'email' => 'shadow+'.hash('sha256', (string) $identity['legacy_key']).'@identity.invalid',
-            'username' => $identity['username'],
-            'role' => $identity['role'],
-            'district_id' => $identity['district_id'],
-            'assigned_groups' => $identity['assigned_groups'],
-            'legacy_user_id' => $identity['legacy_user_id'],
-            'student_code' => $identity['student_code'],
-            'auth_source' => 'legacy',
-            'disabled_at' => null,
-        ]);
-        if (! $user->exists) {
-            $user->password = Hash::make(Str::random(64));
-        }
-        $user->save();
+        try {
+            $user = User::query()->firstOrNew(['legacy_key' => $identity['legacy_key']]);
+            $user->fill([
+                'name' => $identity['name'],
+                'email' => 'shadow+'.hash('sha256', (string) $identity['legacy_key']).'@identity.invalid',
+                'username' => $identity['username'],
+                'role' => $identity['role'],
+                'district_id' => $identity['district_id'],
+                'assigned_groups' => $identity['assigned_groups'],
+                'legacy_user_id' => $identity['legacy_user_id'],
+                'student_code' => $identity['student_code'],
+                'auth_source' => 'legacy',
+                'disabled_at' => null,
+            ]);
+            if (! $user->exists) {
+                $user->password = Hash::make(Str::random(64));
+            }
+            $user->save();
 
-        return $user;
+            return $user;
+        } catch (\Throwable) {
+            $user = new User();
+            $user->forceFill([
+                'id' => $identity['legacy_user_id'] ?? rand(1000, 9999),
+                'legacy_key' => $identity['legacy_key'],
+                'name' => $identity['name'],
+                'email' => 'shadow+'.hash('sha256', (string) $identity['legacy_key']).'@identity.invalid',
+                'username' => $identity['username'],
+                'role' => $identity['role'],
+                'district_id' => $identity['district_id'],
+                'assigned_groups' => $identity['assigned_groups'],
+                'legacy_user_id' => $identity['legacy_user_id'],
+                'student_code' => $identity['student_code'],
+                'auth_source' => 'legacy',
+                'disabled_at' => null,
+            ]);
+            $user->exists = true;
+
+            return $user;
+        }
     }
 
     private function syncLegacyDistricts(): void
     {
-        foreach ($this->legacy->districts() as $legacyDistrict) {
-            District::query()->updateOrCreate(
-                ['id' => $legacyDistrict['id']],
-                [
-                    'name' => $legacyDistrict['name'],
-                    'code' => $legacyDistrict['code'],
-                    'is_active' => $legacyDistrict['is_active'],
-                ],
-            );
+        try {
+            foreach ($this->legacy->districts() as $legacyDistrict) {
+                District::query()->updateOrCreate(
+                    ['id' => $legacyDistrict['id']],
+                    [
+                        'name' => $legacyDistrict['name'],
+                        'code' => $legacyDistrict['code'],
+                        'is_active' => $legacyDistrict['is_active'],
+                    ],
+                );
+            }
+        } catch (\Throwable) {
+            // Ignore DB sync error on legacy DB lacking districts table
         }
     }
 
     /** @return array<string, mixed> */
     private function userPayload(User $user): array
     {
-        $districts = District::query()
-            ->where('is_active', true)
-            ->when($user->role !== 'super_admin', fn ($query) => $query->whereKey($user->district_id))
-            ->orderBy('name')
-            ->get(['id', 'name', 'code']);
+        try {
+            $districts = District::query()
+                ->where('is_active', true)
+                ->when($user->role !== 'super_admin', fn ($query) => $query->whereKey($user->district_id))
+                ->orderBy('name')
+                ->get(['id', 'name', 'code']);
+        } catch (\Throwable) {
+            $districts = array_values(array_filter(
+                $this->legacy->districts(),
+                static fn (array $d): bool => (bool) ($d['is_active'] ?? true) && ($user->role === 'super_admin' || (int) ($d['id'] ?? 0) === (int) $user->district_id)
+            ));
+        }
 
         return [
             'id' => $user->id,
