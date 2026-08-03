@@ -39,7 +39,8 @@ import { Link, Navigate, NavLink, Outlet, useLocation, useNavigate } from 'react
 import { ApiError, apiGet, apiPost } from '../lib/api';
 import { applyAppearance, DEFAULT_APPEARANCE, type AppearanceSettings } from '../lib/appearance';
 import { showSuccessAlert } from '../lib/feedback';
-import { publicBrandingPath, type PublicBranding } from '../lib/publicBranding';
+import { publicAssetUrl, publicBrandingPath, type PublicBranding } from '../lib/publicBranding';
+import { withAppBasePath } from '../lib/urls';
 import { queryClient } from '../query';
 import { useDemoRole, type DemoRole } from '../context/DemoRoleContext';
 
@@ -239,7 +240,7 @@ export function PortalLayout() {
                 <div className="flex h-[78px] items-center justify-between border-b border-white/10 px-4">
                     <Link to="/app" className="flex items-center gap-2.5">
                         <span className="grid size-11 place-items-center overflow-hidden rounded-2xl border border-white/70 bg-white text-brand-700 shadow-[0_10px_26px_rgb(3_15_52_/_0.22)]">
-                            {branding.data?.logoImageUrl ? <img src={branding.data.logoImageUrl} alt="" className="size-full object-contain p-1" /> : <GraduationCap size={23} weight="fill" aria-hidden="true" />}
+                            {branding.data?.logoImageUrl ? <img src={publicAssetUrl(branding.data.logoImageUrl) ?? ''} alt="" className="size-full object-contain p-1" /> : <GraduationCap size={23} weight="fill" aria-hidden="true" />}
                         </span>
                         <span className="leading-tight text-white">
                             <strong className="block max-w-40 truncate text-[16px] font-black tracking-[-0.025em]">{branding.data?.portalName ?? 'SDL School'}</strong>
@@ -329,7 +330,7 @@ export function PortalLayout() {
                                 aria-expanded={roleMenuOpen}
                                 aria-haspopup="menu"
                             >
-                                <Avatar name={me.data.name} image={me.data.avatar_url ? { src: me.data.avatar_url } : undefined} size={36} color="colorful" />
+                                <Avatar name={me.data.name} image={me.data.avatar_url ? { src: withAppBasePath(me.data.avatar_url) } : undefined} size={36} color="colorful" />
                                 <span className="hidden max-w-32 truncate sm:inline">{me.data.name}</span>
                                 <CaretDown size={14} />
                             </Button>

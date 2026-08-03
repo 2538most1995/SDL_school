@@ -1,4 +1,5 @@
 import type { ApiResponse } from '../types';
+import { withAppBasePath } from './urls';
 
 export class ApiError extends Error {
     constructor(
@@ -12,7 +13,7 @@ export class ApiError extends Error {
 
 async function apiRequest<T>(path: string, init: RequestInit): Promise<ApiResponse<T>> {
     const districtId = window.localStorage.getItem('sena-district-id');
-    const response = await fetch(path, {
+    const response = await fetch(withAppBasePath(path), {
         credentials: 'same-origin',
         ...init,
         headers: {

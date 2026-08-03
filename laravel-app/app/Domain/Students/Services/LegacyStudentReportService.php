@@ -56,22 +56,19 @@ final readonly class LegacyStudentReportService
                 if ($code === '' || $term === null || ($selectedTerm !== null && $term !== $selectedTerm)) {
                     continue;
                 }
-                [$status, $statusLabel] = LegacyStudentStatus::resolve((string) ($row['fin_cause'] ?? ''), (string) ($row['transfer_date'] ?? ''));
-                if (isset($filters['status']) && $filters['status'] !== '' && $filters['status'] !== $status) {
-                    continue;
-                }
+                [$status] = LegacyStudentStatus::resolve((string) ($row['fin_cause'] ?? ''), (string) ($row['transfer_date'] ?? ''));
                 $rows[] = [
                     'id' => "{$set->districtId}-{$set->level}-{$code}",
                     'primary' => $this->fullName($row),
                     'secondary' => $code,
                     'group' => $this->levelLabel($set->level).' · '.$this->groupLabel($row),
                     'metric' => 'ภาคเรียน '.$term,
-                    'status' => $statusLabel,
+                    '_active' => $status === 'studying',
                 ];
             }
         }
 
-        return $this->payload($rows, $terms, $selectedTerm, static fn (array $row): bool => $row['status'] === 'กำลังศึกษา');
+        return $this->payload($rows, $terms, $selectedTerm, static fn (array $row): bool => (bool) ($row['_active'] ?? false));
     }
 
     /** @param array<string, mixed> $filters */
@@ -115,7 +112,6 @@ final readonly class LegacyStudentReportService
                     'secondary' => $code,
                     'group' => $this->levelLabel($set->level).' · '.$this->groupLabel($row),
                     'metric' => 'ภาคเรียน '.$term,
-                    'status' => 'จบการศึกษา',
                 ];
             }
         }
@@ -176,7 +172,6 @@ final readonly class LegacyStudentReportService
                     'secondary' => $subjectCode,
                     'group' => $this->fullName($row).' · '.$code,
                     'metric' => number_format($credits, 1).' หน่วยกิต',
-                    'status' => 'อนุมัติ',
                 ];
             }
         }
@@ -228,7 +223,6 @@ final readonly class LegacyStudentReportService
             'secondary' => $row['secondary'],
             'group' => $row['group'],
             'metric' => number_format((int) $row['count']).' คน',
-            'status' => 'เปิดสอน',
         ], $grouped));
         usort($rows, static fn (array $left, array $right): int => [
             $left['group'], $left['secondary'],
@@ -876,9 +870,16 @@ final readonly class LegacyStudentReportService
     /** @param list<array<string, string>> $rows @param list<string> $terms */
     private function payload(array $rows, array $terms, ?string $selectedTerm, callable $active): array
     {
+        $activeCount = count(array_filter($rows, $active));
+        $rows = array_map(static function (array $row): array {
+            unset($row['_active']);
+
+            return $row;
+        }, $rows);
+
         return [
             'total' => count($rows),
-            'active' => count(array_filter($rows, $active)),
+            'active' => $activeCount,
             'groups' => count(array_unique(array_column($rows, 'group'))),
             'terms' => $terms,
             'selected_term' => $selectedTerm,

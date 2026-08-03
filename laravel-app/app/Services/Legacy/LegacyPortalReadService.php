@@ -412,17 +412,18 @@ final class LegacyPortalReadService
     public function safetyState(int $districtId): array
     {
         $batchCount = $this->connection()->table('import_batches')->where('district_id', $districtId)->count();
+        $writeEnabled = (bool) config('legacy.write_enabled');
 
         return [
             'operations' => [
-                ['key' => 'import-write', 'label' => 'นำเข้าข้อมูลใหม่', 'reason' => 'รอ staging, validation และ atomic activation', 'state' => 'disabled'],
-                ['key' => 'cleanup-write', 'label' => 'ลบหรือ cleanup batch', 'reason' => 'ปิดไว้เพื่อป้องกันข้อมูลจริงสูญหาย', 'state' => 'disabled'],
+                ['key' => 'import-write', 'label' => 'นำเข้าข้อมูลใหม่', 'reason' => $writeEnabled ? 'เปิดใช้งานผ่าน staging, validation และการสลับ batch' : 'ปิดการเขียนข้อมูลจริง', 'state' => $writeEnabled ? 'enabled' : 'disabled'],
+                ['key' => 'cleanup-write', 'label' => 'ลบหรือ cleanup batch', 'reason' => $writeEnabled ? 'เปิดใช้งานโดยจำกัด batch ตามอำเภอและบันทึก audit log' : 'ปิดไว้เพื่อป้องกันข้อมูลจริงสูญหาย', 'state' => $writeEnabled ? 'enabled' : 'disabled'],
             ],
             'required_controls' => [
                 ['key' => 'district-scope', 'label' => "ตรวจขอบเขตอำเภอแล้ว ({$districtId})", 'state' => 'ready'],
                 ['key' => 'legacy-read-only', 'label' => 'ฐานเดิมเชื่อมแบบ read-only', 'state' => 'ready'],
                 ['key' => 'batch-registry', 'label' => "พบ batch ในทะเบียน {$batchCount} รายการ", 'state' => $batchCount > 0 ? 'ready' : 'required'],
-                ['key' => 'atomic-activation', 'label' => 'Atomic batch activation และ rollback', 'state' => 'required'],
+                ['key' => 'atomic-activation', 'label' => 'เปิดใช้ชุดใหม่ก่อนลบชุดเดิม', 'state' => $writeEnabled ? 'ready' : 'required'],
             ],
         ];
     }

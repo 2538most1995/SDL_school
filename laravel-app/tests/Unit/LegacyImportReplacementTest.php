@@ -83,6 +83,7 @@ final class LegacyImportReplacementTest extends TestCase
             File::put($this->workspace.'/zips/'.$batch.'.zip', 'zip');
             File::makeDirectory($this->workspace.'/extracted/'.$batch, 0750, true);
             File::put($this->workspace.'/extracted/'.$batch.'/student.dbf', 'dbf');
+            File::put($this->workspace.'/extracted/'.$batch.'/student.fpt', 'memo');
         }
 
         $cleanup = app(LegacyZipImportService::class)->replaceExistingDistrictBatches(1, $active);
@@ -98,6 +99,7 @@ final class LegacyImportReplacementTest extends TestCase
         $this->assertTrue(Schema::connection('replacement_test')->hasTable('db_'.$otherDistrict.'_1_student'));
         $this->assertFileDoesNotExist($this->workspace.'/zips/'.$old.'.zip');
         $this->assertDirectoryDoesNotExist($this->workspace.'/extracted/'.$old);
+        $this->assertFileExists($this->workspace.'/extracted/'.$active.'/student.fpt');
         $this->assertFileExists($this->workspace.'/zips/'.$otherDistrict.'.zip');
     }
 
@@ -165,5 +167,79 @@ final class LegacyImportReplacementTest extends TestCase
         $this->assertFalse(Schema::connection('replacement_test')->hasTable('db_'.$orphan.'_1_student'));
         $this->assertTrue(Schema::connection('replacement_test')->hasTable('db_'.$registered.'_1_student'));
         $this->assertFileExists($this->workspace.'/zips/'.$registered.'.zip');
+    }
+
+    public function test_registered_batch_delete_is_limited_to_its_district_and_removes_all_files(): void
+    {
+        $target = 'import_1700000030_aaaa';
+        $otherDistrict = 'import_1700000031_bbbb';
+        $connection = DB::connection('replacement_test');
+        foreach ([[$target, 1], [$otherDistrict, 2]] as [$batch, $district]) {
+            $historyId = $connection->table('import_history')->insertGetId([
+                'file_name' => $batch.'.zip',
+                'saved_file_name' => $batch.'.zip',
+                'batch_key' => $batch,
+                'district_id' => $district,
+                'status' => 'success',
+            ]);
+            $connection->table('import_batches')->insert([
+                'batch_key' => $batch,
+                'district_id' => $district,
+                'import_history_id' => $historyId,
+                'created_at' => now(),
+            ]);
+            Schema::connection('replacement_test')->create('db_'.$batch.'_1_student', fn ($table) => $table->id());
+            File::put($this->workspace.'/zips/'.$batch.'.zip', 'zip');
+            File::makeDirectory($this->workspace.'/extracted/'.$batch.'/1', 0750, true);
+            File::put($this->workspace.'/extracted/'.$batch.'/1/student.dbf', 'dbf');
+            File::put($this->workspace.'/extracted/'.$batch.'/1/student.fpt', 'memo');
+        }
+
+        $result = app(LegacyZipImportService::class)->deleteDistrictBatch(1, $target);
+
+        $this->assertSame($target, $result['batch_key']);
+        $this->assertSame(1, $result['removed_table_count']);
+        $this->assertTrue($result['removed_zip']);
+        $this->assertTrue($result['removed_extract_directory']);
+        $this->assertDatabaseMissing('import_batches', ['batch_key' => $target], 'replacement_test');
+        $this->assertDatabaseMissing('import_history', ['batch_key' => $target], 'replacement_test');
+        $this->assertFalse(Schema::connection('replacement_test')->hasTable('db_'.$target.'_1_student'));
+        $this->assertFileDoesNotExist($this->workspace.'/zips/'.$target.'.zip');
+        $this->assertDirectoryDoesNotExist($this->workspace.'/extracted/'.$target);
+
+        $this->assertDatabaseHas('import_batches', ['batch_key' => $otherDistrict, 'district_id' => 2], 'replacement_test');
+        $this->assertTrue(Schema::connection('replacement_test')->hasTable('db_'.$otherDistrict.'_1_student'));
+        $this->assertFileExists($this->workspace.'/zips/'.$otherDistrict.'.zip');
+        $this->assertFileExists($this->workspace.'/extracted/'.$otherDistrict.'/1/student.fpt');
+    }
+
+    public function test_registered_batch_delete_refuses_a_batch_from_another_district(): void
+    {
+        $batch = 'import_1700000040_aaaa';
+        $connection = DB::connection('replacement_test');
+        $historyId = $connection->table('import_history')->insertGetId([
+            'file_name' => $batch.'.zip',
+            'saved_file_name' => $batch.'.zip',
+            'batch_key' => $batch,
+            'district_id' => 2,
+            'status' => 'success',
+        ]);
+        $connection->table('import_batches')->insert([
+            'batch_key' => $batch,
+            'district_id' => 2,
+            'import_history_id' => $historyId,
+            'created_at' => now(),
+        ]);
+        Schema::connection('replacement_test')->create('db_'.$batch.'_1_student', fn ($table) => $table->id());
+
+        $this->expectException(\InvalidArgumentException::class);
+        $this->expectExceptionMessage('ไม่พบชุดข้อมูลในอำเภอที่เลือก');
+
+        try {
+            app(LegacyZipImportService::class)->deleteDistrictBatch(1, $batch);
+        } finally {
+            $this->assertDatabaseHas('import_batches', ['batch_key' => $batch, 'district_id' => 2], 'replacement_test');
+            $this->assertTrue(Schema::connection('replacement_test')->hasTable('db_'.$batch.'_1_student'));
+        }
     }
 }

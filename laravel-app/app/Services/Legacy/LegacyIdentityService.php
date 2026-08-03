@@ -132,10 +132,15 @@ final readonly class LegacyIdentityService implements LegacyIdentityProvider
                 continue;
             }
 
+            $citizenIdColumn = $this->studentCitizenIdColumn($table);
+            if ($citizenIdColumn === null) {
+                continue;
+            }
+
             $student = $this->connection()
                 ->table($table)
                 ->selectRaw('ID AS student_code, PRENAME AS prename, NAME AS first_name, SURNAME AS surname, GRP_CODE AS group_code')
-                ->where('_perf_cardid', $citizenId)
+                ->where($citizenIdColumn, $citizenId)
                 ->where('_perf_id10', $studentKey)
                 ->first();
             if ($student === null) {
@@ -189,5 +194,25 @@ final readonly class LegacyIdentityService implements LegacyIdentityProvider
             ->where('table_schema', $this->database->connection((string) config('legacy.connection'))->getDatabaseName())
             ->where('table_name', $table)
             ->exists();
+    }
+
+    private function studentCitizenIdColumn(string $table): ?string
+    {
+        $database = $this->connection()->getDatabaseName();
+
+        foreach (['_perf_cardid', 'cardid'] as $column) {
+            $exists = $this->connection()
+                ->table('information_schema.columns')
+                ->where('table_schema', $database)
+                ->where('table_name', $table)
+                ->where('column_name', $column)
+                ->exists();
+
+            if ($exists) {
+                return $column;
+            }
+        }
+
+        return null;
     }
 }

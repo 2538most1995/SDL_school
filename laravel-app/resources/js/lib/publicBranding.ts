@@ -1,4 +1,7 @@
-export const DEFAULT_HERO_IMAGE = '/images/sena-students-hero.png';
+import type { CSSProperties } from 'react';
+import { withAppBasePath } from './urls';
+
+export const DEFAULT_HERO_IMAGE = withAppBasePath('/images/sena-students-hero.png');
 
 export type PublicBranding = {
     schoolName: string;
@@ -16,6 +19,10 @@ export type PublicBranding = {
 
 export function publicBrandingPath(districtId?: string | null): string {
     return districtId ? `/api/v1/auth/branding?district_id=${encodeURIComponent(districtId)}` : '/api/v1/auth/branding';
+}
+
+export function publicAssetUrl(path?: string | null): string | null {
+    return path ? withAppBasePath(path) : null;
 }
 
 function mixHex(color: string, target: '#ffffff' | '#000000', targetWeight: number): string {
@@ -42,4 +49,3 @@ export function publicBrandingCssVariables(primaryColor?: string): CSSProperties
         '--ui-accent-950': mixHex(color, '#000000', 0.64),
     } as CSSProperties;
 }
-import type { CSSProperties } from 'react';

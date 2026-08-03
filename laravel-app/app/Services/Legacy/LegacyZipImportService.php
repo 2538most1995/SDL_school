@@ -8,6 +8,7 @@ use Illuminate\Database\DatabaseManager;
 use Illuminate\Http\UploadedFile;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Str;
+use InvalidArgumentException;
 use RuntimeException;
 use Throwable;
 use ZipArchive;
@@ -32,7 +33,7 @@ final class LegacyZipImportService
     public function __construct(private readonly DatabaseManager $database) {}
 
     /** @return array<string, mixed> */
-    public function import(UploadedFile $archive, string $academicTerm, int $districtId, int $userId, ?string $ipAddress): array
+    public function import(UploadedFile $archive, string $academicTerm, int $districtId, int $userId, ?string $ipAddress, ?callable $progress = null): array
     {
         if (! (bool) config('legacy.write_enabled')) {
             throw new RuntimeException('ระบบเขียนข้อมูลยังไม่เปิดใช้งาน');
@@ -51,18 +52,58 @@ final class LegacyZipImportService
         $lockName = null;
 
         try {
+            $this->reportProgress($progress, 'กำลังคัดลอกไฟล์ ZIP เข้าพื้นที่ปลอดภัย', 5);
             $this->copyUpload($archive, $zipPath);
+            $this->reportProgress($progress, 'กำลังตรวจสอบและแตกไฟล์ ZIP', 10);
             [$zipFiles, $uncompressedBytes] = $this->extractSafely($zipPath, $extractPath);
             $candidates = $this->dbfCandidates($extractPath);
             $this->assertRequiredDataset($candidates);
+            $this->assertStudentMemoCompanions($candidates);
+            $this->reportProgress($progress, 'ตรวจสอบชุดข้อมูลผ่านแล้ว กำลังเตรียมฐานข้อมูล', 20);
             $lockName = $this->acquireDistrictImportLock($districtId);
 
             $tableReport = [];
-            foreach ($candidates as $candidate) {
-                $tableReport[] = $this->importDbf($batchKey, $candidate['parent'], $candidate['type'], $candidate['path']);
+            $recordCounts = array_map(
+                static fn (array $candidate): int => (new VisualFoxProDbfReader($candidate['path']))->recordCount(),
+                $candidates,
+            );
+            $totalRecords = max(1, array_sum($recordCounts));
+            $completedRecords = 0;
+            foreach ($candidates as $index => $candidate) {
+                $level = in_array($candidate['parent'], ['1', '2', '3'], true) ? 'ระดับ '.$candidate['parent'] : '';
+                $tableLabel = trim("{$candidate['type']} {$level}");
+                $this->reportProgress(
+                    $progress,
+                    "กำลังนำเข้าตาราง {$tableLabel}",
+                    20 + (int) floor(($completedRecords / $totalRecords) * 70),
+                    ['processed_rows' => $completedRecords, 'total_rows' => $totalRecords, 'current_table' => $tableLabel],
+                );
+                $tableReport[] = $this->importDbf(
+                    $batchKey,
+                    $candidate['parent'],
+                    $candidate['type'],
+                    $candidate['path'],
+                    function (int $tableProcessed, int $tableTotal) use ($progress, $completedRecords, $totalRecords, $tableLabel): void {
+                        $processed = min($totalRecords, $completedRecords + min($tableProcessed, $tableTotal));
+                        $this->reportProgress(
+                            $progress,
+                            "กำลังนำเข้าตาราง {$tableLabel} ".number_format($tableProcessed).'/'.number_format($tableTotal).' แถว',
+                            20 + (int) floor(($processed / $totalRecords) * 70),
+                            ['processed_rows' => $processed, 'total_rows' => $totalRecords, 'current_table' => $tableLabel],
+                        );
+                    },
+                );
+                $completedRecords += $recordCounts[$index] ?? 0;
+                $this->reportProgress(
+                    $progress,
+                    "นำเข้าตาราง {$tableLabel} แล้ว",
+                    20 + (int) floor((min($completedRecords, $totalRecords) / $totalRecords) * 70),
+                    ['processed_rows' => min($completedRecords, $totalRecords), 'total_rows' => $totalRecords, 'current_table' => $tableLabel],
+                );
             }
 
             $rowCount = array_sum(array_column($tableReport, 'row_count'));
+            $this->reportProgress($progress, 'กำลังลงทะเบียนและเปิดใช้ชุดข้อมูลใหม่', 92);
             $districtName = (string) $this->read()->table('districts')->where('id', $districtId)->value('name');
             $historyId = $this->registerBatch(
                 $archive->getClientOriginalName(),
@@ -74,6 +115,7 @@ final class LegacyZipImportService
             );
             $replacement = ['removed_count' => 0, 'removed_batch_keys' => [], 'warnings' => []];
             try {
+                $this->reportProgress($progress, 'กำลังลบชุดข้อมูลเดิมของอำเภอ', 96);
                 $replacement = $this->replaceExistingDistrictBatches($districtId, $batchKey);
             } catch (Throwable $cleanupException) {
                 report($cleanupException);
@@ -96,6 +138,8 @@ final class LegacyZipImportService
             } catch (Throwable $auditException) {
                 report($auditException);
             }
+
+            $this->reportProgress($progress, 'นำเข้าและเปิดใช้ชุดข้อมูลใหม่เรียบร้อยแล้ว', 100);
 
             return [
                 'id' => $historyId,
@@ -284,8 +328,57 @@ final class LegacyZipImportService
         }
     }
 
+    /**
+     * Visual FoxPro stores long student values (phone, address and email) in a
+     * sibling FPT file. Activating a DBF without that companion would silently
+     * publish a batch whose contact data can never be decoded.
+     *
+     * @param list<array{parent: string, type: string, path: string, mtime: int}> $candidates
+     */
+    private function assertStudentMemoCompanions(array $candidates): void
+    {
+        foreach ($candidates as $candidate) {
+            if ($candidate['type'] !== 'student') {
+                continue;
+            }
+
+            $reader = new VisualFoxProDbfReader($candidate['path']);
+            $hasMemoField = false;
+            foreach ($reader->fields() as $field) {
+                if (in_array(strtoupper((string) ($field['type'] ?? '')), ['M', 'G', 'P'], true)) {
+                    $hasMemoField = true;
+
+                    break;
+                }
+            }
+            if (! $hasMemoField) {
+                continue;
+            }
+
+            $directory = dirname($candidate['path']);
+            $baseName = pathinfo($candidate['path'], PATHINFO_FILENAME);
+            $hasCompanion = false;
+            foreach (new \FilesystemIterator($directory, \FilesystemIterator::SKIP_DOTS) as $file) {
+                if ($file->isFile()
+                    && strcasecmp($file->getExtension(), 'fpt') === 0
+                    && strcasecmp($file->getBasename('.'.$file->getExtension()), $baseName) === 0) {
+                    $hasCompanion = true;
+
+                    break;
+                }
+            }
+
+            if (! $hasCompanion) {
+                $level = in_array($candidate['parent'], ['1', '2', '3'], true)
+                    ? $candidate['parent']
+                    : 'ไม่ระบุ';
+                throw new RuntimeException("ข้อมูลไม่ครบ: STUDENT.DBF ระดับ {$level} ต้องมีไฟล์ STUDENT.FPT คู่กัน");
+            }
+        }
+    }
+
     /** @return array{physical_table: string, education_level: int, data_type: string, row_count: int, schema_hash: string, import_seconds: float} */
-    private function importDbf(string $batchKey, string $parent, string $type, string $path): array
+    private function importDbf(string $batchKey, string $parent, string $type, string $path, ?callable $progress = null): array
     {
         $startedAt = hrtime(true);
         $table = $this->tableName($batchKey, $parent, $type);
@@ -299,24 +392,61 @@ final class LegacyZipImportService
         foreach (array_keys($performance) as $column) {
             $definitions[] = $this->quoteIdentifier($column).' VARCHAR(100) NULL';
         }
-        $sql = 'CREATE TABLE '.$this->quoteIdentifier($table)
-            .' (`_id` BIGINT UNSIGNED NOT NULL AUTO_INCREMENT, '.implode(', ', $definitions)
-            .', `_imported_at` TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP, PRIMARY KEY (`_id`)) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci';
+        $sql = $this->write()->getDriverName() === 'mysql'
+            ? 'CREATE TABLE '.$this->quoteIdentifier($table)
+                .' (`_id` BIGINT UNSIGNED NOT NULL AUTO_INCREMENT, '.implode(', ', $definitions)
+                .', `_imported_at` TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP, PRIMARY KEY (`_id`)) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci'
+            : 'CREATE TABLE '.$this->quoteIdentifier($table)
+                .' (`_id` INTEGER PRIMARY KEY AUTOINCREMENT, '.implode(', ', $definitions)
+                .', `_imported_at` TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP)';
         $this->write()->statement($sql);
         $this->createdTables[] = $table;
 
         $quotedColumns = implode(', ', array_map($this->quoteIdentifier(...), $allColumns));
-        $placeholders = implode(', ', array_fill(0, count($allColumns), '?'));
-        $statement = $this->write()->getPdo()->prepare('INSERT INTO '.$this->quoteIdentifier($table)." ({$quotedColumns}) VALUES ({$placeholders})");
+        $rowPlaceholders = '('.implode(', ', array_fill(0, count($allColumns), '?')).')';
+        $insertPrefix = 'INSERT INTO '.$this->quoteIdentifier($table)." ({$quotedColumns}) VALUES ";
+        // Keep safely below MySQL's 65,535 placeholder ceiling and SQLite's
+        // lower test limit while replacing hundreds of single-row round trips.
+        $placeholderLimit = $this->write()->getDriverName() === 'mysql' ? 50_000 : 900;
+        $batchSize = max(1, min(750, intdiv($placeholderLimit, max(1, count($allColumns)))));
+        $recordCount = max(1, $reader->recordCount());
+        $reportTableProgress = static function (int $seen, float $start, float $span) use ($progress, $recordCount): void {
+            if ($progress === null) {
+                return;
+            }
+            $progress((int) floor($recordCount * min(1, $start + ((min($seen, $recordCount) / $recordCount) * $span))), $recordCount);
+        };
         $selectedStudentRows = $type === 'student' && in_array('cardid', $columns, true) && in_array('id', $columns, true)
-            ? $this->selectedStudentRowIndexes($reader)
+            ? $this->selectedStudentRowIndexes($reader, fn (int $seen): mixed => $reportTableProgress($seen, 0, 0.30))
             : null;
+        $insertStart = $selectedStudentRows === null ? 0.0 : 0.30;
+        $insertSpan = $selectedStudentRows === null ? 0.92 : 0.62;
         $rows = 0;
+        $recordsSeen = 0;
+        $pendingRows = [];
+        $flush = function () use (&$pendingRows, $insertPrefix, $rowPlaceholders): void {
+            if ($pendingRows === []) {
+                return;
+            }
+            $parameters = [];
+            foreach ($pendingRows as $values) {
+                array_push($parameters, ...$values);
+            }
+            $statement = $this->write()->getPdo()->prepare(
+                $insertPrefix.implode(', ', array_fill(0, count($pendingRows), $rowPlaceholders)),
+            );
+            $statement->execute($parameters);
+            $pendingRows = [];
+        };
         $this->write()->beginTransaction();
         try {
             foreach ($reader->records() as $recordIndex => $record) {
+                $recordsSeen = $recordIndex + 1;
                 $cardId = trim((string) ($record['cardid'] ?? ''));
                 if ($selectedStudentRows !== null && $cardId !== '' && ! isset($selectedStudentRows[$recordIndex])) {
+                    if ($recordsSeen % 1_000 === 0) {
+                        $reportTableProgress($recordsSeen, $insertStart, $insertSpan);
+                    }
                     continue;
                 }
                 $values = [];
@@ -327,15 +457,24 @@ final class LegacyZipImportService
                     $value = trim((string) ($record[$source['field']] ?? ''));
                     $values[] = $source['last'] === null ? ($value ?: null) : ($value === '' ? null : substr($value, -$source['last']));
                 }
-                $statement->execute($values);
+                $pendingRows[] = $values;
                 $rows++;
+                if (count($pendingRows) >= $batchSize) {
+                    $flush();
+                    $reportTableProgress($recordsSeen, $insertStart, $insertSpan);
+                }
             }
+            $flush();
+            $reportTableProgress($recordCount, $insertStart, $insertSpan);
             $this->write()->commit();
         } catch (Throwable $exception) {
             $this->write()->rollBack();
             throw $exception;
         }
         $this->createPerformanceIndexes($table, $this->performanceIndexColumns($type));
+        if ($progress !== null) {
+            $progress($recordCount, $recordCount);
+        }
 
         return [
             'physical_table' => $table,
@@ -345,6 +484,14 @@ final class LegacyZipImportService
             'schema_hash' => hash('sha256', json_encode($fields, JSON_THROW_ON_ERROR)),
             'import_seconds' => round((hrtime(true) - $startedAt) / 1_000_000_000, 3),
         ];
+    }
+
+    /** @param array<string, mixed> $metrics */
+    private function reportProgress(?callable $progress, string $message, int $percentage, array $metrics = []): void
+    {
+        if ($progress !== null) {
+            $progress($message, max(0, min(100, $percentage)), $metrics);
+        }
     }
 
     /** @param array{name: string, type: string, length: int, decimal: int} $field */
@@ -368,10 +515,13 @@ final class LegacyZipImportService
      *
      * @return array<int, true>
      */
-    private function selectedStudentRowIndexes(VisualFoxProDbfReader $reader): array
+    private function selectedStudentRowIndexes(VisualFoxProDbfReader $reader, ?callable $progress = null): array
     {
         $latestByCard = [];
         foreach ($reader->records() as $recordIndex => $record) {
+            if ($progress !== null && (($recordIndex + 1) % 1_000 === 0)) {
+                $progress($recordIndex + 1);
+            }
             $cardId = trim((string) ($record['cardid'] ?? ''));
             if ($cardId === '') {
                 continue;
@@ -387,6 +537,9 @@ final class LegacyZipImportService
         $selected = [];
         foreach ($latestByCard as $record) {
             $selected[$record['index']] = true;
+        }
+        if ($progress !== null) {
+            $progress($reader->recordCount());
         }
 
         return $selected;
@@ -428,46 +581,103 @@ final class LegacyZipImportService
         };
     }
 
-    /** @return list<string> */
+    /** @return list<list<string>> */
     private function performanceIndexColumns(string $type): array
     {
         return match ($type) {
-            'student' => ['_perf_id10', '_perf_expsem', '_perf_grp', '_perf_cardid'],
-            'grade' => ['_perf_std10', '_perf_semestry', '_perf_sub'],
-            'subject' => ['_perf_sub'],
-            'activity' => ['_perf_std10', '_perf_semestry'],
-            'virtue' => ['_perf_std10', '_perf_semester'],
-            'group' => ['_perf_grp'],
-            'schedule' => ['_perf_sub', '_perf_semestry'],
-            'field' => ['_perf_fld'],
+            'student' => [['_perf_id10'], ['_perf_expsem'], ['_perf_grp'], ['_perf_cardid']],
+            // The portal normally locates a student's rows first and then
+            // narrows by semester/subject. The composite index serves all
+            // three left-prefix shapes while the two singles serve global
+            // latest-term and subject joins.
+            'grade' => [['_perf_std10', '_perf_semestry', '_perf_sub'], ['_perf_semestry'], ['_perf_sub']],
+            'subject' => [['_perf_sub']],
+            'activity' => [['_perf_std10', '_perf_semestry']],
+            'virtue' => [['_perf_std10', '_perf_semester']],
+            'group' => [['_perf_grp']],
+            'schedule' => [['_perf_sub', '_perf_semestry'], ['_perf_semestry']],
+            'field' => [['_perf_fld']],
             default => [],
         };
     }
 
-    /** @param list<string> $columns */
-    private function createPerformanceIndexes(string $table, array $columns): void
+    /** @param list<list<string>> $definitions */
+    private function createPerformanceIndexes(string $table, array $definitions): int
     {
-        if ($columns === []) {
-            return;
+        if ($definitions === []) {
+            return 0;
         }
 
-        if ($this->write()->getDriverName() === 'mysql') {
-            $definitions = array_map(function (string $column): string {
-                $index = substr('idx_'.ltrim($column, '_'), 0, 60);
+        $existing = [];
+        foreach ($this->write()->getSchemaBuilder()->getIndexes($table) as $index) {
+            $columns = array_map('strtolower', array_values($index['columns'] ?? []));
+            if ($columns !== []) {
+                $existing[implode("\0", $columns)] = true;
+            }
+        }
+        $missing = array_values(array_filter(
+            $definitions,
+            static fn (array $columns): bool => ! isset($existing[implode("\0", array_map('strtolower', $columns))]),
+        ));
+        if ($missing === []) {
+            return 0;
+        }
 
-                return 'ADD INDEX '.$this->quoteIdentifier($index).' ('.$this->quoteIdentifier($column).')';
-            }, $columns);
+        $indexName = static function (array $columns) use ($table): string {
+            $label = implode('_', array_map(static fn (string $column): string => ltrim($column, '_'), $columns));
+
+            return substr('idx_'.$label.'_'.substr(hash('sha256', $table."\0".implode("\0", $columns)), 0, 8), 0, 60);
+        };
+        if ($this->write()->getDriverName() === 'mysql') {
+            $alterDefinitions = array_map(fn (array $columns): string => 'ADD INDEX '
+                .$this->quoteIdentifier($indexName($columns)).' ('
+                .implode(', ', array_map($this->quoteIdentifier(...), $columns)).')', $missing);
             // One ALTER lets InnoDB build all secondary indexes in one table
             // operation instead of rescanning the imported table for each index.
-            $this->write()->statement('ALTER TABLE '.$this->quoteIdentifier($table).' '.implode(', ', $definitions));
+            $this->write()->statement('ALTER TABLE '.$this->quoteIdentifier($table).' '.implode(', ', $alterDefinitions));
 
-            return;
+            return count($missing);
         }
 
-        foreach ($columns as $column) {
-            $index = substr('idx_'.ltrim($column, '_'), 0, 60);
-            $this->write()->statement('CREATE INDEX '.$this->quoteIdentifier($index).' ON '.$this->quoteIdentifier($table).' ('.$this->quoteIdentifier($column).')');
+        foreach ($missing as $columns) {
+            $this->write()->statement('CREATE INDEX '.$this->quoteIdentifier($indexName($columns)).' ON '
+                .$this->quoteIdentifier($table).' ('.implode(', ', array_map($this->quoteIdentifier(...), $columns)).')');
         }
+
+        return count($missing);
+    }
+
+    /** @return array{batch_key: string, optimized_tables: int, added_indexes: int} */
+    public function optimizeRegisteredBatchIndexes(int $districtId): array
+    {
+        if ($districtId < 1) {
+            throw new InvalidArgumentException('ไม่พบอำเภอเป้าหมาย');
+        }
+        $batchKey = (string) $this->write()->table('import_batches')
+            ->where('district_id', $districtId)
+            ->orderByDesc('created_at')
+            ->value('batch_key');
+        $this->assertBatchKey($batchKey);
+        $prefix = 'db_'.$batchKey.'_';
+        $optimizedTables = 0;
+        $addedIndexes = 0;
+
+        foreach ($this->write()->getSchemaBuilder()->getTableListing(null, false) as $table) {
+            if (! str_starts_with($table, $prefix)
+                || preg_match('/_(student|grade|subject|activity|virtue|group|schedule|field)$/', $table, $matches) !== 1) {
+                continue;
+            }
+            if (preg_match('/^[A-Za-z0-9_]{1,64}$/', $table) !== 1) {
+                throw new RuntimeException('พบชื่อตารางนำเข้าที่ไม่ปลอดภัย');
+            }
+            $added = $this->createPerformanceIndexes($table, $this->performanceIndexColumns($matches[1]));
+            if ($added > 0) {
+                $optimizedTables++;
+                $addedIndexes += $added;
+            }
+        }
+
+        return ['batch_key' => $batchKey, 'optimized_tables' => $optimizedTables, 'added_indexes' => $addedIndexes];
     }
 
     private function registerBatch(string $original, string $saved, string $batchKey, int $sizeKb, int $fileCount, int $districtId): int
@@ -581,6 +791,53 @@ final class LegacyZipImportService
             'removed_zip' => $hadZip && ! is_file($zipPath),
             'removed_extract_directory' => $hadExtractDirectory && ! file_exists($extractPath) && ! is_link($extractPath),
         ];
+    }
+
+    /** @return array{batch_key: string, removed_table_count: int, removed_zip: bool, removed_extract_directory: bool} */
+    public function deleteDistrictBatch(int $districtId, string $batchKey): array
+    {
+        if ($districtId < 1) {
+            throw new InvalidArgumentException('ไม่พบอำเภอเป้าหมาย');
+        }
+        $this->assertBatchKey($batchKey);
+        $lockName = $this->acquireDistrictImportLock($districtId);
+
+        try {
+            $batch = $this->write()->table('import_batches')
+                ->where('district_id', $districtId)
+                ->where('batch_key', $batchKey)
+                ->first(['import_history_id']);
+            if ($batch === null) {
+                throw new InvalidArgumentException('ไม่พบชุดข้อมูลในอำเภอที่เลือก');
+            }
+
+            $prefix = 'db_'.$batchKey.'_';
+            $tableCount = count(array_filter(
+                $this->write()->getSchemaBuilder()->getTableListing(null, false),
+                static fn (string $table): bool => str_starts_with($table, $prefix),
+            ));
+            $zipPath = $this->absoluteDirectory((string) config('legacy.zip_root')).DIRECTORY_SEPARATOR.$batchKey.'.zip';
+            $extractPath = $this->absoluteDirectory((string) config('legacy.extract_root')).DIRECTORY_SEPARATOR.$batchKey;
+            $hadZip = is_file($zipPath);
+            $hadExtractDirectory = is_dir($extractPath) || is_link($extractPath);
+
+            $this->dropBatchTables($batchKey);
+            $this->removeBatchFiles($batchKey);
+            $this->deleteBatchRegistry(
+                $districtId,
+                $batchKey,
+                $batch->import_history_id === null ? null : (int) $batch->import_history_id,
+            );
+
+            return [
+                'batch_key' => $batchKey,
+                'removed_table_count' => $tableCount,
+                'removed_zip' => $hadZip && ! is_file($zipPath),
+                'removed_extract_directory' => $hadExtractDirectory && ! file_exists($extractPath) && ! is_link($extractPath),
+            ];
+        } finally {
+            $this->releaseDistrictImportLock($lockName);
+        }
     }
 
     private function dropBatchTables(string $batchKey): void

@@ -20,7 +20,6 @@ final class StudentDirectoryController extends StudentsApiController
             'district_id' => ['nullable', 'integer', 'min:1'],
             'level' => ['nullable', 'integer', Rule::in([1, 2, 3])],
             'group' => ['nullable', 'string', 'max:120'],
-            'status' => ['nullable', Rule::in(['studying', 'graduated', 'transferred', 'inactive'])],
             'term' => ['nullable', 'regex:/^[12]\/25\d{2}$/'],
             'sort' => ['nullable', Rule::in(['name', 'code', 'gpax', 'credits', 'kpch_hours'])],
             'direction' => ['nullable', Rule::in(['asc', 'desc'])],

@@ -88,7 +88,6 @@ final class StudentReportController extends StudentsApiController
             'district_id' => ['nullable', 'integer', 'min:1'],
             'level' => ['nullable', 'integer', Rule::in([1, 2, 3])],
             'group' => ['nullable', 'string', 'max:80'],
-            'status' => ['nullable', Rule::in(['studying', 'graduated', 'transferred'])],
             'term' => ['nullable', 'regex:/^[12]\/25\d{2}$/'],
             'search' => ['nullable', 'string', 'max:100'],
             'subject' => ['nullable', 'string', 'max:30'],

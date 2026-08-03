@@ -70,6 +70,27 @@ final class LegacyFptMemoReaderTest extends TestCase
         );
     }
 
+    public function test_it_finds_student_memo_files_in_nested_import_directories(): void
+    {
+        $nestedRoot = $this->root.'/import_456_abcdef/backup/itw51/school/3';
+        File::ensureDirectoryExists($nestedRoot);
+        File::copy(
+            $this->root.'/import_123_abcdef/school/3/STUDENT.FPT',
+            $nestedRoot.'/student.fpt',
+        );
+        File::copy(
+            $this->root.'/import_123_abcdef/school/3/STUDENT.DBF',
+            $nestedRoot.'/student.dbf',
+        );
+
+        $reader = new LegacyFptMemoReader($this->root);
+
+        $this->assertSame(
+            '089-111-2233',
+            $reader->readStudentMemo('import_456_abcdef', 3, null, 'STUDENT01', 'phone'),
+        );
+    }
+
     private function putMemo(string $contents, int $pointer, int $blockSize, string $value): string
     {
         $encoded = iconv('UTF-8', 'Windows-874//IGNORE', $value);

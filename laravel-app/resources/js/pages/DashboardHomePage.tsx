@@ -19,14 +19,15 @@ import type { ReactNode } from 'react';
 import { Link } from 'react-router-dom';
 import { useDemoRole, type DemoRole } from '../context/DemoRoleContext';
 import { apiGet } from '../lib/api';
-import { publicBrandingPath, type PublicBranding } from '../lib/publicBranding';
+import { publicAssetUrl, publicBrandingPath, type PublicBranding } from '../lib/publicBranding';
+import { withAppBasePath } from '../lib/urls';
 import { queryKeys } from '../query';
 import type { AnalyticsDatum, PortalData } from '../types';
 
 const roleContent: Record<DemoRole, { title: string; subtitle: string }> = {
     student: {
         title: 'ภาพรวมการเรียนของคุณ',
-        subtitle: 'ติดตามสถานะ ผลการเรียน กพช. คุณธรรม และตารางสอบจากข้อมูลล่าสุด',
+        subtitle: 'ติดตามผลการเรียน กพช. คุณธรรม และตารางสอบจากข้อมูลล่าสุด',
     },
     teacher: {
         title: 'ภาพรวมกลุ่มที่ดูแล',
@@ -253,7 +254,7 @@ export function DashboardHomePage() {
         <div className="space-y-6 pb-2">
             <section className="dashboard-hero relative overflow-hidden border border-brand-200/80 bg-brand-100">
                 <img
-                    src={branding.data?.dashboardHeroImageUrl ?? '/images/dashboard-hero-sena-v2.webp'}
+                    src={publicAssetUrl(branding.data?.dashboardHeroImageUrl) ?? withAppBasePath('/images/dashboard-hero-sena-v2.webp')}
                     alt="ครูผู้ดูแลระบบการศึกษาในพื้นที่อำเภอเสนา"
                     fetchPriority="high"
                     className="absolute inset-0 size-full object-cover object-[67%_center] opacity-45 sm:opacity-100"

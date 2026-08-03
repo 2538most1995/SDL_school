@@ -1,5 +1,6 @@
 import { ApiError, apiGet } from '../lib/api';
 import type { ApiResponse } from '../types';
+import { withAppBasePath } from '../lib/urls';
 
 export function getFeatureData<T>(path: string, signal?: AbortSignal): Promise<ApiResponse<T>> {
     return apiGet<T>(path, signal);
@@ -53,8 +54,7 @@ function firstJsonValue(raw: string): string | null {
     return null;
 }
 
-async function readJsonResponse<T>(response: Response): Promise<T | null> {
-    const raw = await response.text();
+function parseJsonText<T>(raw: string): T | null {
     if (!raw.trim()) return null;
 
     try {
@@ -70,13 +70,31 @@ async function readJsonResponse<T>(response: Response): Promise<T | null> {
     }
 }
 
+async function readJsonResponse<T>(response: Response): Promise<T | null> {
+    const raw = await response.text();
+    return parseJsonText<T>(raw);
+}
+
+function responseError<T extends { message?: string; errors?: Record<string, string[]> }>(result: T | null, status: number): ApiError {
+    const firstValidationError = result?.errors ? Object.values(result.errors).flat()[0] : undefined;
+    const statusMessages: Record<number, string> = {
+        413: 'ไฟล์มีขนาดเกินค่าที่เซิร์ฟเวอร์อนุญาต',
+        419: 'เซสชันหมดอายุ กรุณารีเฟรชหน้าและเข้าสู่ระบบอีกครั้ง',
+        429: 'มีการส่งข้อมูลถี่เกินไป กรุณารอสักครู่แล้วลองใหม่',
+        500: 'เซิร์ฟเวอร์หยุดทำงานระหว่างประมวลผล กรุณาลองใหม่หรือติดต่อผู้ดูแลระบบ',
+        503: 'ระบบนำเข้าข้อมูลยังไม่พร้อมใช้งาน',
+    };
+
+    return new ApiError(firstValidationError ?? result?.message ?? statusMessages[status] ?? `ไม่สามารถบันทึกข้อมูลได้ (HTTP ${status})`, status, result?.errors ?? {});
+}
+
 export async function sendFeatureData<T>(path: string, method: 'POST' | 'PATCH' | 'DELETE', payload?: unknown): Promise<ApiResponse<T>> {
     const isForm = payload instanceof FormData;
     const token = csrfToken();
     const districtId = window.localStorage.getItem('sena-district-id');
     let response: Response;
     try {
-        response = await fetch(path, {
+        response = await fetch(withAppBasePath(path), {
             method,
             credentials: 'same-origin',
             headers: {
@@ -94,15 +112,7 @@ export async function sendFeatureData<T>(path: string, method: 'POST' | 'PATCH' 
     const result = await readJsonResponse<ApiResponse<T> & { message?: string; errors?: Record<string, string[]> }>(response);
 
     if (!response.ok) {
-        const firstValidationError = result?.errors ? Object.values(result.errors).flat()[0] : undefined;
-        const statusMessages: Record<number, string> = {
-            413: 'ไฟล์มีขนาดเกินค่าที่เซิร์ฟเวอร์อนุญาต',
-            419: 'เซสชันหมดอายุ กรุณารีเฟรชหน้าและเข้าสู่ระบบอีกครั้ง',
-            429: 'มีการส่งข้อมูลถี่เกินไป กรุณารอสักครู่แล้วลองใหม่',
-            500: 'เซิร์ฟเวอร์หยุดทำงานระหว่างประมวลผล กรุณาลองใหม่หรือติดต่อผู้ดูแลระบบ',
-            503: 'ระบบนำเข้าข้อมูลยังไม่พร้อมใช้งาน',
-        };
-        throw new ApiError(firstValidationError ?? result?.message ?? statusMessages[response.status] ?? `ไม่สามารถบันทึกข้อมูลได้ (HTTP ${response.status})`, response.status, result?.errors ?? {});
+        throw responseError(result, response.status);
     }
 
     if (!result) {
@@ -110,4 +120,42 @@ export async function sendFeatureData<T>(path: string, method: 'POST' | 'PATCH' 
     }
 
     return result;
+}
+
+export function uploadFeatureData<T>(path: string, payload: FormData, onProgress: (percentage: number) => void): Promise<ApiResponse<T>> {
+    return new Promise((resolve, reject) => {
+        const request = new XMLHttpRequest();
+        const token = csrfToken();
+        const districtId = window.localStorage.getItem('sena-district-id');
+        request.open('POST', withAppBasePath(path), true);
+        request.withCredentials = true;
+        request.timeout = 10 * 60 * 1_000;
+        request.setRequestHeader('Accept', 'application/json');
+        if (districtId) request.setRequestHeader('X-District-Id', districtId);
+        if (token) {
+            request.setRequestHeader('X-CSRF-TOKEN', token);
+            request.setRequestHeader('X-XSRF-TOKEN', token);
+        }
+        request.upload.onprogress = (event) => {
+            if (event.lengthComputable && event.total > 0) {
+                onProgress(Math.min(100, Math.round((event.loaded / event.total) * 100)));
+            }
+        };
+        request.onerror = () => reject(new ApiError('การเชื่อมต่อกับเซิร์ฟเวอร์ขาดระหว่างอัปโหลดไฟล์ กรุณาลองใหม่อีกครั้ง', 0));
+        request.ontimeout = () => reject(new ApiError('อัปโหลดไฟล์ใช้เวลานานเกินกำหนด กรุณาตรวจอินเทอร์เน็ตแล้วลองใหม่', 0));
+        request.onload = () => {
+            const result = parseJsonText<ApiResponse<T> & { message?: string; errors?: Record<string, string[]> }>(request.responseText ?? '');
+            if (request.status < 200 || request.status >= 300) {
+                reject(responseError(result, request.status));
+                return;
+            }
+            if (!result) {
+                reject(new ApiError('เซิร์ฟเวอร์ส่งข้อมูลตอบกลับไม่สมบูรณ์ กรุณาลองใหม่อีกครั้ง', request.status));
+                return;
+            }
+            onProgress(100);
+            resolve(result);
+        };
+        request.send(payload);
+    });
 }

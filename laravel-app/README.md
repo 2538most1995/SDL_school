@@ -45,14 +45,15 @@ DocumentRoot "/Applications/MAMP/htdocs/sena_care_school 3/laravel-app/public"
 
 กำหนด `APP_URL=http://localhost:8888` และ `SANCTUM_STATEFUL_DOMAINS=localhost:8888,127.0.0.1:8888` จากนั้นเปิด [http://localhost:8888/index.php](http://localhost:8888/index.php) หรือ [http://localhost:8888/login](http://localhost:8888/login)
 
-การนำเข้า ZIP/DBF เป็นงานเบื้องหลัง ต้องเปิด queue worker ด้วย PHP เวอร์ชันเดียวกับ MAMP ควบคู่กับ Apache:
+การนำเข้า ZIP/DBF บันทึกงานลง database queue ก่อน แล้วเปิด worker เบื้องหลังอัตโนมัติ จึงไม่ต้องเปิด queue worker แยกใน MAMP ค่าแนะนำคือ:
 
 ```bash
-cd "/Applications/MAMP/htdocs/sena_care_school 3/laravel-app"
-/Applications/MAMP/bin/php/php8.4.1/bin/php artisan queue:work database --queue=default --sleep=1 --tries=1 --timeout=600
+SENA_LEGACY_IMPORT_QUEUE_CONNECTION=database
+SENA_LEGACY_IMPORT_AUTOSTART_CONNECTION=background
+DB_QUEUE_RETRY_AFTER=900
 ```
 
-หากมีการแก้โค้ดฝั่งนำเข้าระหว่างที่ worker ทำงาน ให้รัน `php artisan queue:restart` แล้วเปิด worker ใหม่ สถานะคิวตรวจได้ด้วย `php artisan queue:monitor database:default --max=100`
+ตัวปลุก background จะระบายงาน import ที่ค้างตามลำดับจนคิวว่าง ไม่หยุดหลังงานแรก ใช้ file lock เดียวกับ scheduled worker และตั้งเวลาจองงานให้นานกว่า timeout เพื่อป้องกัน worker สองตัวนำเข้า ZIP เดียวกันซ้ำ หากโฮสต์ปิดการสร้าง background process งานจะยังค้างอย่างปลอดภัยใน database queue และสามารถเปิด worker ด้วย `php artisan legacy:work-import-queue` ได้โดยข้อมูลไม่สูญหาย สำหรับ Plesk Scheduled Task ให้ใช้ `legacy:work-import-queue --once`
 
 หากแก้ `.env` ให้รัน `php artisan config:clear` ก่อนทดสอบ การเปิด `mod_rewrite` จำเป็นต่อการรีเฟรช route เช่น `/app`, `/students` และ `/grades`
 
@@ -68,6 +69,8 @@ Production ต้องใช้ฐานสองชุดและบัญช
 ```dotenv
 APP_ENV=production
 APP_DEBUG=false
+APP_URL=https://example.com/SDL_school
+ASSET_URL=https://example.com/SDL_school
 SENA_DEMO_MODE=false
 SENA_DATA_SOURCE=legacy
 LEGACY_STUDENT_ENABLED=true
@@ -79,6 +82,10 @@ LEGACY_DB_DATABASE=...
 LEGACY_DB_USERNAME=... # SELECT-only
 LEGACY_DB_PASSWORD=...
 ```
+
+ถ้าติดตั้งใต้ subdirectory เช่น `/SDL_school` ต้องให้ทั้ง `APP_URL` และ `ASSET_URL`
+มี path เดียวกัน จากนั้นรัน `php artisan optimize:clear` และ build/deploy `public/build` ใหม่
+เพื่อให้ Vite, React Router และ API ใช้ base path ถูกต้อง
 
 `SENA_LEGACY_CONFIG_FALLBACK=true` ใช้กับ MAMP เครื่องพัฒนาเครื่องนี้เท่านั้น โดย parser อ่านเฉพาะค่าเชื่อมต่อจาก `storage/app/private/legacy-database.credentials` และไม่ execute ไฟล์นั้น ห้ามเปิด fallback บน production
 

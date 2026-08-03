@@ -1,9 +1,14 @@
 Options -Indexes
+DirectoryIndex index.php
 
 <IfModule mod_rewrite.c>
     RewriteEngine On
 
-    # The legacy PHP application has been retired. Laravel is the only web entry point.
-    RewriteRule ^$ laravel-app/public/ [L]
-    RewriteRule ^(.*)$ laravel-app/public/$1 [L]
+    # Serve only Laravel's public assets from the application subdirectory.
+    RewriteRule ^(build|storage)/(.*)$ laravel-app/public/$1/$2 [L]
+
+    # Keep the project-level front controller as the visible PHP entry point.
+    # This lets Laravel detect /SDL_school as its base URL correctly.
+    RewriteRule ^index\.php$ - [L]
+    RewriteRule ^ index.php [L,QSA]
 </IfModule>

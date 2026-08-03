@@ -28,10 +28,6 @@ export type PortalAnalytics = {
         students: number;
         groups: number;
         new_students: number;
-        studying: number;
-        graduated: number;
-        transferred: number;
-        inactive: number;
     };
     averages: {
         gpax: number | null;
@@ -41,7 +37,6 @@ export type PortalAnalytics = {
         kpch_hours: number | null;
     };
     current_term: string | null;
-    by_status: AnalyticsDatum[];
     by_level: AnalyticsDatum[];
     by_gender: AnalyticsDatum[];
     by_group: AnalyticsDatum[];

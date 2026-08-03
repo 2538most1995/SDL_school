@@ -7,6 +7,8 @@ return [
     'read_only' => env('SENA_LEGACY_READ_ONLY', true),
     'write_enabled' => env('SENA_LEGACY_WRITE_ENABLED', false),
     'write_connection' => env('SENA_LEGACY_WRITE_CONNECTION', 'legacy_write'),
+    'import_queue_connection' => env('SENA_LEGACY_IMPORT_QUEUE_CONNECTION', 'database'),
+    'import_autostart_connection' => env('SENA_LEGACY_IMPORT_AUTOSTART_CONNECTION', 'background'),
     'allow_config_fallback' => env('SENA_LEGACY_CONFIG_FALLBACK', false),
     // Import tables are immutable and every replacement receives a new batch
     // key, so computed aggregates can be reused safely for several minutes.

@@ -188,19 +188,29 @@ final class LegacyFptMemoReader
             return $this->paths[$cacheKey] = null;
         }
 
-        $matches = glob($batchRoot.DIRECTORY_SEPARATOR.'*'.DIRECTORY_SEPARATOR.$level.DIRECTORY_SEPARATOR.'*') ?: [];
-        foreach ($matches as $candidate) {
-            if (strcasecmp(basename($candidate), 'student.'.$extension) !== 0) {
+        $selected = null;
+        $selectedMtime = -1;
+        $iterator = new \RecursiveIteratorIterator(
+            new \RecursiveDirectoryIterator($batchRoot, \FilesystemIterator::SKIP_DOTS),
+        );
+        foreach ($iterator as $candidate) {
+            if (! $candidate->isFile()
+                || basename($candidate->getPath()) !== (string) $level
+                || strcasecmp($candidate->getBasename(), 'student.'.$extension) !== 0) {
                 continue;
             }
 
-            $path = realpath($candidate);
+            $path = realpath($candidate->getPathname());
             if ($path !== false && is_file($path) && str_starts_with($path, $batchRoot.DIRECTORY_SEPARATOR)) {
-                return $this->paths[$cacheKey] = $path;
+                $mtime = $candidate->getMTime();
+                if ($selected === null || $mtime > $selectedMtime || ($mtime === $selectedMtime && strcmp($path, $selected) > 0)) {
+                    $selected = $path;
+                    $selectedMtime = $mtime;
+                }
             }
         }
 
-        return $this->paths[$cacheKey] = null;
+        return $this->paths[$cacheKey] = $selected;
     }
 
     private function rawStudentField(string $batchKey, int $level, string $studentCode, string $field): ?string

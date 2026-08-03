@@ -22,7 +22,7 @@ import { Panel } from '../../components/Panel';
 import { QueryError, QuerySkeleton } from '../../components/QueryState';
 import { StatTile } from '../../components/StatTile';
 import { StatGrid } from '../../components/StatGrid';
-import { StatusBadge, type StatusTone } from '../../components/StatusBadge';
+import { StatusBadge } from '../../components/StatusBadge';
 import { useDemoRole } from '../../context/DemoRoleContext';
 import { getFeatureDataWithDemo } from '../api';
 
@@ -34,7 +34,6 @@ type ReportRow = {
     secondary: string;
     group: string;
     metric: string;
-    status: string;
     registeredCount?: number;
     successfulCount?: number;
     absentCount?: number;
@@ -58,18 +57,15 @@ type AcademicSubjectRow = {
     name: string;
     credits: number;
     grade: string | null;
-    transferred: boolean;
-    passed: boolean;
     attended: boolean;
-    registrationStatus: string;
 };
 
 const academicReportKinds: ReportKind[] = ['registered-subjects', 'grade-threshold', 'exam-attendance'];
 
 const commonStudents: ReportRow[] = [
-    { id: '1', primary: 'ณัฐชา ศรีสวัสดิ์', secondary: 'SENA-670142', group: 'ม.ปลาย กลุ่ม 1', metric: 'ภาคเรียน 1/2569', status: 'กำลังศึกษา' },
-    { id: '2', primary: 'กิตติภพ พูลผล', secondary: 'SENA-660087', group: 'ม.ต้น กลุ่ม 2', metric: 'ภาคเรียน 1/2569', status: 'กำลังศึกษา' },
-    { id: '3', primary: 'ธีรภัทร ภู่ทอง', secondary: 'SENA-670099', group: 'ม.ปลาย กลุ่ม 1', metric: 'ภาคเรียน 1/2569', status: 'กำลังศึกษา' },
+    { id: '1', primary: 'ณัฐชา ศรีสวัสดิ์', secondary: 'SENA-670142', group: 'ม.ปลาย กลุ่ม 1', metric: 'ภาคเรียน 1/2569' },
+    { id: '2', primary: 'กิตติภพ พูลผล', secondary: 'SENA-660087', group: 'ม.ต้น กลุ่ม 2', metric: 'ภาคเรียน 1/2569' },
+    { id: '3', primary: 'ธีรภัทร ภู่ทอง', secondary: 'SENA-670099', group: 'ม.ปลาย กลุ่ม 1', metric: 'ภาคเรียน 1/2569' },
 ];
 
 const reportConfig: Record<ReportKind, {
@@ -90,15 +86,15 @@ const reportConfig: Record<ReportKind, {
         title: 'นักศึกษาใหม่', description: 'ตรวจรายชื่อนักศึกษาใหม่ แยกตามระดับและกลุ่มเรียน', category: 'รายงานนักศึกษา', icon: UserPlus,
         primaryLabel: 'นักศึกษา', secondaryLabel: 'รหัสนักศึกษา', groupLabel: 'ระดับและกลุ่ม', metricLabel: 'ภาคเรียน',
         endpoint: '/api/v1/reports/new-students',
-        activeLabel: 'กำลังศึกษา', activeDetail: 'จากนักศึกษาใหม่ในภาคเรียน',
+        activeLabel: 'นักศึกษาใหม่', activeDetail: 'จากผู้เข้าเรียนในภาคเรียน',
         demo: { total: 47, active: 45, groups: 6, rows: commonStudents },
     },
     graduates: {
-        title: 'ผู้จบหลักสูตร', description: 'ตรวจสถานะการจบ หน่วยกิต และภาคเรียนที่สำเร็จการศึกษา', category: 'รายงานผลสำเร็จ', icon: Medal,
+        title: 'ผู้จบหลักสูตร', description: 'ตรวจข้อมูลการจบ หน่วยกิต และภาคเรียนที่สำเร็จการศึกษา', category: 'รายงานผลสำเร็จ', icon: Medal,
         primaryLabel: 'นักศึกษา', secondaryLabel: 'รหัสนักศึกษา', groupLabel: 'ระดับ', metricLabel: 'ภาคเรียนที่จบ',
         endpoint: '/api/v1/reports/graduates',
         activeLabel: 'จบหลักสูตร', activeDetail: 'ยืนยันผลจบแล้ว',
-        demo: { total: 32, active: 32, groups: 3, rows: commonStudents.map((row, index) => ({ ...row, metric: index === 0 ? '2/2568' : '1/2568', status: 'จบการศึกษา' })) },
+        demo: { total: 32, active: 32, groups: 3, rows: commonStudents.map((row, index) => ({ ...row, metric: index === 0 ? '2/2568' : '1/2568' })) },
     },
     transfers: {
         title: 'ข้อมูลเทียบโอน', description: 'ดูรายวิชา หน่วยกิต และผลการเทียบโอนของนักศึกษา', category: 'รายงานวิชา', icon: ArrowsLeftRight,
@@ -106,9 +102,9 @@ const reportConfig: Record<ReportKind, {
         endpoint: '/api/v1/reports/transfers',
         activeLabel: 'อนุมัติเทียบโอน', activeDetail: 'รายการที่บันทึกในระบบเดิม',
         demo: { total: 18, active: 16, groups: 9, rows: [
-            { id: '1', primary: 'ภาษาไทย', secondary: 'พท31001', group: 'ณัฐชา ศรีสวัสดิ์', metric: '5 หน่วยกิต', status: 'อนุมัติ' },
-            { id: '2', primary: 'สังคมศึกษา', secondary: 'สค31001', group: 'กิตติภพ พูลผล', metric: '3 หน่วยกิต', status: 'อนุมัติ' },
-            { id: '3', primary: 'วิทยาศาสตร์', secondary: 'พว31001', group: 'ธีรภัทร ภู่ทอง', metric: '5 หน่วยกิต', status: 'รอตรวจ' },
+            { id: '1', primary: 'ภาษาไทย', secondary: 'พท31001', group: 'ณัฐชา ศรีสวัสดิ์', metric: '5 หน่วยกิต' },
+            { id: '2', primary: 'สังคมศึกษา', secondary: 'สค31001', group: 'กิตติภพ พูลผล', metric: '3 หน่วยกิต' },
+            { id: '3', primary: 'วิทยาศาสตร์', secondary: 'พว31001', group: 'ธีรภัทร ภู่ทอง', metric: '5 หน่วยกิต' },
         ] },
     },
     'registered-subjects': {
@@ -117,9 +113,9 @@ const reportConfig: Record<ReportKind, {
         endpoint: '/api/v1/reports/registered-subjects',
         activeLabel: 'รายวิชาเปิดสอน', activeDetail: 'รายการที่พร้อมใช้งาน',
         demo: { total: 24, active: 22, groups: 3, rows: [
-            { id: '1', primary: 'ภาษาไทย', secondary: 'พท31001', group: 'มัธยมศึกษาตอนปลาย', metric: '38 คน', status: 'เปิดสอน' },
-            { id: '2', primary: 'วิทยาศาสตร์', secondary: 'พว31001', group: 'มัธยมศึกษาตอนปลาย', metric: '41 คน', status: 'เปิดสอน' },
-            { id: '3', primary: 'คณิตศาสตร์', secondary: 'พค21001', group: 'มัธยมศึกษาตอนต้น', metric: '35 คน', status: 'เปิดสอน' },
+            { id: '1', primary: 'ภาษาไทย', secondary: 'พท31001', group: 'มัธยมศึกษาตอนปลาย', metric: '38 คน' },
+            { id: '2', primary: 'วิทยาศาสตร์', secondary: 'พว31001', group: 'มัธยมศึกษาตอนปลาย', metric: '41 คน' },
+            { id: '3', primary: 'คณิตศาสตร์', secondary: 'พค21001', group: 'มัธยมศึกษาตอนต้น', metric: '35 คน' },
         ] },
     },
     'grade-threshold': {
@@ -128,9 +124,9 @@ const reportConfig: Record<ReportKind, {
         endpoint: '/api/v1/reports/students/grades-above-two',
         activeLabel: 'ผ่านเกณฑ์', activeDetail: 'ผลการเรียนเกรด 2 ขึ้นไป',
         demo: { total: 418, active: 356, groups: 12, rows: [
-            { id: '1', primary: 'ภาษาไทย', secondary: 'พท31001', group: 'มัธยมศึกษาตอนปลาย', metric: '34 จาก 38 คน', status: '89.5%' },
-            { id: '2', primary: 'วิทยาศาสตร์', secondary: 'พว31001', group: 'มัธยมศึกษาตอนปลาย', metric: '33 จาก 41 คน', status: '80.5%' },
-            { id: '3', primary: 'คณิตศาสตร์', secondary: 'พค21001', group: 'มัธยมศึกษาตอนต้น', metric: '27 จาก 35 คน', status: '77.1%' },
+            { id: '1', primary: 'ภาษาไทย', secondary: 'พท31001', group: 'มัธยมศึกษาตอนปลาย', metric: '34 จาก 38 คน (89.5%)' },
+            { id: '2', primary: 'วิทยาศาสตร์', secondary: 'พว31001', group: 'มัธยมศึกษาตอนปลาย', metric: '33 จาก 41 คน (80.5%)' },
+            { id: '3', primary: 'คณิตศาสตร์', secondary: 'พค21001', group: 'มัธยมศึกษาตอนต้น', metric: '27 จาก 35 คน (77.1%)' },
         ] },
     },
     'exam-attendance': {
@@ -139,18 +135,12 @@ const reportConfig: Record<ReportKind, {
         endpoint: '/api/v1/reports/students/exam-attendance',
         activeLabel: 'เข้าสอบ', activeDetail: 'รายการเข้าสอบที่บันทึกแล้ว',
         demo: { total: 436, active: 409, groups: 14, rows: [
-            { id: '1', primary: 'ภาษาไทย', secondary: 'พท31001', group: 'ห้องสอบ 1', metric: '36 จาก 38 คน', status: 'ครบข้อมูล' },
-            { id: '2', primary: 'วิทยาศาสตร์', secondary: 'พว31001', group: 'ห้องสอบ 2', metric: '39 จาก 41 คน', status: 'ครบข้อมูล' },
-            { id: '3', primary: 'คณิตศาสตร์', secondary: 'พค21001', group: 'ห้องสอบ 3', metric: '31 จาก 35 คน', status: 'รอตรวจ' },
+            { id: '1', primary: 'ภาษาไทย', secondary: 'พท31001', group: 'ห้องสอบ 1', metric: '36 จาก 38 คน' },
+            { id: '2', primary: 'วิทยาศาสตร์', secondary: 'พว31001', group: 'ห้องสอบ 2', metric: '39 จาก 41 คน' },
+            { id: '3', primary: 'คณิตศาสตร์', secondary: 'พค21001', group: 'ห้องสอบ 3', metric: '31 จาก 35 คน' },
         ] },
     },
 };
-
-function statusTone(status: string): StatusTone {
-    if (['กำลังศึกษา', 'จบการศึกษา', 'อนุมัติ', 'เปิดสอน', 'ครบข้อมูล', 'ลงทะเบียนแล้ว'].includes(status) || status.endsWith('%')) return 'success';
-    if (status.includes('รอ')) return 'warning';
-    return 'neutral';
-}
 
 function normalizeReportPayload(kind: ReportKind, payload: unknown, fallback: ReportPayload, viewMode: ViewMode = 'subject'): ReportPayload {
     if (payload && typeof payload === 'object' && 'rows' in payload) return payload as ReportPayload;
@@ -175,8 +165,7 @@ function normalizeReportPayload(kind: ReportKind, payload: unknown, fallback: Re
                 group: `${String(studentLevel.label ?? '-')} · ${String(studentGroup.name ?? studentGroup.code ?? '-')}`,
                 metric: kind === 'registered-subjects'
                     ? `${registered.toLocaleString('th-TH')} วิชา`
-                    : `${successful.toLocaleString('th-TH')} จาก ${registered.toLocaleString('th-TH')} วิชา`,
-                status: kind === 'registered-subjects' ? 'ลงทะเบียนแล้ว' : `${String(item.success_rate ?? 0)}%`,
+                    : `${successful.toLocaleString('th-TH')} จาก ${registered.toLocaleString('th-TH')} วิชา (${String(item.success_rate ?? 0)}%)`,
                 registeredCount: registered,
                 successfulCount: successful,
                 absentCount: Number(item.absent_subjects ?? 0),
@@ -191,8 +180,7 @@ function normalizeReportPayload(kind: ReportKind, payload: unknown, fallback: Re
             primary: String(subject.name ?? 'รายวิชา'),
             secondary: String(subject.code ?? ''),
             group: String(level.label ?? item.term ?? '-'),
-            metric: `${successful.toLocaleString('th-TH')} จาก ${registered.toLocaleString('th-TH')} คน`,
-            status: kind === 'exam-attendance' ? `${String(item.attendance_rate ?? 0)}%` : `${String(item.success_rate ?? 0)}%`,
+            metric: `${successful.toLocaleString('th-TH')} จาก ${registered.toLocaleString('th-TH')} คน (${String(kind === 'exam-attendance' ? item.attendance_rate ?? 0 : item.success_rate ?? 0)}%)`,
             registeredCount: registered,
             successfulCount: successful,
             absentCount: Number(item.absent_students ?? 0),
@@ -310,23 +298,14 @@ function AcademicStudentDetailDialog({ kind, student, term, onClose }: { kind: R
             name,
             credits: Number(nestedSubject?.credits ?? item.credits ?? 0),
             grade,
-            transferred: Boolean(item.is_transferred),
-            passed: Boolean(item.is_passed) || String(item.registration_status ?? '') === 'passed',
             attended: Boolean(item.exam_attended),
-            registrationStatus: String(item.registration_status ?? ''),
         };
     }), [detail.data, term]);
     const columns = useMemo<ColumnDef<AcademicSubjectRow>[]>(() => [
         { accessorKey: 'code', header: 'รหัสวิชา', size: 100, meta: { compactSize: 74 }, cell: ({ getValue }) => <span className="font-mono text-xs font-bold text-slate-600">{getValue<string>()}</span> },
         { accessorKey: 'name', header: 'รายวิชา', size: 320, meta: { compactSize: 164 }, cell: ({ getValue }) => <span className="font-bold text-slate-950">{getValue<string>()}</span> },
         { accessorKey: 'credits', header: 'หน่วยกิต', size: 92, meta: { compactSize: 58, compactTextAlign: 'center' }, cell: ({ getValue }) => Number(getValue<number>()).toFixed(1) },
-        ...(kind === 'registered-subjects' ? [{
-            id: 'registration', header: 'สถานะลงทะเบียน', size: 160, meta: { compactSize: 82, compactTextAlign: 'center' }, cell: ({ row }: { row: { original: AcademicSubjectRow } }) => {
-                const value = row.original;
-                const label = value.transferred ? 'เทียบโอน' : value.registrationStatus === 'passed' ? 'ผ่านแล้ว' : value.registrationStatus === 'needs_improvement' ? 'ต้องปรับปรุง' : 'ลงทะเบียน';
-                return <StatusBadge tone={label === 'ต้องปรับปรุง' ? 'warning' : 'success'}>{label}</StatusBadge>;
-            },
-        } as ColumnDef<AcademicSubjectRow>] : [{ accessorKey: 'grade', header: 'ผลการเรียน', size: 120, meta: { compactSize: 74, compactTextAlign: 'center' }, cell: ({ getValue }) => getValue<string | null>() ?? 'รอผล' } as ColumnDef<AcademicSubjectRow>]),
+        ...(kind === 'registered-subjects' ? [] : [{ accessorKey: 'grade', header: 'ผลการเรียน', size: 120, meta: { compactSize: 74, compactTextAlign: 'center' }, cell: ({ getValue }) => getValue<string | null>() ?? 'รอผล' } as ColumnDef<AcademicSubjectRow>]),
         ...(kind === 'grade-threshold' ? [{
             id: 'grade_result', header: 'ผลเกณฑ์เกรด 2', size: 170, meta: { compactSize: 92, compactTextAlign: 'center' }, cell: ({ row }: { row: { original: AcademicSubjectRow } }) => {
                 const numeric = row.original.grade !== null && !Number.isNaN(Number(row.original.grade)) ? Number(row.original.grade) : null;
@@ -386,7 +365,6 @@ function AcademicSubjectStudentsDialog({ kind, subject, term, level, group, endp
         { accessorKey: 'primary', header: 'นักศึกษา', size: 255, meta: { compactSize: 138 }, cell: ({ row }) => <div><p className="font-bold text-slate-950">{row.original.primary}</p><p className="mt-0.5 font-mono text-xs text-slate-500">{row.original.secondary}</p></div> },
         { accessorKey: 'group', header: 'ระดับ / กลุ่มเรียน', size: 235, meta: { compactSize: 122 } },
         { accessorKey: 'metric', header: kind === 'registered-subjects' ? 'การลงทะเบียน' : kind === 'grade-threshold' ? 'ผลตามเกณฑ์' : 'การเข้าสอบ', size: 170, meta: { compactSize: 88, compactTextAlign: 'center' } },
-        { accessorKey: 'status', header: 'สถานะ', size: 130, meta: { compactSize: 76, compactTextAlign: 'center' }, cell: ({ getValue }) => <StatusBadge tone={statusTone(getValue<string>())}>{getValue<string>()}</StatusBadge> },
     ], [kind]);
 
     useEffect(() => {
@@ -425,12 +403,12 @@ export function ReportPage({ kind }: { kind: ReportKind }) {
     const [selectedSubject, setSelectedSubject] = useState<ReportRow | null>(null);
     const deferredSearch = useDeferredValue(search);
     const isAcademicReport = academicReportKinds.includes(kind);
-    const canFilterGroups = role === 'admin' || role === 'super_admin';
+    const canFilterGroups = role === 'teacher' || role === 'admin' || role === 'super_admin';
     useEffect(() => { if (!canFilterGroups && group !== '') setGroup(''); }, [canFilterGroups, group]);
     const directoryOptions = useQuery({
         queryKey: ['report-filter-options', kind],
         queryFn: ({ signal }) => getFeatureDataWithDemo<unknown[]>('/api/v1/students?per_page=1', [], signal),
-        enabled: isAcademicReport && canFilterGroups,
+        enabled: canFilterGroups,
         staleTime: 60_000,
     });
     const filterOptions = useMemo(() => {
@@ -444,9 +422,9 @@ export function ReportPage({ kind }: { kind: ReportKind }) {
             if (term) params.set('term', term);
             if (isAcademicReport) {
                 params.set('view', viewMode);
-                if (level) params.set('level', level);
-                if (canFilterGroups && group) params.set('group', group);
             }
+            if (level) params.set('level', level);
+            if (canFilterGroups && group) params.set('group', group);
             const response = await getFeatureDataWithDemo<unknown>(`${config.endpoint}?${params.toString()}`, config.demo, signal);
             return { ...response, data: normalizeReportPayload(kind, response.data, { total: 0, active: 0, groups: 0, rows: [] }, viewMode) };
         },
@@ -468,7 +446,6 @@ export function ReportPage({ kind }: { kind: ReportKind }) {
         },
         { accessorKey: 'group', header: isAcademicReport && viewMode === 'student' ? 'ระดับ / กลุ่มเรียน' : config.groupLabel, size: 230, meta: { compactSize: 116 } },
         { accessorKey: 'metric', header: isAcademicReport && viewMode === 'student' ? (kind === 'registered-subjects' ? 'วิชาลงทะเบียน' : config.metricLabel) : config.metricLabel, size: 170, meta: { compactSize: 84, compactTextAlign: 'center' } },
-        { accessorKey: 'status', header: 'สถานะ', size: 140, meta: { compactSize: 76, compactTextAlign: 'center' }, cell: ({ getValue }) => <StatusBadge tone={statusTone(getValue<string>())}>{getValue<string>()}</StatusBadge> },
         ...(isAcademicReport ? [{
             id: 'details', header: 'รายละเอียด', size: 145, meta: { compactSize: 52, compactTextAlign: 'center' }, enableSorting: false,
             cell: ({ row }: { row: { original: ReportRow } }) => viewMode === 'student'
@@ -528,7 +505,7 @@ export function ReportPage({ kind }: { kind: ReportKind }) {
                     </div>
                 </div>}
 
-                <div className={`mb-5 grid gap-3 ${isAcademicReport ? canFilterGroups ? 'md:grid-cols-3' : 'md:grid-cols-2' : 'max-w-xl'}`}>
+                <div className={`mb-5 grid gap-3 ${canFilterGroups ? 'md:grid-cols-3' : 'md:grid-cols-2'}`}>
                     <label>
                         <span className="mb-2 block text-sm font-bold text-slate-700">ค้นหาในรายงาน</span>
                         <span className="relative block">
@@ -536,10 +513,8 @@ export function ReportPage({ kind }: { kind: ReportKind }) {
                             <input value={search} onChange={(event) => setSearch(event.target.value)} placeholder={viewMode === 'student' && isAcademicReport ? canFilterGroups ? 'ค้นหาชื่อ รหัส หรือกลุ่มเรียน' : 'ค้นหาชื่อหรือรหัสนักศึกษา' : `ค้นหา${config.primaryLabel} หรือ${config.secondaryLabel}`} className="h-11 w-full rounded-xl border border-slate-300 bg-white pl-11 pr-4 text-sm placeholder:text-slate-400" />
                         </span>
                     </label>
-                    {isAcademicReport && <>
-                        <label><span className="mb-2 block text-sm font-bold text-slate-700">ระดับการศึกษา</span><select value={level} onChange={(event) => { setLevel(event.target.value); setGroup(''); }} className="h-11 w-full rounded-xl border border-slate-300 bg-white px-3 text-sm"><option value="">ทุกระดับ</option><option value="1">ประถมศึกษา</option><option value="2">มัธยมศึกษาตอนต้น</option><option value="3">มัธยมศึกษาตอนปลาย</option></select></label>
-                        {canFilterGroups && <label><span className="mb-2 block text-sm font-bold text-slate-700">กลุ่มเรียน</span><select value={group} onChange={(event) => setGroup(event.target.value)} className="h-11 w-full rounded-xl border border-slate-300 bg-white px-3 text-sm"><option value="">ทุกกลุ่มเรียน</option>{filterOptions.groups.map((option) => <option key={String(option.value)} value={String(option.value)}>{option.label}</option>)}</select></label>}
-                    </>}
+                    <label><span className="mb-2 block text-sm font-bold text-slate-700">ระดับการศึกษา</span><select value={level} onChange={(event) => { setLevel(event.target.value); setGroup(''); }} className="h-11 w-full rounded-xl border border-slate-300 bg-white px-3 text-sm"><option value="">ทุกระดับ</option><option value="1">ประถมศึกษา</option><option value="2">มัธยมศึกษาตอนต้น</option><option value="3">มัธยมศึกษาตอนปลาย</option></select></label>
+                    {canFilterGroups && <label><span className="mb-2 block text-sm font-bold text-slate-700">กลุ่มเรียน</span><select value={group} onChange={(event) => setGroup(event.target.value)} className="h-11 w-full rounded-xl border border-slate-300 bg-white px-3 text-sm"><option value="">ทุกกลุ่มเรียน</option>{filterOptions.groups.map((option) => <option key={String(option.value)} value={String(option.value)}>{option.label}</option>)}</select></label>}
                 </div>
                 {report.isPending && <QuerySkeleton />}
                 {report.isError && <QueryError onRetry={() => report.refetch()} />}

@@ -31,7 +31,7 @@ final class PortalController extends Controller
                 ['label' => 'หน่วยกิตสะสม', 'value' => number_format($student->creditsEarned, 1), 'hint' => 'คำนวณจากผลการเรียนจริง'],
                 ['label' => 'กิจกรรม กพช.', 'value' => number_format($student->kpchHours, 1), 'hint' => 'ชั่วโมงสะสม'],
                 ['label' => 'ผลการเรียน', 'value' => number_format($student->gpax, 2), 'hint' => "ภาคเรียน {$student->currentTerm}"],
-                ['label' => 'สถานะ', 'value' => $student->statusLabel, 'hint' => $student->levelLabel],
+                ['label' => 'ระดับการศึกษา', 'value' => $student->levelLabel, 'hint' => $student->groupName],
             ];
 
         return response()->json([
@@ -64,12 +64,6 @@ final class PortalController extends Controller
      */
     private function analytics(array $students): array
     {
-        $statuses = [
-            'studying' => ['label' => 'กำลังศึกษา', 'value' => 0],
-            'graduated' => ['label' => 'จบการศึกษา', 'value' => 0],
-            'transferred' => ['label' => 'ย้ายสถานศึกษา', 'value' => 0],
-            'inactive' => ['label' => 'พ้นสภาพ/รอตรวจสอบ', 'value' => 0],
-        ];
         $levels = [
             1 => ['label' => 'ประถมศึกษา', 'value' => 0],
             2 => ['label' => 'มัธยมศึกษาตอนต้น', 'value' => 0],
@@ -96,9 +90,6 @@ final class PortalController extends Controller
         $kpchHours = 0.0;
 
         foreach ($students as $student) {
-            if (isset($statuses[$student->status])) {
-                $statuses[$student->status]['value']++;
-            }
             if (isset($levels[$student->level])) {
                 $levels[$student->level]['value']++;
             }
@@ -150,10 +141,6 @@ final class PortalController extends Controller
                 'students' => $count,
                 'groups' => count($groups),
                 'new_students' => $newStudents,
-                'studying' => $statuses['studying']['value'],
-                'graduated' => $statuses['graduated']['value'],
-                'transferred' => $statuses['transferred']['value'],
-                'inactive' => $statuses['inactive']['value'],
             ],
             'averages' => [
                 'gpax' => $gpaxCount > 0 ? round($gpaxTotal / $gpaxCount, 2) : null,
@@ -163,7 +150,6 @@ final class PortalController extends Controller
                 'kpch_hours' => $count > 0 ? round($kpchHours / $count, 1) : null,
             ],
             'current_term' => $currentTerm,
-            'by_status' => array_values($statuses),
             'by_level' => array_values($levels),
             'by_gender' => array_values($genders),
             'by_group' => array_map(

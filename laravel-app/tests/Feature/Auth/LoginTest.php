@@ -12,6 +12,18 @@ class LoginTest extends TestCase
 {
     use RefreshDatabase;
 
+    public function test_login_page_detects_the_application_subdirectory_from_the_request(): void
+    {
+        config()->set('app.url', 'https://school.example.test');
+
+        $this->withServerVariables([
+            'SCRIPT_NAME' => '/SDL_school/index.php',
+            'SCRIPT_FILENAME' => base_path('../index.php'),
+        ])->get('/SDL_school/login')
+            ->assertOk()
+            ->assertSee('<meta name="app-base-path" content="/SDL_school">', false);
+    }
+
     public function test_enabled_user_can_log_in_and_log_out(): void
     {
         $district = District::create(['name' => 'อำเภอเสนา', 'code' => 'sena']);

@@ -33,6 +33,9 @@ final class StudentApiTest extends TestCase
             Route::get('/students/{student}/moral', StudentMoralController::class);
             Route::get('/students/{student}/subjects', StudentSubjectsController::class);
             Route::get('/reports/students/overview', [StudentReportController::class, 'overview']);
+            Route::get('/reports/new-students', [StudentReportController::class, 'newStudents']);
+            Route::get('/reports/graduates', [StudentReportController::class, 'graduates']);
+            Route::get('/reports/transfers', [StudentReportController::class, 'transfers']);
             Route::get('/reports/registered-subjects', [StudentReportController::class, 'registeredSubjects']);
             Route::get('/reports/students/grades-above-two', [StudentReportController::class, 'gradesAboveTwo']);
             Route::get('/reports/students/exam-attendance', [StudentReportController::class, 'examAttendance']);
@@ -54,13 +57,14 @@ final class StudentApiTest extends TestCase
     {
         Sanctum::actingAs($this->viewer('admin'));
 
-        $this->getJson('/api/v1/students?level=3&status=studying&per_page=1')
+        $this->getJson('/api/v1/students?level=3&per_page=1')
             ->assertOk()
             ->assertJsonCount(1, 'data')
             ->assertJsonPath('data.0.level.id', 3)
-            ->assertJsonPath('data.0.status.code', 'studying')
-            ->assertJsonPath('meta.pagination.total', 2)
-            ->assertJsonPath('meta.summary.total', 2)
+            ->assertJsonMissingPath('data.0.status')
+            ->assertJsonMissingPath('meta.filter_options.statuses')
+            ->assertJsonPath('meta.pagination.total', 3)
+            ->assertJsonPath('meta.summary.total', 3)
             ->assertJsonPath('meta.summary.groups', 2)
             ->assertJsonPath('meta.source', 'synthetic_canonical_dataset')
             ->assertJsonPath('meta.contains_personal_data', false)
@@ -93,7 +97,15 @@ final class StudentApiTest extends TestCase
             ->assertOk()
             ->assertJsonCount(2, 'data')
             ->assertJsonPath('data.0.group.code', 'SENA-M3-B')
-            ->assertJsonPath('data.1.group.code', 'SENA-M3-B');
+            ->assertJsonPath('data.1.group.code', 'SENA-M3-B')
+            ->assertJsonCount(1, 'meta.filter_options.groups')
+            ->assertJsonFragment(['value' => 'เสนา ม.ปลาย B', 'label' => 'เสนา ม.ปลาย B']);
+
+        $this->getJson('/api/v1/students?level=3&group=SENA-M3-B&per_page=50')
+            ->assertOk()
+            ->assertJsonCount(2, 'data')
+            ->assertJsonPath('meta.summary.levels', 1)
+            ->assertJsonPath('meta.summary.groups', 1);
 
         $this->getJson('/api/v1/students/6650100001')->assertNotFound();
     }
@@ -187,6 +199,25 @@ final class StudentApiTest extends TestCase
             ->assertOk()
             ->assertJsonCount(3, 'data.items')
             ->assertJsonPath('data.items.0.term', '1/2568');
+    }
+
+    public function test_every_student_report_accepts_level_and_group_filters_with_teacher_scope(): void
+    {
+        Sanctum::actingAs($this->viewer('teacher', $this->sena->id, ['SENA-M3-B']));
+
+        foreach ([
+            '/api/v1/reports/new-students?level=3&group=SENA-M3-B',
+            '/api/v1/reports/graduates?level=3&group=SENA-M3-B',
+            '/api/v1/reports/transfers?level=3&group=SENA-M3-B',
+            '/api/v1/reports/registered-subjects?level=3&group=SENA-M3-B&view=student',
+            '/api/v1/reports/students/grades-above-two?level=3&group=SENA-M3-B&view=student',
+            '/api/v1/reports/students/exam-attendance?level=3&group=SENA-M3-B&view=student',
+        ] as $url) {
+            $this->getJson($url)
+                ->assertOk()
+                ->assertJsonMissing(['status' => 'กำลังศึกษา'])
+                ->assertJsonMissing(['status' => 'พ้นสภาพ/รอตรวจสอบ']);
+        }
     }
 
     public function test_academic_reports_support_student_view_level_group_and_subject_filters(): void

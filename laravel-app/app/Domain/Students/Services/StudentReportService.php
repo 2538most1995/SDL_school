@@ -22,15 +22,11 @@ final readonly class StudentReportService
     {
         $students = $this->students($viewer, $filters);
         $count = count($students);
-        $statusCounts = $this->countBy($students, static fn (Student $student): string => $student->status);
         $levelCounts = $this->countBy($students, static fn (Student $student): string => (string) $student->level);
 
         return [
             'totals' => [
                 'students' => $count,
-                'studying' => $statusCounts['studying'] ?? 0,
-                'graduated' => $statusCounts['graduated'] ?? 0,
-                'transferred' => $statusCounts['transferred'] ?? 0,
             ],
             'averages' => [
                 'gpax' => $count > 0 ? round(array_sum(array_column($students, 'gpax')) / $count, 2) : null,
@@ -66,7 +62,6 @@ final readonly class StudentReportService
             'secondary' => $student->code,
             'group' => $student->levelLabel.' · '.$student->groupName,
             'metric' => 'ภาคเรียน '.$student->enrollmentTerm,
-            'status' => $student->statusLabel,
         ], $students);
 
         return ['total' => count($rows), 'active' => count(array_filter($students, static fn (Student $student): bool => $student->status === 'studying')), 'groups' => count(array_unique(array_column($rows, 'group'))), 'rows' => $rows];
@@ -88,7 +83,6 @@ final readonly class StudentReportService
             'secondary' => $student->code,
             'group' => $student->levelLabel,
             'metric' => $student->currentTerm,
-            'status' => 'จบการศึกษา',
         ], $students);
 
         return ['total' => count($rows), 'active' => count($rows), 'groups' => count(array_unique(array_column($rows, 'group'))), 'rows' => $rows];
@@ -114,7 +108,6 @@ final readonly class StudentReportService
                     'secondary' => $grade->subjectCode,
                     'group' => $student->fullName().' · '.$student->code,
                     'metric' => number_format($grade->credits, 1).' หน่วยกิต',
-                    'status' => 'อนุมัติ',
                 ];
             }
         }
@@ -159,7 +152,6 @@ final readonly class StudentReportService
             'secondary' => (string) $row['code'],
             'group' => (string) $row['level'],
             'metric' => number_format((int) $row['count']).' คน',
-            'status' => 'เปิดสอน',
         ], $grouped, array_keys($grouped)));
 
         return [

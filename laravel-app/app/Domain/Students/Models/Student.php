@@ -79,10 +79,6 @@ final readonly class Student
                 'name' => $this->groupName,
             ],
             'current_term' => $this->currentTerm,
-            'status' => [
-                'code' => $this->status,
-                'label' => $this->statusLabel,
-            ],
             'academic' => [
                 'gpax' => $this->gpax,
                 'credits_earned' => $this->creditsEarned,

@@ -40,8 +40,6 @@ type StudentRow = {
     level: string;
     groupCode: string;
     group: string;
-    statusCode: string;
-    status: string;
     district: string;
     currentTerm: string;
     citizenIdMasked: string;
@@ -54,12 +52,8 @@ type StudentRow = {
 };
 
 const demoStudents: StudentRow[] = [
-    { id: 'SENA-670142', code: 'SENA-670142', name: 'ณัฐชา ศรีสวัสดิ์', level: 'มัธยมศึกษาตอนปลาย', groupCode: 'G-01', group: 'กลุ่มวันอาทิตย์ 1', statusCode: 'studying', status: 'กำลังศึกษา', district: 'อำเภอเสนา', currentTerm: '1/2569', citizenIdMasked: '1-xxxx-xxxxx-xx-1', birthDate: '01/01/2548', gender: 'หญิง', gpax: 3.24, creditsEarned: 68, creditsCurrent: 73, creditsRequired: 76 },
+    { id: 'SENA-670142', code: 'SENA-670142', name: 'ณัฐชา ศรีสวัสดิ์', level: 'มัธยมศึกษาตอนปลาย', groupCode: 'G-01', group: 'กลุ่มวันอาทิตย์ 1', district: 'อำเภอเสนา', currentTerm: '1/2569', citizenIdMasked: '1-xxxx-xxxxx-xx-1', birthDate: '01/01/2548', gender: 'หญิง', gpax: 3.24, creditsEarned: 68, creditsCurrent: 73, creditsRequired: 76 },
 ];
-
-function studentStatusTone(status: string): StatusTone {
-    return status === 'studying' ? 'success' : status === 'graduated' || status === 'transferred' ? 'info' : 'warning';
-}
 
 function sortAcademicTermsDescending(left: string, right: string): number {
     const key = (value: string) => {
@@ -122,8 +116,8 @@ type FilterOption = { value: string | number; label: string };
 type StudentDirectoryMeta = {
     mode?: string;
     pagination: { current_page: number; per_page: number; total: number; last_page: number; from: number | null; to: number | null };
-    filter_options: { levels: FilterOption[]; groups: FilterOption[]; statuses: FilterOption[]; terms: FilterOption[]; districts: FilterOption[] };
-    summary: { total: number; studying: number; graduated: number; transferred: number; male: number; female: number; groups: number; levels: number; average_gpax: number | null };
+    filter_options: { levels: FilterOption[]; groups: FilterOption[]; terms: FilterOption[]; districts: FilterOption[] };
+    summary: { total: number; male: number; female: number; groups: number; levels: number; average_gpax: number | null };
 };
 
 export function StudentsPage() {
@@ -131,13 +125,12 @@ export function StudentsPage() {
     const [search, setSearch] = useState('');
     const [level, setLevel] = useState('');
     const [group, setGroup] = useState('');
-    const [status, setStatus] = useState('');
     const [page, setPage] = useState(1);
     const [perPage, setPerPage] = useState(25);
     const deferredSearch = useDeferredValue(search);
-    const canFilterGroups = role === 'admin' || role === 'super_admin';
+    const canFilterGroups = role === 'teacher' || role === 'admin' || role === 'super_admin';
 
-    useEffect(() => setPage(1), [deferredSearch, level, group, status, perPage]);
+    useEffect(() => setPage(1), [deferredSearch, level, group, perPage]);
     useEffect(() => { if (!canFilterGroups && group !== '') setGroup(''); }, [canFilterGroups, group]);
 
     const queryString = useMemo(() => {
@@ -145,13 +138,12 @@ export function StudentsPage() {
         if (deferredSearch) params.set('search', deferredSearch);
         if (level) params.set('level', level);
         if (canFilterGroups && group) params.set('group', group);
-        if (status) params.set('status', status);
 
         return params.toString();
-    }, [canFilterGroups, deferredSearch, group, level, page, perPage, status]);
+    }, [canFilterGroups, deferredSearch, group, level, page, perPage]);
 
     const students = useQuery({
-        queryKey: ['students', { search: deferredSearch, level, group, status, page, perPage }],
+        queryKey: ['students', { search: deferredSearch, level, group, page, perPage }],
         queryFn: async ({ signal }) => {
             type StudentApi = {
                 code: string;
@@ -159,7 +151,6 @@ export function StudentsPage() {
                 district: { name: string };
                 level: { id: number; label: string };
                 group: { code: string; name: string };
-                status: { code: string; label: string };
                 current_term: string;
                 demographics?: { citizen_id?: string; citizen_id_masked?: string; birth_date?: string; gender?: string };
                 academic: { gpax: number; credits_earned: number; credits_current: number; credits_required: number };
@@ -172,8 +163,6 @@ export function StudentsPage() {
                 level: student.level.label,
                 groupCode: student.group.code,
                 group: student.group.name,
-                statusCode: student.status.code,
-                status: student.status.label,
                 district: student.district.name,
                 currentTerm: student.current_term,
                 citizenIdMasked: student.demographics?.citizen_id ?? student.demographics?.citizen_id_masked ?? '-',
@@ -231,7 +220,6 @@ export function StudentsPage() {
         setSearch('');
         setLevel('');
         setGroup('');
-        setStatus('');
         setPage(1);
     };
 
@@ -240,7 +228,7 @@ export function StudentsPage() {
             <PageHeader
                 category="ฐานข้อมูลนักศึกษา"
                 title="ค้นหานักศึกษาได้รวดเร็ว"
-                description="แสดงข้อมูลนักศึกษาภาคเรียนล่าสุดครบทุกหน้า พร้อมกรองระดับ กลุ่มเรียน และสถานะตามขอบเขตที่รับผิดชอบ"
+                description="แสดงข้อมูลนักศึกษาภาคเรียนล่าสุดครบทุกหน้า พร้อมกรองระดับและกลุ่มเรียนตามขอบเขตที่รับผิดชอบ"
                 icon={UsersThree}
                 actions={<StatusBadge tone="info">ข้อมูลจริงล่าสุด</StatusBadge>}
             />
@@ -252,7 +240,7 @@ export function StudentsPage() {
             </div>
 
             <Panel title="รายชื่อนักศึกษา" description={pagination ? `แสดง ${pagination.from ?? 0}-${pagination.to ?? 0} จากทั้งหมด ${pagination.total} คน · แสดงข้อมูลตามสิทธิ์และกลุ่มที่รับผิดชอบ` : 'ข้อมูลส่วนบุคคลละเอียดจะแสดงตามสิทธิ์ของผู้ใช้งาน'}>
-                <div className={`mb-5 grid gap-3 md:grid-cols-2 ${canFilterGroups ? 'xl:grid-cols-[minmax(260px,1.5fr)_minmax(180px,0.8fr)_minmax(220px,1fr)_minmax(170px,0.8fr)]' : 'xl:grid-cols-[minmax(300px,1.5fr)_minmax(200px,0.8fr)_minmax(190px,0.8fr)]'}`}>
+                <div className={`mb-5 grid gap-3 md:grid-cols-2 ${canFilterGroups ? 'xl:grid-cols-[minmax(300px,1.5fr)_minmax(200px,0.8fr)_minmax(240px,1fr)]' : 'xl:grid-cols-[minmax(300px,1.5fr)_minmax(200px,0.8fr)]'}`}>
                     <Field label="ค้นหา">
                         <Input value={search} onChange={(_, data) => setSearch(data.value)} contentBefore={<MagnifyingGlass size={18} aria-hidden="true" />} placeholder="ชื่อ รหัส เลขบัตร หรือกลุ่ม" size="large" />
                     </Field>
@@ -270,14 +258,8 @@ export function StudentsPage() {
                             {(meta?.filter_options.groups ?? []).map((option) => <option key={String(option.value)} value={String(option.value)}>{option.label}</option>)}
                         </Select>
                     </Field>}
-                    <Field label="สถานะ">
-                        <Select value={status} onChange={(_, data) => setStatus(data.value)} size="large">
-                            <option value="">ทุกสถานะ</option>
-                            {(meta?.filter_options.statuses ?? []).map((option) => <option key={String(option.value)} value={String(option.value)}>{option.label}</option>)}
-                        </Select>
-                    </Field>
                 </div>
-                {(search || level || group || status) && <Button type="button" appearance="subtle" onClick={resetFilters} className="mb-4">ล้างตัวกรองทั้งหมด</Button>}
+                {(search || level || group) && <Button type="button" appearance="subtle" onClick={resetFilters} className="mb-4">ล้างตัวกรองทั้งหมด</Button>}
                 {students.isPending && <QuerySkeleton />}
                 {students.isError && <QueryError onRetry={() => students.refetch()} />}
                 {students.data && <DataTable data={rows} columns={columns} pageSize={perPage} showPagination={false} minWidth="wide" emptyTitle="ไม่พบนักศึกษา" emptyDescription="ลองเปลี่ยนคำค้น ระดับ หรือกลุ่มเรียน" />}
@@ -295,8 +277,6 @@ type StudentDetail = {
     groupCode: string;
     group: string;
     district: string;
-    statusCode: string;
-    status: string;
     currentTerm: string;
     enrollmentTerm: string;
     citizenIdMasked: string;
@@ -327,8 +307,6 @@ const demoStudent: StudentDetail = {
     groupCode: 'G-01',
     group: 'กลุ่มวันอาทิตย์ 1',
     district: 'อำเภอเสนา',
-    statusCode: 'studying',
-    status: 'กำลังศึกษา',
     currentTerm: '1/2569',
     enrollmentTerm: '1/2567',
     citizenIdMasked: '1-xxxx-xxxxx-xx-1',
@@ -405,7 +383,7 @@ export function StudentDetailPage() {
         queryFn: async ({ signal }) => {
             type StudentDetailApi = {
                 code: string; full_name?: string; name?: { full_name: string }; level: { label: string }; group: { code: string; name: string }; district: { name: string };
-                status: { code: string; label: string }; current_term: string; enrollment_term: string;
+                current_term: string; enrollment_term: string;
                 contact?: { phone?: string; phone_masked?: string; email?: string; email_masked?: string; registered_address?: string; current_address?: string };
                 demographics?: { citizen_id?: string; citizen_id_masked?: string; birth_date?: string; gender?: string; age?: number; application_date?: string; last_updated?: string };
                 academic: {
@@ -419,7 +397,7 @@ export function StudentDetailPage() {
                 const api = response.data;
                 const data: StudentDetail = {
                     id: api.code, code: api.code, name: api.name?.full_name ?? api.full_name ?? api.code, level: api.level.label, groupCode: api.group.code, group: api.group.name,
-                    district: api.district.name, statusCode: api.status.code, status: api.status.label, currentTerm: api.current_term, enrollmentTerm: api.enrollment_term,
+                    district: api.district.name, currentTerm: api.current_term, enrollmentTerm: api.enrollment_term,
                     citizenIdMasked: api.demographics?.citizen_id ?? api.demographics?.citizen_id_masked ?? '-', birthDate: api.demographics?.birth_date ?? '-', gender: api.demographics?.gender ?? '-', age: api.demographics?.age ? String(api.demographics.age) : '-',
                     phone: api.contact?.phone ?? api.contact?.phone_masked ?? '-', email: api.contact?.email ?? api.contact?.email_masked ?? '-',
                     registeredAddress: api.contact?.registered_address ?? '-', currentAddress: api.contact?.current_address ?? api.contact?.registered_address ?? '-',
@@ -442,7 +420,7 @@ export function StudentDetailPage() {
             <Link to="/students" className="mb-4 inline-flex items-center gap-2 text-sm font-bold text-brand-700 hover:text-brand-900">
                 <ArrowLeft size={17} weight="bold" /> กลับไปรายชื่อนักศึกษา
             </Link>
-            <PageHeader category={data.code} title={data.name} description={`${data.level} · ${data.group}`} icon={IdentificationCard} actions={<StatusBadge tone={studentStatusTone(data.statusCode)}>{data.status}</StatusBadge>} />
+            <PageHeader category={data.code} title={data.name} description={`${data.level} · ${data.group}`} icon={IdentificationCard} />
             <div className="space-y-5">
                 <Panel title="ข้อมูลประจำตัวและการศึกษา" description="จัดวางข้อมูลเป็นช่องแยกเพื่อให้อ่านง่าย และแสดงข้อมูลส่วนบุคคลเฉพาะผู้ใช้ที่มีสิทธิ์">
                     <dl className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
@@ -562,12 +540,11 @@ type LearningProfile = {
     group: string;
     advisor: string;
     currentTerm: string;
-    enrollmentStatus: string;
     nextMeeting: string;
 };
 
 const demoLearningProfile: LearningProfile = {
-    name: 'ณัฐชา ศรีสวัสดิ์', code: 'SENA-670142', level: 'มัธยมศึกษาตอนปลาย', group: 'กลุ่มวันอาทิตย์ 1', advisor: 'ครูสุภาวดี รักษ์เรียน', currentTerm: '1/2569', enrollmentStatus: 'ลงทะเบียนแล้ว', nextMeeting: 'อาทิตย์ 19 ก.ค. เวลา 09:00 น.',
+    name: 'ณัฐชา ศรีสวัสดิ์', code: 'SENA-670142', level: 'มัธยมศึกษาตอนปลาย', group: 'กลุ่มวันอาทิตย์ 1', advisor: 'ครูสุภาวดี รักษ์เรียน', currentTerm: '1/2569', nextMeeting: 'อาทิตย์ 19 ก.ค. เวลา 09:00 น.',
 };
 
 export function MyLearningPage() {
@@ -577,7 +554,7 @@ export function MyLearningPage() {
     const data = profile.data.data;
     return (
         <div>
-            <PageHeader title={`ข้อมูลการเรียนของ ${data.name}`} description="ตรวจข้อมูลประจำตัว กลุ่มเรียน และสถานะลงทะเบียนของคุณ" icon={Student} category={data.code} actions={<StatusBadge tone="success">{data.enrollmentStatus}</StatusBadge>} />
+            <PageHeader title={`ข้อมูลการเรียนของ ${data.name}`} description="ตรวจข้อมูลประจำตัว กลุ่มเรียน และภาคเรียนของคุณ" icon={Student} category={data.code} />
             <div className="grid gap-5 lg:grid-cols-[1fr_0.8fr]">
                 <Panel title="ข้อมูลภาคเรียนปัจจุบัน">
                     <dl className="grid gap-4 sm:grid-cols-2">
@@ -679,8 +656,6 @@ type StaffMetricStudent = {
     level: string;
     group: string;
     groupCode: string;
-    statusCode: string;
-    status: string;
     gpax: number;
     creditsEarned: number;
     creditsRequired: number;
@@ -781,7 +756,7 @@ function StaffStudentMetricPage({ kind }: { kind: MetricKind }) {
     const [perPage, setPerPage] = useState(25);
     const [selectedStudent, setSelectedStudent] = useState<StaffMetricStudent | null>(null);
     const deferredSearch = useDeferredValue(search);
-    const canFilterGroups = role === 'admin' || role === 'super_admin';
+    const canFilterGroups = role === 'teacher' || role === 'admin' || role === 'super_admin';
     useEffect(() => setPage(1), [deferredSearch, group, level, perPage]);
     useEffect(() => { if (!canFilterGroups && group !== '') setGroup(''); }, [canFilterGroups, group]);
     const params = useMemo(() => {
@@ -795,13 +770,13 @@ function StaffStudentMetricPage({ kind }: { kind: MetricKind }) {
         queryKey: ['student-metric-directory', kind, deferredSearch, level, group, page, perPage],
         queryFn: async ({ signal }) => {
             type ApiStudent = {
-                code: string; full_name: string; level: { label: string }; group: { code: string; name: string }; status: { code: string; label: string };
+                code: string; full_name: string; level: { label: string }; group: { code: string; name: string };
                 academic: { gpax: number; credits_earned: number; credits_required: number; kpch_hours: number; moral_result: string };
             };
             const response = await getFeatureDataWithDemo<ApiStudent[]>(`/api/v1/students?${params}`, [], signal);
             const data: StaffMetricStudent[] = response.data.map((student) => ({
                 code: student.code, name: student.full_name, level: student.level.label, group: student.group.name, groupCode: student.group.code,
-                statusCode: student.status.code, status: student.status.label, gpax: student.academic.gpax, creditsEarned: student.academic.credits_earned,
+                gpax: student.academic.gpax, creditsEarned: student.academic.credits_earned,
                 creditsRequired: student.academic.credits_required, kpchHours: student.academic.kpch_hours, moralResult: student.academic.moral_result,
             }));
             return { data, meta: response.meta as unknown as StudentDirectoryMeta };
@@ -811,7 +786,7 @@ function StaffStudentMetricPage({ kind }: { kind: MetricKind }) {
     const pageRows = directory.data?.data ?? [];
     const meta = directory.data?.meta;
     const title = kind === 'grades' ? 'ผลการเรียนและ GPAX นักศึกษา' : kind === 'kpch' ? 'กิจกรรม กพช. นักศึกษา' : 'ผลประเมินคุณธรรมนักศึกษา';
-    const description = kind === 'grades' ? 'ตรวจ GPAX และหน่วยกิตสะสม พร้อมเปิดดูรายวิชาและผลการเรียนรายคน' : kind === 'kpch' ? 'ตรวจชั่วโมงสะสม กพช. และสถานะผ่านเกณฑ์ 200 ชั่วโมง' : 'ตรวจผลคุณธรรมล่าสุดจากตัวชี้วัด 11 รายการของแต่ละคน';
+    const description = kind === 'grades' ? 'ตรวจ GPAX และหน่วยกิตสะสม พร้อมเปิดดูรายวิชาและผลการเรียนรายคน' : kind === 'kpch' ? 'ตรวจชั่วโมงสะสม กพช. และผลตามเกณฑ์ 200 ชั่วโมง' : 'ตรวจผลคุณธรรมล่าสุดจากตัวชี้วัด 11 รายการของแต่ละคน';
     const columns = useMemo<ColumnDef<StaffMetricStudent>[]>(() => [
         { accessorKey: 'name', header: 'นักศึกษา', size: 255, meta: { compactSize: kind === 'grades' ? 150 : 140 }, cell: ({ row }) => <div className="min-w-0"><Link to={`/students/${row.original.code}`} title={row.original.name} className="thai-table-primary hover:text-brand-700 sm:text-sm">{row.original.name}</Link><p className="thai-table-secondary font-mono sm:text-[10px]">{row.original.code}</p></div> },
         { accessorKey: 'group', header: 'ระดับ / กลุ่มเรียน', size: 235, meta: { compactSize: kind === 'grades' ? 160 : kind === 'moral' ? 140 : 134, compactHeader: 'ระดับ/กลุ่ม' }, cell: ({ row }) => <div className="min-w-0" title={`${row.original.group}\n${row.original.level} ${row.original.groupCode}`}><p className="thai-table-primary sm:text-[13px]">{row.original.group}</p><p className="thai-table-secondary sm:text-[10px]">{row.original.level} <span aria-hidden="true">•</span> {row.original.groupCode}</p></div> },
@@ -820,7 +795,7 @@ function StaffStudentMetricPage({ kind }: { kind: MetricKind }) {
             { accessorKey: 'creditsEarned', header: 'หน่วยกิตสะสม', size: 150, meta: { compactSize: 72, compactHeader: 'หน่วยกิต', compactTextAlign: 'center' }, cell: ({ row }) => <span className="whitespace-nowrap font-semibold tabular-nums">{row.original.creditsEarned} / {row.original.creditsRequired}</span> },
         ] as ColumnDef<StaffMetricStudent>[] : kind === 'kpch' ? [
             { accessorKey: 'kpchHours', header: 'ชั่วโมงสะสม', size: 130, meta: { compactSize: 60, compactHeader: 'ชั่วโมง', compactTextAlign: 'center' }, cell: ({ getValue }) => <span className="font-bold tabular-nums text-amber-700 sm:text-sm">{getValue<number>()}</span> },
-            { id: 'kpch_status', header: 'สถานะ กพช.', size: 160, meta: { compactSize: 84, compactHeader: 'สถานะ', compactTextAlign: 'center' }, cell: ({ row }) => <StatusBadge tone={row.original.kpchHours >= 200 ? 'success' : 'warning'}>{row.original.kpchHours >= 200 ? 'ผ่านเกณฑ์' : `ขาด ${Math.max(0, 200 - row.original.kpchHours)} ชม.`}</StatusBadge> },
+            { id: 'kpch_result', header: 'ผล กพช.', size: 160, meta: { compactSize: 84, compactHeader: 'ผล', compactTextAlign: 'center' }, cell: ({ row }) => <StatusBadge tone={row.original.kpchHours >= 200 ? 'success' : 'warning'}>{row.original.kpchHours >= 200 ? 'ผ่านเกณฑ์' : `ขาด ${Math.max(0, 200 - row.original.kpchHours)} ชม.`}</StatusBadge> },
         ] as ColumnDef<StaffMetricStudent>[] : [
             { accessorKey: 'moralResult', header: 'ผลคุณธรรมล่าสุด', size: 175, meta: { compactSize: 96, compactHeader: 'คุณธรรม', compactTextAlign: 'center' }, cell: ({ getValue }) => { const value = getValue<string>(); return <StatusBadge tone={value === 'ปรับปรุง' ? 'danger' : value === 'พอใช้' ? 'warning' : value === 'ยังไม่มีผลประเมิน' ? 'neutral' : 'success'}>{value}</StatusBadge>; } },
         ] as ColumnDef<StaffMetricStudent>[]),

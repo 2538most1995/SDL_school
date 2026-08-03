@@ -20,6 +20,7 @@ import { Panel } from '../../components/Panel';
 import { QueryError, QuerySkeleton } from '../../components/QueryState';
 import { StatusBadge } from '../../components/StatusBadge';
 import { applyAppearance, DEFAULT_APPEARANCE, type AppearanceSettings, type ColorScheme } from '../../lib/appearance';
+import { withAppBasePath } from '../../lib/urls';
 import { getFeatureDataWithDemo, sendFeatureData } from '../api';
 
 type ProfileSettings = {
@@ -100,7 +101,7 @@ export function ProfileSettingsPage() {
                         <div className="mb-6 flex flex-col gap-5 rounded-2xl border border-brand-100 bg-gradient-to-br from-brand-50 to-sky-50 p-4 sm:flex-row sm:items-center sm:p-5">
                             <div className="relative mx-auto shrink-0 sm:mx-0">
                                 {avatarPreview || values.avatarUrl
-                                    ? <img src={avatarPreview ?? values.avatarUrl ?? ''} alt={`รูปโปรไฟล์ของ ${values.displayName}`} className="size-28 rounded-2xl object-cover shadow-sm ring-4 ring-white" />
+                                    ? <img src={avatarPreview ?? withAppBasePath(values.avatarUrl ?? '')} alt={`รูปโปรไฟล์ของ ${values.displayName}`} className="size-28 rounded-2xl object-cover shadow-sm ring-4 ring-white" />
                                     : <span className="grid size-28 place-items-center rounded-2xl bg-white text-brand-700 shadow-sm ring-1 ring-brand-100"><UserCircle size={58} weight="duotone" /></span>}
                                 <span className="absolute -bottom-2 -right-2 grid size-9 place-items-center rounded-xl bg-brand-700 text-white shadow-md"><Camera size={18} weight="fill" aria-hidden="true" /></span>
                             </div>

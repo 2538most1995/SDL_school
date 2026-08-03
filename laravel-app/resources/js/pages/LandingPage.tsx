@@ -2,7 +2,7 @@ import { ArrowRight, BookOpenText, ChartLineUp, GraduationCap, Sparkle } from '@
 import { Link } from 'react-router-dom';
 import { useQuery } from '@tanstack/react-query';
 import { apiGet } from '../lib/api';
-import { DEFAULT_HERO_IMAGE, publicBrandingCssVariables, publicBrandingPath, type PublicBranding } from '../lib/publicBranding';
+import { DEFAULT_HERO_IMAGE, publicAssetUrl, publicBrandingCssVariables, publicBrandingPath, type PublicBranding } from '../lib/publicBranding';
 
 const highlights = [
     { label: 'งานและบทเรียน', icon: BookOpenText },
@@ -14,7 +14,7 @@ function Brand({ branding }: { branding?: PublicBranding }) {
     return (
         <Link to="/" className="flex items-center gap-3" aria-label="SDL School หน้าแรก">
             <span className="grid size-11 shrink-0 place-items-center overflow-hidden rounded-2xl bg-brand-700 text-white shadow-lg shadow-brand-950/20">
-                {branding?.logoImageUrl ? <img src={branding.logoImageUrl} alt="" className="size-full bg-white object-contain p-1" /> : <GraduationCap size={26} weight="fill" aria-hidden="true" />}
+                {branding?.logoImageUrl ? <img src={publicAssetUrl(branding.logoImageUrl) ?? ''} alt="" className="size-full bg-white object-contain p-1" /> : <GraduationCap size={26} weight="fill" aria-hidden="true" />}
             </span>
             <span className="leading-tight text-white">
                 <strong className="block text-[17px] font-bold tracking-[-0.02em]">{branding?.portalName ?? 'SDL School'}</strong>
@@ -36,7 +36,7 @@ export function LandingPage() {
         <main style={publicBrandingCssVariables(branding.data?.primaryColor)} className="public-page min-h-[100dvh] p-3 sm:p-5 lg:p-6">
             <section className="public-hero relative mx-auto min-h-[calc(100dvh-24px)] max-w-[1500px] overflow-hidden bg-brand-950 sm:min-h-[calc(100dvh-40px)] lg:min-h-[calc(100dvh-48px)]">
                 <img
-                    src={branding.data?.heroImageUrl ?? DEFAULT_HERO_IMAGE}
+                    src={publicAssetUrl(branding.data?.heroImageUrl) ?? DEFAULT_HERO_IMAGE}
                     alt="ภาพต้อนรับนักศึกษาและครู"
                     className="absolute inset-0 size-full object-cover object-[66%_center]"
                 />

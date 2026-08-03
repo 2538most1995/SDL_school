@@ -33,12 +33,7 @@ final class ProcessLegacyZipImport implements ShouldQueue
 
     public function handle(LegacyZipImportService $importer): void
     {
-        Cache::put(self::cacheKey($this->jobId), [
-            'job_id' => $this->jobId,
-            'district_id' => $this->districtId,
-            'status' => 'processing',
-            'message' => 'กำลังตรวจสอบและนำเข้าข้อมูล',
-        ], now()->addDay());
+        $this->updateStatus('processing', 'กำลังตรวจสอบไฟล์ ZIP', 2);
 
         try {
             $absolutePath = Storage::disk('local')->path($this->stagingPath);
@@ -52,25 +47,28 @@ final class ProcessLegacyZipImport implements ShouldQueue
                 $this->districtId,
                 $this->userId,
                 $this->ipAddress,
+                fn (string $message, int $progress, array $metrics = []) => $this->updateStatus('processing', $message, $progress, $metrics),
             );
-            Cache::put(self::cacheKey($this->jobId), [
-                'job_id' => $this->jobId,
-                'district_id' => $this->districtId,
-                'status' => 'completed',
-                'message' => 'นำเข้าและเปิดใช้ชุดข้อมูลใหม่เรียบร้อยแล้ว',
-                'result' => $result,
-            ], now()->addDay());
+            $this->updateStatus('completed', 'นำเข้าและเปิดใช้ชุดข้อมูลใหม่เรียบร้อยแล้ว', 100, ['result' => $result]);
         } catch (Throwable $exception) {
             report($exception);
-            Cache::put(self::cacheKey($this->jobId), [
-                'job_id' => $this->jobId,
-                'district_id' => $this->districtId,
-                'status' => 'failed',
-                'message' => 'นำเข้าข้อมูลไม่สำเร็จ กรุณาตรวจรูปแบบ ZIP และไฟล์ DBF แล้วลองใหม่',
-            ], now()->addDay());
+            $this->updateStatus('failed', 'นำเข้าข้อมูลไม่สำเร็จ กรุณาตรวจรูปแบบ ZIP และไฟล์ DBF แล้วลองใหม่', 100);
         } finally {
             Storage::disk('local')->delete($this->stagingPath);
         }
+    }
+
+    /** @param array<string, mixed> $extra */
+    private function updateStatus(string $status, string $message, int $progress, array $extra = []): void
+    {
+        Cache::put(self::cacheKey($this->jobId), [
+            'job_id' => $this->jobId,
+            'district_id' => $this->districtId,
+            'status' => $status,
+            'message' => $message,
+            'progress' => max(0, min(100, $progress)),
+            ...$extra,
+        ], now()->addDay());
     }
 
     public static function cacheKey(string $jobId): string

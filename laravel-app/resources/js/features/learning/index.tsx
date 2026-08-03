@@ -33,6 +33,7 @@ import { StatusBadge, type StatusTone } from '../../components/StatusBadge';
 import { getFeatureDataWithDemo } from '../api';
 import { sendFeatureData } from '../api';
 import { useDemoRole } from '../../context/DemoRoleContext';
+import { withAppBasePath } from '../../lib/urls';
 
 type LearningOverview = {
     studentName: string;
@@ -130,7 +131,7 @@ function normalizeLearningPayload(kind: LearningKind, payload: unknown, fallback
             id: String(course.id ?? index),
             title: String(course.subject_name ?? 'รายวิชา'),
             subtitle: `${String(course.subject_code ?? '')} ${String(course.credits ?? 0)} หน่วยกิต`,
-            course: String(course.status === 'passed' ? 'ผ่านแล้ว' : 'กำลังศึกษา'),
+            course: String(course.status === 'passed' ? 'ผ่านแล้ว' : 'อยู่ระหว่างเรียน'),
             timing: course.total_score == null ? 'ยังไม่สรุปผล' : `${String(course.total_score)} คะแนน`,
             status: course.grade == null ? 'กำลังเรียน' : `เกรด ${String(course.grade)}`,
         }));
@@ -401,7 +402,7 @@ function ExamSchedulePage() {
         clearPreview(); setPdfLoading(true);
         try {
             const districtId = window.localStorage.getItem('sena-district-id');
-            const response = await fetch(buildPdfPath(), { credentials: 'same-origin', headers: { Accept: 'application/pdf', ...(districtId ? { 'X-District-Id': districtId } : {}) } });
+            const response = await fetch(withAppBasePath(buildPdfPath()), { credentials: 'same-origin', headers: { Accept: 'application/pdf', ...(districtId ? { 'X-District-Id': districtId } : {}) } });
             if (!response.ok) {
                 const error = await response.json().catch(() => null) as { message?: string; errors?: Record<string, string[]> } | null;
                 throw new Error(error?.message ?? Object.values(error?.errors ?? {}).flat()[0] ?? 'สร้าง PDF ไม่สำเร็จ');

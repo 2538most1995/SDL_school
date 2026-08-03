@@ -31,6 +31,9 @@ final class LegacyStudentRepository implements StudentRepository
     /** @var array<string, list<Student>> */
     private array $studentCache = [];
 
+    /** @var array<string, array<string, true>> */
+    private array $columnsByTable = [];
+
     public function __construct(
         private readonly ConnectionInterface $connection,
         private readonly ?ThaiAdministrativeAreaLookup $areaLookup = null,
@@ -95,10 +98,16 @@ final class LegacyStudentRepository implements StudentRepository
 
                     $metrics = $academic[$code] ?? [];
                     [$creditsRequired, $compulsoryRequired, $electiveRequired] = $this->creditRequirements($set->level);
-                    $contactPhone = $this->validPhone(
-                        $this->memoValue($set, $code, 'curphone', (string) ($row['curphone'] ?? '')) ?? '',
-                    ) ?? $this->validPhone(
-                        $this->memoValue($set, $code, 'phone', (string) ($row['phone'] ?? '')) ?? '',
+                    $contactPhone = $this->phoneMemoValue(
+                        $set,
+                        $code,
+                        'curphone',
+                        (string) ($row['curphone'] ?? ''),
+                    ) ?? $this->phoneMemoValue(
+                        $set,
+                        $code,
+                        'phone',
+                        (string) ($row['phone'] ?? ''),
                     ) ?? '';
                     $email = $this->memoValue($set, $code, 'email', (string) ($row['email'] ?? '')) ?? '';
                     [$status, $statusLabel] = LegacyStudentStatus::resolve(
@@ -507,6 +516,8 @@ final class LegacyStudentRepository implements StudentRepository
     {
         $student = $this->identifier($set->student);
         $grade = $this->identifier($set->grade);
+        $citizenIdColumn = $this->firstExistingColumn($set->student, ['_perf_cardid', 'cardid']);
+        $citizenId = $citizenIdColumn === null ? 'NULL' : 's.'.$this->identifier($citizenIdColumn);
         $variants = AcademicTerm::variants($latestTerm);
         if ($variants === []) {
             return [];
@@ -534,11 +545,11 @@ final class LegacyStudentRepository implements StudentRepository
                     s.trn_date2 AS transfer_date,
                     s.gpasem AS gpasem,
                     CASE
-                        WHEN CHAR_LENGTH(TRIM(COALESCE(s._perf_cardid, ''))) = 13
-                        THEN CONCAT(LEFT(TRIM(s._perf_cardid), 1), '-xxxx-xxxxx-xx-', RIGHT(TRIM(s._perf_cardid), 1))
+                        WHEN CHAR_LENGTH(TRIM(COALESCE({$citizenId}, ''))) = 13
+                        THEN CONCAT(LEFT(TRIM({$citizenId}), 1), '-xxxx-xxxxx-xx-', RIGHT(TRIM({$citizenId}), 1))
                         ELSE NULL
                     END AS citizen_id_masked,
-                    s._perf_cardid AS citizen_id,
+                    {$citizenId} AS citizen_id,
                     s.gender AS gender,
                     s.birday AS birth_date,
                     s.age AS age,
@@ -573,6 +584,34 @@ final class LegacyStudentRepository implements StudentRepository
              ORDER BY s._perf_id10 ASC",
             $bindings,
         );
+    }
+
+    /** @param list<string> $candidates */
+    private function firstExistingColumn(string $table, array $candidates): ?string
+    {
+        if (! array_key_exists($table, $this->columnsByTable)) {
+            $columns = [];
+            foreach ($this->rows(
+                'SELECT COLUMN_NAME AS column_name
+                 FROM INFORMATION_SCHEMA.COLUMNS
+                 WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = ?',
+                [$table],
+            ) as $row) {
+                $column = strtolower(trim((string) ($row['column_name'] ?? '')));
+                if ($column !== '') {
+                    $columns[$column] = true;
+                }
+            }
+            $this->columnsByTable[$table] = $columns;
+        }
+
+        foreach ($candidates as $candidate) {
+            if (isset($this->columnsByTable[$table][strtolower($candidate)])) {
+                return $candidate;
+            }
+        }
+
+        return null;
     }
 
     /** @return array<string, array{gpax: float, credits_earned: float, credits_current: float, compulsory_earned: float, elective_earned: float}> */
@@ -958,6 +997,20 @@ final class LegacyStudentRepository implements StudentRepository
             $studentCode,
             $field,
         );
+    }
+
+    private function phoneMemoValue(LegacyTableSet $set, string $studentCode, string $field, string $storedValue): ?string
+    {
+        $decoded = $this->memoValue($set, $studentCode, $field, $storedValue);
+        $phone = $this->validPhone($decoded ?? '');
+        if ($phone !== null) {
+            return $phone;
+        }
+
+        // Some production imports persist the decoded memo text directly in
+        // MySQL. Use it only when it is a valid Thai phone number; raw four-byte
+        // Visual FoxPro memo pointers continue to fail closed.
+        return $this->validPhone($storedValue);
     }
 
     private function legacyDateValue(LegacyTableSet $set, string $studentCode, string $field, string $storedValue): ?string

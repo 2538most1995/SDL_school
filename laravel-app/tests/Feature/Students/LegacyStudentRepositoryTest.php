@@ -3,9 +3,11 @@
 namespace Tests\Feature\Students;
 
 use App\Domain\Students\Repositories\LegacyStudentRepository;
+use App\Domain\Students\Support\LegacyTableSet;
 use App\Http\Resources\Students\StudentDetailResource;
 use App\Http\Resources\Students\StudentSummaryResource;
 use App\Models\User;
+use App\Support\LegacyFptMemoReader;
 use Illuminate\Database\ConnectionInterface;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
@@ -14,6 +16,30 @@ use Tests\TestCase;
 
 final class LegacyStudentRepositoryTest extends TestCase
 {
+    public function test_phone_uses_valid_database_text_when_memo_files_are_unavailable(): void
+    {
+        $repository = new LegacyStudentRepository(
+            Mockery::mock(ConnectionInterface::class),
+            memoReader: new LegacyFptMemoReader('/directory-that-does-not-exist'),
+        );
+        $set = new LegacyTableSet(
+            districtId: 1,
+            districtName: 'อำเภอทดสอบ',
+            batchKey: 'import_123_abcdef',
+            level: 1,
+            student: 'db_import_123_abcdef_1_student',
+            grade: 'db_import_123_abcdef_1_grade',
+            subject: 'db_import_123_abcdef_1_subject',
+            activity: null,
+            virtue: null,
+            group: null,
+        );
+        $method = new \ReflectionMethod($repository, 'phoneMemoValue');
+
+        $this->assertSame('0812345678', $method->invoke($repository, $set, 'STUDENT01', 'phone', '081-234-5678'));
+        $this->assertNull($method->invoke($repository, $set, 'STUDENT01', 'phone', "\x21\x00\x00\x00"));
+    }
+
     public function test_it_fails_closed_when_a_district_has_no_successful_registered_batch(): void
     {
         $queries = [];
@@ -67,6 +93,9 @@ final class LegacyStudentRepositoryTest extends TestCase
                             "db_{$otherBatch}_1_grade",
                         ],
                     ),
+                    str_contains($query, 'INFORMATION_SCHEMA.COLUMNS') => [
+                        (object) ['column_name' => 'cardid'],
+                    ],
                     str_contains($query, 'SELECT DISTINCT _perf_semestry') => [
                         (object) ['term' => '68/2'],
                         (object) ['term' => '1/2568'],
@@ -184,6 +213,7 @@ final class LegacyStudentRepositoryTest extends TestCase
         }
         $this->assertTrue((bool) array_filter($queries, static fn (string $query): bool => str_contains($query, 'EXISTS')));
         $this->assertTrue((bool) array_filter($queries, static fn (string $query): bool => str_contains($query, '_perf_std10')));
+        $this->assertTrue((bool) array_filter($queries, static fn (string $query): bool => str_contains($query, 's.`cardid`')));
     }
 
     public function test_real_legacy_connection_is_opt_in_and_read_only(): void

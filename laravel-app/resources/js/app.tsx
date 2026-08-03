@@ -15,6 +15,7 @@ import { LandingPage } from './pages/LandingPage';
 import { LoginPage } from './pages/LoginPage';
 import { queryClient } from './query';
 import { initializeAppearance } from './lib/appearance';
+import { APP_BASE_PATH } from './lib/urls';
 
 initializeAppearance();
 
@@ -101,7 +102,7 @@ createRoot(document.getElementById('app')!).render(
         <QueryClientProvider client={queryClient}>
             <MaterialAppProvider>
                 <GlobalMutationLoading />
-                <BrowserRouter>
+                <BrowserRouter basename={APP_BASE_PATH || undefined}>
                     <AppErrorBoundary>
                         <App />
                     </AppErrorBoundary>

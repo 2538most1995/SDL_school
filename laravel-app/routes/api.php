@@ -115,21 +115,24 @@ Route::prefix('v1')->group(function (): void {
         Route::patch('/settings/appearance', [AppearanceController::class, 'update'])->middleware('throttle:20,1');
     });
 
-    Route::middleware(['auth:sanctum', 'active', 'district', 'role:admin,super_admin', 'throttle:60,1'])
+    Route::middleware(['auth:sanctum', 'active', 'district', 'role:admin,super_admin'])
         ->group(function (): void {
-            Route::get('/admin/users', [UserController::class, 'index']);
+            Route::get('/admin/users', [UserController::class, 'index'])->middleware('throttle:120,1');
             Route::post('/admin/users', [UserController::class, 'store'])->middleware('throttle:20,1');
             Route::patch('/admin/users/{legacyUser}', [UserController::class, 'update'])->whereNumber('legacyUser')->middleware('throttle:30,1');
-            Route::get('/admin/imports', [ImportController::class, 'index']);
-            Route::get('/admin/imports/jobs/{job}', [ImportController::class, 'status'])->whereUuid('job');
+            Route::get('/admin/imports', [ImportController::class, 'index'])->middleware('throttle:120,1');
+            Route::get('/admin/imports/jobs/{job}', [ImportController::class, 'status'])->whereUuid('job')->middleware('throttle:300,1');
             Route::post('/admin/imports', [ImportController::class, 'store'])->middleware('throttle:5,1');
-            Route::get('/admin/imports/safety', ImportSafetyController::class);
-            Route::get('/admin/exam-rooms', [ExamRoomController::class, 'index']);
+            Route::delete('/admin/imports/{batch}', [ImportController::class, 'destroy'])
+                ->where('batch', 'import_\\d{10}_[A-Za-z0-9]+')
+                ->middleware('throttle:10,1');
+            Route::get('/admin/imports/safety', ImportSafetyController::class)->middleware('throttle:120,1');
+            Route::get('/admin/exam-rooms', [ExamRoomController::class, 'index'])->middleware('throttle:120,1');
             Route::post('/admin/exam-rooms', [ExamRoomController::class, 'store'])->middleware('throttle:30,1');
             Route::patch('/admin/exam-rooms/{examRoom}', [ExamRoomController::class, 'update'])->whereNumber('examRoom')->middleware('throttle:30,1');
             Route::delete('/admin/exam-rooms/{examRoom}', [ExamRoomController::class, 'destroy'])->whereNumber('examRoom')->middleware('throttle:20,1');
-            Route::get('/admin/branding', [BrandingController::class, 'show']);
-            Route::patch('/admin/branding', [BrandingController::class, 'update']);
+            Route::get('/admin/branding', [BrandingController::class, 'show'])->middleware('throttle:120,1');
+            Route::patch('/admin/branding', [BrandingController::class, 'update'])->middleware('throttle:30,1');
             Route::post('/admin/branding/hero', [BrandingController::class, 'updateHero'])->middleware('throttle:10,1');
             Route::delete('/admin/branding/hero', [BrandingController::class, 'destroyHero'])->middleware('throttle:10,1');
             Route::post('/admin/branding/assets/{slot}', [BrandingController::class, 'updateAsset'])->whereIn('slot', ['logo', 'dashboard-hero'])->middleware('throttle:10,1');

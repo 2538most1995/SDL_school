@@ -129,10 +129,6 @@ final readonly class StudentDirectoryService
                 return false;
             }
 
-            if (isset($filters['status']) && $filters['status'] !== '' && $filters['status'] !== $student->status) {
-                return false;
-            }
-
             return ! isset($filters['term']) || $filters['term'] === '' || $filters['term'] === $student->currentTerm;
         }));
     }
@@ -145,7 +141,6 @@ final readonly class StudentDirectoryService
     {
         $levels = [];
         $groups = [];
-        $statuses = [];
         $terms = [];
         $districts = [];
 
@@ -155,21 +150,18 @@ final readonly class StudentDirectoryService
             if ($groupName !== '') {
                 $groups[$groupName] = ['value' => $groupName, 'label' => $groupName];
             }
-            $statuses[$student->status] = ['value' => $student->status, 'label' => $student->statusLabel];
             $terms[$student->currentTerm] = ['value' => $student->currentTerm, 'label' => "ภาคเรียน {$student->currentTerm}"];
             $districts[$student->districtId] = ['value' => $student->districtId, 'label' => $student->districtName];
         }
 
         ksort($levels);
         ksort($groups, SORT_NATURAL);
-        ksort($statuses, SORT_NATURAL);
         krsort($terms, SORT_NATURAL);
         ksort($districts);
 
         return [
             'levels' => array_values($levels),
             'groups' => array_values($groups),
-            'statuses' => array_values($statuses),
             'terms' => array_values($terms),
             'districts' => array_values($districts),
         ];
@@ -202,9 +194,6 @@ final readonly class StudentDirectoryService
 
         return [
             'total' => count($students),
-            'studying' => count(array_filter($students, static fn (Student $student): bool => $student->status === 'studying')),
-            'graduated' => count(array_filter($students, static fn (Student $student): bool => $student->status === 'graduated')),
-            'transferred' => count(array_filter($students, static fn (Student $student): bool => $student->status === 'transferred')),
             'male' => $genderCounts['ชาย'],
             'female' => $genderCounts['หญิง'],
             'groups' => count($groups),

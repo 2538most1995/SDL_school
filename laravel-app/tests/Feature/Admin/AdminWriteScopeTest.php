@@ -7,6 +7,7 @@ use App\Models\User;
 use Illuminate\Database\Schema\Blueprint;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\File;
 use Laravel\Sanctum\Sanctum;
 use Tests\TestCase;
 
@@ -15,6 +16,8 @@ final class AdminWriteScopeTest extends TestCase
     use RefreshDatabase;
 
     private string $legacyDatabase;
+
+    private string $importWorkspace;
 
     private District $sena;
 
@@ -31,6 +34,11 @@ final class AdminWriteScopeTest extends TestCase
         config()->set('legacy.write_enabled', true);
         config()->set('legacy.connection', 'legacy');
         config()->set('legacy.write_connection', 'legacy_write');
+        $this->importWorkspace = sys_get_temp_dir().'/sena-admin-import-delete-'.bin2hex(random_bytes(6));
+        File::makeDirectory($this->importWorkspace.'/zips', 0750, true);
+        File::makeDirectory($this->importWorkspace.'/extracted', 0750, true);
+        config()->set('legacy.zip_root', $this->importWorkspace.'/zips');
+        config()->set('legacy.extract_root', $this->importWorkspace.'/extracted');
         DB::purge('legacy');
         DB::purge('legacy_write');
 
@@ -79,6 +87,9 @@ final class AdminWriteScopeTest extends TestCase
         DB::disconnect('legacy_write');
         if (isset($this->legacyDatabase) && is_file($this->legacyDatabase)) {
             unlink($this->legacyDatabase);
+        }
+        if (isset($this->importWorkspace)) {
+            File::deleteDirectory($this->importWorkspace);
         }
         parent::tearDown();
     }
@@ -179,5 +190,68 @@ final class AdminWriteScopeTest extends TestCase
             ->assertOk()
             ->assertJsonFragment(['username' => 'other.teacher'])
             ->assertJsonMissing(['username' => 'sena.admin']);
+    }
+
+    public function test_admin_can_delete_only_the_import_batch_from_own_district(): void
+    {
+        $ownBatch = 'import_1700000100_aaaa';
+        $otherBatch = 'import_1700000101_bbbb';
+        $connection = DB::connection('legacy_write');
+        $schema = $connection->getSchemaBuilder();
+        $schema->create('import_history', function (Blueprint $table): void {
+            $table->id();
+            $table->string('file_name');
+            $table->string('saved_file_name');
+            $table->string('batch_key')->nullable();
+            $table->unsignedBigInteger('district_id')->nullable();
+            $table->string('status')->nullable();
+            $table->timestamp('created_at')->nullable();
+        });
+        $schema->create('import_batches', function (Blueprint $table): void {
+            $table->string('batch_key')->primary();
+            $table->unsignedBigInteger('district_id');
+            $table->unsignedBigInteger('import_history_id')->nullable();
+            $table->timestamp('created_at')->nullable();
+        });
+        foreach ([[$ownBatch, $this->sena->id], [$otherBatch, $this->other->id]] as [$batch, $districtId]) {
+            $historyId = $connection->table('import_history')->insertGetId([
+                'file_name' => $batch.'.zip',
+                'saved_file_name' => $batch.'.zip',
+                'batch_key' => $batch,
+                'district_id' => $districtId,
+                'status' => 'success',
+                'created_at' => now(),
+            ]);
+            $connection->table('import_batches')->insert([
+                'batch_key' => $batch,
+                'district_id' => $districtId,
+                'import_history_id' => $historyId,
+                'created_at' => now(),
+            ]);
+            $connection->getSchemaBuilder()->create('db_'.$batch.'_1_student', fn (Blueprint $table) => $table->id());
+            File::put($this->importWorkspace.'/zips/'.$batch.'.zip', 'zip');
+            File::makeDirectory($this->importWorkspace.'/extracted/'.$batch.'/1', 0750, true);
+            File::put($this->importWorkspace.'/extracted/'.$batch.'/1/student.dbf', 'dbf');
+        }
+
+        $admin = User::factory()->create(['role' => 'admin', 'district_id' => $this->sena->id]);
+        Sanctum::actingAs($admin);
+
+        $this->deleteJson('/api/v1/admin/imports/'.$otherBatch)->assertNotFound();
+        $this->assertTrue($connection->table('import_batches')->where('batch_key', $otherBatch)->exists());
+
+        $this->deleteJson('/api/v1/admin/imports/'.$ownBatch)
+            ->assertOk()
+            ->assertJsonPath('data.deleted', true)
+            ->assertJsonPath('data.batch_key', $ownBatch)
+            ->assertJsonPath('data.removed_table_count', 1);
+
+        $this->assertFalse($connection->table('import_batches')->where('batch_key', $ownBatch)->exists());
+        $this->assertTrue($connection->table('import_batches')->where('batch_key', $otherBatch)->exists());
+        $this->assertDatabaseHas('audit_logs', [
+            'event' => 'admin.import.deleted',
+            'district_id' => $this->sena->id,
+            'user_id' => $admin->id,
+        ]);
     }
 }

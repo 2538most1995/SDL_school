@@ -2,6 +2,7 @@ import {
     Archive,
     Buildings,
     CheckCircle,
+    CircleNotch,
     Database,
     DoorOpen,
     FileZip,
@@ -32,7 +33,7 @@ import { QueryError, QuerySkeleton } from '../../components/QueryState';
 import { StatTile } from '../../components/StatTile';
 import { StatusBadge, type StatusTone } from '../../components/StatusBadge';
 import { showErrorAlert, showSuccessAlert } from '../../lib/feedback';
-import { getFeatureData, getFeatureDataWithDemo, sendFeatureData } from '../api';
+import { getFeatureData, getFeatureDataWithDemo, sendFeatureData, uploadFeatureData } from '../api';
 
 const primaryButton = 'inline-flex items-center justify-center gap-2 whitespace-nowrap rounded-full bg-brand-700 px-4 py-2.5 text-sm font-bold text-white transition hover:bg-brand-800 disabled:cursor-not-allowed disabled:bg-slate-300 active:scale-[0.98]';
 const secondaryButton = 'inline-flex items-center justify-center gap-2 whitespace-nowrap rounded-full border border-slate-200 bg-white px-4 py-2.5 text-sm font-bold text-slate-700 transition hover:border-brand-300 hover:text-brand-800 disabled:opacity-50 active:scale-[0.98]';
@@ -187,7 +188,8 @@ export function AdminUsersPage() {
 
 type ImportBatch = { id: number; batch_key: string; district_name: string; academic_term: string; status: string; row_count: number; table_count: number; warning_count: number; replaced_batch_count?: number; is_active: boolean };
 type ImportStart = { job_id: string; status: 'queued'; message: string };
-type ImportJob = { job_id: string; status: 'queued' | 'processing' | 'completed' | 'failed'; message: string; result?: ImportBatch };
+type ImportJob = { job_id: string; status: 'queued' | 'processing' | 'completed' | 'failed'; message: string; progress?: number; processed_rows?: number; total_rows?: number; current_table?: string; result?: ImportBatch };
+type ImportDeleteResult = { deleted: boolean; batch_key: string; removed_table_count: number; removed_zip: boolean; removed_extract_directory: boolean };
 function importTone(status: string): StatusTone { return status === 'พร้อมใช้งาน' ? 'success' : status.includes('ตรวจ') || status.includes('รอ') ? 'warning' : 'neutral'; }
 
 export function AdminImportsPage() {
@@ -196,6 +198,7 @@ export function AdminImportsPage() {
     const [term, setTerm] = useState('1/2569');
     const [jobId, setJobId] = useState<string | null>(null);
     const [handledJobId, setHandledJobId] = useState<string | null>(null);
+    const [uploadProgress, setUploadProgress] = useState(0);
     const imports = useQuery({
         queryKey: ['admin', 'imports'],
         queryFn: async ({ signal }) => {
@@ -205,45 +208,70 @@ export function AdminImportsPage() {
         },
     });
     const upload = useMutation({
-        meta: { notification: { success: 'รับไฟล์แล้ว ระบบกำลังนำเข้าข้อมูลเบื้องหลัง' } },
         mutationFn: () => {
             if (!file) throw new Error('กรุณาเลือกไฟล์ ZIP ก่อนนำเข้า');
             const payload = new FormData();
             payload.append('archive', file);
             payload.append('academic_term', term);
-            return sendFeatureData<ImportStart>('/api/v1/admin/imports', 'POST', payload);
+            return uploadFeatureData<ImportStart>('/api/v1/admin/imports', payload, setUploadProgress);
         },
+        onMutate: () => setUploadProgress(0),
         onSuccess: (response) => {
             setFile(null);
             setJobId(response.data.job_id);
             setHandledJobId(null);
         },
+        onError: () => setUploadProgress(0),
     });
     const importJob = useQuery({
         queryKey: ['admin', 'imports', 'job', jobId],
         queryFn: ({ signal }) => getFeatureData<ImportJob>(`/api/v1/admin/imports/jobs/${jobId}`, signal),
         enabled: jobId !== null,
-        retry: 3,
-        retryDelay: 1_500,
-        refetchInterval: (query) => ['queued', 'processing'].includes(query.state.data?.data.status ?? '') ? 2_000 : false,
+        retry: 4,
+        retryDelay: (attempt) => Math.min(5_000, 1_000 * (attempt + 1)),
+        refetchInterval: (query) => ['queued', 'processing'].includes(query.state.data?.data.status ?? '') ? 2_500 : false,
     });
     const jobStatus = importJob.data?.data.status;
     const jobRunning = jobId !== null && jobStatus !== 'completed' && jobStatus !== 'failed';
+    const loading = upload.isPending || jobRunning;
+    const currentProgress = upload.isPending ? uploadProgress : Math.max(0, Math.min(100, importJob.data?.data.progress ?? 0));
+    const remove = useMutation({
+        meta: { notification: { success: 'ลบชุดข้อมูลและไฟล์เดิมเรียบร้อยแล้ว' } },
+        mutationFn: (batch: ImportBatch) => sendFeatureData<ImportDeleteResult>(`/api/v1/admin/imports/${encodeURIComponent(batch.batch_key)}`, 'DELETE'),
+        onSuccess: () => {
+            setJobId(null);
+            setHandledJobId(null);
+            void queryClient.invalidateQueries({ queryKey: ['admin', 'imports'] });
+        },
+    });
     useEffect(() => {
         if (!jobId || handledJobId === jobId || (jobStatus !== 'completed' && jobStatus !== 'failed')) return;
         setHandledJobId(jobId);
         if (jobStatus === 'completed') {
-            showSuccessAlert('นำเข้าและเปิดใช้ชุดข้อมูลใหม่เรียบร้อยแล้ว');
-            void queryClient.invalidateQueries({
-                predicate: (query) => {
-                    const key = query.queryKey;
-                    return !['auth', 'system'].includes(String(key[0])) && !(key[0] === 'admin' && key[1] === 'imports' && key[2] === 'job');
-                },
-            });
+            void (async () => {
+                await queryClient.invalidateQueries({
+                    predicate: (query) => {
+                        const key = query.queryKey;
+                        return !['auth', 'system'].includes(String(key[0])) && !(key[0] === 'admin' && key[1] === 'imports' && key[2] === 'job');
+                    },
+                    refetchType: 'none',
+                });
+                await queryClient.refetchQueries({ queryKey: ['admin', 'imports'], type: 'active' });
+                setJobId(null);
+                setUploadProgress(0);
+                upload.reset();
+                showSuccessAlert('นำเข้าและเปิดใช้ชุดข้อมูลใหม่เรียบร้อยแล้ว ข้อมูลบนหน้าจออัปเดตเป็นชุดล่าสุดแล้ว');
+            })();
         } else {
             showErrorAlert(importJob.data?.data.message ?? 'นำเข้าข้อมูลไม่สำเร็จ กรุณาตรวจไฟล์แล้วลองใหม่');
         }
     }, [handledJobId, importJob.data?.data.message, jobId, jobStatus, queryClient]);
+    function confirmDelete(batch: ImportBatch) {
+        if (loading || remove.isPending) return;
+        if (window.confirm(`ยืนยันลบชุดข้อมูล ${batch.batch_key} ของ${batch.district_name}หรือไม่?\n\nระบบจะลบตาราง ฐานทะเบียน ZIP และไฟล์ DBF/FPT ของชุดนี้ทั้งหมด หลังลบแล้วเมนูข้อมูลนักศึกษาจะไม่มีข้อมูลจนกว่าจะนำเข้าชุดใหม่`)) {
+            remove.mutate(batch);
+        }
+    }
     const columns = useMemo<ColumnDef<ImportBatch>[]>(() => [
         { accessorKey: 'batch_key', header: 'Batch', size: 245, meta: { compactSize: 130 }, cell: ({ row }) => <div><p className="font-bold text-slate-950">{row.original.batch_key}</p><p className="mt-0.5 text-xs text-slate-500">{row.original.district_name}</p></div> },
         { accessorKey: 'academic_term', header: 'ภาคเรียน', size: 110, meta: { compactSize: 64, compactTextAlign: 'center' } },
@@ -251,7 +279,8 @@ export function AdminImportsPage() {
         { accessorKey: 'table_count', header: 'ตาราง', size: 92, meta: { compactSize: 52, compactTextAlign: 'center' } },
         { accessorKey: 'warning_count', header: 'คำเตือน', size: 105, meta: { compactSize: 62, compactTextAlign: 'center' }, cell: ({ getValue }) => <StatusBadge tone={Number(getValue()) > 0 ? 'warning' : 'success'}>{getValue<number>()}</StatusBadge> },
         { accessorKey: 'status', header: 'สถานะ', size: 135, meta: { compactSize: 76, compactTextAlign: 'center' }, cell: ({ getValue }) => <StatusBadge tone={importTone(getValue<string>())}>{getValue<string>()}</StatusBadge> },
-    ], []);
+        { id: 'actions', header: 'จัดการ', size: 112, meta: { compactSize: 72, compactTextAlign: 'center' }, enableSorting: false, cell: ({ row }) => <button type="button" onClick={() => confirmDelete(row.original)} disabled={loading || remove.isPending} className="responsive-table-action inline-flex items-center justify-center gap-1.5 rounded-full border border-rose-200 bg-white px-3 py-2 text-xs font-bold text-rose-700 transition hover:bg-rose-50 disabled:cursor-not-allowed disabled:opacity-50" aria-label={`ลบชุดข้อมูล ${row.original.batch_key}`}>{remove.isPending ? <CircleNotch size={16} className="animate-spin" /> : <Trash size={16} weight="bold" />}<span>ลบข้อมูล</span></button> },
+    ], [loading, remove.isPending]);
     const readOnly = imports.data ? imports.data.meta.read_only === true : true;
     function submit(event: FormEvent) { event.preventDefault(); upload.mutate(); }
     return (
@@ -260,15 +289,15 @@ export function AdminImportsPage() {
             <div className="grid gap-5 xl:grid-cols-[0.72fr_1.28fr]">
                 <Panel title="อัปโหลดชุดข้อมูลใหม่" description="เมื่อสำเร็จ ระบบจะใช้ชุดนี้แทนชุดเดิมของอำเภอทันที">
                     <form onSubmit={submit} className="space-y-4">
-                        <label className="block"><span className="mb-2 block text-sm font-bold text-slate-700">ไฟล์ข้อมูล</span><span className="grid min-h-32 place-items-center rounded-2xl border border-dashed border-brand-300 bg-brand-50 px-4 py-6 text-center"><FileZip size={32} weight="duotone" className="text-brand-700" /><span className="mt-2 max-w-full truncate text-sm font-bold text-slate-800">{file?.name ?? 'เลือกไฟล์ ZIP'}</span><input key={jobId ?? 'ready'} type="file" accept=".zip,application/zip" disabled={readOnly || upload.isPending || jobRunning} onChange={(event) => { setFile(event.target.files?.[0] ?? null); setJobId(null); setHandledJobId(null); upload.reset(); }} className="mt-3 block max-w-full text-xs text-slate-600 file:mr-3 file:rounded-full file:border-0 file:bg-brand-700 file:px-4 file:py-2 file:font-bold file:text-white" /></span></label>
+                        <label className="block"><span className="mb-2 block text-sm font-bold text-slate-700">ไฟล์ข้อมูล</span><span className="grid min-h-32 place-items-center rounded-2xl border border-dashed border-brand-300 bg-brand-50 px-4 py-6 text-center"><FileZip size={32} weight="duotone" className="text-brand-700" /><span className="mt-2 max-w-full truncate text-sm font-bold text-slate-800">{file?.name ?? 'เลือกไฟล์ ZIP'}</span><input key={jobId ?? 'ready'} type="file" accept=".zip,application/zip" disabled={readOnly || upload.isPending || jobRunning} onChange={(event) => { setFile(event.target.files?.[0] ?? null); setJobId(null); setHandledJobId(null); setUploadProgress(0); upload.reset(); }} className="mt-3 block max-w-full text-xs text-slate-600 file:mr-3 file:rounded-full file:border-0 file:bg-brand-700 file:px-4 file:py-2 file:font-bold file:text-white" /></span></label>
                         <Field label="ภาคเรียน"><input required pattern="(?:[12]/25[0-9]{2}|25[0-9]{2}/[12])" value={term} onChange={(event) => setTerm(event.target.value)} disabled={readOnly} className={inputClass} placeholder="1/2569" /></Field>
-                        <MutationError error={upload.error} />
+                        <MutationError error={upload.error ?? remove.error} />
                         {importJob.isError && <p role="alert" className="rounded-xl border border-rose-200 bg-rose-50 p-3 text-sm font-bold text-rose-800">อ่านสถานะการนำเข้าไม่สำเร็จ ระบบอาจยังทำงานอยู่ กรุณารอสักครู่แล้วรีเฟรชหน้า</p>}
-                        {jobRunning && <p role="status" className="rounded-xl border border-amber-200 bg-amber-50 p-3 text-sm font-bold leading-6 text-amber-900">รับไฟล์แล้ว ระบบกำลังตรวจสอบและนำเข้าข้อมูลเบื้องหลัง สามารถรอที่หน้านี้ได้โดยไม่ต้องกดซ้ำ</p>}
+                        {loading && <div role="status" aria-live="polite" className="overflow-hidden rounded-2xl border border-brand-200 bg-gradient-to-br from-brand-50 to-sky-50 p-4 shadow-sm"><div className="flex items-start gap-3"><span className="grid size-11 shrink-0 place-items-center rounded-full bg-white text-brand-700 shadow-sm"><CircleNotch size={25} weight="bold" className="animate-spin" /></span><div className="min-w-0 flex-1"><div className="flex items-center justify-between gap-3"><p className="font-bold text-slate-950">{upload.isPending ? 'กำลังอัปโหลดไฟล์ ZIP' : jobStatus === 'queued' ? 'ไฟล์อยู่ในคิวนำเข้า' : 'กำลังตรวจสอบและนำเข้าข้อมูล'}</p><strong className="text-sm text-brand-800">{currentProgress}%</strong></div><p className="mt-1 text-sm leading-6 text-slate-600">{upload.isPending ? `กำลังส่ง ${file?.name ?? 'ไฟล์ข้อมูล'} ไปยังเซิร์ฟเวอร์ กรุณาอย่าปิดหน้านี้` : importJob.data?.data.message ?? 'กำลังเริ่มงานเบื้องหลังอัตโนมัติ กรุณารอสักครู่'}</p>{!upload.isPending && (importJob.data?.data.total_rows ?? 0) > 0 && <p className="mt-1 text-xs font-semibold text-slate-500">ประมวลผล {Number(importJob.data?.data.processed_rows ?? 0).toLocaleString('th-TH')} / {Number(importJob.data?.data.total_rows ?? 0).toLocaleString('th-TH')} แถว{importJob.data?.data.current_table ? ` · ${importJob.data.data.current_table}` : ''}</p>}</div></div><div className="mt-3 h-2 overflow-hidden rounded-full bg-white"><div className="h-full rounded-full bg-brand-600 transition-[width] duration-500" style={{ width: `${currentProgress}%` }} /></div></div>}
                         {jobStatus === 'failed' && <p role="alert" className="rounded-xl border border-rose-200 bg-rose-50 p-3 text-sm font-bold text-rose-800">{importJob.data?.data.message}</p>}
                         {jobStatus === 'completed' && importJob.data?.data.result && <p role="status" className="rounded-xl border border-brand-200 bg-brand-50 p-3 text-sm font-bold text-brand-800">นำเข้าสำเร็จ {importJob.data.data.result.table_count.toLocaleString('th-TH')} ตาราง รวม {importJob.data.data.result.row_count.toLocaleString('th-TH')} แถว เปิดใช้งานแล้ว และลบชุดเก่า {importJob.data.data.result.replaced_batch_count ?? 0} ชุด</p>}
-                        <button type="submit" disabled={readOnly || !file || upload.isPending || jobRunning} className={`${primaryButton} w-full py-3`}><UploadSimple size={18} weight="bold" />{upload.isPending ? 'กำลังส่งไฟล์' : jobRunning ? 'กำลังนำเข้าข้อมูลเบื้องหลัง' : 'ตรวจสอบและเริ่มนำเข้า'}</button>
-                        <p className="text-xs leading-5 text-slate-500">รองรับ ZIP ไม่เกิน 90 MB ระบบปฏิเสธ path อันตราย, symbolic link และ ZIP bomb หากชุดใหม่ไม่สมบูรณ์ ชุดเดิมจะยังใช้งานต่อโดยไม่ถูกลบ</p>
+                        <button type="submit" disabled={readOnly || !file || loading || remove.isPending} className={`${primaryButton} w-full py-3`}>{loading ? <CircleNotch size={18} weight="bold" className="animate-spin" /> : <UploadSimple size={18} weight="bold" />}{upload.isPending ? 'กำลังอัปโหลด กรุณารอ' : jobRunning ? 'กำลังนำเข้า กรุณารอ' : 'ตรวจสอบและเริ่มนำเข้า'}</button>
+                        <p className="text-xs leading-5 text-slate-500">รองรับ ZIP ไม่เกิน 90 MB ระบบปฏิเสธ path อันตราย, symbolic link และ ZIP bomb เมื่อชุดใหม่ผ่านครบทุกขั้น ระบบจะเปิดใช้ชุดใหม่และลบตาราง ZIP และไฟล์ DBF/FPT ชุดเดิมโดยอัตโนมัติ หากชุดใหม่ไม่สมบูรณ์ ชุดเดิมจะยังใช้งานต่อ</p>
                     </form>
                 </Panel>
                 <Panel title="ชุดข้อมูลปัจจุบัน" description="แต่ละอำเภอมีชุดข้อมูลใช้งานหนึ่งชุด ชุดก่อนหน้าจะถูกลบเมื่อชุดใหม่ผ่านการนำเข้า">
@@ -346,7 +375,7 @@ export function AdminDataMaintenancePage() {
     });
     return (
         <div>
-            <PageHeader category="ดูแลข้อมูล" title="สถานะความปลอดภัยของข้อมูล" description="ตรวจขอบเขตอำเภอ การตรวจ ZIP โครงสร้าง DBF และ audit log ของระบบนำเข้า" icon={Database} actions={<StatusBadge tone="warning">ไม่เปิดการลบ batch</StatusBadge>} />
+            <PageHeader category="ดูแลข้อมูล" title="สถานะความปลอดภัยของข้อมูล" description="ตรวจขอบเขตอำเภอ การตรวจ ZIP โครงสร้าง DBF และ audit log ของระบบนำเข้า" icon={Database} actions={<StatusBadge tone="success">ควบคุมการลบตามอำเภอ</StatusBadge>} />
             <div className="grid gap-5 lg:grid-cols-[1.1fr_0.9fr]">
                 <Panel title="ผลตรวจระบบ" description="สถานะจริงของมาตรการควบคุมในระบบ"><div className="grid gap-3">{safety.isPending && <QuerySkeleton rows={5} />}{safety.isError && <QueryError onRetry={() => safety.refetch()} />}{safety.data?.data.map((item) => <article key={item.key} className="flex items-start gap-3 rounded-2xl bg-slate-50 p-4"><span className={`grid size-10 shrink-0 place-items-center rounded-xl ${item.status === 'ผ่าน' ? 'bg-brand-100 text-brand-800' : 'bg-amber-100 text-amber-900'}`}>{item.status === 'ผ่าน' ? <CheckCircle size={21} weight="fill" /> : <Warning size={21} weight="fill" />}</span><div><div className="flex flex-wrap items-center gap-2"><h2 className="font-bold text-slate-950">{item.label}</h2><StatusBadge tone={item.status === 'ผ่าน' ? 'success' : 'warning'}>{item.status}</StatusBadge></div><p className="mt-1 text-sm leading-6 text-slate-500">{item.description}</p></div></article>)}</div></Panel>
                 <Panel title="ขอบเขตควบคุม" description="ป้องกันข้อมูลข้ามอำเภอและการลบโดยไม่ตั้งใจ" className="border-rose-200 bg-rose-50"><div className="space-y-3 text-sm leading-6 text-rose-950"><p className="flex items-start gap-2"><LockKey size={19} weight="fill" className="mt-0.5 shrink-0" />admin ใช้งานได้เฉพาะอำเภอของบัญชี ส่วน super admin ต้องเลือกอำเภอเป้าหมาย</p><p className="flex items-start gap-2"><Archive size={19} weight="fill" className="mt-0.5 shrink-0" />ชุดข้อมูลเดิมยังใช้งานต่อจนกว่า batch ใหม่จะนำเข้าสำเร็จครบทุกตาราง</p><p className="flex items-start gap-2"><HardDrives size={19} weight="fill" className="mt-0.5 shrink-0" />เมื่อผิดพลาด ระบบลบเฉพาะตารางและไฟล์ staging ของ batch ใหม่</p></div></Panel>

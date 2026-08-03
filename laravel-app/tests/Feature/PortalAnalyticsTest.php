@@ -33,7 +33,7 @@ final class PortalAnalyticsTest extends TestCase
             ->assertJsonPath('data.analytics.totals.groups', 5)
             ->assertJsonPath('data.analytics.totals.new_students', 0)
             ->assertJsonPath('data.analytics.current_term', '2/2568')
-            ->assertJsonCount(4, 'data.analytics.by_status')
+            ->assertJsonMissingPath('data.analytics.by_status')
             ->assertJsonCount(3, 'data.analytics.by_level')
             ->assertJsonCount(3, 'data.analytics.by_gender')
             ->assertJsonCount(5, 'data.analytics.by_group')
@@ -46,11 +46,9 @@ final class PortalAnalyticsTest extends TestCase
                 'kpch_hours',
             ]]]]);
 
-        $statusTotal = collect($response->json('data.analytics.by_status'))->sum('value');
         $levelTotal = collect($response->json('data.analytics.by_level'))->sum('value');
         $moralTotal = collect($response->json('data.analytics.moral'))->sum('value');
 
-        $this->assertSame(8, $statusTotal);
         $this->assertSame(8, $levelTotal);
         $this->assertSame(8, $moralTotal);
     }

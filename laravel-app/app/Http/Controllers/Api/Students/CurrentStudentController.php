@@ -29,7 +29,6 @@ final class CurrentStudentController extends Controller
             'group' => $student->groupName,
             'advisor' => 'ตรวจสอบกับครูประจำกลุ่ม',
             'currentTerm' => $student->currentTerm,
-            'enrollmentStatus' => $student->statusLabel,
             'nextMeeting' => 'ดูวันนัดหมายล่าสุดจากปฏิทินการเรียนรู้',
         ]);
     }
