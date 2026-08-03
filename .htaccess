@@ -1,0 +1,9 @@
+Options -Indexes
+
+<IfModule mod_rewrite.c>
+    RewriteEngine On
+
+    # The legacy PHP application has been retired. Laravel is the only web entry point.
+    RewriteRule ^$ laravel-app/public/ [L]
+    RewriteRule ^(.*)$ laravel-app/public/$1 [L]
+</IfModule>
