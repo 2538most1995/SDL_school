@@ -247,6 +247,10 @@ final readonly class LegacyStudentReportService
                         continue;
                     }
 
+                    if ($selectedTerm !== null && empty($registeredInSelectedTerm[$code])) {
+                        continue;
+                    }
+
                     $m = $studentMetrics[$code] ?? [
                         'compulsory_earned' => 0.0,
                         'elective_earned' => 0.0,
