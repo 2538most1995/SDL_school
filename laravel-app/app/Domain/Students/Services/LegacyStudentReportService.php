@@ -124,8 +124,9 @@ final readonly class LegacyStudentReportService
     {
         try {
             $sets = $this->sets($districtId);
-            $terms = $this->distinctTerms($sets, 'grade', '_perf_semestry', '1=1');
+            $terms = $this->registeredSubjectTerms($viewer, $sets, $filters);
             $selectedTerm = $this->selectedTerm($filters, $terms);
+            $selectedTermVariants = $selectedTerm !== null ? AcademicTerm::variants($selectedTerm) : [];
             $rows = [];
 
             foreach ($this->filteredSets($sets, $filters) as $set) {
@@ -206,9 +207,12 @@ final readonly class LegacyStudentReportService
                     $subCode = strtoupper(trim((string) ($aRow['sub_code'] ?? '')));
                     $subName = strtoupper(trim((string) ($aRow['sub_name'] ?? '')));
                     $credit = (float) ($aRow['sub_credit'] ?? 0);
-                    $term = AcademicTerm::normalize((string) ($aRow['term'] ?? ''));
+                    $rawTerm = (string) ($aRow['term'] ?? '');
+                    $term = AcademicTerm::normalize($rawTerm);
 
-                    if ($selectedTerm !== null && $term === $selectedTerm) {
+                    $isTermMatch = $selectedTerm === null || ($term !== null && in_array($term, $selectedTermVariants, true)) || in_array(trim($rawTerm), $selectedTermVariants, true);
+
+                    if ($isTermMatch) {
                         $registeredInSelectedTerm[$code] = true;
                     }
 
@@ -219,7 +223,7 @@ final readonly class LegacyStudentReportService
                         $studentMetrics[$code]['exam_taken'] = true;
                     }
 
-                    $isCurrentTermRegistration = ($selectedTerm !== null && $term === $selectedTerm) || in_array($gradeVal, ['', '-'], true);
+                    $isCurrentTermRegistration = $isTermMatch || in_array($gradeVal, ['', '-'], true);
 
                     if ($isNumericPassed) {
                         if ($subType === '1') {
@@ -242,8 +246,8 @@ final readonly class LegacyStudentReportService
                         continue;
                     }
 
-                    // Only include students who registered in the selected academic term
-                    if ($selectedTerm !== null && empty($registeredInSelectedTerm[$code])) {
+                    // Only include students who registered in the selected academic term (if terms exist)
+                    if ($selectedTerm !== null && $terms !== [] && empty($registeredInSelectedTerm[$code])) {
                         continue;
                     }
 
