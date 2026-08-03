@@ -129,10 +129,15 @@ final readonly class LegacyStudentReportService
             $selectedTermVariants = $selectedTerm !== null ? AcademicTerm::variants($selectedTerm) : [];
             $rows = [];
 
+            $isLatestTerm = $selectedTerm === null || ($terms !== [] && $selectedTerm === $terms[0]);
+
             foreach ($this->filteredSets($sets, $filters) as $set) {
                 [$join, $groupName] = $this->groupJoin($set, 's');
                 [$scopeSql, $scopeBindings] = $this->scope($viewer, $set, 's', $join !== '');
-                $conditions = [$scopeSql, "TRIM(COALESCE(s.fin_cause, '')) <> '1'"];
+                $conditions = [$scopeSql];
+                if ($isLatestTerm) {
+                    $conditions[] = "TRIM(COALESCE(s.fin_cause, '')) <> '1'";
+                }
                 $bindings = $scopeBindings;
                 $this->appendGroupAndSearchFilters($conditions, $bindings, $filters, $join !== '', 's', $groupName);
 
@@ -147,12 +152,18 @@ final readonly class LegacyStudentReportService
                     default => [0.0, 0.0, 0.0],
                 };
 
+                $finSemCol = $this->firstExistingColumn($set->student, ['fin_sem']);
+                $finSem2Col = $this->firstExistingColumn($set->student, ['fin_sem2']);
+                $finCauseCol = $this->firstExistingColumn($set->student, ['fin_cause']);
                 $ntSara1Col = $this->firstExistingColumn($set->student, ['nt_sara1']);
                 $ntSara2Col = $this->firstExistingColumn($set->student, ['nt_sara2']);
                 $ntSemCol = $this->firstExistingColumn($set->student, ['nt_sem']);
                 $ntNosemCol = $this->firstExistingColumn($set->student, ['nt_nosem']);
                 $nnetCol = $this->firstExistingColumn($set->student, ['nnet', 'n_net', 'eexam', 'e_exam', 'nnet_stat', 'exm_status']);
 
+                $finSemSql = $finSemCol !== null ? ", s.{$finSemCol} AS fin_sem_val" : ", '' AS fin_sem_val";
+                $finSem2Sql = $finSem2Col !== null ? ", s.{$finSem2Col} AS fin_sem2_val" : ", '' AS fin_sem2_val";
+                $finCauseSql = $finCauseCol !== null ? ", s.{$finCauseCol} AS fin_cause_val" : ", '' AS fin_cause_val";
                 $ntSql1 = $ntSara1Col !== null ? ", s.{$ntSara1Col} AS nt_sara1_val" : ", '' AS nt_sara1_val";
                 $ntSql2 = $ntSara2Col !== null ? ", s.{$ntSara2Col} AS nt_sara2_val" : ", '' AS nt_sara2_val";
                 $ntSemSql = $ntSemCol !== null ? ", s.{$ntSemCol} AS nt_sem_val" : ", '' AS nt_sem_val";
@@ -161,7 +172,7 @@ final readonly class LegacyStudentReportService
 
                 $studentsSql = "SELECT s._perf_id10 AS student_code, s.prename, s.name AS first_name,
                                        s.surname AS last_name, s.grp_code AS group_code, {$groupName} AS group_name
-                                       {$ntSql1} {$ntSql2} {$ntSemSql} {$ntNosemSql} {$nnetSql}
+                                       {$finCauseSql} {$finSemSql} {$finSem2Sql} {$ntSql1} {$ntSql2} {$ntSemSql} {$ntNosemSql} {$nnetSql}
                                 FROM {$student} s {$join}
                                 WHERE ".implode(' AND ', array_filter($conditions)).'
                                 ORDER BY s.name ASC, s.surname ASC, s._perf_id10 ASC';
@@ -258,6 +269,19 @@ final readonly class LegacyStudentReportService
 
                     if ($selectedTerm !== null && empty($registeredInSelectedTerm[$code])) {
                         continue;
+                    }
+
+                    $finCauseVal = trim((string) ($sRow['fin_cause_val'] ?? ''));
+                    if ($finCauseVal === '1') {
+                        if ($isLatestTerm) {
+                            continue;
+                        }
+
+                        $finSem = AcademicTerm::normalize((string) ($sRow['fin_sem_val'] ?? ''))
+                            ?? AcademicTerm::normalize((string) ($sRow['fin_sem2_val'] ?? ''));
+                        if ($finSem !== null && $selectedTerm !== null && AcademicTerm::compare($finSem, $selectedTerm) < 0) {
+                            continue;
+                        }
                     }
 
                     $m = $studentMetrics[$code] ?? [
