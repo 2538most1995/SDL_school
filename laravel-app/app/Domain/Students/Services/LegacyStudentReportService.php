@@ -242,16 +242,17 @@ final readonly class LegacyStudentReportService
 
                 foreach ($studentList as $sRow) {
                     $code = trim((string) ($sRow['student_code'] ?? ''));
-                    if ($code === '' || ! isset($studentMetrics[$code])) {
+                    if ($code === '') {
                         continue;
                     }
 
-                    // Only include students who registered in the selected academic term (if terms exist)
-                    if ($selectedTerm !== null && $terms !== [] && empty($registeredInSelectedTerm[$code])) {
-                        continue;
-                    }
-
-                    $m = $studentMetrics[$code];
+                    $m = $studentMetrics[$code] ?? [
+                        'compulsory_earned' => 0.0,
+                        'elective_earned' => 0.0,
+                        'compulsory_registered' => 0.0,
+                        'elective_registered' => 0.0,
+                        'exam_taken' => false,
+                    ];
                     $compTotal = $m['compulsory_earned'] + $m['compulsory_registered'];
                     $elecTotal = $m['elective_earned'] + $m['elective_registered'];
                     $grandTotal = $compTotal + $elecTotal;
@@ -260,6 +261,7 @@ final readonly class LegacyStudentReportService
                     $hasStudentFlag = in_array($nnetVal, ['1', 'Y', 'P', 'PASS', 'PASSED', 'สอบแล้ว', 'ผ่าน'], true);
                     $isExamTaken = ! empty($m['exam_taken']) || $hasStudentFlag;
 
+                    // Active student passes graduation criteria
                     if ($compTotal >= $reqComp && $elecTotal >= $reqElec && $grandTotal >= $reqTotal) {
                         $rows[] = [
                             'id' => "{$set->districtId}-{$set->level}-{$code}",
