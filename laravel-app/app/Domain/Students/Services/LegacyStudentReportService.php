@@ -236,23 +236,24 @@ final readonly class LegacyStudentReportService
                         $registeredInSelectedTerm[$code] = true;
                     }
 
+                    $isTermBeforeOrEqual = $selectedTerm === null || $term === null || AcademicTerm::compare($term, $selectedTerm) <= 0;
+
                     $isNumericPassed = is_numeric($gradeVal) && (float) $gradeVal >= 1.0;
                     $isExamSubject = str_contains($subCode, 'NET') || str_contains($subCode, 'EXAM') || str_contains($subName, 'N-NET') || str_contains($subName, 'E-EXAM');
 
-                    if (($isExamSubject || in_array($typCode, ['2', '3'], true)) && ! in_array($gradeVal, ['', '-'], true)) {
+                    if (($isExamSubject || in_array($typCode, ['2', '3'], true)) && ! in_array($gradeVal, ['', '-'], true) && $isTermBeforeOrEqual) {
                         $studentMetrics[$code]['exam_taken'] = true;
                     }
 
-                    $isCurrentTermRegistration = $isTermMatch || in_array($gradeVal, ['', '-'], true);
                     $isElective = in_array($subType, ['2', '3'], true);
 
-                    if ($isNumericPassed) {
+                    if ($isNumericPassed && $isTermBeforeOrEqual) {
                         if ($isElective) {
                             $studentMetrics[$code]['elective_earned'] += $credit;
                         } else {
                             $studentMetrics[$code]['compulsory_earned'] += $credit;
                         }
-                    } elseif ($isCurrentTermRegistration) {
+                    } elseif ($isTermMatch) {
                         if ($isElective) {
                             $studentMetrics[$code]['elective_registered'] += $credit;
                         } else {
