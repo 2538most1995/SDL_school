@@ -46,6 +46,8 @@ final class LegacyExamScheduleService
         $schedulePath = $batchKey === null ? null : $this->findDbf($batchKey, 'schedule', (string) $student->level);
         $fieldPath = $batchKey === null ? null : $this->findDbf($batchKey, 'field');
         $fields = $fieldPath === null ? [] : $this->fieldMap($fieldPath);
+        $groupFields = $batchKey === null ? [] : $this->groupFieldMap($batchKey);
+        $studentGroupFld = $groupFields[trim((string) $student->groupCode)] ?? '';
 
         $rows = [];
         if ($schedulePath !== null) {
@@ -60,13 +62,15 @@ final class LegacyExamScheduleService
                 $fieldCode = trim((string) (
                     $row['fld_code'] ?? $row['fldcode'] ?? $row['field_code'] ?? $row['fld_id'] ?? $row['field'] ?? ''
                 ));
+                if ($fieldCode === '' && $studentGroupFld !== '') {
+                    $fieldCode = $studentGroupFld;
+                }
                 $directLoc = trim((string) (
                     $row['fld_name'] ?? $row['fldname'] ?? $row['field_name'] ?? $row['location'] ?? $row['place'] ?? $row['exam_place'] ?? $row['loc_name'] ?? ''
                 ));
                 $location = $fields[$fieldCode] ?? ($directLoc !== '' ? $directLoc : ($fieldCode !== '' ? $fieldCode : ''));
-                if ($location === '' || $location === '-' || $location === $student->districtName) {
-                    $groupName = trim((string) ($student->groupName ?: $student->groupCode));
-                    $location = $groupName !== '' ? $groupName : ($student->districtName ?: '-');
+                if ($location === '' || $location === '-') {
+                    $location = $student->districtName ?: '-';
                 }
 
                 $rows[] = [
@@ -296,6 +300,29 @@ final class LegacyExamScheduleService
         }
 
         return $this->fieldMaps[$path] = $fields;
+    }
+
+    /** @return array<string, string> */
+    private function groupFieldMap(string $batchKey): array
+    {
+        $cacheKey = 'groupFieldMap|'.$batchKey;
+        if (isset($this->fieldMaps[$cacheKey])) {
+            return $this->fieldMaps[$cacheKey];
+        }
+        $groupPath = $this->findDbf($batchKey, 'group');
+        if ($groupPath === null) {
+            return $this->fieldMaps[$cacheKey] = [];
+        }
+        $map = [];
+        foreach ($this->records($groupPath) as $row) {
+            $grpCode = trim((string) ($row['grp_code'] ?? ''));
+            $fldCode = trim((string) ($row['grp_field'] ?? $row['fld_code'] ?? $row['field'] ?? ''));
+            if ($grpCode !== '' && $fldCode !== '') {
+                $map[$grpCode] = $fldCode;
+            }
+        }
+
+        return $this->fieldMaps[$cacheKey] = $map;
     }
 
     private function time(string $value): string
