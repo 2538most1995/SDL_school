@@ -20,7 +20,6 @@
         .exam-table .empty { height: 38mm; color: #64748b; font-size: 16pt; text-align: center; }
         .w-no { width: 8mm; } .w-term { width: 18mm; } .w-subject { width: 48mm; } .w-date { width: 31mm; } .w-time { width: 25mm; } .w-place { width: 28mm; } .w-room { width: 22mm; }
         .footer { margin-top: 4mm; text-align: right; color: #64748b; font-size: 11pt; }
-        .no-otl-dot { font-family: thsarabunnew_nootl; }
     </style>
 </head>
 <body>

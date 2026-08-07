@@ -38,16 +38,8 @@ final class ExamScheduleDocumentController extends Controller
                     'B' => 'THSarabunNew Bold.ttf',
                     'I' => 'THSarabunNew Italic.ttf',
                     'BI' => 'THSarabunNew BoldItalic.ttf',
-                    'useOTL' => 0xFF,
-                ],
-                // mPDF inserts an unsupported U+200B after periods when OTL is
-                // enabled. This alias is used for period glyphs only.
-                'thsarabunnew_nootl' => [
-                    'R' => 'THSarabunNew.ttf',
-                    'B' => 'THSarabunNew Bold.ttf',
-                    'I' => 'THSarabunNew Italic.ttf',
-                    'BI' => 'THSarabunNew BoldItalic.ttf',
                     'useOTL' => 0,
+                    'useKPP' => 0,
                 ],
             ],
             'default_font' => 'thsarabunnew',
