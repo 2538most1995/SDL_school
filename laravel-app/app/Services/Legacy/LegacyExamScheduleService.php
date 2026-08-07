@@ -91,7 +91,7 @@ final class LegacyExamScheduleService
                     'start_time' => $this->time((string) ($row['exam_start'] ?? '')),
                     'end_time' => $this->time((string) ($row['exam_end'] ?? '')),
                     'location' => $location,
-                    'room' => $this->examRoom($student, $term, $code, $row),
+                    'room' => $this->examRoom($student, $term, $code, $row, $batchKey),
                 ];
             }
         }
@@ -166,18 +166,30 @@ final class LegacyExamScheduleService
         return $this->dbfPaths[$cacheKey] = $matches[0] ?? null;
     }
 
-    private function examRoom(Student $student, string $term, string $subjectCode, array $row = []): string
+    private function examRoom(Student $student, string $term, string $subjectCode, array $row = [], ?string $batchKey = null): string
     {
         $roomFromDb = $this->queryExamRoomDb($student, $term, $subjectCode);
         if ($roomFromDb !== '-') {
             return $roomFromDb;
         }
 
+        if ($batchKey !== null) {
+            $gradeRooms = $this->studentGradeRoomMap($batchKey, (string) $student->level, (string) $student->code);
+            $roomNo = $gradeRooms[$subjectCode] ?? '';
+            if ($roomNo !== '') {
+                $cleanNo = ltrim($roomNo, '0') ?: $roomNo;
+
+                return preg_match('/^\d+$/', $cleanNo) ? 'ห้อง '.$cleanNo : $cleanNo;
+            }
+        }
+
         $dbfRoom = trim((string) (
-            $row['room'] ?? $row['room_no'] ?? $row['room_name'] ?? $row['exam_room'] ?? $row['rm_no'] ?? $row['room_code'] ?? $row['building'] ?? ''
+            $row['room'] ?? $row['room_no'] ?? $row['roomname'] ?? $row['room_name'] ?? $row['exam_room'] ?? $row['rm_no'] ?? $row['room_code'] ?? $row['building'] ?? ''
         ));
         if ($dbfRoom !== '') {
-            return preg_match('/^\d+$/', $dbfRoom) ? 'ห้อง '.$dbfRoom : $dbfRoom;
+            $clean = ltrim($dbfRoom, '0') ?: $dbfRoom;
+
+            return preg_match('/^\d+$/', $clean) ? 'ห้อง '.$clean : $clean;
         }
 
         return 'ห้อง 1';
@@ -370,6 +382,62 @@ final class LegacyExamScheduleService
                             $fldCode = trim((string) ($row['grp_field'] ?? $row['fld_code'] ?? $row['field'] ?? ''));
                             if ($grpCode !== '' && $fldCode !== '') {
                                 $map[$grpCode] = $fldCode;
+                            }
+                        }
+                        if ($map !== []) {
+                            break;
+                        }
+                    }
+                }
+            } catch (\Throwable $e) {
+                // Ignore DB query errors
+            }
+        }
+
+        return $this->fieldMaps[$cacheKey] = $map;
+    }
+
+    /** @return array<string, string> */
+    private function studentGradeRoomMap(string $batchKey, string $level, string $studentCode): array
+    {
+        $cacheKey = 'studentGradeRoomMap|'.$batchKey.'|'.$level.'|'.$studentCode;
+        if (isset($this->fieldMaps[$cacheKey])) {
+            return $this->fieldMaps[$cacheKey];
+        }
+
+        $map = [];
+
+        $gradePath = $this->findDbf($batchKey, 'grade', $level);
+        if ($gradePath !== null && is_file($gradePath)) {
+            foreach ($this->records($gradePath) as $row) {
+                $std = trim((string) ($row['std_code'] ?? ''));
+                if ($std !== $studentCode && ! str_ends_with($std, $studentCode) && ! str_ends_with($studentCode, $std)) {
+                    continue;
+                }
+                $sub = trim((string) ($row['sub_code'] ?? ''));
+                $rm = trim((string) ($row['roomno'] ?? $row['room_no'] ?? $row['room'] ?? ''));
+                if ($sub !== '' && $rm !== '') {
+                    $map[$sub] = $rm;
+                }
+            }
+        }
+
+        if ($map === [] && (bool) config('legacy.enabled')) {
+            try {
+                $connection = $this->database->connection((string) config('legacy.connection'));
+                $tableNames = ["db_import_{$batchKey}_{$level}_grade", "db_import_{$batchKey}_grade"];
+                foreach ($tableNames as $tableName) {
+                    if ($connection->getSchemaBuilder()->hasTable($tableName)) {
+                        $rows = $connection->table($tableName)
+                            ->where('_perf_std10', substr($studentCode, -10))
+                            ->orWhere('std_code', $studentCode)
+                            ->get();
+                        foreach ($rows as $r) {
+                            $row = (array) $r;
+                            $sub = trim((string) ($row['sub_code'] ?? ''));
+                            $rm = trim((string) ($row['roomno'] ?? $row['room_no'] ?? $row['room'] ?? ''));
+                            if ($sub !== '' && $rm !== '') {
+                                $map[$sub] = $rm;
                             }
                         }
                         if ($map !== []) {
