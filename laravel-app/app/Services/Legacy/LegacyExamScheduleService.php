@@ -64,8 +64,9 @@ final class LegacyExamScheduleService
                     $row['fld_name'] ?? $row['fldname'] ?? $row['field_name'] ?? $row['location'] ?? $row['place'] ?? $row['exam_place'] ?? $row['loc_name'] ?? ''
                 ));
                 $location = $fields[$fieldCode] ?? ($directLoc !== '' ? $directLoc : ($fieldCode !== '' ? $fieldCode : ''));
-                if ($location === '' || $location === '-') {
-                    $location = $student->districtName ?: '-';
+                if ($location === '' || $location === '-' || $location === $student->districtName) {
+                    $groupName = trim((string) ($student->groupName ?: $student->groupCode));
+                    $location = $groupName !== '' ? $groupName : ($student->districtName ?: '-');
                 }
 
                 $rows[] = [
@@ -164,11 +165,6 @@ final class LegacyExamScheduleService
         ));
         if ($dbfRoom !== '') {
             return preg_match('/^\d+$/', $dbfRoom) ? 'ห้อง '.$dbfRoom : $dbfRoom;
-        }
-
-        $groupName = trim((string) ($student->groupName ?: $student->groupCode));
-        if ($groupName !== '') {
-            return 'ห้อง '.preg_replace('/^(กลุ่ม|ห้อง)\s*/u', '', $groupName);
         }
 
         return 'ห้อง 1';
