@@ -52,7 +52,8 @@ final class ProcessLegacyZipImport implements ShouldQueue
             $this->updateStatus('completed', 'นำเข้าและเปิดใช้ชุดข้อมูลใหม่เรียบร้อยแล้ว', 100, ['result' => $result]);
         } catch (Throwable $exception) {
             report($exception);
-            $this->updateStatus('failed', 'นำเข้าข้อมูลไม่สำเร็จ กรุณาตรวจรูปแบบ ZIP และไฟล์ DBF แล้วลองใหม่', 100);
+            $msg = 'นำเข้าข้อมูลไม่สำเร็จ: '.$exception->getMessage();
+            $this->updateStatus('failed', $msg, 100);
         } finally {
             Storage::disk('local')->delete($this->stagingPath);
         }

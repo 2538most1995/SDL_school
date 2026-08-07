@@ -680,8 +680,41 @@ final class LegacyZipImportService
         return ['batch_key' => $batchKey, 'optimized_tables' => $optimizedTables, 'added_indexes' => $addedIndexes];
     }
 
+    private function ensureImportRegistryTables(): void
+    {
+        try {
+            $schema = $this->write()->getSchemaBuilder();
+            if (! $schema->hasTable('import_history')) {
+                $schema->create('import_history', function (\Illuminate\Database\Schema\Blueprint $table): void {
+                    $table->id();
+                    $table->string('file_name');
+                    $table->string('saved_file_name');
+                    $table->string('batch_key')->index();
+                    $table->unsignedInteger('file_size_kb')->default(0);
+                    $table->string('level', 20)->default('ทุกระดับ');
+                    $table->unsignedInteger('file_count')->default(0);
+                    $table->string('status', 24)->default('pending')->index();
+                    $table->unsignedBigInteger('district_id')->index();
+                    $table->timestamp('created_at')->nullable();
+
+                    $table->index(['district_id', 'batch_key']);
+                });
+            }
+
+            if ($schema->hasTable('import_batches') && ! $schema->hasColumn('import_batches', 'import_history_id')) {
+                $schema->table('import_batches', function (\Illuminate\Database\Schema\Blueprint $table): void {
+                    $table->unsignedBigInteger('import_history_id')->nullable()->after('district_id');
+                });
+            }
+        } catch (\Throwable) {
+            // Safe fallback if already created or restricted permissions
+        }
+    }
+
     private function registerBatch(string $original, string $saved, string $batchKey, int $sizeKb, int $fileCount, int $districtId): int
     {
+        $this->ensureImportRegistryTables();
+
         return $this->write()->transaction(function () use ($original, $saved, $batchKey, $sizeKb, $fileCount, $districtId): int {
             $historyId = $this->write()->table('import_history')->insertGetId([
                 'file_name' => Str::limit(basename($original), 255, ''),

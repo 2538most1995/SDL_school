@@ -54,46 +54,67 @@ final class ImportController extends Controller
     public function store(Request $request): JsonResponse
     {
         abort_unless((bool) config('legacy.enabled') && (bool) config('legacy.write_enabled'), 503, 'ระบบนำเข้าข้อมูลจริงยังไม่เปิดใช้งาน');
-        $validated = $request->validate([
-            'archive' => ['required', File::types(['zip'])->max(90 * 1024)],
-            'academic_term' => ['required', 'string', 'max:20', 'regex:/^(?:[12]\/25\d{2}|25\d{2}\/[12])$/'],
-        ], [
-            'archive.required' => 'กรุณาเลือกไฟล์ ZIP',
-            'archive.mimes' => 'อนุญาตเฉพาะไฟล์ ZIP',
-            'academic_term.regex' => 'กรุณาระบุภาคเรียน เช่น 1/2569',
-        ]);
 
-        $districtId = (int) $request->attributes->get('district_id');
-        $jobId = (string) Str::uuid();
-        $archive = $validated['archive'];
-        $stagingPath = $archive->storeAs("import-queue/{$districtId}", $jobId.'.zip', 'local');
-        abort_if($stagingPath === false, 500, 'ไม่สามารถบันทึกไฟล์รอนำเข้าได้');
-        $status = [
-            'job_id' => $jobId,
-            'district_id' => $districtId,
-            'status' => 'queued',
-            'message' => 'รับไฟล์แล้วและกำลังเริ่มนำเข้าข้อมูล',
-            'progress' => 0,
-        ];
-        Cache::put(ProcessLegacyZipImport::cacheKey($jobId), $status, now()->addDay());
+        try {
+            $archive = $request->file('archive');
+            if (! $archive || ! $archive->isValid()) {
+                return response()->json(['message' => 'กรุณาเลือกไฟล์ ZIP ที่ถูกต้อง หรือไฟล์มีขนาดเกินขีดจำกัดที่เซิร์ฟเวอร์ตั้งไว้'], 422);
+            }
 
-        $queueConnection = (string) config('legacy.import_queue_connection', 'database');
-        ProcessLegacyZipImport::dispatch(
-            $jobId,
-            $stagingPath,
-            basename($archive->getClientOriginalName()),
-            (string) $validated['academic_term'],
-            $districtId,
-            (int) $request->user()->id,
-            $request->ip(),
-        )->onConnection($queueConnection);
-        RunLegacyImportQueueOnce::dispatch($queueConnection)
-            ->onConnection((string) config('legacy.import_autostart_connection', 'background'));
+            $ext = strtolower($archive->getClientOriginalExtension());
+            if ($ext !== 'zip') {
+                return response()->json(['message' => 'ระบบรองรับเฉพาะไฟล์นามสกุล .zip เท่านั้น'], 422);
+            }
 
-        return response()->json(['data' => $status, 'meta' => [
-            'source' => 'legacy_controlled_write',
-            'read_only' => false,
-        ]], 202);
+            $validated = $request->validate([
+                'archive' => ['required', 'file', 'max:92160'],
+                'academic_term' => ['required', 'string', 'max:20', 'regex:/^(?:[12]\/25\d{2}|25\d{2}\/[12])$/'],
+            ], [
+                'archive.required' => 'กรุณาเลือกไฟล์ ZIP',
+                'archive.max' => 'ไฟล์มีขนาดใหญ่เกินกำหนด (สูงสุด 90 MB)',
+                'academic_term.required' => 'กรุณาระบุภาคเรียน',
+                'academic_term.regex' => 'กรุณาระบุภาคเรียน เช่น 1/2569',
+            ]);
+
+            $districtId = (int) $request->attributes->get('district_id');
+            $jobId = (string) Str::uuid();
+            $stagingPath = $archive->storeAs("import-queue/{$districtId}", $jobId.'.zip', 'local');
+            abort_if($stagingPath === false, 500, 'ไม่สามารถบันทึกไฟล์รอนำเข้าในพื้นที่ดิสก์ได้');
+            $status = [
+                'job_id' => $jobId,
+                'district_id' => $districtId,
+                'status' => 'queued',
+                'message' => 'รับไฟล์แล้วและกำลังเริ่มนำเข้าข้อมูล',
+                'progress' => 0,
+            ];
+            Cache::put(ProcessLegacyZipImport::cacheKey($jobId), $status, now()->addDay());
+
+            $queueConnection = (string) config('legacy.import_queue_connection', 'database');
+            ProcessLegacyZipImport::dispatch(
+                $jobId,
+                $stagingPath,
+                basename($archive->getClientOriginalName()),
+                (string) $validated['academic_term'],
+                $districtId,
+                (int) $request->user()->id,
+                $request->ip(),
+            )->onConnection($queueConnection);
+            RunLegacyImportQueueOnce::dispatch($queueConnection)
+                ->onConnection((string) config('legacy.import_autostart_connection', 'background'));
+
+            return response()->json(['data' => $status, 'meta' => [
+                'source' => 'legacy_controlled_write',
+                'read_only' => false,
+            ]], 202);
+        } catch (\Illuminate\Validation\ValidationException $e) {
+            $firstError = collect($e->errors())->flatten()->first() ?? 'ข้อมูลที่ส่งมาไม่ถูกต้อง';
+
+            return response()->json(['message' => $firstError, 'errors' => $e->errors()], 422);
+        } catch (\Throwable $e) {
+            \Illuminate\Support\Facades\Log::error('Import store error: '.$e->getMessage(), ['exception' => $e]);
+
+            return response()->json(['message' => 'เกิดข้อผิดพลาดในการนำเข้า: '.$e->getMessage()], 500);
+        }
     }
 
     public function status(Request $request, string $job): JsonResponse
