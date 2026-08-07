@@ -166,7 +166,12 @@ final class LegacyExamScheduleService
             return preg_match('/^\d+$/', $dbfRoom) ? 'ห้อง '.$dbfRoom : $dbfRoom;
         }
 
-        return '-';
+        $groupName = trim((string) ($student->groupName ?: $student->groupCode));
+        if ($groupName !== '') {
+            return 'ห้อง '.preg_replace('/^(กลุ่ม|ห้อง)\s*/u', '', $groupName);
+        }
+
+        return 'ห้อง 1';
     }
 
     private function queryExamRoomDb(Student $student, string $term, string $subjectCode): string
@@ -193,7 +198,11 @@ final class LegacyExamScheduleService
             if ($rows === []) {
                 $rows = $this->database->connection((string) config('legacy.connection'))->table('exam_rooms')
                     ->where('district_id', $student->districtId)
-                    ->where('term', $term)
+                    ->where(function ($q) use ($term): void {
+                        $q->where('term', $term)
+                            ->orWhere('term', 'all')
+                            ->orWhere('term', '*');
+                    })
                     ->orderBy('id')->get()->all();
             }
 
@@ -209,22 +218,60 @@ final class LegacyExamScheduleService
             if ($roomName === '') {
                 continue;
             }
-            if ($startVal === '' || $startVal === '*' || $startVal === 'all') {
-                return $roomName;
-            }
 
             $candidateValues = $assignmentType === 'group_range'
                 ? array_filter([$student->groupCode, $student->groupName])
                 : array_filter([$student->code]);
 
             foreach ($candidateValues as $val) {
-                if (strnatcasecmp((string) $val, $startVal) >= 0 && strnatcasecmp((string) $val, $endVal) <= 0) {
+                if ($this->matchValue((string) $val, $startVal, $endVal)) {
                     return $roomName;
                 }
             }
         }
 
+        // If exam_rooms has rows for this district, return the first room as fallback
+        if ($this->examRooms[$cacheKey] !== []) {
+            $firstRoom = trim((string) ($this->examRooms[$cacheKey][0]->room_name ?? ''));
+            if ($firstRoom !== '') {
+                return $firstRoom;
+            }
+        }
+
         return '-';
+    }
+
+    private function matchValue(string $val, string $start, string $end): bool
+    {
+        $val = trim($val);
+        $start = trim($start);
+        $end = trim($end);
+
+        if ($val === '') {
+            return false;
+        }
+
+        if ($start === '' || $start === '*' || strtolower($start) === 'all' || $end === '' || $end === '*' || strtolower($end) === 'all') {
+            return true;
+        }
+
+        if (ctype_digit($val) && ctype_digit($start) && ctype_digit($end)) {
+            $numVal = (float) $val;
+            $numStart = (float) $start;
+            $numEnd = (float) $end;
+
+            return $numVal >= $numStart && $numVal <= $numEnd;
+        }
+
+        if (strcasecmp($val, $start) === 0 || strcasecmp($val, $end) === 0) {
+            return true;
+        }
+
+        if (str_contains($val, $start) || str_contains($val, $end)) {
+            return true;
+        }
+
+        return strnatcasecmp($val, $start) >= 0 && strnatcasecmp($val, $end) <= 0;
     }
 
     /** @return list<array<string, mixed>> */

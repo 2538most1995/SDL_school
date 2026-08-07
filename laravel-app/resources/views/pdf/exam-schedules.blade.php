@@ -25,13 +25,7 @@
 </head>
 <body>
 @php
-    // Escape every source value first; only the period glyph gets the no-OTL
-    // font alias so mPDF does not render its inserted U+200B as a square.
-    $pdfText = static fn (mixed $value): string => str_replace(
-        '.',
-        '<span class="no-otl-dot">.</span>',
-        e((string) $value),
-    );
+    $pdfText = static fn (mixed $value): string => e((string) $value);
 @endphp
 @foreach ($documents as $document)
     <section class="sheet">
