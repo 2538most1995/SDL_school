@@ -405,10 +405,10 @@ final class LegacyZipImportService
         $quotedColumns = implode(', ', array_map($this->quoteIdentifier(...), $allColumns));
         $rowPlaceholders = '('.implode(', ', array_fill(0, count($allColumns), '?')).')';
         $insertPrefix = 'INSERT INTO '.$this->quoteIdentifier($table)." ({$quotedColumns}) VALUES ";
-        // Keep safely below MySQL's 65,535 placeholder ceiling and SQLite's
-        // lower test limit while replacing hundreds of single-row round trips.
-        $placeholderLimit = $this->write()->getDriverName() === 'mysql' ? 50_000 : 900;
-        $batchSize = max(1, min(750, intdiv($placeholderLimit, max(1, count($allColumns)))));
+        @set_time_limit(0);
+        @ini_set('memory_limit', '512M');
+        $placeholderLimit = $this->write()->getDriverName() === 'mysql' ? 60_000 : 900;
+        $batchSize = max(1, min(3000, intdiv($placeholderLimit, max(1, count($allColumns)))));
         $recordCount = max(1, $reader->recordCount());
         $reportTableProgress = static function (int $seen, float $start, float $span) use ($progress, $recordCount): void {
             if ($progress === null) {
