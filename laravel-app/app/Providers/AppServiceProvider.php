@@ -50,6 +50,26 @@ class AppServiceProvider extends ServiceProvider
      */
     public function boot(): void
     {
-        //
+        try {
+            $request = request();
+            $host = $request->getHttpHost();
+            $serverHost = (string) ($_SERVER['HTTP_HOST'] ?? '');
+
+            if (str_contains($host, 'localhost') || str_contains($host, '127.0.0.1')
+                || str_contains($serverHost, 'localhost') || str_contains($serverHost, '8888')
+                || str_contains($serverHost, '127.0.0.1')) {
+                $basePath = (string) ($request->server('SENA_APP_BASE_PATH') ?? $_SERVER['SENA_APP_BASE_PATH'] ?? '');
+                $scheme = $request->getScheme() ?: 'http';
+                $actualHost = $serverHost ?: $host;
+                $dynamicAppUrl = rtrim($scheme.'://'.$actualHost.$basePath, '/');
+
+                config(['app.url' => $dynamicAppUrl, 'app.asset_url' => $dynamicAppUrl]);
+                $url = app('url');
+                $url->forceRootUrl($dynamicAppUrl);
+                $url->useAssetOrigin($dynamicAppUrl);
+            }
+        } catch (\Throwable) {
+            // Ignore during early bootstrap
+        }
     }
 }

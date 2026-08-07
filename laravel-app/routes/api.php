@@ -19,6 +19,7 @@ use App\Http\Controllers\Api\Learning\ScoreController;
 use App\Http\Controllers\Api\PortalController;
 use App\Http\Controllers\Api\PortalDemoController;
 use App\Http\Controllers\Api\Settings\AppearanceController;
+use App\Http\Controllers\Api\Settings\NnetScheduleController;
 use App\Http\Controllers\Api\Settings\ProfileController;
 use App\Http\Controllers\Api\Students\CurrentStudentController;
 use App\Http\Controllers\Api\Students\StudentDirectoryController;
@@ -114,6 +115,8 @@ Route::prefix('v1')->group(function (): void {
         Route::patch('/settings/password', [ProfileController::class, 'updatePassword'])->middleware('throttle:10,1');
         Route::get('/settings/appearance', [AppearanceController::class, 'show']);
         Route::patch('/settings/appearance', [AppearanceController::class, 'update'])->middleware('throttle:20,1');
+        Route::get('/settings/nnet-schedule', [NnetScheduleController::class, 'show']);
+        Route::put('/settings/nnet-schedule', [NnetScheduleController::class, 'update'])->middleware('throttle:20,1');
     });
 
     Route::middleware(['auth:sanctum', 'active', 'district', 'role:admin,super_admin'])
