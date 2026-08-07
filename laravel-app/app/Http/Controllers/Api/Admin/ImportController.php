@@ -16,7 +16,8 @@ use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Str;
 use InvalidArgumentException;
-use Throwable;
+use Illuminate\Database\Schema\Blueprint;
+use Illuminate\Support\Facades\Schema;
 use Illuminate\Validation\Rule;
 use Illuminate\Validation\Rules\File;
 
@@ -89,18 +90,33 @@ final class ImportController extends Controller
             ];
             Cache::put(ProcessLegacyZipImport::cacheKey($jobId), $status, now()->addDay());
 
+            $this->ensureJobsQueueTablesExist();
+
             $queueConnection = (string) config('legacy.import_queue_connection', 'database');
-            ProcessLegacyZipImport::dispatch(
-                $jobId,
-                $stagingPath,
-                basename($archive->getClientOriginalName()),
-                (string) $validated['academic_term'],
-                $districtId,
-                (int) $request->user()->id,
-                $request->ip(),
-            )->onConnection($queueConnection);
-            RunLegacyImportQueueOnce::dispatch($queueConnection)
-                ->onConnection((string) config('legacy.import_autostart_connection', 'background'));
+            try {
+                ProcessLegacyZipImport::dispatch(
+                    $jobId,
+                    $stagingPath,
+                    basename($archive->getClientOriginalName()),
+                    (string) $validated['academic_term'],
+                    $districtId,
+                    (int) $request->user()->id,
+                    $request->ip(),
+                )->onConnection($queueConnection);
+                RunLegacyImportQueueOnce::dispatch($queueConnection)
+                    ->onConnection((string) config('legacy.import_autostart_connection', 'background'));
+            } catch (\Throwable $dispatchError) {
+                \Illuminate\Support\Facades\Log::warning('Queue dispatch failed, running import inline: '.$dispatchError->getMessage());
+                ProcessLegacyZipImport::dispatchSync(
+                    $jobId,
+                    $stagingPath,
+                    basename($archive->getClientOriginalName()),
+                    (string) $validated['academic_term'],
+                    $districtId,
+                    (int) $request->user()->id,
+                    $request->ip(),
+                );
+            }
 
             return response()->json(['data' => $status, 'meta' => [
                 'source' => 'legacy_controlled_write',
@@ -161,5 +177,52 @@ final class ImportController extends Controller
             'source' => 'legacy_controlled_write',
             'read_only' => false,
         ]]);
+    }
+
+    private function ensureJobsQueueTablesExist(): void
+    {
+        try {
+            $schema = Schema::connection(config('database.default'));
+            if (! $schema->hasTable('jobs')) {
+                $schema->create('jobs', function (Blueprint $table): void {
+                    $table->id();
+                    $table->string('queue')->index();
+                    $table->longText('payload');
+                    $table->unsignedSmallInteger('attempts');
+                    $table->unsignedInteger('reserved_at')->nullable();
+                    $table->unsignedInteger('available_at');
+                    $table->unsignedInteger('created_at');
+                });
+            }
+            if (! $schema->hasTable('job_batches')) {
+                $schema->create('job_batches', function (Blueprint $table): void {
+                    $table->string('id')->primary();
+                    $table->string('name');
+                    $table->integer('total_jobs');
+                    $table->integer('pending_jobs');
+                    $table->integer('failed_jobs');
+                    $table->longText('failed_job_ids');
+                    $table->mediumText('options')->nullable();
+                    $table->integer('cancelled_at')->nullable();
+                    $table->integer('created_at');
+                    $table->integer('finished_at')->nullable();
+                });
+            }
+            if (! $schema->hasTable('failed_jobs')) {
+                $schema->create('failed_jobs', function (Blueprint $table): void {
+                    $table->id();
+                    $table->string('uuid')->unique();
+                    $table->string('connection');
+                    $table->string('queue');
+                    $table->longText('payload');
+                    $table->longText('exception');
+                    $table->timestamp('failed_at')->useCurrent();
+
+                    $table->index(['connection', 'queue', 'failed_at']);
+                });
+            }
+        } catch (Throwable) {
+            // Ignore if schema checks fail or table already exists
+        }
     }
 }
