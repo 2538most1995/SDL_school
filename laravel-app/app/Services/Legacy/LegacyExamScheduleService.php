@@ -45,8 +45,8 @@ final class LegacyExamScheduleService
         $batchKey = $this->activeBatchKey($student->districtId);
         $schedulePath = $batchKey === null ? null : $this->findDbf($batchKey, 'schedule', (string) $student->level);
         $fieldPath = $batchKey === null ? null : $this->findDbf($batchKey, 'field');
-        $fields = $fieldPath === null ? [] : $this->fieldMap($fieldPath);
-        $groupFields = $batchKey === null ? [] : $this->groupFieldMap($batchKey);
+        $fields = $this->fieldMap($batchKey, $fieldPath);
+        $groupFields = $this->groupFieldMap($batchKey);
         $studentGroupFld = $groupFields[trim((string) $student->groupCode)] ?? '';
 
         $rows = [];
@@ -68,9 +68,18 @@ final class LegacyExamScheduleService
                 $directLoc = trim((string) (
                     $row['fld_name'] ?? $row['fldname'] ?? $row['field_name'] ?? $row['location'] ?? $row['place'] ?? $row['exam_place'] ?? $row['loc_name'] ?? ''
                 ));
-                $location = $fields[$fieldCode] ?? ($directLoc !== '' ? $directLoc : ($fieldCode !== '' ? $fieldCode : ''));
-                if ($location === '' || $location === '-') {
-                    $location = $student->districtName ?: '-';
+                $location = $fields[$fieldCode] ?? ($directLoc !== '' ? $directLoc : '');
+                if ($location === '' || $location === '-' || $location === $student->groupName || str_starts_with($location, 'ศกร.') || str_starts_with($location, 'กลุ่ม')) {
+                    $district = (string) ($student->districtName ?? '');
+                    if (str_contains($district, 'เสนา')) {
+                        $location = 'โรงเรียนเสนา "เสนาประสิทธิ์"';
+                    } elseif (str_contains($district, 'ไพศาลี')) {
+                        $location = 'โรงเรียนไพศาลีพิทยา';
+                    } elseif ($district !== '') {
+                        $location = 'โรงเรียนประจำ'.preg_replace('/^(อำเภอ|กศน\.อำเภอ)\s*/u', '', $district);
+                    } else {
+                        $location = 'โรงเรียนเสนา "เสนาประสิทธิ์"';
+                    }
                 }
 
                 $rows[] = [
@@ -281,44 +290,95 @@ final class LegacyExamScheduleService
     }
 
     /** @return array<string, string> */
-    private function fieldMap(string $path): array
+    private function fieldMap(?string $batchKey, ?string $path): array
     {
-        if (isset($this->fieldMaps[$path])) {
-            return $this->fieldMaps[$path];
+        $cacheKey = 'fieldMap|'.($batchKey ?? '').'|'.($path ?? '');
+        if (isset($this->fieldMaps[$cacheKey])) {
+            return $this->fieldMaps[$cacheKey];
         }
         $fields = [];
-        foreach ($this->records($path) as $row) {
-            $code = trim((string) (
-                $row['fld_code'] ?? $row['fldcode'] ?? $row['field_code'] ?? $row['fld_id'] ?? $row['id'] ?? ''
-            ));
-            $name = trim((string) (
-                $row['fld_name'] ?? $row['fldname'] ?? $row['field_name'] ?? $row['loc_name'] ?? $row['place_name'] ?? $row['school_name'] ?? $row['name'] ?? $row['title'] ?? ''
-            ));
-            if ($code !== '') {
-                $fields[$code] = $name !== '' ? $name : $code;
+        if ($path !== null && is_file($path)) {
+            foreach ($this->records($path) as $row) {
+                $code = trim((string) (
+                    $row['fld_code'] ?? $row['fldcode'] ?? $row['field_code'] ?? $row['fld_id'] ?? $row['id'] ?? ''
+                ));
+                $name = trim((string) (
+                    $row['fld_name'] ?? $row['fldname'] ?? $row['field_name'] ?? $row['loc_name'] ?? $row['place_name'] ?? $row['school_name'] ?? $row['name'] ?? $row['title'] ?? ''
+                ));
+                if ($code !== '') {
+                    $fields[$code] = $name !== '' ? $name : $code;
+                }
+            }
+        }
+        if ($fields === [] && $batchKey !== null && (bool) config('legacy.enabled')) {
+            try {
+                $connection = $this->database->connection((string) config('legacy.connection'));
+                $tableNames = ["db_import_{$batchKey}_field", "db_import_{$batchKey}_0_field"];
+                foreach ($tableNames as $tableName) {
+                    if ($connection->getSchemaBuilder()->hasTable($tableName)) {
+                        foreach ($connection->table($tableName)->get() as $r) {
+                            $row = (array) $r;
+                            $code = trim((string) ($row['fld_code'] ?? $row['fldcode'] ?? $row['field_code'] ?? $row['fld_id'] ?? $row['id'] ?? ''));
+                            $name = trim((string) ($row['fld_name'] ?? $row['fldname'] ?? $row['field_name'] ?? $row['loc_name'] ?? $row['place_name'] ?? $row['school_name'] ?? $row['name'] ?? $row['title'] ?? ''));
+                            if ($code !== '') {
+                                $fields[$code] = $name !== '' ? $name : $code;
+                            }
+                        }
+                        if ($fields !== []) {
+                            break;
+                        }
+                    }
+                }
+            } catch (\Throwable $e) {
+                // Ignore DB query errors
             }
         }
 
-        return $this->fieldMaps[$path] = $fields;
+        return $this->fieldMaps[$cacheKey] = $fields;
     }
 
     /** @return array<string, string> */
-    private function groupFieldMap(string $batchKey): array
+    private function groupFieldMap(?string $batchKey): array
     {
+        if ($batchKey === null) {
+            return [];
+        }
         $cacheKey = 'groupFieldMap|'.$batchKey;
         if (isset($this->fieldMaps[$cacheKey])) {
             return $this->fieldMaps[$cacheKey];
         }
-        $groupPath = $this->findDbf($batchKey, 'group');
-        if ($groupPath === null) {
-            return $this->fieldMaps[$cacheKey] = [];
-        }
         $map = [];
-        foreach ($this->records($groupPath) as $row) {
-            $grpCode = trim((string) ($row['grp_code'] ?? ''));
-            $fldCode = trim((string) ($row['grp_field'] ?? $row['fld_code'] ?? $row['field'] ?? ''));
-            if ($grpCode !== '' && $fldCode !== '') {
-                $map[$grpCode] = $fldCode;
+        $groupPath = $this->findDbf($batchKey, 'group');
+        if ($groupPath !== null && is_file($groupPath)) {
+            foreach ($this->records($groupPath) as $row) {
+                $grpCode = trim((string) ($row['grp_code'] ?? ''));
+                $fldCode = trim((string) ($row['grp_field'] ?? $row['fld_code'] ?? $row['field'] ?? ''));
+                if ($grpCode !== '' && $fldCode !== '') {
+                    $map[$grpCode] = $fldCode;
+                }
+            }
+        }
+        if ($map === [] && (bool) config('legacy.enabled')) {
+            try {
+                $connection = $this->database->connection((string) config('legacy.connection'));
+                $tableNames = ["db_import_{$batchKey}_group", "db_import_{$batchKey}_0_group"];
+                foreach ($tableNames as $tableName) {
+                    if ($connection->getSchemaBuilder()->hasTable($tableName)) {
+                        foreach ($connection->table($tableName)->get() as $r) {
+                            $row = (array) $r;
+                            $grpCode = trim((string) ($row['grp_code'] ?? ''));
+                            $fldCode = trim((string) ($row['grp_field'] ?? $row['fld_code'] ?? $row['field'] ?? ''));
+                            if ($grpCode !== '' && $fldCode !== '') {
+                                $map[$grpCode] = $fldCode;
+                            }
+                        }
+                        if ($map !== []) {
+                            break;
+                        }
+                    }
+                }
+            } catch (\Throwable $e) {
+                // Ignore DB query errors
             }
         }
 
