@@ -69,6 +69,7 @@ final class LegacyExamScheduleService
                     $row['fld_name'] ?? $row['fldname'] ?? $row['field_name'] ?? $row['location'] ?? $row['place'] ?? $row['exam_place'] ?? $row['loc_name'] ?? ''
                 ));
                 $location = $fields[$fieldCode] ?? ($directLoc !== '' ? $directLoc : '');
+                $location = $this->normalizeSchoolName($location);
                 if ($location === '' || $location === '-' || $location === $student->groupName || str_starts_with($location, 'ศกร.') || str_starts_with($location, 'กลุ่ม')) {
                     $district = (string) ($student->districtName ?? '');
                     if (str_contains($district, 'เสนา')) {
@@ -301,6 +302,19 @@ final class LegacyExamScheduleService
         return $this->dbfRecords[$path] ??= iterator_to_array((new VisualFoxProDbfReader($path))->records(), false);
     }
 
+    private function normalizeSchoolName(string $name): string
+    {
+        $name = trim($name);
+        if ($name === '' || $name === '-') {
+            return '';
+        }
+        if (str_contains($name, 'เสนาบดี')) {
+            return 'โรงเรียนเสนา "เสนาประสิทธิ์"';
+        }
+
+        return $name;
+    }
+
     /** @return array<string, string> */
     private function fieldMap(?string $batchKey, ?string $path): array
     {
@@ -314,7 +328,7 @@ final class LegacyExamScheduleService
                 $code = trim((string) (
                     $row['fld_code'] ?? $row['fldcode'] ?? $row['field_code'] ?? $row['fld_id'] ?? $row['id'] ?? ''
                 ));
-                $name = trim((string) (
+                $name = $this->normalizeSchoolName((string) (
                     $row['fld_name'] ?? $row['fldname'] ?? $row['field_name'] ?? $row['loc_name'] ?? $row['place_name'] ?? $row['school_name'] ?? $row['name'] ?? $row['title'] ?? ''
                 ));
                 if ($code !== '') {
@@ -331,7 +345,7 @@ final class LegacyExamScheduleService
                         foreach ($connection->table($tableName)->get() as $r) {
                             $row = (array) $r;
                             $code = trim((string) ($row['fld_code'] ?? $row['fldcode'] ?? $row['field_code'] ?? $row['fld_id'] ?? $row['id'] ?? ''));
-                            $name = trim((string) ($row['fld_name'] ?? $row['fldname'] ?? $row['field_name'] ?? $row['loc_name'] ?? $row['place_name'] ?? $row['school_name'] ?? $row['name'] ?? $row['title'] ?? ''));
+                            $name = $this->normalizeSchoolName((string) ($row['fld_name'] ?? $row['fldname'] ?? $row['field_name'] ?? $row['loc_name'] ?? $row['place_name'] ?? $row['school_name'] ?? $row['name'] ?? $row['title'] ?? ''));
                             if ($code !== '') {
                                 $fields[$code] = $name !== '' ? $name : $code;
                             }
