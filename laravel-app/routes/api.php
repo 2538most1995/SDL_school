@@ -126,10 +126,10 @@ Route::prefix('v1')->group(function (): void {
             Route::patch('/admin/users/{legacyUser}', [UserController::class, 'update'])->whereNumber('legacyUser')->middleware('throttle:30,1');
             Route::get('/admin/imports', [ImportController::class, 'index'])->middleware('throttle:120,1');
             Route::get('/admin/imports/jobs/{job}', [ImportController::class, 'status'])->whereUuid('job')->middleware('throttle:300,1');
-            Route::post('/admin/imports', [ImportController::class, 'store'])->middleware('throttle:5,1');
+            Route::post('/admin/imports', [ImportController::class, 'store'])->middleware('throttle:120,1');
             Route::delete('/admin/imports/{batch}', [ImportController::class, 'destroy'])
                 ->where('batch', 'import_\\d{10}_[A-Za-z0-9]+')
-                ->middleware('throttle:10,1');
+                ->middleware('throttle:60,1');
             Route::get('/admin/imports/safety', ImportSafetyController::class)->middleware('throttle:120,1');
             Route::get('/admin/exam-rooms', [ExamRoomController::class, 'index'])->middleware('throttle:120,1');
             Route::post('/admin/exam-rooms', [ExamRoomController::class, 'store'])->middleware('throttle:30,1');
