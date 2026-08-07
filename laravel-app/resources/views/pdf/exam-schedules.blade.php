@@ -57,7 +57,7 @@
             <tbody>
             @forelse ($document['rows'] as $index => $row)
                 <tr>
-                    <td>{{ $index + 1 }}</td><td>{!! $pdfText($row['term']) !!}</td><td class="subject"><strong>{!! $pdfText($row['subject_code']) !!}</strong> {!! $pdfText($row['subject_name']) !!}</td><td>{!! $pdfText($row['exam_date_display']) !!}</td><td>{!! $pdfText($row['start_time']) !!}-{!! $pdfText($row['end_time']) !!} นาฬิกา</td><td>{!! $pdfText($row['location']) !!}</td><td>{!! $pdfText($row['room']) !!}</td>
+                    <td>{{ $index + 1 }}</td><td>{!! $pdfText($row['term']) !!}</td><td class="subject"><strong>{!! $pdfText($row['subject_code']) !!}</strong> {!! $pdfText($row['subject_name']) !!}</td><td>{!! $pdfText($row['exam_date_display']) !!}</td><td>{!! $pdfText($row['start_time']) !!}-{!! $pdfText($row['end_time']) !!} น.</td><td>{!! $pdfText($row['location']) !!}</td><td>{!! $pdfText($row['room']) !!}</td>
                 </tr>
             @empty
                 <tr><td colspan="7" class="empty">{{ $document['source_ready'] ? 'ไม่พบรายวิชาที่มีตารางสอบในภาคเรียน '.$document['term'] : 'ยังไม่พบข้อมูล schedule.dbf ในชุดข้อมูลปัจจุบัน' }}</td></tr>

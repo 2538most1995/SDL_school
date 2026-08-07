@@ -57,7 +57,17 @@ final class LegacyExamScheduleService
                 if (! isset($subjects[$code]) || $term !== $student->currentTerm || $date === '') {
                     continue;
                 }
-                $fieldCode = trim((string) ($row['fld_code'] ?? ''));
+                $fieldCode = trim((string) (
+                    $row['fld_code'] ?? $row['fldcode'] ?? $row['field_code'] ?? $row['fld_id'] ?? $row['field'] ?? ''
+                ));
+                $directLoc = trim((string) (
+                    $row['fld_name'] ?? $row['fldname'] ?? $row['field_name'] ?? $row['location'] ?? $row['place'] ?? $row['exam_place'] ?? $row['loc_name'] ?? ''
+                ));
+                $location = $fields[$fieldCode] ?? ($directLoc !== '' ? $directLoc : ($fieldCode !== '' ? $fieldCode : ''));
+                if ($location === '' || $location === '-') {
+                    $location = $student->districtName ?: '-';
+                }
+
                 $rows[] = [
                     'subject_code' => $code,
                     'subject_name' => $subjects[$code]->name,
@@ -66,8 +76,8 @@ final class LegacyExamScheduleService
                     'exam_date_display' => $this->date($date),
                     'start_time' => $this->time((string) ($row['exam_start'] ?? '')),
                     'end_time' => $this->time((string) ($row['exam_end'] ?? '')),
-                    'location' => $fields[$fieldCode] ?? ($fieldCode ?: '-'),
-                    'room' => $this->examRoom($student, $term, $code),
+                    'location' => $location,
+                    'room' => $this->examRoom($student, $term, $code, $row),
                 ];
             }
         }
@@ -142,19 +152,75 @@ final class LegacyExamScheduleService
         return $this->dbfPaths[$cacheKey] = $matches[0] ?? null;
     }
 
-    private function examRoom(Student $student, string $term, string $subjectCode): string
+    private function examRoom(Student $student, string $term, string $subjectCode, array $row = []): string
+    {
+        $roomFromDb = $this->queryExamRoomDb($student, $term, $subjectCode);
+        if ($roomFromDb !== '-') {
+            return $roomFromDb;
+        }
+
+        $dbfRoom = trim((string) (
+            $row['room'] ?? $row['room_no'] ?? $row['room_name'] ?? $row['exam_room'] ?? $row['rm_no'] ?? $row['room_code'] ?? $row['building'] ?? ''
+        ));
+        if ($dbfRoom !== '') {
+            return preg_match('/^\d+$/', $dbfRoom) ? 'ห้อง '.$dbfRoom : $dbfRoom;
+        }
+
+        return '-';
+    }
+
+    private function queryExamRoomDb(Student $student, string $term, string $subjectCode): string
     {
         if (! (bool) config('legacy.enabled')) {
             return '-';
         }
         $cacheKey = implode('|', [$student->districtId, $term, $subjectCode]);
-        $rows = $this->examRooms[$cacheKey] ??= $this->database->connection((string) config('legacy.connection'))->table('exam_rooms')
-            ->where('district_id', $student->districtId)->where('term', $term)->where('subject_code', $subjectCode)
-            ->orderBy('id')->get()->all();
-        foreach ($rows as $row) {
-            $value = (string) ($row->assignment_type === 'student_range' ? $student->code : $student->groupCode);
-            if ($value !== '' && strnatcasecmp($value, (string) $row->start_val) >= 0 && strnatcasecmp($value, (string) $row->end_val) <= 0) {
-                return (string) $row->room_name;
+        if (! isset($this->examRooms[$cacheKey])) {
+            $rows = $this->database->connection((string) config('legacy.connection'))->table('exam_rooms')
+                ->where('district_id', $student->districtId)
+                ->where(function ($q) use ($term): void {
+                    $q->where('term', $term)
+                        ->orWhere('term', 'all')
+                        ->orWhere('term', '*');
+                })
+                ->where(function ($q) use ($subjectCode): void {
+                    $q->where('subject_code', $subjectCode)
+                        ->orWhere('subject_code', 'all')
+                        ->orWhere('subject_code', '*');
+                })
+                ->orderBy('id')->get()->all();
+
+            if ($rows === []) {
+                $rows = $this->database->connection((string) config('legacy.connection'))->table('exam_rooms')
+                    ->where('district_id', $student->districtId)
+                    ->where('term', $term)
+                    ->orderBy('id')->get()->all();
+            }
+
+            $this->examRooms[$cacheKey] = $rows;
+        }
+
+        foreach ($this->examRooms[$cacheKey] as $row) {
+            $assignmentType = (string) ($row->assignment_type ?? 'student_range');
+            $startVal = trim((string) ($row->start_val ?? ''));
+            $endVal = trim((string) ($row->end_val ?? ''));
+            $roomName = trim((string) ($row->room_name ?? ''));
+
+            if ($roomName === '') {
+                continue;
+            }
+            if ($startVal === '' || $startVal === '*' || $startVal === 'all') {
+                return $roomName;
+            }
+
+            $candidateValues = $assignmentType === 'group_range'
+                ? array_filter([$student->groupCode, $student->groupName])
+                : array_filter([$student->code]);
+
+            foreach ($candidateValues as $val) {
+                if (strnatcasecmp((string) $val, $startVal) >= 0 && strnatcasecmp((string) $val, $endVal) <= 0) {
+                    return $roomName;
+                }
             }
         }
 
@@ -175,9 +241,14 @@ final class LegacyExamScheduleService
         }
         $fields = [];
         foreach ($this->records($path) as $row) {
-            $code = trim((string) ($row['fld_code'] ?? ''));
+            $code = trim((string) (
+                $row['fld_code'] ?? $row['fldcode'] ?? $row['field_code'] ?? $row['fld_id'] ?? $row['id'] ?? ''
+            ));
+            $name = trim((string) (
+                $row['fld_name'] ?? $row['fldname'] ?? $row['field_name'] ?? $row['loc_name'] ?? $row['place_name'] ?? $row['school_name'] ?? $row['name'] ?? $row['title'] ?? ''
+            ));
             if ($code !== '') {
-                $fields[$code] = trim((string) ($row['fld_name'] ?? $code));
+                $fields[$code] = $name !== '' ? $name : $code;
             }
         }
 
@@ -200,16 +271,42 @@ final class LegacyExamScheduleService
     private function date(string $value): string
     {
         $value = trim($value);
-        if (preg_match('/^\d{1,2}\/\d{1,2}\/\d{2,4}$/', $value) === 1) {
-            return $value;
-        }
-        if (preg_match('/^(\d{4})-(\d{2})-(\d{2})$/', $value, $matches) === 1) {
-            $year = (int) $matches[1];
-
-            return sprintf('%s/%s/%d', $matches[3], $matches[2], $year < 2400 ? $year + 543 : $year);
+        if ($value === '') {
+            return '-';
         }
 
-        return $value ?: '-';
+        $day = null;
+        $month = null;
+        $year = null;
+
+        if (preg_match('/^(\d{1,2})[\/\.-](\d{1,2})[\/\.-](\d{2,4})$/', $value, $matches) === 1) {
+            $day = (int) $matches[1];
+            $month = (int) $matches[2];
+            $rawYear = (int) $matches[3];
+            if ($rawYear < 100) {
+                $year = 2500 + $rawYear;
+            } elseif ($rawYear < 2400) {
+                $year = $rawYear + 543;
+            } else {
+                $year = $rawYear;
+            }
+        } elseif (preg_match('/^(\d{4})-(\d{2})-(\d{2})$/', $value, $matches) === 1) {
+            $rawYear = (int) $matches[1];
+            $month = (int) $matches[2];
+            $day = (int) $matches[3];
+            $year = $rawYear < 2400 ? $rawYear + 543 : $rawYear;
+        }
+
+        $thaiMonths = [
+            1 => 'ม.ค.', 2 => 'ก.พ.', 3 => 'มี.ค.', 4 => 'เม.ย.',
+            5 => 'พ.ค.', 6 => 'มิ.ย.', 7 => 'ก.ค.', 8 => 'ส.ค.',
+            9 => 'ก.ย.', 10 => 'ต.ค.', 11 => 'พ.ย.', 12 => 'ธ.ค.',
+        ];
+
+        if ($day !== null && isset($thaiMonths[$month]) && $year !== null) {
+            return sprintf('%d %s %d', $day, $thaiMonths[$month], $year);
+        }
+
+        return $value;
     }
-
 }
