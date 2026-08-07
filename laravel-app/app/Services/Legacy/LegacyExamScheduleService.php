@@ -69,15 +69,8 @@ final class LegacyExamScheduleService
                     $row['fld_name'] ?? $row['fldname'] ?? $row['field_name'] ?? $row['location'] ?? $row['place'] ?? $row['exam_place'] ?? $row['loc_name'] ?? ''
                 ));
                 $location = $fields[$fieldCode] ?? ($directLoc !== '' ? $directLoc : ($fields['1'] ?? ''));
-                if ($location === '' || $location === '-' || $location === $student->groupName || str_starts_with($location, 'ศกร.') || str_starts_with($location, 'กลุ่ม') || str_contains($location, 'เสนา')) {
-                    $district = (string) ($student->districtName ?? '');
-                    if (str_contains($district, 'เสนา') || $district === '') {
-                        $location = 'โรงเรียนเสนา "เสนาประสิทธิ์"';
-                    } elseif (str_contains($district, 'ไพศาลี')) {
-                        $location = 'โรงเรียนไพศาลีพิทยา';
-                    } else {
-                        $location = 'โรงเรียนประจำ'.preg_replace('/^(อำเภอ|กศน\.อำเภอ)\s*/u', '', $district);
-                    }
+                if ($location === '' || $location === '-') {
+                    $location = $student->districtName ?: '-';
                 }
 
                 $rows[] = [
@@ -409,7 +402,9 @@ final class LegacyExamScheduleService
         if ($gradePath !== null && is_file($gradePath)) {
             foreach ($this->records($gradePath) as $row) {
                 $std = trim((string) ($row['std_code'] ?? ''));
-                if ($std !== $studentCode && ! str_ends_with($std, $studentCode) && ! str_ends_with($studentCode, $std)) {
+                $stdLast10 = substr($std, -10);
+                $studentLast10 = substr($studentCode, -10);
+                if ($std !== $studentCode && ($stdLast10 === '' || $stdLast10 !== $studentLast10) && ! str_ends_with($std, $studentCode) && ! str_ends_with($studentCode, $std)) {
                     continue;
                 }
                 $sub = trim((string) ($row['sub_code'] ?? ''));
