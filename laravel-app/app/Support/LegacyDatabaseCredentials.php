@@ -37,6 +37,30 @@ final class LegacyDatabaseCredentials
         }
     }
 
+    /**
+     * Resolve the credentials used by writes to the legacy database.
+     *
+     * The read connection is intentionally allowed to use a SELECT-only
+     * account. A deployment that enables legacy writes must provide a
+     * separate account through LEGACY_WRITE_DB_*; the read credentials remain
+     * the development fallback so existing local setups keep working.
+     *
+     * @return array{host: ?string, port: int, database: ?string, username: ?string, password: ?string}
+     */
+    public static function resolveWrite(): array
+    {
+        $read = self::resolve();
+        $password = self::nullableEnv('LEGACY_WRITE_DB_PASSWORD');
+
+        return [
+            'host' => self::stringEnv('LEGACY_WRITE_DB_HOST') ?? $read['host'],
+            'port' => (int) (env('LEGACY_WRITE_DB_PORT') ?: $read['port']),
+            'database' => self::stringEnv('LEGACY_WRITE_DB_DATABASE') ?? $read['database'],
+            'username' => self::stringEnv('LEGACY_WRITE_DB_USERNAME') ?? $read['username'],
+            'password' => $password !== null && trim($password) !== '' ? $password : $read['password'],
+        ];
+    }
+
     /** @return array{host: string, port: int, database: string, username: string, password: string} */
     public static function fromLegacyConfig(string $path): array
     {

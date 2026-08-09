@@ -5,6 +5,7 @@ use Illuminate\Support\Str;
 use Pdo\Mysql;
 
 $legacy = LegacyDatabaseCredentials::resolve();
+$legacyWrite = LegacyDatabaseCredentials::resolveWrite();
 
 return [
 
@@ -103,11 +104,11 @@ return [
 
         'legacy_write' => [
             'driver' => 'mysql',
-            'host' => $legacy['host'] ?? '127.0.0.1',
-            'port' => $legacy['port'] ?: 3306,
-            'database' => $legacy['database'] ?? '',
-            'username' => $legacy['username'] ?? '',
-            'password' => $legacy['password'] ?? '',
+            'host' => $legacyWrite['host'] ?? '127.0.0.1',
+            'port' => $legacyWrite['port'] ?: 3306,
+            'database' => $legacyWrite['database'] ?? '',
+            'username' => $legacyWrite['username'] ?? '',
+            'password' => $legacyWrite['password'] ?? '',
             'unix_socket' => env('LEGACY_DB_SOCKET', ''),
             'charset' => 'utf8mb4',
             'collation' => 'utf8mb4_unicode_ci',

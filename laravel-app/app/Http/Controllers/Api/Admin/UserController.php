@@ -47,7 +47,7 @@ final class UserController extends Controller
         $viewer = $request->user();
         $availableGroups = $this->availableGroups($districtId);
         $groupNames = collect($availableGroups)->pluck('label', 'code')->all();
-        $query = $this->read()->table('users as user')
+        $query = $this->userDirectoryConnection()->table('users as user')
             ->leftJoin('districts as district', 'district.id', '=', 'user.district_id')
             ->whereIn('user.role', ['teacher', 'admin', 'super_admin'])
             ->where(function (Builder $scope) use ($districtId, $viewer): void {
@@ -103,7 +103,7 @@ final class UserController extends Controller
             'assigned_groups' => json_encode($validated['assigned_groups'] ?? [], JSON_UNESCAPED_UNICODE | JSON_THROW_ON_ERROR),
             'created_at' => now(),
         ]);
-        $row = $this->userRow($request, $id);
+        $row = $this->userRow($request, $id, true);
         $this->audit($request, 'admin.user.created', $id, null, $this->auditPayload($row));
 
         return response()->json(['data' => $this->payload($row, true, $this->groupNames($this->districtId($request)))], 201);
@@ -112,7 +112,7 @@ final class UserController extends Controller
     public function update(Request $request, int $legacyUser): JsonResponse
     {
         $this->assertWriteEnabled();
-        $before = $this->userRow($request, $legacyUser);
+        $before = $this->userRow($request, $legacyUser, true);
         $validated = $this->validated($request, false);
         $districtId = $this->targetDistrictId($request, $validated['role'], $validated['district_id'] ?? $before->district_id);
         $this->assertUsernameAvailable($validated['username'], $legacyUser);
@@ -134,7 +134,7 @@ final class UserController extends Controller
             $changes['password'] = password_hash($validated['password'], PASSWORD_BCRYPT);
         }
         $this->write()->table('users')->where('id', $legacyUser)->update($changes);
-        $after = $this->userRow($request, $legacyUser);
+        $after = $this->userRow($request, $legacyUser, true);
         $this->syncShadowUser($legacyUser, $after);
         $this->audit($request, 'admin.user.updated', $legacyUser, $this->auditPayload($before), $this->auditPayload($after));
 
@@ -179,11 +179,12 @@ final class UserController extends Controller
         return $target;
     }
 
-    private function userRow(Request $request, int $id): object
+    private function userRow(Request $request, int $id, bool $forWrite = false): object
     {
         $districtId = $this->districtId($request);
         $viewer = $request->user();
-        $row = $this->read()->table('users as user')
+        $connection = $forWrite ? $this->write() : $this->read();
+        $row = $connection->table('users as user')
             ->leftJoin('districts as district', 'district.id', '=', 'user.district_id')
             ->select('user.*', 'district.name as district_name')
             ->where('user.id', $id)
@@ -202,7 +203,7 @@ final class UserController extends Controller
 
     private function assertUsernameAvailable(string $username, ?int $except = null): void
     {
-        $query = $this->read()->table('users')->where('username', trim($username));
+        $query = $this->write()->table('users')->where('username', trim($username));
         if ($except !== null) {
             $query->where('id', '!=', $except);
         }
@@ -369,6 +370,11 @@ final class UserController extends Controller
     private function read()
     {
         return $this->database->connection((string) config('legacy.connection'));
+    }
+
+    private function userDirectoryConnection()
+    {
+        return $this->writeEnabled() ? $this->write() : $this->read();
     }
 
     private function write()

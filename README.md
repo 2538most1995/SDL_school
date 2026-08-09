@@ -58,7 +58,7 @@ Real legacy integration tests ต้องเปิด opt-in และใช้
 
 ## Deployment
 
-ให้ web server ชี้ document root ไปที่ `laravel-app/public` เท่านั้น ใช้ฐาน control-plane และ legacy คนละ connection/credential, ปิด `APP_DEBUG`, เปิด HTTPS และตรวจ `SENA_LEGACY_READ_ONLY=true` ก่อน deploy
+ให้ web server ชี้ document root ไปที่ `laravel-app/public` เท่านั้น ใช้ฐาน control-plane และ legacy คนละ connection/credential, ตั้ง `LEGACY_WRITE_DB_*` เป็นบัญชีเขียนแยกเมื่อเปิด `SENA_LEGACY_WRITE_ENABLED=true`, ปิด `APP_DEBUG`, เปิด HTTPS และตรวจ `SENA_LEGACY_READ_ONLY=true` ก่อน deploy
 
 ## Project structure
 
