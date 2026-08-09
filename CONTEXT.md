@@ -49,6 +49,7 @@ Request → route → Sanctum/auth + active + district/role middleware
 - `EnsureActiveUser`, `EnsureRole`, `ResolveDistrictContext` and `SecurityHeaders` are registered in `bootstrap/app.php`.
 - Protected routes are defined in `routes/api.php`; admin writes are restricted to `admin,super_admin`, learning writes to `teacher,admin,super_admin`, and super-admin branding routes to `super_admin`.
 - POST/PATCH/PUT/DELETE paths use Laravel validation/authentication and audit where applicable. Upload/import paths must retain size/type/path validation.
+- Legacy admin user writes commit to `legacy_write` first. If a compatibility deployment has not installed the optional shadow-user columns or `audit_logs` table, shadow synchronization is skipped and the audit entry falls back to the structured Laravel log; an already successful user mutation must not be returned as HTTP 500.
 
 ## Important routes/controllers/services
 

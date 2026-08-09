@@ -11,8 +11,10 @@ use Illuminate\Database\Query\Builder;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Log;
 use Illuminate\Validation\Rule;
 use Illuminate\Validation\ValidationException;
+use Throwable;
 
 final class UserController extends Controller
 {
@@ -214,13 +216,34 @@ final class UserController extends Controller
 
     private function syncShadowUser(int $legacyId, object $row): void
     {
-        User::query()->where('legacy_key', "staff:{$legacyId}")->update([
-            'name' => trim((string) $row->first_name.' '.(string) $row->last_name),
-            'username' => (string) $row->username,
-            'role' => (string) $row->role,
-            'district_id' => $row->district_id,
-            'assigned_groups' => json_encode($this->groups($row->assigned_groups), JSON_UNESCAPED_UNICODE | JSON_THROW_ON_ERROR),
-        ]);
+        try {
+            $shadow = new User;
+            if (! $shadow->getConnection()->getSchemaBuilder()->hasColumn($shadow->getTable(), 'legacy_key')) {
+                Log::warning('admin.user.shadow_sync_skipped', [
+                    'legacy_user_id' => $legacyId,
+                    'reason' => 'missing_legacy_key_column',
+                ]);
+
+                return;
+            }
+
+            User::query()->where('legacy_key', "staff:{$legacyId}")->update([
+                'name' => trim((string) $row->first_name.' '.(string) $row->last_name),
+                'username' => (string) $row->username,
+                'role' => (string) $row->role,
+                'district_id' => $row->district_id,
+                'assigned_groups' => json_encode($this->groups($row->assigned_groups), JSON_UNESCAPED_UNICODE | JSON_THROW_ON_ERROR),
+            ]);
+        } catch (Throwable $exception) {
+            // Some compatibility deployments authenticate directly against the
+            // legacy users table and do not have Laravel shadow-user columns.
+            // The authoritative legacy update has already succeeded, so a
+            // shadow sync failure must not turn that success into HTTP 500.
+            Log::warning('admin.user.shadow_sync_skipped', [
+                'legacy_user_id' => $legacyId,
+                'exception' => $exception::class,
+            ]);
+        }
     }
 
     /** @return array<string, mixed> */
@@ -339,7 +362,7 @@ final class UserController extends Controller
 
     private function audit(Request $request, string $event, int $id, ?array $before, array $after): void
     {
-        DB::table('audit_logs')->insert([
+        $entry = [
             'user_id' => $request->user()->id,
             'district_id' => $this->districtId($request),
             'event' => $event,
@@ -349,7 +372,30 @@ final class UserController extends Controller
             'before' => $before === null ? null : json_encode($before, JSON_UNESCAPED_UNICODE | JSON_THROW_ON_ERROR),
             'after' => json_encode($after, JSON_UNESCAPED_UNICODE | JSON_THROW_ON_ERROR),
             'created_at' => now(),
-        ]);
+        ];
+
+        try {
+            $connection = DB::connection();
+            if (! $connection->getSchemaBuilder()->hasTable('audit_logs')) {
+                Log::warning('admin.user.audit_fallback', [
+                    ...$entry,
+                    'reason' => 'missing_audit_logs_table',
+                ]);
+
+                return;
+            }
+
+            $connection->table('audit_logs')->insert($entry);
+        } catch (Throwable $exception) {
+            // Keep an audit trail in the application log when the optional
+            // control-plane audit table has not been deployed yet. The legacy
+            // user write is authoritative and must not be reported as failed
+            // after it has already committed.
+            Log::warning('admin.user.audit_fallback', [
+                ...$entry,
+                'exception' => $exception::class,
+            ]);
+        }
     }
 
     private function districtId(Request $request): int

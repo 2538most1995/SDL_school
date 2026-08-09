@@ -8,6 +8,8 @@ use Illuminate\Database\Schema\Blueprint;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\File;
+use Illuminate\Support\Facades\Log;
+use Illuminate\Support\Facades\Schema;
 use Laravel\Sanctum\Sanctum;
 use Tests\TestCase;
 
@@ -149,6 +151,57 @@ final class AdminWriteScopeTest extends TestCase
             'last_name' => 'สร้าง',
             'role' => 'super_admin',
         ])->assertUnprocessable();
+    }
+
+    public function test_user_writes_remain_successful_when_optional_shadow_and_audit_schema_are_missing(): void
+    {
+        $admin = User::factory()->create([
+            'role' => 'admin',
+            'district_id' => $this->sena->id,
+            'legacy_user_id' => 10,
+        ]);
+        Sanctum::actingAs($admin);
+        Schema::drop('audit_logs');
+        Schema::table('users', function (Blueprint $table): void {
+            $table->dropUnique('users_legacy_key_unique');
+        });
+        Schema::table('users', function (Blueprint $table): void {
+            $table->dropColumn('legacy_key');
+        });
+        Log::spy();
+
+        $this->postJson('/api/v1/admin/users', [
+            'username' => 'sena.compat.teacher',
+            'password' => 'secure-pass-123',
+            'first_name' => 'ครูทดสอบ',
+            'last_name' => 'ระบบเดิม',
+            'role' => 'teacher',
+            'assigned_groups' => ['220010'],
+        ])->assertCreated()
+            ->assertJsonPath('data.username', 'sena.compat.teacher')
+            ->assertJsonPath('data.district_id', $this->sena->id);
+
+        $this->patchJson('/api/v1/admin/users/10', [
+            'username' => 'sena.admin',
+            'first_name' => 'แอดมินแก้ไข',
+            'last_name' => 'เสนา',
+            'role' => 'admin',
+            'assigned_groups' => ['220009'],
+        ])->assertOk()
+            ->assertJsonPath('data.first_name', 'แอดมินแก้ไข')
+            ->assertJsonPath('data.assigned_groups.0', '220009');
+
+        $this->assertDatabaseHas('users', [
+            'id' => 10,
+            'first_name' => 'แอดมินแก้ไข',
+            'assigned_groups' => '["220009"]',
+        ], 'legacy_write');
+        $this->assertDatabaseHas('users', [
+            'username' => 'sena.compat.teacher',
+            'district_id' => $this->sena->id,
+            'assigned_groups' => '["220010"]',
+        ], 'legacy_write');
+        Log::shouldHaveReceived('warning')->times(3);
     }
 
     public function test_exam_room_writes_are_scoped_and_audited(): void
