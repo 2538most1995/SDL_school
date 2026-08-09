@@ -415,12 +415,20 @@ final class LegacyStudentRepository implements StudentRepository
             return $this->setsByDistrict[$districtId];
         }
 
+        // Mocked connections used by contract tests do not necessarily expose
+        // the concrete connection methods. Keep the production-specific binary
+        // comparison when the driver is available, while remaining portable in
+        // SQLite/unit-test contexts.
+        $mysql = method_exists($this->connection, 'getDriverName')
+            && $this->connection->getDriverName() === 'mysql';
+        $binaryClause = $mysql ? 'BINARY ih.batch_key = BINARY ib.batch_key' : 'ih.batch_key = ib.batch_key';
+
         $batches = $this->rows(
             "SELECT ib.batch_key
              FROM import_batches ib
              INNER JOIN import_history ih
                 ON ih.id = ib.import_history_id
-               AND BINARY ih.batch_key = BINARY ib.batch_key
+               AND {$binaryClause}
                AND ih.district_id = ib.district_id
                AND ih.status = 'success'
              WHERE ib.district_id = ?

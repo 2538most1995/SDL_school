@@ -15,6 +15,56 @@ use Illuminate\Support\Str;
 final class DemoLearningPortal
 {
     /**
+     * @return array<string, mixed>
+     */
+    public function overview(string $viewerName = 'ผู้ใช้งานสาธิต'): array
+    {
+        $assignments = $this->assignments();
+        $resources = $this->resources();
+        $calendar = array_slice($this->calendar(), 0, 5);
+        $courses = [];
+
+        foreach ($assignments as $assignment) {
+            $code = (string) $assignment['subject_code'];
+            $courses[$code] ??= [
+                'id' => $code,
+                'code' => $code,
+                'title' => (string) $assignment['subject_name'],
+                'teacher' => (string) $assignment['teacher_name'],
+                'next' => 'ดูงานและสื่อในรายวิชา',
+                'tone' => ['emerald', 'sky', 'amber'][count($courses) % 3],
+            ];
+        }
+
+        foreach ($resources as $resource) {
+            $code = (string) $resource['subject_code'];
+            $courses[$code] ??= [
+                'id' => $code,
+                'code' => $code,
+                'title' => $code,
+                'teacher' => 'ข้อมูลจากระบบการเรียนรู้',
+                'next' => 'ดูงานและสื่อในรายวิชา',
+                'tone' => ['emerald', 'sky', 'amber'][count($courses) % 3],
+            ];
+        }
+
+        return [
+            'studentName' => $viewerName,
+            'dueAssignments' => count(array_filter($assignments, static fn (array $item): bool => $item['status'] !== 'completed')),
+            'completedAssignments' => count(array_filter($assignments, static fn (array $item): bool => $item['status'] === 'completed')),
+            'resources' => count($resources),
+            'courses' => array_values($courses),
+            'upcoming' => array_map(static fn (array $item): array => [
+                'id' => (string) $item['id'],
+                'date' => (string) $item['starts_at'],
+                'title' => (string) $item['title'],
+                'meta' => trim((string) ($item['location'] ?? '')),
+                'type' => (string) $item['type'],
+            ], $calendar),
+        ];
+    }
+
+    /**
      * @return list<array<string, mixed>>
      */
     public function assignments(?string $status = null, ?string $search = null): array
@@ -319,52 +369,55 @@ final class DemoLearningPortal
     {
         $items = [
             [
-                'id' => 'exam-room-001',
-                'exam_date' => '2026-07-27',
-                'session' => 'morning',
-                'starts_at' => '09:00',
-                'ends_at' => '12:00',
-                'building' => 'อาคาร 2',
-                'room' => '204',
-                'level' => 'มัธยมศึกษาตอนต้น',
-                'seat_capacity' => 30,
-                'assigned_seats' => 26,
-                'proctors' => ['ครูพิมพ์ชนก', 'ครูสุเมธ'],
+                'id' => 1,
+                'district_id' => 1,
+                'term' => '2/2568',
+                'subject_code' => 'ทร21001',
+                'assignment_type' => 'group_range',
+                'start_val' => 'SENA-M3-A',
+                'end_val' => 'SENA-M3-C',
+                'room_name' => 'อาคาร 2 ห้อง 204',
+                'capacity' => null,
                 'status' => 'ready',
+                '_exam_date' => '2026-07-27',
             ],
             [
-                'id' => 'exam-room-002',
-                'exam_date' => '2026-07-27',
-                'session' => 'morning',
-                'starts_at' => '09:00',
-                'ends_at' => '12:00',
-                'building' => 'อาคาร 2',
-                'room' => '205',
-                'level' => 'มัธยมศึกษาตอนปลาย',
-                'seat_capacity' => 35,
-                'assigned_seats' => 31,
-                'proctors' => ['ครูวรัญญา', 'ครูประทีป'],
+                'id' => 2,
+                'district_id' => 1,
+                'term' => '2/2568',
+                'subject_code' => 'พต21001',
+                'assignment_type' => 'student_range',
+                'start_val' => '6650100001',
+                'end_val' => '6650100030',
+                'room_name' => 'อาคาร 2 ห้อง 205',
+                'capacity' => 30,
                 'status' => 'ready',
+                '_exam_date' => '2026-07-27',
             ],
             [
-                'id' => 'exam-room-003',
-                'exam_date' => '2026-07-28',
-                'session' => 'afternoon',
-                'starts_at' => '13:00',
-                'ends_at' => '16:00',
-                'building' => 'อาคาร 1',
-                'room' => 'ประชุมใหญ่',
-                'level' => 'ประถมศึกษา',
-                'seat_capacity' => 24,
-                'assigned_seats' => 18,
-                'proctors' => ['ครูสุเมธ'],
+                'id' => 3,
+                'district_id' => 1,
+                'term' => '2/2568',
+                'subject_code' => 'คณ21001',
+                'assignment_type' => 'student_range',
+                'start_val' => '6650100031',
+                'end_val' => '6650100054',
+                'room_name' => 'ห้องประชุมใหญ่',
+                'capacity' => 24,
                 'status' => 'needs_review',
+                '_exam_date' => '2026-07-28',
             ],
         ];
 
-        return $date === null
+        $filtered = $date === null
             ? $items
-            : array_values(array_filter($items, fn (array $item): bool => $item['exam_date'] === $date));
+            : array_values(array_filter($items, fn (array $item): bool => $item['_exam_date'] === $date));
+
+        return array_map(static function (array $item): array {
+            unset($item['_exam_date']);
+
+            return $item;
+        }, $filtered);
     }
 
     /**

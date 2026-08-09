@@ -23,7 +23,7 @@ final class LegacyExamScheduleService
     private array $fieldMaps = [];
 
     /** @var array<string, list<object>> */
-    private array $examRooms = [];
+    private array $examRoomsByTerm = [];
 
     public function __construct(
         private readonly DatabaseManager $database,
@@ -191,37 +191,33 @@ final class LegacyExamScheduleService
         if (! (bool) config('legacy.enabled')) {
             return '-';
         }
-        $cacheKey = implode('|', [$student->districtId, $term, $subjectCode]);
-        if (! isset($this->examRooms[$cacheKey])) {
-            $rows = $this->database->connection((string) config('legacy.connection'))->table('exam_rooms')
+        $termCacheKey = implode('|', [$student->districtId, $term]);
+        if (! array_key_exists($termCacheKey, $this->examRoomsByTerm)) {
+            $this->examRoomsByTerm[$termCacheKey] = $this->database->connection((string) config('legacy.connection'))->table('exam_rooms')
+                ->select(['id', 'subject_code', 'assignment_type', 'start_val', 'end_val', 'room_name'])
                 ->where('district_id', $student->districtId)
                 ->where(function ($q) use ($term): void {
                     $q->where('term', $term)
                         ->orWhere('term', 'all')
                         ->orWhere('term', '*');
-                })
-                ->where(function ($q) use ($subjectCode): void {
-                    $q->where('subject_code', $subjectCode)
-                        ->orWhere('subject_code', 'all')
-                        ->orWhere('subject_code', '*');
-                })
-                ->orderBy('id')->get()->all();
-
-            if ($rows === []) {
-                $rows = $this->database->connection((string) config('legacy.connection'))->table('exam_rooms')
-                    ->where('district_id', $student->districtId)
-                    ->where(function ($q) use ($term): void {
-                        $q->where('term', $term)
-                            ->orWhere('term', 'all')
-                            ->orWhere('term', '*');
-                    })
-                    ->orderBy('id')->get()->all();
-            }
-
-            $this->examRooms[$cacheKey] = $rows;
+                })->orderBy('id')->get()->all();
         }
 
-        foreach ($this->examRooms[$cacheKey] as $row) {
+        $rows = array_values(array_filter(
+            $this->examRoomsByTerm[$termCacheKey],
+            static function (object $row) use ($subjectCode): bool {
+                $candidate = trim((string) ($row->subject_code ?? ''));
+
+                return strcasecmp($candidate, $subjectCode) === 0 || $candidate === 'all' || $candidate === '*';
+            },
+        ));
+        // Preserve the previous fallback: when there is no subject-specific or
+        // wildcard row, evaluate all rooms for the term.
+        if ($rows === []) {
+            $rows = $this->examRoomsByTerm[$termCacheKey];
+        }
+
+        foreach ($rows as $row) {
             $assignmentType = (string) ($row->assignment_type ?? 'student_range');
             $startVal = trim((string) ($row->start_val ?? ''));
             $endVal = trim((string) ($row->end_val ?? ''));
@@ -243,8 +239,8 @@ final class LegacyExamScheduleService
         }
 
         // If exam_rooms has rows for this district, return the first room as fallback
-        if ($this->examRooms[$cacheKey] !== []) {
-            $firstRoom = trim((string) ($this->examRooms[$cacheKey][0]->room_name ?? ''));
+        if ($rows !== []) {
+            $firstRoom = trim((string) ($rows[0]->room_name ?? ''));
             if ($firstRoom !== '') {
                 return $firstRoom;
             }

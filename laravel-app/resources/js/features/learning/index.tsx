@@ -67,6 +67,13 @@ const courseTones = {
     amber: 'border-amber-200 bg-amber-50 text-amber-950',
 };
 
+function shortThaiDate(value: string): string {
+    const date = new Date(value);
+    if (Number.isNaN(date.getTime())) return value;
+
+    return new Intl.DateTimeFormat('th-TH', { day: 'numeric', month: 'short' }).format(date);
+}
+
 export function LearningHomePage() {
     const overview = useQuery({ queryKey: ['learning', 'overview'], queryFn: ({ signal }) => getFeatureDataWithDemo<LearningOverview>('/api/v1/learning', demoOverview, signal) });
     if (overview.isPending) return <QuerySkeleton rows={7} />;
@@ -97,7 +104,7 @@ export function LearningHomePage() {
                     <div className="space-y-3">
                         {data.upcoming.map((item) => (
                             <article key={item.id} className="flex gap-3 rounded-2xl bg-slate-50 p-3.5">
-                                <div className="grid min-h-14 w-16 shrink-0 place-items-center rounded-xl bg-white text-center text-xs font-bold text-brand-800 shadow-sm">{item.date}</div>
+                                <div className="grid min-h-14 w-16 shrink-0 place-items-center rounded-xl bg-white text-center text-xs font-bold text-brand-800 shadow-sm">{shortThaiDate(item.date)}</div>
                                 <div className="min-w-0"><h3 className="font-bold text-slate-950">{item.title}</h3><p className="mt-1 text-sm leading-5 text-slate-500">{item.meta}</p></div>
                             </article>
                         ))}

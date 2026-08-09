@@ -17,7 +17,10 @@ final class PublicBrandingController extends Controller
     public function show(Request $request): JsonResponse
     {
         return response()->json([
-            'data' => $this->branding->payload($this->district($request)),
+            'data' => [
+                ...$this->branding->payload($this->district($request)),
+                'loginMode' => config('legacy.enabled') ? 'legacy' : 'local',
+            ],
             'meta' => ['source' => 'laravel_control_plane'],
         ]);
     }

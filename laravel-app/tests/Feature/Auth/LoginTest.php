@@ -37,6 +37,7 @@ class LoginTest extends TestCase
         $this->postJson('/auth/login', [
             'identifier' => 'student.test',
             'password' => 'Correct123!',
+            'login_type' => 'student',
         ])->assertOk()
             ->assertJsonPath('data.id', $user->id)
             ->assertJsonPath('data.districts.0.id', $district->id)
@@ -46,6 +47,21 @@ class LoginTest extends TestCase
         $this->assertAuthenticatedAs($user);
         $this->postJson('/auth/logout')->assertOk();
         $this->assertGuest();
+    }
+
+    public function test_public_branding_exposes_the_login_mode_needed_by_the_student_form(): void
+    {
+        District::create(['name' => 'อำเภอเสนา', 'code' => 'sena']);
+
+        config(['legacy.enabled' => false]);
+        $this->getJson('/api/v1/auth/branding')
+            ->assertOk()
+            ->assertJsonPath('data.loginMode', 'local');
+
+        config(['legacy.enabled' => true]);
+        $this->getJson('/api/v1/auth/branding')
+            ->assertOk()
+            ->assertJsonPath('data.loginMode', 'legacy');
     }
 
     public function test_login_uses_generic_error_for_wrong_credentials(): void

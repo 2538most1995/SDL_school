@@ -15,6 +15,7 @@ export type PublicBranding = {
     hasCustomHero: boolean;
     dashboardHeroImageUrl: string;
     hasCustomDashboardHero: boolean;
+    loginMode: 'legacy' | 'local';
 };
 
 export function publicBrandingPath(districtId?: string | null): string {

@@ -4,6 +4,10 @@
 
 เอกสารนี้กำหนดบทบาทในการวิเคราะห์งานของ AI เพื่อให้การแก้ไขระบบ Sena Care School ครบทั้ง business logic, ความปลอดภัย, ฐานข้อมูล และประสบการณ์ใช้งาน
 
+> สถานะปัจจุบัน: แอปหลักอยู่ใน `laravel-app/` เป็น Laravel 13 + React 19 ไม่ใช่ procedural PHP แบบเดิมทั้งหมด ให้ยึด `laravel-app/app/`, `routes/`, `database/migrations/` และ test เป็น source of truth ปัจจุบัน
+
+เอกสารคู่มือที่ต้องอ่านร่วมกันคือ `CONTEXT.md`, `DATABASE.md`, `PERFORMANCE.md`, `SKILL.md` และ `laravel-app/README.md` หากข้อมูลในเอกสารเก่าขัดกับ migration/source ให้รายงานและยึด code + migration ปัจจุบัน
+
 บทบาทเหล่านี้เป็นกรอบคิดของทีม AI ไม่จำเป็นต้องแยกเป็น process จริงทุกครั้ง งานเล็กใช้บทบาทหลักหนึ่งคนและให้ Reviewer ตรวจ ส่วนงานเสี่ยงหรือข้ามโมดูลให้ Agent Lead ประสานหลายบทบาท
 
 ## โครงสร้างทีม
@@ -267,4 +271,3 @@ role และ district scope ที่ได้รับผลกระทบ:
 4. QA & Reviewer Agent ตรวจ syntax และ flow ที่เกี่ยวข้อง
 5. ไม่มีคำสั่ง destructive ถูกใช้กับข้อมูลจริงโดยไม่ได้รับอนุญาต
 6. สรุปผลการแก้ไข การทดสอบ และข้อจำกัดให้ผู้ใช้ทราบ
-

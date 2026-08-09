@@ -70,7 +70,14 @@ final class AdminDemoApiTest extends TestCase
         $this->getJson('/api/_contract/admin/exam-rooms?date=2026-07-28')
             ->assertOk()
             ->assertJsonCount(1, 'data')
-            ->assertJsonPath('data.0.id', 'exam-room-003')
+            ->assertJsonPath('data.0.id', 3)
+            ->assertJsonPath('data.0.term', '2/2568')
+            ->assertJsonPath('data.0.subject_code', 'คณ21001')
+            ->assertJsonPath('data.0.assignment_type', 'student_range')
+            ->assertJsonPath('data.0.start_val', '6650100031')
+            ->assertJsonPath('data.0.end_val', '6650100054')
+            ->assertJsonPath('data.0.room_name', 'ห้องประชุมใหญ่')
+            ->assertJsonPath('data.0.capacity', 24)
             ->assertJsonPath('meta.source_batch', 'demo-only')
             ->assertJsonPath('meta.sync_enabled', false);
 

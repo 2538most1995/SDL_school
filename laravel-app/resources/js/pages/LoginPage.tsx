@@ -50,6 +50,7 @@ export function LoginPage() {
         queryFn: ({ signal }) => apiGet<PublicBranding>(publicBrandingPath(brandingDistrictId), signal).then((response) => response.data),
         staleTime: 5 * 60_000,
     });
+    const usesLegacyStudentCredentials = branding.data?.loginMode !== 'local';
 
     const login = useMutation({
         meta: { notification: { success: false } },
@@ -106,7 +107,7 @@ export function LoginPage() {
                         </div>
 
                         <div className="mt-9">
-                            <Badge appearance="tint" color="brand" icon={<CheckCircle size={16} weight="fill" />}>เชื่อมข้อมูลระบบจริง</Badge>
+                            <Badge appearance="tint" color="brand" icon={<CheckCircle size={16} weight="fill" />}>{usesLegacyStudentCredentials ? 'เชื่อมข้อมูลระบบจริง' : 'โหมดทดสอบภายใน'}</Badge>
                             <h2 className="mt-4 text-3xl font-black tracking-[-0.03em] text-slate-950 sm:text-4xl">ยินดีต้อนรับกลับมา</h2>
                             <p className="mt-3 text-slate-600">เลือกประเภทผู้ใช้งาน แล้วเข้าสู่พื้นที่ของคุณ</p>
                         </div>
@@ -117,12 +118,12 @@ export function LoginPage() {
                         </TabList>
 
                         <form className="mt-6 space-y-5" onSubmit={(event) => { event.preventDefault(); login.mutate(); }}>
-                            <Field label={loginType === 'student' ? 'เลขประจำตัวประชาชน' : 'ชื่อผู้ใช้'} required>
-                                <Input id="identifier" size="large" contentBefore={<IdentificationCard size={21} aria-hidden="true" />} value={identifier} onChange={(event) => setIdentifier(event.target.value)} autoComplete="username" inputMode={loginType === 'student' ? 'numeric' : undefined} maxLength={loginType === 'student' ? 13 : 190} className="login-input w-full" placeholder={loginType === 'student' ? 'กรอกเลข 13 หลัก' : 'กรอกชื่อผู้ใช้'} />
+                            <Field label={loginType === 'student' && usesLegacyStudentCredentials ? 'เลขประจำตัวประชาชน' : 'ชื่อผู้ใช้'} required>
+                                <Input id="identifier" size="large" contentBefore={<IdentificationCard size={21} aria-hidden="true" />} value={identifier} onChange={(event) => setIdentifier(event.target.value)} autoComplete="username" inputMode={loginType === 'student' && usesLegacyStudentCredentials ? 'numeric' : undefined} maxLength={loginType === 'student' && usesLegacyStudentCredentials ? 13 : 190} className="login-input w-full" placeholder={loginType === 'student' && usesLegacyStudentCredentials ? 'กรอกเลข 13 หลัก' : 'กรอกชื่อผู้ใช้'} />
                             </Field>
 
-                            <Field label={loginType === 'student' ? 'รหัสนักศึกษา' : 'รหัสผ่าน'} required>
-                                <Input id="password" size="large" contentBefore={<LockKey size={21} aria-hidden="true" />} contentAfter={loginType === 'staff' ? <Button type="button" appearance="transparent" size="small" icon={showPassword ? <EyeSlash size={20} /> : <Eye size={20} />} onClick={() => setShowPassword((value) => !value)} aria-label={showPassword ? 'ซ่อนรหัสผ่าน' : 'แสดงรหัสผ่าน'} /> : undefined} type={loginType === 'student' || showPassword ? 'text' : 'password'} value={password} onChange={(event) => setPassword(event.target.value)} autoComplete={loginType === 'student' ? 'off' : 'current-password'} className="login-input w-full" placeholder={loginType === 'student' ? 'กรอกรหัสนักศึกษา' : 'กรอกรหัสผ่าน'} />
+                            <Field label={loginType === 'student' && usesLegacyStudentCredentials ? 'รหัสนักศึกษา' : 'รหัสผ่าน'} required>
+                                <Input id="password" size="large" contentBefore={<LockKey size={21} aria-hidden="true" />} contentAfter={loginType === 'staff' || !usesLegacyStudentCredentials ? <Button type="button" appearance="transparent" size="small" icon={showPassword ? <EyeSlash size={20} /> : <Eye size={20} />} onClick={() => setShowPassword((value) => !value)} aria-label={showPassword ? 'ซ่อนรหัสผ่าน' : 'แสดงรหัสผ่าน'} /> : undefined} type={loginType === 'student' && usesLegacyStudentCredentials || showPassword ? 'text' : 'password'} value={password} onChange={(event) => setPassword(event.target.value)} autoComplete={loginType === 'student' && usesLegacyStudentCredentials ? 'off' : 'current-password'} className="login-input w-full" placeholder={loginType === 'student' && usesLegacyStudentCredentials ? 'กรอกรหัสนักศึกษา' : 'กรอกรหัสผ่าน'} />
                             </Field>
 
                             {error && <MessageBar intent="error" role="alert"><MessageBarBody>{error}</MessageBarBody></MessageBar>}

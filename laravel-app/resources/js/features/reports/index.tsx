@@ -343,7 +343,7 @@ function AcademicStudentDetailDialog({ kind, student, term, onClose }: { kind: R
             cell: ({ getValue }) => {
                 const isElective = getValue<string>() === 'elective';
                 return (
-                    <StatusBadge tone={isElective ? 'warning' : 'sky'}>
+                    <StatusBadge tone={isElective ? 'warning' : 'info'}>
                         {isElective ? 'วิชาเลือก' : 'วิชาบังคับ'}
                     </StatusBadge>
                 );

@@ -1,235 +1,88 @@
-# บริบทโปรเจกต์ Sena Care School
+# SDL School Context
 
-## 1. ภาพรวม
+## Purpose and architecture
 
-Sena Care School เป็นเว็บแอปพลิเคชัน PHP และ MySQL สำหรับดูแลข้อมูลนักศึกษาและสารสนเทศทางการศึกษา รองรับหลายอำเภอในฐานข้อมูลเดียว มีระบบนำเข้าข้อมูลจาก ZIP/DBF ของ itw51 และมีพอร์ทัลการเรียนรู้สำหรับครูและนักศึกษา
+SDL School is a Laravel 13 + React 19 application for multi-district student administration and learning services. Laravel owns the control-plane data (users, districts, settings, audit, queue and learning write models). When `SENA_DATA_SOURCE=legacy` and `LEGACY_STUDENT_ENABLED=true`, student and imported academic data are read from a separate legacy MySQL connection using a read-only repository.
 
-โปรเจกต์นี้เป็น PHP แบบ procedural เป็นหลัก แต่ละหน้า `.php` ทำหน้าที่เป็น entry point และเรียก helper จาก `auth.php` หรือไฟล์ใน `includes/` ไม่มี framework และไม่มี Composer dependency ในโฟลเดอร์หลัก
+## User types and roles
 
-## 2. ผู้ใช้งานและสิทธิ์
-
-| Role | ขอบเขตหลัก |
+| Role | Scope |
 | --- | --- |
-| `super_admin` | จัดการทุกอำเภอ เลือกอำเภอ และดูข้อมูลรวมข้ามอำเภอในหน้าที่รองรับ |
-| `admin` | จัดการข้อมูลและผู้ใช้ภายในอำเภอของตน |
-| `teacher` | ดูข้อมูลนักศึกษาและจัดการงานสอนตามกลุ่มที่ได้รับมอบหมาย |
-| `student` | ล็อกอินจากข้อมูลนักศึกษาและดูข้อมูลของตนเอง |
+| `super_admin` | cross-district administration where the route supports it |
+| `admin` | manage users, imports, branding and exam rooms in selected district |
+| `teacher` | read assigned student groups and manage own learning content |
+| `student` | access own profile, academic records and targeted learning content |
 
-จุดควบคุมสิทธิ์ส่วนกลางอยู่ใน `auth.php` เช่น:
+District scope is resolved by `ResolveDistrictContext`; role checks are enforced by `EnsureRole` and route middleware. Never infer district scope from an unvalidated request parameter.
 
-- `requireLogin()`
-- `requireAdmin()`
-- `requireTeacherOrAdmin()`
-- `requireCsrf()` และ `requireJsonCsrf()`
-- `canAccessStudentRecord()`
-- `currentDistrictId()` และ `districtScopedTables()`
+## Main modules
 
-## 3. โครงสร้างระบบ
+- Authentication/profile/appearance and district branding
+- Student directory and current-student academic endpoints
+- Student reports: overview, new students, graduates, transfers, registrations, grade threshold and attendance
+- Learning: assignments, resources, calendar, schedules, lesson plans, scores and content writes
+- Admin: users, import status/safety, ZIP/DBF imports, exam rooms and branding
+- Legacy compatibility redirects for old `.php` paths
 
-### ไฟล์ศูนย์กลาง
+## Business rules
 
-| ไฟล์ | หน้าที่ |
-| --- | --- |
-| `config.php` | เชื่อมต่อ PDO MySQL, ตั้ง session cookie และ security headers |
-| `auth.php` | Auth, CSRF, rate limit, dynamic SQL helpers, district scope, theme helper และ schema หลายอำเภอ |
-| `index.php` | Dashboard และข้อมูลสรุปนักศึกษา |
-| `includes/header.php` | Branding, theme, CSS และโครง HTML ส่วนบน |
-| `includes/sidebar.php` | เมนูตามสิทธิ์ผู้ใช้งาน |
-| `includes/footer.php` | footer, visitor counter และ JavaScript UI ส่วนกลาง |
+1. A non-super-admin user is limited to the active selected district and their role/group scope.
+2. Student code is not assumed globally unique across district/level; ambiguous lookups fail closed.
+3. Legacy reads use the latest successful batch belonging to the same district; no cross-district fallback.
+4. Legacy table identifiers must be resolved from a validated batch and identifier whitelist; bound parameters are required for values.
+5. Student PII is masked by default and unmasked only for an allowed scope/resource.
+6. Import creates and validates a new batch before replacing old district batches; writes are disabled by default.
+7. Learning writes require teacher/admin/super-admin role and teacher ownership/district checks.
 
-### โมดูลข้อมูลนักศึกษา
-
-| ไฟล์ | หน้าที่ |
-| --- | --- |
-| `students.php` | รายชื่อนักศึกษา ค้นหา กรอง และจัดการข้อมูล |
-| `grades.php` | ผลการเรียน |
-| `kpch.php` | กิจกรรม กพช. |
-| `moral.php` | คุณธรรม |
-| `graduated_students.php` | รายชื่อนักศึกษาจบหลักสูตร |
-| `transferred_students.php` | ข้อมูลเทียบโอน |
-| `registered_subjects.php` | วิชาที่ลงทะเบียน |
-| `grades_above_2_stats.php` | สถิติเกรด 2 ขึ้นไป |
-| `exam_attendance_stats.php` | สถิติการเข้าสอบ |
-
-### โมดูลนำเข้าข้อมูล
-
-| ไฟล์ | หน้าที่ |
-| --- | --- |
-| `import.php` | อัปโหลด ZIP, แตกไฟล์อย่างปลอดภัย, อ่าน DBF และสร้างตาราง dynamic |
-| `includes/DbfReader.php` | อ่านโครงสร้างและ record จาก DBF พร้อมแปลง TIS-620 เป็น UTF-8 |
-| `cleanup.php` | ลบตาราง import เก่าตาม batch |
-| `includes/sync_exam_rooms.php` | sync ห้องสอบหลัง import |
-
-### พอร์ทัลการเรียนรู้
-
-| ไฟล์ | หน้าที่ |
-| --- | --- |
-| `includes/learning_portal.php` | Schema และ business logic ส่วนกลางของพอร์ทัล |
-| `assignments.php` | มอบหมายงานและตรวจงาน |
-| `resources.php` | คลังสื่อการเรียนรู้ |
-| `lesson_plans.php` | แผนการสอน |
-| `calendar.php` | ปฏิทินพบกลุ่ม |
-| `exams.php` | ตารางสอน |
-| `scores.php` | คะแนนเก็บ |
-| `api/learning_scores.php` | คะแนนของนักศึกษาสำหรับหน้าที่เรียกผ่าน JSON |
-
-### API
-
-| ไฟล์ | หน้าที่ |
-| --- | --- |
-| `api/students.php` | API รายชื่อนักศึกษาและกลุ่มเรียน รองรับ API key, session, filter และ pagination |
-| `api/learning_scores.php` | API คะแนนเก็บภายในระบบ |
-| `api/README.md` | วิธีใช้ Student API |
-
-## 4. ฐานข้อมูล
-
-### ตารางหลัก
-
-ตารางตั้งต้นอยู่ใน `krumostc_sena_care.sql` และมี schema บางส่วนที่ระบบเติมให้อัตโนมัติ:
-
-- `districts`
-- `users`
-- `import_history`
-- `import_batches`
-- `exam_rooms`
-- `user_theme_settings`
-- ตารางชื่อขึ้นต้น `learning_` สำหรับพอร์ทัลการเรียนรู้
-
-`auth.php` เรียก `ensureMultiDistrictSchema()` เมื่อเริ่ม request ภายในระบบ ส่วน `includes/learning_portal.php` มี `learningEnsureSchema()` สำหรับโมดูลการเรียนรู้
-
-### ตารางจากการ import
-
-ไฟล์ ZIP ของ itw51 ถูกแตกและอ่าน DBF เพื่อสร้างตารางแบบ dynamic:
+## Request/data flow
 
 ```text
-db_import_{timestamp}_{hash}_{folder}_{type}
+Request → route → Sanctum/auth + active + district/role middleware
+        → controller → validation → domain service/repository
+        → control-plane Eloquent/query builder OR legacy read-only connection
+        → resource/JSON/PDF → response
 ```
 
-ตัวอย่าง:
+## Authentication and authorization
 
-```text
-db_import_1772538756_69a6cb8481c57_1_student
-db_import_1772538756_69a6cb8481c57_2_grade
-db_import_1772538756_69a6cb8481c57_group
-```
+- Login is handled by `Auth\LoginController`; API access uses Sanctum.
+- `EnsureActiveUser`, `EnsureRole`, `ResolveDistrictContext` and `SecurityHeaders` are registered in `bootstrap/app.php`.
+- Protected routes are defined in `routes/api.php`; admin writes are restricted to `admin,super_admin`, learning writes to `teacher,admin,super_admin`, and super-admin branding routes to `super_admin`.
+- POST/PATCH/PUT/DELETE paths use Laravel validation/authentication and audit where applicable. Upload/import paths must retain size/type/path validation.
 
-`folder` ที่เป็น `1`, `2`, `3` แทนระดับการศึกษา และ `type` เช่น `student`, `grade`, `subject`, `group`
+## Important routes/controllers/services
 
-ตาราง import แต่ละ batch ผูกกับอำเภอผ่าน `import_batches.batch_key` จึงต้องใช้ helper district scope ทุกครั้งที่ query ข้อมูล import
+- `/api/v1/portal` → `Api\PortalController`
+- `/api/v1/students*` and `/api/v1/reports/*` → `Api\Students\*`
+- `/api/v1/learning/*` → `Api\Learning\*`
+- `/api/v1/admin/*` → `Api\Admin\*`
+- Student source → `StudentRepository`, `DemoStudentRepository` or `LegacyStudentRepository`
+- Legacy learning/import → `LegacyPortalReadService`, `LegacyZipImportService`, `LegacyExamScheduleService`
+- PDF → `ExamScheduleExportService`/mPDF
 
-### ความหลากหลายของข้อมูลเดิม
+## Data and external services
 
-ข้อมูล DBF อาจมี:
+- Legacy MySQL/DBF-derived tables are configured through `config/legacy.php`; live schema/cardinality is `Not verified` in this audit.
+- ZIP extraction uses `ZipArchive`; DBF parsing uses `VisualFoxProDbfReader`.
+- Thai administrative lookup can call `data.go.th` through `ThaiAdministrativeAreaLookup`.
+- No third-party production API contract was inferred beyond code/config.
 
-- ชื่อคอลัมน์ตัวพิมพ์เล็กและใหญ่ต่างกัน
-- ค่าเว้นวรรคจาก fixed-width field
-- รหัสนักศึกษาที่ต้องเทียบ 10 หลักท้าย
-- รูปแบบภาคเรียนหลายแบบ เช่น `68/2`, `2568/2`, `2/2568`
-- encoding แบบ TIS-620
+## Current status
 
-ให้ใช้ helper ใน `auth.php` ก่อนเขียน SQL เอง เช่น:
+- Laravel application, routes, migrations, models/services and tests were audited.
+- Performance fixes are recorded in [`PERFORMANCE.md`](PERFORMANCE.md).
+- Real MySQL EXPLAIN, production response time and live legacy integration are `Not verified`.
 
-- `studentIdKeySql()`
-- `gradeStdKeySql()`
-- `expsemSql()`
-- `semestrySql()`
-- `academicTermVariants()`
-- `latestAcademicTerm()`
+## Known issues and next tasks
 
-## 5. เส้นทาง Request สำคัญ
+- Student directory performs filtering/sorting/pagination after loading the active roster and aggregates; measure realistic data before redesigning its API.
+- Legacy portal/exam-room integration needs fixture-backed integration tests.
+- Review Pint findings in the existing files and run live query plans before adding indexes.
 
-### หน้าเว็บภายใน
+## Do not change without checking
 
-```text
-หน้า .php
-  -> require_once 'auth.php'
-  -> config.php เชื่อมต่อฐานข้อมูลและเริ่ม session
-  -> ensureMultiDistrictSchema()
-  -> refreshSessionUserFromDatabase()
-  -> handleDistrictSwitch()
-  -> ตรวจสิทธิ์ของหน้า
-  -> query ข้อมูลตาม district scope
-  -> include header/sidebar/footer
-```
-
-### ล็อกอิน
-
-- ครูและผู้ดูแลล็อกอินจากตาราง `users` ด้วย `password_verify()`
-- นักศึกษาล็อกอินด้วยเลขบัตรประชาชน 13 หลักและรหัสนักศึกษา
-- ระบบมี CSRF, rate limit และ `session_regenerate_id(true)` หลังล็อกอินสำเร็จ
-
-### Import
-
-```text
-อัปโหลด ZIP
-  -> ตรวจ CSRF และสิทธิ์ admin
-  -> ตรวจไฟล์และอำเภอเป้าหมาย
-  -> แตก ZIP ด้วย safeExtractZip()
-  -> อ่าน DBF ด้วย DbfReader
-  -> สร้างตาราง db_import_*
-  -> บันทึก import_history และ import_batches
-  -> sync ห้องสอบ
-```
-
-## 6. Frontend
-
-- ใช้ Tailwind CSS v4 จาก `css/input.css` และ build เป็น `css/output.css`
-- ใช้ฟอนต์ Prompt
-- ใช้ Font Awesome และ SweetAlert2 จาก CDN
-- รองรับ theme รายผู้ใช้ผ่าน CSS variables
-- มี responsive table, modal และ sidebar logic ส่วนกลางใน `includes/header.php`, `includes/footer.php` และ `css/input.css`
-
-คำสั่ง build CSS:
-
-```bash
-./tailwindcss -i ./css/input.css -o ./css/output.css
-```
-
-## 7. Environment
-
-ค่าฐานข้อมูลอ่านจาก environment variable และมีค่าเริ่มต้นสำหรับ MAMP:
-
-```text
-DB_HOST=127.0.0.1
-DB_PORT=8889
-DB_NAME=sena_school_db
-DB_USER=root
-DB_PASS=root
-```
-
-ค่าที่เกี่ยวข้องเพิ่มเติม:
-
-```text
-SCHEMA_CHECK_TTL
-IMPORT_MEMORY_LIMIT
-STUDENT_API_KEY
-STUDENT_API_KEYS
-STUDENT_API_CORS_ORIGINS
-```
-
-PHP extension สำคัญ:
-
-- `PDO`
-- `pdo_mysql`
-- `zip`
-- `iconv`
-- `mbstring`
-
-## 8. ข้อมูลและไฟล์ที่ต้องระวัง
-
-- `uploads/zips/` มีไฟล์ต้นฉบับที่ผู้ใช้อัปโหลด
-- `uploads/extracted/` มีข้อมูล DBF ที่แตกจาก ZIP
-- `uploads/learning/` มีไฟล์แนบจากพอร์ทัลการเรียนรู้
-- `uploads/profiles/` มีรูปโปรไฟล์
-- `logs/` มี log, cache flag, rate limit และ visitor stats
-- `krumostc_sena_care.sql` มีคำสั่ง `DROP TABLE IF EXISTS` สำหรับติดตั้งใหม่ ห้ามรันกับฐานข้อมูลจริงโดยไม่ยืนยัน
-- `debug_*.php`, `test_*.php`, Python script และไฟล์ log เป็นเครื่องมือช่วยพัฒนา ต้องประเมินก่อนนำขึ้น production
-
-## 9. หลักการสำคัญของโปรเจกต์
-
-1. ความถูกต้องของ district scope สำคัญกว่าความสะดวกในการ query
-2. ข้อมูลนักศึกษาและเลขบัตรประชาชนเป็นข้อมูลส่วนบุคคล ต้องเปิดเผยเท่าที่จำเป็น
-3. ตาราง import เปลี่ยนแปลงตาม batch ห้าม hardcode ชื่อตาราง
-4. การลบ import, cleanup และ schema migration มีผลต่อข้อมูลจริง ต้องแยกจากการทดสอบทั่วไป
-5. UI ใหม่ต้องใช้งานได้ทั้ง desktop และ mobile
-
+- Legacy batch selection, district scope, PII masking, role middleware and API response fields
+- `2026_08_07_000014_fix_import_and_exam_room_schema.php` and any dynamic import table naming
+- Legacy read-only connection and import write flags
+- Student academic-term normalization and grade selection rules
+- Frontend response shapes and legacy redirect routes

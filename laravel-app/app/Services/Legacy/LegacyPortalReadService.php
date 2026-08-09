@@ -137,6 +137,19 @@ final class LegacyPortalReadService
     /** @return list<array<string, mixed>> */
     public function calendar(User $viewer, int $districtId, ?string $type = null): array
     {
+        return $this->calendarItems($viewer, $districtId, null, $type);
+    }
+
+    /**
+     * Build calendar data, optionally reusing assignments already loaded by a
+     * caller such as overview(). This keeps the public response unchanged while
+     * avoiding a duplicate assignment query in the same request.
+     *
+     * @param  list<array<string, mixed>>|null  $assignments
+     * @return list<array<string, mixed>>
+     */
+    private function calendarItems(User $viewer, int $districtId, ?array $assignments = null, ?string $type = null): array
+    {
         $events = $this->connection()->table('learning_group_events as event')
             ->where('event.district_id', $districtId);
         $this->scopeGroupContent($events, $viewer, 'event');
@@ -160,7 +173,7 @@ final class LegacyPortalReadService
                 ],
             ])->all();
 
-        foreach ($this->assignments($viewer, $districtId) as $assignment) {
+        foreach ($assignments ?? $this->assignments($viewer, $districtId) as $assignment) {
             $items[] = [
                 'id' => 'assignment-'.$assignment['id'],
                 'type' => 'assignment',
@@ -264,7 +277,7 @@ final class LegacyPortalReadService
     {
         $assignments = $this->assignments($viewer, $districtId);
         $resources = $this->resources($viewer, $districtId);
-        $calendar = array_slice($this->calendar($viewer, $districtId), 0, 5);
+        $calendar = array_slice($this->calendarItems($viewer, $districtId, $assignments), 0, 5);
         $subjects = [];
         foreach ([...$assignments, ...$resources] as $item) {
             $subject = trim((string) ($item['subject_name'] ?? $item['subject_code'] ?? ''));
@@ -301,34 +314,38 @@ final class LegacyPortalReadService
     /** @return list<array<string, mixed>> */
     public function users(int $districtId, ?string $role = null, ?string $search = null): array
     {
-        $query = $this->connection()->table('users')->where('district_id', $districtId);
+        $query = $this->connection()->table('users as user')
+            ->leftJoin('districts as district', 'district.id', '=', 'user.district_id')
+            ->where('user.district_id', $districtId);
         if ($role !== null) {
-            $query->where('role', $role);
+            $query->where('user.role', $role);
         }
         if ($search !== null && trim($search) !== '') {
             $needle = '%'.trim($search).'%';
             $query->where(fn (Builder $part) => $part
-                ->where('username', 'like', $needle)
-                ->orWhere('first_name', 'like', $needle)
-                ->orWhere('last_name', 'like', $needle));
+                ->where('user.username', 'like', $needle)
+                ->orWhere('user.first_name', 'like', $needle)
+                ->orWhere('user.last_name', 'like', $needle));
         }
 
-        return $query->select(['id', 'username', 'first_name', 'last_name', 'role', 'district_id', 'assigned_groups', 'created_at'])
-            ->orderBy('role')->orderBy('first_name')->limit(250)->get()->map(function (object $row): array {
-                $groups = json_decode((string) ($row->assigned_groups ?? '[]'), true);
+        return $query->select([
+            'user.id', 'user.username', 'user.first_name', 'user.last_name', 'user.role',
+            'user.district_id', 'user.assigned_groups', 'user.created_at', 'district.name as district_name',
+        ])->orderBy('user.role')->orderBy('user.first_name')->limit(250)->get()->map(function (object $row): array {
+            $groups = json_decode((string) ($row->assigned_groups ?? '[]'), true);
 
-                return [
-                    'id' => (string) $row->id,
-                    'display_name' => trim((string) $row->first_name.' '.(string) $row->last_name),
-                    'username' => (string) $row->username,
-                    'role' => (string) $row->role,
-                    'district_id' => (int) $row->district_id,
-                    'district_name' => (string) ($this->connection()->table('districts')->where('id', $row->district_id)->value('name') ?? ''),
-                    'group' => is_array($groups) && $groups !== [] ? implode(', ', array_map('strval', $groups)) : null,
-                    'status' => 'active',
-                    'last_seen_at' => null,
-                ];
-            })->all();
+            return [
+                'id' => (string) $row->id,
+                'display_name' => trim((string) $row->first_name.' '.(string) $row->last_name),
+                'username' => (string) $row->username,
+                'role' => (string) $row->role,
+                'district_id' => (int) $row->district_id,
+                'district_name' => (string) ($row->district_name ?? ''),
+                'group' => is_array($groups) && $groups !== [] ? implode(', ', array_map('strval', $groups)) : null,
+                'status' => 'active',
+                'last_seen_at' => null,
+            ];
+        })->all();
     }
 
     /** @return list<array<string, mixed>> */

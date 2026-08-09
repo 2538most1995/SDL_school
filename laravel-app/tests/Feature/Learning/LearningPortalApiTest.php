@@ -4,6 +4,7 @@ namespace Tests\Feature\Learning;
 
 use App\Http\Controllers\Api\Learning\AssignmentController;
 use App\Http\Controllers\Api\Learning\CalendarController;
+use App\Http\Controllers\Api\Learning\OverviewController;
 use App\Http\Controllers\Api\Learning\ResourceController;
 use App\Http\Controllers\Api\Learning\ScoreController;
 use Illuminate\Support\Facades\Route;
@@ -16,9 +17,27 @@ final class LearningPortalApiTest extends TestCase
         parent::setUp();
 
         Route::get('/api/_contract/learning/assignments', AssignmentController::class);
+        Route::get('/api/_contract/learning', OverviewController::class);
         Route::get('/api/_contract/learning/resources', ResourceController::class);
         Route::get('/api/_contract/learning/calendar', CalendarController::class);
         Route::get('/api/_contract/learning/scores', ScoreController::class);
+    }
+
+    public function test_learning_overview_returns_the_demo_contract_when_legacy_is_disabled(): void
+    {
+        config(['legacy.enabled' => false]);
+
+        $this->getJson('/api/_contract/learning')
+            ->assertOk()
+            ->assertJsonPath('data.studentName', 'ผู้ใช้งานสาธิต')
+            ->assertJsonPath('data.dueAssignments', 3)
+            ->assertJsonPath('data.completedAssignments', 1)
+            ->assertJsonPath('data.resources', 4)
+            ->assertJsonCount(4, 'data.courses')
+            ->assertJsonCount(4, 'data.upcoming')
+            ->assertJsonPath('meta.mode', 'demo')
+            ->assertJsonPath('meta.source', 'canonical_demo')
+            ->assertJsonPath('meta.read_only', true);
     }
 
     public function test_assignments_return_a_filterable_canonical_demo_collection(): void

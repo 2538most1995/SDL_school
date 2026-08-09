@@ -34,9 +34,9 @@ npm run build
 
 ```apache
 LoadModule rewrite_module modules/mod_rewrite.so
-DocumentRoot "/Applications/MAMP/htdocs/sena_care_school 3/laravel-app/public"
+DocumentRoot "/Applications/MAMP/htdocs/SDL_school/laravel-app/public"
 
-<Directory "/Applications/MAMP/htdocs/sena_care_school 3/laravel-app/public">
+<Directory "/Applications/MAMP/htdocs/SDL_school/laravel-app/public">
     Options -Indexes +FollowSymLinks
     AllowOverride All
     Require all granted
@@ -56,6 +56,18 @@ DB_QUEUE_RETRY_AFTER=900
 ตัวปลุก background จะระบายงาน import ที่ค้างตามลำดับจนคิวว่าง ไม่หยุดหลังงานแรก ใช้ file lock เดียวกับ scheduled worker และตั้งเวลาจองงานให้นานกว่า timeout เพื่อป้องกัน worker สองตัวนำเข้า ZIP เดียวกันซ้ำ หากโฮสต์ปิดการสร้าง background process งานจะยังค้างอย่างปลอดภัยใน database queue และสามารถเปิด worker ด้วย `php artisan legacy:work-import-queue` ได้โดยข้อมูลไม่สูญหาย สำหรับ Plesk Scheduled Task ให้ใช้ `legacy:work-import-queue --once`
 
 หากแก้ `.env` ให้รัน `php artisan config:clear` ก่อนทดสอบ การเปิด `mod_rewrite` จำเป็นต่อการรีเฟรช route เช่น `/app`, `/students` และ `/grades`
+
+## รันโหมด demo แบบไม่แตะฐานข้อมูลจริง
+
+ใช้ไฟล์ SQLite ใหม่และตั้ง `SENA_DEMO_MODE=true`, `SENA_DATA_SOURCE=demo`, `LEGACY_STUDENT_ENABLED=false` จากนั้นรัน:
+
+```bash
+touch database/demo.sqlite
+php artisan migrate --seed
+php artisan serve
+```
+
+บัญชีทดสอบใช้รหัสผ่าน `Demo1234!`: `admin.demo`, `teacher.demo`, `super.demo` และนักศึกษา `6650100001` หน้า login จะแสดง “ชื่อผู้ใช้ + รหัสผ่าน” อัตโนมัติในโหมด demo และแสดง “เลขประจำตัวประชาชน + รหัสนักศึกษา” เมื่อเชื่อม legacy จริง
 
 ## Production database configuration
 
