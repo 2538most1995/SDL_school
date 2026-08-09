@@ -148,7 +148,7 @@ export function AdminUsersPage() {
 
     return (
         <div>
-            <PageHeader category="จัดการระบบ" title="ผู้ใช้งานและสิทธิ์" description="ผู้ดูแลอำเภอจัดการครูและผู้ดูแลในพื้นที่ตนเอง ส่วนผู้ดูแลสูงสุดจัดการได้ทุกอำเภอ" icon={UsersThree} actions={<button type="button" onClick={openCreate} disabled={users.data?.meta.read_only === true} className={primaryButton}><Plus size={17} weight="bold" /> เพิ่มผู้ใช้</button>} />
+            <PageHeader category="จัดการระบบ" title="ผู้ใช้งานและสิทธิ์" description="ข้อมูลผู้ใช้อ่านและบันทึกในฐานข้อมูลของระบบโดยตรง ผู้ดูแลอำเภอจัดการได้เฉพาะพื้นที่ตนเอง" icon={UsersThree} actions={<button type="button" onClick={openCreate} disabled={users.data?.meta.read_only === true} className={primaryButton}><Plus size={17} weight="bold" /> เพิ่มผู้ใช้</button>} />
             <div className="mb-5 grid gap-3 sm:grid-cols-3">
                 <StatTile label="ผู้ใช้งาน" value={users.data?.data.length ?? 0} detail="ในพื้นที่ที่เลือก" icon={UsersThree} tone="sky" />
                 <StatTile label="ครู" value={(users.data?.data ?? []).filter((item) => item.role === 'teacher').length} detail="บัญชีผู้สอน" icon={UserCircleGear} />

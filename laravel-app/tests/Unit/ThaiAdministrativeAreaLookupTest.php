@@ -9,33 +9,21 @@ use Tests\TestCase;
 
 final class ThaiAdministrativeAreaLookupTest extends TestCase
 {
-    public function test_it_resolves_official_subdistrict_codes_and_caches_the_reference_data(): void
+    public function test_it_resolves_administrative_areas_from_the_bundled_system_snapshot_without_http(): void
     {
-        Cache::forget('thai-administrative-areas-v1');
-        Http::fake([
-            'www.data.go.th/*' => Http::response([
-                'success' => true,
-                'result' => [
-                    'records' => [[
-                        'TA_ID' => 140405,
-                        'TAMBON_T' => 'ต. บ้านแพน',
-                        'AMPHOE_T' => 'อ. เสนา',
-                        'CHANGWAT_T' => 'จ. พระนครศรีอยุธยา',
-                    ]],
-                ],
-            ]),
-        ]);
+        Cache::forget('thai-administrative-areas-local-v1');
+        Http::preventStrayRequests();
 
         $lookup = new ThaiAdministrativeAreaLookup;
 
         $this->assertSame([
-            'subdistrict' => 'บ้านแพน',
-            'district' => 'เสนา',
+            'subdistrict' => 'หน้าไม้',
+            'district' => 'บางไทร',
             'province' => 'พระนครศรีอยุธยา',
         ], $lookup->resolve('140405'));
         $this->assertNull($lookup->resolve('invalid'));
-        Http::assertSentCount(1);
+        Http::assertNothingSent();
 
-        Cache::forget('thai-administrative-areas-v1');
+        Cache::forget('thai-administrative-areas-local-v1');
     }
 }

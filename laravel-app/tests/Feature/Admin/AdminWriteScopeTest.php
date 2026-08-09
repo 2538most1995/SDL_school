@@ -8,6 +8,7 @@ use Illuminate\Database\Schema\Blueprint;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\File;
+use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Schema;
 use Laravel\Sanctum\Sanctum;
@@ -98,6 +99,7 @@ final class AdminWriteScopeTest extends TestCase
 
     public function test_district_admin_can_create_and_edit_only_users_in_own_district(): void
     {
+        Http::preventStrayRequests();
         Sanctum::actingAs(User::factory()->create([
             'role' => 'admin',
             'district_id' => $this->sena->id,
@@ -106,6 +108,7 @@ final class AdminWriteScopeTest extends TestCase
 
         $this->getJson('/api/v1/admin/users')
             ->assertOk()
+            ->assertJsonPath('meta.source', 'system_database')
             ->assertJsonCount(1, 'data')
             ->assertJsonPath('data.0.username', 'sena.admin');
 
@@ -151,6 +154,8 @@ final class AdminWriteScopeTest extends TestCase
             'last_name' => 'สร้าง',
             'role' => 'super_admin',
         ])->assertUnprocessable();
+
+        Http::assertNothingSent();
     }
 
     public function test_user_writes_remain_successful_when_optional_shadow_and_audit_schema_are_missing(): void

@@ -78,7 +78,7 @@ final class UserController extends Controller
             ->values()->all();
 
         return response()->json(['data' => $items, 'meta' => [
-            'source' => 'legacy_controlled_write',
+            'source' => 'system_database',
             'read_only' => ! $this->writeEnabled(),
             'district_id' => $districtId,
             'allowed_roles' => $viewer->role === 'super_admin'

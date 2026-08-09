@@ -3,15 +3,11 @@
 namespace App\Support;
 
 use Illuminate\Support\Facades\Cache;
-use Illuminate\Support\Facades\Http;
-use RuntimeException;
 use Throwable;
 
 final class ThaiAdministrativeAreaLookup
 {
-    private const CACHE_KEY = 'thai-administrative-areas-v1';
-
-    private const RESOURCE_ID = '48039a2a-2f01-448c-b2a2-bb0d541dedcd';
+    private const CACHE_KEY = 'thai-administrative-areas-local-v1';
 
     /** @var array<string, array{subdistrict: string, district: string, province: string}>|null */
     private ?array $loadedAreas = null;
@@ -38,7 +34,7 @@ final class ThaiAdministrativeAreaLookup
             return $this->loadedAreas = Cache::remember(
                 self::CACHE_KEY,
                 now()->addYear(),
-                fn (): array => $this->download(),
+                fn (): array => $this->loadLocalSnapshot(),
             );
         } catch (Throwable) {
             return $this->loadedAreas = [];
@@ -46,39 +42,34 @@ final class ThaiAdministrativeAreaLookup
     }
 
     /** @return array<string, array{subdistrict: string, district: string, province: string}> */
-    private function download(): array
+    private function loadLocalSnapshot(): array
     {
-        $response = Http::acceptJson()
-            ->timeout(10)
-            ->retry(1, 200)
-            ->get('https://www.data.go.th/api/3/action/datastore_search', [
-                'resource_id' => self::RESOURCE_ID,
-                'limit' => 8000,
-            ]);
-
-        if (! $response->successful() || $response->json('success') !== true) {
-            throw new RuntimeException('Unable to load Thai administrative area reference data.');
+        $path = resource_path('data/thai_administrative_areas.csv');
+        $handle = fopen($path, 'rb');
+        if ($handle === false) {
+            return [];
         }
 
         $areas = [];
-        foreach ((array) $response->json('result.records', []) as $record) {
-            $code = str_pad((string) ((int) ($record['TA_ID'] ?? 0)), 6, '0', STR_PAD_LEFT);
-            if (strlen($code) !== 6 || $code === '000000') {
-                continue;
-            }
+        try {
+            fgetcsv($handle, null, ',', '"', '');
+            while (($record = fgetcsv($handle, null, ',', '"', '')) !== false) {
+                [$code, $subdistrict, $district, $province] = array_pad($record, 4, '');
+                $code = trim((string) $code);
+                if (preg_match('/^\d{6}$/', $code) !== 1) {
+                    continue;
+                }
 
-            $areas[$code] = [
-                'subdistrict' => $this->cleanName((string) ($record['TAMBON_T'] ?? ''), 'ต.'),
-                'district' => $this->cleanName((string) ($record['AMPHOE_T'] ?? ''), 'อ.'),
-                'province' => $this->cleanName((string) ($record['CHANGWAT_T'] ?? ''), 'จ.'),
-            ];
+                $areas[$code] = [
+                    'subdistrict' => trim((string) $subdistrict),
+                    'district' => trim((string) $district),
+                    'province' => trim((string) $province),
+                ];
+            }
+        } finally {
+            fclose($handle);
         }
 
         return $areas;
-    }
-
-    private function cleanName(string $value, string $prefix): string
-    {
-        return trim((string) preg_replace('/^'.preg_quote($prefix, '/').'\s*/u', '', trim($value)));
     }
 }

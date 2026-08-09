@@ -65,8 +65,9 @@ Request → route → Sanctum/auth + active + district/role middleware
 
 - Legacy MySQL/DBF-derived tables are configured through `config/legacy.php`; live schema/cardinality is `Not verified` in this audit.
 - ZIP extraction uses `ZipArchive`; DBF parsing uses `VisualFoxProDbfReader`.
-- Thai administrative lookup can call `data.go.th` through `ThaiAdministrativeAreaLookup`.
-- No third-party production API contract was inferred beyond code/config.
+- Staff users, districts, student records, learning data, imports and reports are read from databases/files owned by this deployment. Browser calls under `/api/v1` are same-application endpoints, not third-party APIs.
+- Thai administrative names are resolved from the bundled `resources/data/thai_administrative_areas.csv` snapshot. `ThaiAdministrativeAreaLookup` performs no network request.
+- `AppServiceProvider` blocks unreviewed outbound calls made through Laravel's HTTP client. No third-party production data API is used.
 
 ## Current status
 

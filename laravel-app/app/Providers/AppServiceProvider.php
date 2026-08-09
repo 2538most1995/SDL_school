@@ -11,6 +11,7 @@ use App\Support\LegacyFptMemoReader;
 use App\Support\ThaiAdministrativeAreaLookup;
 use Illuminate\Contracts\Foundation\Application;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Http;
 use Illuminate\Support\ServiceProvider;
 use LogicException;
 
@@ -50,6 +51,11 @@ class AppServiceProvider extends ServiceProvider
      */
     public function boot(): void
     {
+        // Production data is intentionally self-contained. Any future use of
+        // Laravel's HTTP client must be explicitly reviewed instead of silently
+        // turning a page request into an external data dependency.
+        Http::preventStrayRequests();
+
         try {
             $request = request();
             $host = $request->getHttpHost();

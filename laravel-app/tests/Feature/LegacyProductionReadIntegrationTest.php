@@ -59,7 +59,7 @@ final class LegacyProductionReadIntegrationTest extends TestCase
         ] as $endpoint) {
             $this->getJson($endpoint)->assertOk();
         }
-        $this->getJson('/api/v1/admin/users')->assertOk()->assertJsonPath('meta.source', 'legacy_read_only');
+        $this->getJson('/api/v1/admin/users')->assertOk()->assertJsonPath('meta.source', 'system_database');
         $this->getJson('/api/v1/admin/imports')->assertOk()->assertJsonPath('meta.read_only', true);
         $this->getJson('/api/v1/admin/imports/safety')->assertOk()->assertJsonPath('meta.read_only', true);
         $this->getJson('/api/v1/admin/exam-rooms')->assertOk()->assertJsonPath('meta.sync_enabled', false);
