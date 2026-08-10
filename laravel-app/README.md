@@ -86,6 +86,8 @@ npm run build
 
 Migration รองรับฐานที่มีตารางเดิมอยู่แล้วแต่ migration ledger ว่าง โดยจะตรวจ table/column ก่อนสร้างและไม่ลบข้อมูลหรือ password hash เดิม
 
+หากตาราง `students` ภายในฐานของระบบมี `id` แบบ `INT` จาก schema เดิม migration จะสร้างและซ่อม `student_id` ให้ใช้ชนิดเดียวกันก่อนเพิ่ม foreign key จึงสามารถรันซ้ำหลัง MySQL ทิ้งตารางที่สร้างค้างไว้ได้ โดยไม่ลบแถวข้อมูลที่อ้างอิงไม่ครบ
+
 ระบบยังมี repair migration สำหรับ production ที่ migration ledger เคยบันทึกสำเร็จไม่ตรงกับ schema จริง โดยจะเติมคอลัมน์ผู้ใช้และตาราง `sessions`, `cache`, `jobs`, `audit_logs` ที่ขาดแบบไม่ลบข้อมูลเดิม หลัง deploy ต้องรัน `php artisan migrate --force` และ `php artisan optimize:clear`
 
 จากนั้นนำเข้า ZIP/DBF ผ่านเมนู Admin เพื่อให้ข้อมูลนักศึกษาอยู่ในฐานใหม่ของระบบ ไม่ควร copy หรือ query ข้อมูลจากฐานเก่าโดยตรง

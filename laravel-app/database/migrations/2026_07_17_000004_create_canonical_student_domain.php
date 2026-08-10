@@ -2,6 +2,7 @@
 
 use Illuminate\Database\Migrations\Migration;
 use Illuminate\Database\Schema\Blueprint;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Schema;
 
 return new class extends Migration
@@ -51,7 +52,7 @@ return new class extends Migration
         if (! Schema::hasTable('registrations')) {
             Schema::create('registrations', function (Blueprint $table): void {
                 $table->id();
-                $table->foreignId('student_id')->constrained()->cascadeOnDelete();
+                $this->addStudentForeignId($table);
                 $table->foreignId('subject_id')->constrained()->restrictOnDelete();
                 $table->string('academic_term', 16)->index();
                 $table->string('status', 24)->default('registered')->index();
@@ -64,7 +65,7 @@ return new class extends Migration
         if (! Schema::hasTable('grades')) {
             Schema::create('grades', function (Blueprint $table): void {
                 $table->id();
-                $table->foreignId('student_id')->constrained()->cascadeOnDelete();
+                $this->addStudentForeignId($table);
                 $table->foreignId('subject_id')->constrained()->restrictOnDelete();
                 $table->string('academic_term', 16)->index();
                 $table->string('raw_grade', 24)->nullable();
@@ -82,7 +83,7 @@ return new class extends Migration
         if (! Schema::hasTable('student_activities')) {
             Schema::create('student_activities', function (Blueprint $table): void {
                 $table->id();
-                $table->foreignId('student_id')->constrained()->cascadeOnDelete();
+                $this->addStudentForeignId($table);
                 $table->string('academic_term', 16)->nullable()->index();
                 $table->string('activity_code', 64)->nullable();
                 $table->string('name', 220);
@@ -97,7 +98,7 @@ return new class extends Migration
         if (! Schema::hasTable('moral_assessments')) {
             Schema::create('moral_assessments', function (Blueprint $table): void {
                 $table->id();
-                $table->foreignId('student_id')->constrained()->cascadeOnDelete();
+                $this->addStudentForeignId($table);
                 $table->string('academic_term', 16)->index();
                 $table->json('scores');
                 $table->decimal('average_score', 5, 2);
@@ -107,6 +108,93 @@ return new class extends Migration
                 $table->unique(['student_id', 'academic_term']);
             });
         }
+
+        // MySQL may leave the base table behind when adding a foreign key
+        // fails. Repair those partial tables so rerunning this migration is
+        // safe against an adopted students table whose id is an INT rather
+        // than Laravel's default BIGINT UNSIGNED.
+        foreach (['registrations', 'grades', 'student_activities', 'moral_assessments'] as $table) {
+            $this->repairStudentForeignId($table);
+        }
+    }
+
+    private function addStudentForeignId(Blueprint $table): void
+    {
+        $this->defineStudentId($table);
+        $table->foreign('student_id')->references('id')->on('students')->cascadeOnDelete();
+    }
+
+    private function repairStudentForeignId(string $table): void
+    {
+        if (! Schema::hasTable($table) || ! Schema::hasColumn($table, 'student_id')) {
+            return;
+        }
+
+        if ($this->hasStudentForeignKey($table)) {
+            return;
+        }
+
+        $hasOrphans = DB::table($table.' as child')
+            ->leftJoin('students', 'students.id', '=', 'child.student_id')
+            ->whereNotNull('child.student_id')
+            ->whereNull('students.id')
+            ->exists();
+
+        if ($hasOrphans) {
+            return;
+        }
+
+        if (! $this->studentIdTypesMatch($table)) {
+            Schema::table($table, function (Blueprint $blueprint): void {
+                $this->defineStudentId($blueprint, change: true);
+            });
+        }
+
+        Schema::table($table, function (Blueprint $blueprint): void {
+            $blueprint->foreign('student_id')->references('id')->on('students')->cascadeOnDelete();
+        });
+    }
+
+    private function defineStudentId(Blueprint $table, bool $change = false): void
+    {
+        $type = strtolower(Schema::getColumnType('students', 'id', true));
+        $unsigned = str_contains($type, 'unsigned');
+
+        $column = str_contains($type, 'bigint')
+            ? ($unsigned ? $table->unsignedBigInteger('student_id') : $table->bigInteger('student_id'))
+            : ($unsigned ? $table->unsignedInteger('student_id') : $table->integer('student_id'));
+
+        if ($change) {
+            $column->change();
+        }
+    }
+
+    private function studentIdTypesMatch(string $table): bool
+    {
+        return $this->normalizedIntegerType(Schema::getColumnType('students', 'id', true))
+            === $this->normalizedIntegerType(Schema::getColumnType($table, 'student_id', true));
+    }
+
+    private function normalizedIntegerType(string $type): string
+    {
+        $type = strtolower($type);
+
+        return sprintf(
+            '%s%s',
+            str_contains($type, 'unsigned') ? 'unsigned_' : '',
+            str_contains($type, 'bigint') ? 'bigint' : 'integer',
+        );
+    }
+
+    private function hasStudentForeignKey(string $table): bool
+    {
+        foreach (Schema::getForeignKeys($table) as $foreignKey) {
+            if ($foreignKey['columns'] === ['student_id'] && $foreignKey['foreign_table'] === 'students') {
+                return true;
+            }
+        }
+
+        return false;
     }
 
     public function down(): void

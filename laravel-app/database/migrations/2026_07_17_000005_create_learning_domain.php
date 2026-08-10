@@ -2,6 +2,7 @@
 
 use Illuminate\Database\Migrations\Migration;
 use Illuminate\Database\Schema\Blueprint;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Schema;
 
 return new class extends Migration
@@ -31,7 +32,7 @@ return new class extends Migration
             Schema::create('learning_submissions', function (Blueprint $table): void {
                 $table->id();
                 $table->foreignId('assignment_id')->constrained('learning_assignments')->cascadeOnDelete();
-                $table->foreignId('student_id')->constrained()->cascadeOnDelete();
+                $this->addStudentForeignId($table);
                 $table->text('content')->nullable();
                 $table->string('attachment_disk', 40)->nullable();
                 $table->string('attachment_path')->nullable();
@@ -46,6 +47,8 @@ return new class extends Migration
                 $table->unique(['assignment_id', 'student_id']);
             });
         }
+
+        $this->repairStudentForeignId('learning_submissions');
 
         if (! Schema::hasTable('learning_resources')) {
             Schema::create('learning_resources', function (Blueprint $table): void {
@@ -129,6 +132,85 @@ return new class extends Migration
                 $table->unique(['district_id', 'academic_term', 'subject_code', 'student_code'], 'exam_room_student_subject');
             });
         }
+    }
+
+    private function addStudentForeignId(Blueprint $table): void
+    {
+        $this->defineStudentId($table);
+        $table->foreign('student_id')->references('id')->on('students')->cascadeOnDelete();
+    }
+
+    private function repairStudentForeignId(string $table): void
+    {
+        if (! Schema::hasTable($table) || ! Schema::hasColumn($table, 'student_id')) {
+            return;
+        }
+
+        if ($this->hasStudentForeignKey($table)) {
+            return;
+        }
+
+        $hasOrphans = DB::table($table.' as child')
+            ->leftJoin('students', 'students.id', '=', 'child.student_id')
+            ->whereNotNull('child.student_id')
+            ->whereNull('students.id')
+            ->exists();
+
+        if ($hasOrphans) {
+            return;
+        }
+
+        if (! $this->studentIdTypesMatch($table)) {
+            Schema::table($table, function (Blueprint $blueprint): void {
+                $this->defineStudentId($blueprint, change: true);
+            });
+        }
+
+        Schema::table($table, function (Blueprint $blueprint): void {
+            $blueprint->foreign('student_id')->references('id')->on('students')->cascadeOnDelete();
+        });
+    }
+
+    private function defineStudentId(Blueprint $table, bool $change = false): void
+    {
+        $type = strtolower(Schema::getColumnType('students', 'id', true));
+        $unsigned = str_contains($type, 'unsigned');
+
+        $column = str_contains($type, 'bigint')
+            ? ($unsigned ? $table->unsignedBigInteger('student_id') : $table->bigInteger('student_id'))
+            : ($unsigned ? $table->unsignedInteger('student_id') : $table->integer('student_id'));
+
+        if ($change) {
+            $column->change();
+        }
+    }
+
+    private function studentIdTypesMatch(string $table): bool
+    {
+        return $this->normalizedIntegerType(Schema::getColumnType('students', 'id', true))
+            === $this->normalizedIntegerType(Schema::getColumnType($table, 'student_id', true));
+    }
+
+    private function normalizedIntegerType(string $type): string
+    {
+        $type = strtolower($type);
+
+        return sprintf(
+            '%s%s',
+            str_contains($type, 'unsigned') ? 'unsigned_' : '',
+            str_contains($type, 'bigint') ? 'bigint' : 'integer',
+        );
+    }
+
+    private function hasStudentForeignKey(string $table): bool
+    {
+        foreach (Schema::getForeignKeys($table) as $foreignKey) {
+            if ($foreignKey['columns'] === ['student_id'] && $foreignKey['foreign_table'] === 'students') {
+                return true;
+            }
+        }
+
+        return false;
     }
 
     public function down(): void
