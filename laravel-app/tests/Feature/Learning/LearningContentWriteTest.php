@@ -349,6 +349,56 @@ final class LearningContentWriteTest extends TestCase
         $this->get("/api/v1/learning/calendar/{$eventId}/image")->assertOk();
     }
 
+    public function test_legacy_student_audience_label_is_visible_to_every_group_in_the_district(): void
+    {
+        Storage::fake('local');
+        $creator = User::factory()->create([
+            'role' => 'admin',
+            'district_id' => $this->district->id,
+        ]);
+        $eventId = (int) DB::table('learning_calendar_events')->insertGetId([
+            'district_id' => $this->district->id,
+            'created_by' => $creator->id,
+            'title' => 'กิจกรรมสำหรับนักศึกษาทุกคน',
+            'event_type' => 'activity',
+            'starts_at' => '2026-08-26 09:00:00',
+            'ends_at' => '2026-08-26 12:00:00',
+            'target_type' => 'group',
+            'target_value' => 'นักศึกษา',
+            'created_at' => now(),
+            'updated_at' => now(),
+        ]);
+        $imagePath = "learning/calendar/{$this->district->id}/{$eventId}/activity.jpg";
+        DB::table('learning_calendar_events')->where('id', $eventId)->update(['image_path' => $imagePath]);
+        Storage::disk('local')->put($imagePath, 'image-data');
+        DB::table('learning_resources')->insert([
+            'district_id' => $this->district->id,
+            'uploaded_by' => $creator->id,
+            'title' => 'สื่อสำหรับนักศึกษาทุกคน',
+            'resource_type' => 'link',
+            'external_url' => 'https://example.test/resource',
+            'visibility' => 'district',
+            'target_group' => 'นักศึกษา',
+            'created_at' => now(),
+            'updated_at' => now(),
+        ]);
+
+        Sanctum::actingAs(User::factory()->create([
+            'role' => 'student',
+            'district_id' => $this->district->id,
+            'assigned_groups' => ['GROUP-NOT-IN-CATALOG'],
+        ]));
+
+        $this->getJson('/api/v1/learning/calendar')
+            ->assertOk()
+            ->assertJsonPath('data.0.id', 'event-'.$eventId)
+            ->assertJsonPath('data.0.image_url', fn (string $url): bool => str_contains($url, "/calendar/{$eventId}/image"));
+        $this->get("/api/v1/learning/calendar/{$eventId}/image")->assertOk();
+        $this->getJson('/api/v1/learning/resources')
+            ->assertOk()
+            ->assertJsonPath('data.0.title', 'สื่อสำหรับนักศึกษาทุกคน');
+    }
+
     public function test_learning_reads_use_only_canonical_system_tables(): void
     {
         $teacher = User::factory()->create([

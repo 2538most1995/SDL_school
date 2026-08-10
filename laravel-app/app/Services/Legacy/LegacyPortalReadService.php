@@ -517,8 +517,13 @@ final class LegacyPortalReadService
     {
         if ($viewer->role === 'student') {
             $groups = $this->groups($viewer, (int) $viewer->district_id);
-            $query->where(function (Builder $scope) use ($alias, $groups): void {
+            $legacyAllTargets = $this->groupCatalog->legacyAllStudentTargets();
+            $query->where(function (Builder $scope) use ($alias, $groups, $legacyAllTargets): void {
                 $scope->where("{$alias}.target_type", 'all');
+                $scope->orWhere(function (Builder $legacyScope) use ($alias, $legacyAllTargets): void {
+                    $legacyScope->where("{$alias}.target_type", 'group')
+                        ->whereIn("{$alias}.target_value", $legacyAllTargets);
+                });
                 if ($groups !== []) {
                     $scope->orWhere(function (Builder $groupScope) use ($alias, $groups): void {
                         $groupScope->where("{$alias}.target_type", 'group')
@@ -552,8 +557,10 @@ final class LegacyPortalReadService
     ): void {
         $groups = $this->groups($viewer, (int) $viewer->district_id);
         if ($viewer->role === 'student') {
-            $query->where(function (Builder $scope) use ($alias, $groupColumn, $groups): void {
+            $legacyAllTargets = $this->groupCatalog->legacyAllStudentTargets();
+            $query->where(function (Builder $scope) use ($alias, $groupColumn, $groups, $legacyAllTargets): void {
                 $scope->whereNull("{$alias}.{$groupColumn}")->orWhere("{$alias}.{$groupColumn}", '');
+                $scope->orWhereIn("{$alias}.{$groupColumn}", $legacyAllTargets);
                 if ($groups !== []) {
                     $scope->orWhereIn("{$alias}.{$groupColumn}", $groups);
                 }

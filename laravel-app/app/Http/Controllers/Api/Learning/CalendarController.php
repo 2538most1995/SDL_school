@@ -56,8 +56,12 @@ final class CalendarController extends Controller
 
         if ($viewer->role === 'student') {
             $groups = $groupCatalog->aliasesForViewer($viewer, (int) $districtId);
-            $query->where(function ($scope) use ($groups): void {
+            $legacyAllTargets = $groupCatalog->legacyAllStudentTargets();
+            $query->where(function ($scope) use ($groups, $legacyAllTargets): void {
                 $scope->where('target_type', 'all');
+                $scope->orWhere(fn ($legacyScope) => $legacyScope
+                    ->where('target_type', 'group')
+                    ->whereIn('target_value', $legacyAllTargets));
                 if ($groups !== []) {
                     $scope->orWhere(fn ($groupScope) => $groupScope
                         ->where('target_type', 'group')

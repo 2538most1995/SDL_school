@@ -8,6 +8,9 @@ use Illuminate\Database\DatabaseManager;
 
 final class DistrictLearningGroupCatalog
 {
+    /** @var list<string> */
+    private const LEGACY_ALL_STUDENT_TARGETS = ['นักศึกษา', 'นักเรียน', 'ทุกกลุ่ม', 'ทั้งหมด'];
+
     /** @var array<int, list<array{code: string, name: string, label: string, level: string|null}>> */
     private array $groupsByDistrict = [];
 
@@ -158,6 +161,17 @@ final class DistrictLearningGroupCatalog
         }
 
         return false;
+    }
+
+    /**
+     * Older free-text forms commonly stored one of these audience labels as if
+     * it were a group name. They mean every student in the same district.
+     *
+     * @return list<string>
+     */
+    public function legacyAllStudentTargets(): array
+    {
+        return self::LEGACY_ALL_STUDENT_TARGETS;
     }
 
     /** @param array<int, mixed> $values
