@@ -127,7 +127,16 @@ final class LearningContentWriteTest extends TestCase
             $table->dropColumn(['education_level', 'target_group']);
         });
         Schema::table('learning_calendar_events', function ($table): void {
-            $table->dropColumn(['image_path', 'image_updated_at']);
+            $table->dropColumn(['location', 'image_path', 'image_updated_at']);
+        });
+        Schema::table('learning_assignments', function ($table): void {
+            $table->dropColumn('instructions');
+        });
+        Schema::table('learning_submissions', function ($table): void {
+            $table->dropColumn('attachment_disk');
+        });
+        Schema::table('learning_lesson_plans', function ($table): void {
+            $table->dropColumn('objectives');
         });
         Schema::drop('audit_logs');
 
@@ -146,6 +155,10 @@ final class LearningContentWriteTest extends TestCase
         $this->assertTrue(Schema::hasTable('audit_logs'));
         $this->assertTrue(Schema::hasColumn('learning_calendar_events', 'image_path'));
         $this->assertTrue(Schema::hasColumn('learning_calendar_events', 'image_updated_at'));
+        $this->assertTrue(Schema::hasColumn('learning_calendar_events', 'location'));
+        $this->assertTrue(Schema::hasColumn('learning_assignments', 'instructions'));
+        $this->assertTrue(Schema::hasColumn('learning_submissions', 'attachment_disk'));
+        $this->assertTrue(Schema::hasColumn('learning_lesson_plans', 'objectives'));
         $this->assertDatabaseHas('learning_resources', [
             'title' => 'สื่อหลัง deploy ผ่าน Git',
             'education_level' => 3,

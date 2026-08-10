@@ -62,6 +62,11 @@ export function StatTile({ label, value, detail, icon: Icon, tone = 'emerald' }:
                 backgroundImage: 'linear-gradient(150deg, color-mix(in srgb, var(--metric-surface) 92%, white), color-mix(in srgb, var(--metric-surface) 72%, white))',
                 boxShadow: '0 12px 28px color-mix(in srgb, var(--metric-accent) 8%, transparent), 0 2px 4px rgb(var(--ui-shadow) / 0.05)',
                 transition: 'transform 160ms cubic-bezier(0.23, 1, 0.32, 1), border-color 160ms ease, box-shadow 160ms ease',
+                '[data-ui-mode="dark"] &': {
+                    borderColor: 'color-mix(in srgb, var(--metric-accent) 38%, var(--ui-border))',
+                    bgcolor: 'color-mix(in srgb, var(--metric-accent) 12%, var(--ui-surface))',
+                    backgroundImage: 'linear-gradient(150deg, color-mix(in srgb, var(--metric-accent) 16%, var(--ui-surface)), var(--ui-surface))',
+                },
                 '@media (hover: hover) and (pointer: fine)': {
                     '&:hover': {
                         transform: 'translateY(-3px)',
@@ -92,7 +97,7 @@ export function StatTile({ label, value, detail, icon: Icon, tone = 'emerald' }:
             }}
         >
             <Box sx={{ position: 'relative', zIndex: 1, display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: 2 }}>
-                <Typography component="p" variant="body1" sx={{ minWidth: 0, color: 'var(--metric-accent-strong)', lineHeight: '22px', fontWeight: 700 }}>
+                <Typography component="p" variant="body1" sx={{ minWidth: 0, color: 'var(--metric-accent-strong)', lineHeight: '22px', fontWeight: 700, '[data-ui-mode="dark"] &': { color: 'color-mix(in srgb, var(--metric-accent) 44%, white)' } }}>
                     {label}
                 </Typography>
                 <Box
@@ -109,6 +114,11 @@ export function StatTile({ label, value, detail, icon: Icon, tone = 'emerald' }:
                         bgcolor: 'color-mix(in srgb, white 84%, var(--metric-surface))',
                         border: '1px solid color-mix(in srgb, var(--metric-accent) 20%, transparent)',
                         boxShadow: '0 8px 18px color-mix(in srgb, var(--metric-accent) 10%, transparent)',
+                        '[data-ui-mode="dark"] &': {
+                            color: 'color-mix(in srgb, var(--metric-accent) 46%, white)',
+                            bgcolor: 'color-mix(in srgb, var(--metric-accent) 18%, var(--ui-surface))',
+                            borderColor: 'color-mix(in srgb, var(--metric-accent) 36%, var(--ui-border))',
+                        },
                     }}
                 >
                     <Icon size={29} weight="duotone" />

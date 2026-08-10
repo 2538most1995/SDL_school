@@ -80,6 +80,12 @@ function buildTheme(settings: AppearanceSettings, mode: 'light' | 'dark'): Theme
                             boxShadow: '0 9px 22px color-mix(in srgb, var(--ui-accent-700) 30%, transparent)',
                         },
                     },
+                    textPrimary: {
+                        color: mode === 'dark' ? 'var(--ui-accent-200)' : brandPalettes[settings.colorScheme].main,
+                    },
+                    outlinedPrimary: {
+                        color: mode === 'dark' ? 'var(--ui-accent-200)' : brandPalettes[settings.colorScheme].main,
+                    },
                     outlined: {
                         borderColor: 'var(--ui-border-strong)',
                         backgroundColor: 'color-mix(in srgb, var(--ui-surface) 94%, var(--ui-accent-50))',

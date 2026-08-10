@@ -748,6 +748,25 @@ textarea {
     color: var(--ui-accent-200);
 }
 
+[data-ui-mode='dark'] .portal-shell :where(.text-brand-600, .text-brand-500) {
+    color: var(--ui-accent-300);
+}
+
+[data-ui-mode='dark'] .portal-shell .user-menu-trigger,
+[data-ui-mode='dark'] .portal-shell .portal-topbar .MuiButton-textPrimary,
+[data-ui-mode='dark'] .portal-shell .portal-topbar .MuiIconButton-colorPrimary {
+    color: var(--ui-accent-200);
+}
+
+[data-ui-mode='dark'] .portal-shell .metric-detail-button {
+    border-color: var(--ui-accent-500);
+    color: var(--ui-accent-200);
+}
+
+[data-ui-mode='dark'] .portal-shell .metric-detail-button:hover {
+    background: color-mix(in srgb, var(--ui-accent-800) 30%, var(--ui-surface));
+}
+
 [data-ui-mode='dark'] .portal-shell :where(.text-sky-900, .text-sky-800, .text-sky-700) {
     color: #bae6fd;
 }
