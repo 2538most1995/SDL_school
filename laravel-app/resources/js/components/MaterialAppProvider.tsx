@@ -72,6 +72,9 @@ function buildTheme(settings: AppearanceSettings, mode: 'light' | 'dark'): Theme
                         '&:active:not(:disabled)': {
                             transform: 'scale(0.97)',
                         },
+                        '&.MuiButton-textPrimary, &.MuiButton-outlinedPrimary': {
+                            color: mode === 'dark' ? 'var(--ui-accent-200)' : brandPalettes[settings.colorScheme].main,
+                        },
                     },
                     sizeLarge: { minHeight: 48, paddingInline: 20 },
                     contained: {
@@ -79,12 +82,6 @@ function buildTheme(settings: AppearanceSettings, mode: 'light' | 'dark'): Theme
                         '&:hover': {
                             boxShadow: '0 9px 22px color-mix(in srgb, var(--ui-accent-700) 30%, transparent)',
                         },
-                    },
-                    textPrimary: {
-                        color: mode === 'dark' ? 'var(--ui-accent-200)' : brandPalettes[settings.colorScheme].main,
-                    },
-                    outlinedPrimary: {
-                        color: mode === 'dark' ? 'var(--ui-accent-200)' : brandPalettes[settings.colorScheme].main,
                     },
                     outlined: {
                         borderColor: 'var(--ui-border-strong)',

@@ -200,7 +200,16 @@ function StudentCalendar({ events }: { events: CalendarItem[] }) {
     );
 }
 
-function StudentFeaturedActivity({ item, imageUrl, loading }: { item?: CalendarItem; imageUrl: string; loading: boolean }) {
+const calendarTypeLabel: Record<CalendarItem['type'], string> = {
+    assignment: 'งาน',
+    activity: 'กิจกรรม',
+    meeting: 'พบกลุ่ม',
+    exam: 'สอบ',
+};
+
+function StudentFeaturedActivity({ item, loading }: { item?: CalendarItem; loading: boolean }) {
+    const imageUrl = item?.image_url ? withAppBasePath(item.image_url) : null;
+
     return (
         <section className="student-feature" aria-labelledby="student-feature-title">
             <div className="flex items-center justify-between gap-3">
@@ -214,9 +223,9 @@ function StudentFeaturedActivity({ item, imageUrl, loading }: { item?: CalendarI
             </div>
             {loading ? (
                 <div className="mt-5 aspect-[16/9] animate-pulse rounded-[16px] bg-slate-100" />
-            ) : item ? (
+            ) : item && imageUrl ? (
                 <Link to="/learning/calendar" className="student-feature__media group mt-5">
-                    <img src={imageUrl} alt="ภาพประกอบกิจกรรมของนักศึกษา" className="size-full object-cover" />
+                    <img src={imageUrl} alt={`ภาพประกอบ ${item.title}`} className="size-full object-cover" />
                     <span className="student-feature__scrim" aria-hidden="true" />
                     <span className="student-feature__caption">
                         <strong className="block text-base font-black leading-6 text-white sm:text-lg">{item.title}</strong>
@@ -224,6 +233,18 @@ function StudentFeaturedActivity({ item, imageUrl, loading }: { item?: CalendarI
                             <time dateTime={item.starts_at}>{formatEventDate(item.starts_at)}</time>
                             {item.location && <span>{item.location}</span>}
                         </span>
+                    </span>
+                </Link>
+            ) : item ? (
+                <Link to="/learning/calendar" className="student-feature__empty mt-5">
+                    {item.type === 'exam'
+                        ? <Bell size={30} weight="duotone" aria-hidden="true" />
+                        : <CalendarBlank size={30} weight="duotone" aria-hidden="true" />}
+                    <span>{calendarTypeLabel[item.type]}</span>
+                    <strong>{item.title}</strong>
+                    <span>
+                        {formatEventDate(item.starts_at)}
+                        {item.location ? ` · ${item.location}` : ''}
                     </span>
                 </Link>
             ) : (
@@ -297,19 +318,17 @@ function StudentDashboard({
     profile,
     events,
     calendarPending,
-    activityImageUrl,
 }: {
     portal: PortalData;
     profile?: StudentProfile;
     events: CalendarItem[];
     calendarPending: boolean;
-    activityImageUrl: string;
 }) {
     const analytics = portal.analytics;
-    const activities = events
-        .filter((item) => item.type === 'meeting' || item.type === 'activity')
+    const calendarEvents = events
+        .filter((item) => item.type !== 'assignment')
         .sort((left, right) => eventTimestamp(right) - eventTimestamp(left));
-    const latestActivity = activities.find((item) => Boolean(item.image_url)) ?? activities[0];
+    const latestActivity = calendarEvents[0];
     const moralResult = analytics.moral.find((item) => item.value > 0)?.label ?? 'ยังไม่มีผล';
     const viewedAt = new Intl.DateTimeFormat('th-TH', {
         day: 'numeric', month: 'long', year: 'numeric', hour: '2-digit', minute: '2-digit',
@@ -341,7 +360,7 @@ function StudentDashboard({
                     </header>
                     <div className="student-dashboard-shell__content">
                         <StudentCalendar events={events} />
-                        <StudentFeaturedActivity item={latestActivity} imageUrl={latestActivity?.image_url ? withAppBasePath(latestActivity.image_url) : activityImageUrl} loading={calendarPending} />
+                        <StudentFeaturedActivity item={latestActivity} loading={calendarPending} />
                     </div>
                 </div>
                 <StudentTermPanel term={analytics.current_term} profile={profile} viewedAt={viewedAt} />
@@ -523,7 +542,6 @@ export function DashboardHomePage() {
                 profile={studentProfile.data}
                 events={events}
                 calendarPending={calendar.isPending}
-                activityImageUrl={withAppBasePath('/images/sena-students-hero.png')}
             />
         );
     }
