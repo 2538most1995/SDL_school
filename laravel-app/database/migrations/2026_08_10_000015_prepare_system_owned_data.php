@@ -51,16 +51,28 @@ return new class extends Migration
 
         Schema::table('learning_resources', function (Blueprint $table): void {
             if (! Schema::hasColumn('learning_resources', 'education_level')) {
-                $table->unsignedTinyInteger('education_level')->nullable()->index()->after('subject_code');
+                $column = $table->unsignedTinyInteger('education_level')->nullable()->index();
+
+                if (Schema::hasColumn('learning_resources', 'subject_code')) {
+                    $column->after('subject_code');
+                }
             }
             if (! Schema::hasColumn('learning_resources', 'target_group')) {
-                $table->string('target_group', 120)->nullable()->index()->after('visibility');
+                $column = $table->string('target_group', 120)->nullable()->index();
+
+                if (Schema::hasColumn('learning_resources', 'visibility')) {
+                    $column->after('visibility');
+                }
             }
         });
 
         Schema::table('learning_lesson_plans', function (Blueprint $table): void {
             if (! Schema::hasColumn('learning_lesson_plans', 'education_level')) {
-                $table->unsignedTinyInteger('education_level')->nullable()->index()->after('subject_code');
+                $column = $table->unsignedTinyInteger('education_level')->nullable()->index();
+
+                if (Schema::hasColumn('learning_lesson_plans', 'subject_code')) {
+                    $column->after('subject_code');
+                }
             }
         });
     }
