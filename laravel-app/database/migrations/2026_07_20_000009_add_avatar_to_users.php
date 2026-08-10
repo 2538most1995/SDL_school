@@ -8,10 +8,15 @@ return new class extends Migration
 {
     public function up(): void
     {
-        Schema::table('users', function (Blueprint $table): void {
-            $table->string('avatar_path')->nullable()->after('contact_email');
-            $table->timestamp('avatar_updated_at')->nullable()->after('avatar_path');
-        });
+        $columns = [
+            'avatar_path' => fn (Blueprint $table) => $table->string('avatar_path')->nullable()->after('contact_email'),
+            'avatar_updated_at' => fn (Blueprint $table) => $table->timestamp('avatar_updated_at')->nullable()->after('avatar_path'),
+        ];
+        foreach ($columns as $column => $definition) {
+            if (! Schema::hasColumn('users', $column)) {
+                Schema::table('users', $definition);
+            }
+        }
     }
 
     public function down(): void

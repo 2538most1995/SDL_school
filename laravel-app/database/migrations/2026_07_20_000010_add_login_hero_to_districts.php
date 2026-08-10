@@ -8,10 +8,15 @@ return new class extends Migration
 {
     public function up(): void
     {
-        Schema::table('districts', function (Blueprint $table): void {
-            $table->string('login_hero_path')->nullable()->after('primary_color');
-            $table->timestamp('login_hero_updated_at')->nullable()->after('login_hero_path');
-        });
+        $columns = [
+            'login_hero_path' => fn (Blueprint $table) => $table->string('login_hero_path')->nullable()->after('primary_color'),
+            'login_hero_updated_at' => fn (Blueprint $table) => $table->timestamp('login_hero_updated_at')->nullable()->after('login_hero_path'),
+        ];
+        foreach ($columns as $column => $definition) {
+            if (! Schema::hasColumn('districts', $column)) {
+                Schema::table('districts', $definition);
+            }
+        }
     }
 
     public function down(): void

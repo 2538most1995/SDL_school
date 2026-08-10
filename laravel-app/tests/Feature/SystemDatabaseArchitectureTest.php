@@ -32,4 +32,23 @@ final class SystemDatabaseArchitectureTest extends TestCase
         $this->assertArrayNotHasKey('connection', config('system_data'));
         $this->assertArrayNotHasKey('write_connection', config('system_data'));
     }
+
+    public function test_non_interactive_admin_command_generates_a_temporary_password(): void
+    {
+        $this->artisan('system:create-admin', [
+            '--username' => 'scheduled.owner',
+            '--name' => 'ผู้ดูแล Scheduled Task',
+            '--super-admin' => true,
+            '--no-interaction' => true,
+        ])
+            ->expectsOutputToContain('สร้างบัญชีผู้ดูแลในฐานข้อมูลระบบเรียบร้อยแล้ว')
+            ->expectsOutputToContain('รหัสผ่านชั่วคราว:')
+            ->assertSuccessful();
+
+        $this->assertDatabaseHas('users', [
+            'username' => 'scheduled.owner',
+            'role' => 'super_admin',
+            'auth_source' => 'local',
+        ]);
+    }
 }

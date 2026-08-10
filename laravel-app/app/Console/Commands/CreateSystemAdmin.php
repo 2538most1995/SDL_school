@@ -7,6 +7,7 @@ use App\Models\User;
 use Illuminate\Console\Command;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Hash;
+use Illuminate\Support\Str;
 
 final class CreateSystemAdmin extends Command
 {
@@ -22,10 +23,19 @@ final class CreateSystemAdmin extends Command
 
     public function handle(): int
     {
-        $username = trim((string) ($this->option('username') ?: $this->ask('ชื่อผู้ใช้')));
-        $password = (string) ($this->option('password') ?: $this->secret('รหัสผ่าน'));
-        $name = trim((string) ($this->option('name') ?: $this->ask('ชื่อที่แสดง')));
+        $interactive = $this->input->isInteractive();
+        $username = trim((string) ($this->option('username') ?: ($interactive ? $this->ask('ชื่อผู้ใช้') : '')));
+        $password = (string) ($this->option('password')
+            ?: getenv('SYSTEM_BOOTSTRAP_ADMIN_PASSWORD')
+            ?: ($interactive ? $this->secret('รหัสผ่าน') : ''));
+        $name = trim((string) ($this->option('name') ?: ($interactive ? $this->ask('ชื่อที่แสดง') : '')));
         $superAdmin = (bool) $this->option('super-admin');
+        $generatedPassword = false;
+
+        if ($password === '' && ! $interactive) {
+            $password = Str::random(24);
+            $generatedPassword = true;
+        }
 
         if (preg_match('/^[A-Za-z0-9._@-]{3,50}$/', $username) !== 1) {
             $this->error('ชื่อผู้ใช้ต้องยาว 3-50 ตัว และใช้เฉพาะ A-Z, 0-9, จุด, ขีด, @ หรือ _');
@@ -50,8 +60,8 @@ final class CreateSystemAdmin extends Command
 
         $district = null;
         if (! $superAdmin) {
-            $districtCode = trim((string) ($this->option('district-code') ?: $this->ask('รหัสอำเภอ')));
-            $districtName = trim((string) ($this->option('district-name') ?: $this->ask('ชื่ออำเภอ')));
+            $districtCode = trim((string) ($this->option('district-code') ?: ($interactive ? $this->ask('รหัสอำเภอ') : '')));
+            $districtName = trim((string) ($this->option('district-name') ?: ($interactive ? $this->ask('ชื่ออำเภอ') : '')));
             if (preg_match('/^[A-Za-z0-9_-]{2,40}$/', $districtCode) !== 1 || $districtName === '') {
                 $this->error('กรุณาระบุรหัสและชื่ออำเภอให้ถูกต้อง');
 
@@ -80,6 +90,10 @@ final class CreateSystemAdmin extends Command
         });
 
         $this->info('สร้างบัญชีผู้ดูแลในฐานข้อมูลระบบเรียบร้อยแล้ว');
+        if ($generatedPassword) {
+            $this->warn("รหัสผ่านชั่วคราว: {$password}");
+            $this->warn('กรุณาบันทึกรหัสผ่านนี้และเปลี่ยนทันทีหลังเข้าสู่ระบบ');
+        }
 
         return self::SUCCESS;
     }

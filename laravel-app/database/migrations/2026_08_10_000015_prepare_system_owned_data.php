@@ -20,22 +20,32 @@ return new class extends Migration
             });
         }
 
-        DB::table('users')
-            ->where(function ($query): void {
-                $query->whereNull('first_name')->orWhere('first_name', '');
-            })
-            ->orderBy('id')
+        DB::table('users')->orderBy('id')
             ->chunkById(200, function ($users): void {
                 foreach ($users as $user) {
-                    [$firstName, $lastName] = array_pad(
-                        preg_split('/\s+/u', trim((string) $user->name), 2) ?: [],
-                        2,
-                        '',
-                    );
-                    DB::table('users')->where('id', $user->id)->update([
-                        'first_name' => $firstName,
+                    $name = trim((string) ($user->name ?? ''));
+                    $firstName = trim((string) ($user->first_name ?? ''));
+                    $lastName = trim((string) ($user->last_name ?? ''));
+                    if ($firstName === '') {
+                        [$firstName, $splitLastName] = array_pad(
+                            preg_split('/\s+/u', $name, 2) ?: [],
+                            2,
+                            '',
+                        );
+                        $lastName = $lastName ?: $splitLastName;
+                    }
+                    $name = $name ?: trim($firstName.' '.$lastName);
+                    $username = trim((string) ($user->username ?? '')) ?: 'user-'.$user->id;
+                    $email = trim((string) ($user->email ?? ''))
+                        ?: 'user+'.hash('sha256', mb_strtolower($username)).'@system.invalid';
+
+                    DB::table('users')->where('id', $user->id)->update(array_filter([
+                        'name' => $name ?: $username,
+                        'email' => $email,
+                        'first_name' => $firstName ?: $name ?: $username,
                         'last_name' => $lastName,
-                    ]);
+                        'auth_source' => 'local',
+                    ], static fn (mixed $value): bool => $value !== null));
                 }
             });
 

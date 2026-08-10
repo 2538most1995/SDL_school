@@ -2,6 +2,7 @@
 
 use Illuminate\Database\Migrations\Migration;
 use Illuminate\Database\Schema\Blueprint;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Schema;
 
 /**
@@ -105,7 +106,7 @@ return new class extends Migration
             });
 
             // Step 2: Copy existing student_code data into start_val.
-            \Illuminate\Support\Facades\DB::statement(
+            DB::statement(
                 'UPDATE exam_rooms SET start_val = student_code WHERE student_code IS NOT NULL'
             );
 
@@ -170,8 +171,8 @@ return new class extends Migration
     private function dropIndexByName(string $indexName): void
     {
         try {
-            \Illuminate\Support\Facades\DB::statement("DROP INDEX IF EXISTS \"{$indexName}\"");
-        } catch (\Throwable) {
+            DB::statement("DROP INDEX IF EXISTS \"{$indexName}\"");
+        } catch (Throwable) {
             // Silently ignore — the index may have already been removed.
         }
     }
@@ -182,7 +183,7 @@ return new class extends Migration
             Schema::table($tableName, function (Blueprint $table) use ($columns, $indexName): void {
                 $table->index($columns, $indexName);
             });
-        } catch (\Throwable) {
+        } catch (Throwable) {
             // Index already exists — safe to ignore.
         }
     }
@@ -196,7 +197,7 @@ return new class extends Migration
                     $table->string('student_code', 32)->nullable()->index();
                 });
 
-                \Illuminate\Support\Facades\DB::statement(
+                DB::statement(
                     'UPDATE exam_rooms SET student_code = start_val WHERE start_val IS NOT NULL'
                 );
 
@@ -229,7 +230,7 @@ return new class extends Migration
             Schema::table('import_batches', function (Blueprint $table): void {
                 try {
                     $table->dropForeign(['import_history_id']);
-                } catch (\Throwable) {
+                } catch (Throwable) {
                     // FK may not exist on SQLite — safe to ignore.
                 }
                 $table->dropColumn('import_history_id');

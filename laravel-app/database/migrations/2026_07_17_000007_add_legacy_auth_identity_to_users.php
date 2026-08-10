@@ -8,18 +8,22 @@ return new class extends Migration
 {
     public function up(): void
     {
-        Schema::table('users', function (Blueprint $table): void {
-            $table->string('legacy_key', 120)->nullable()->unique()->after('username');
-            $table->unsignedBigInteger('legacy_user_id')->nullable()->index()->after('legacy_key');
-            $table->string('student_code', 32)->nullable()->index()->after('legacy_user_id');
-            $table->string('auth_source', 24)->default('local')->index()->after('student_code');
-        });
+        $columns = [
+            'student_code' => fn (Blueprint $table) => $table->string('student_code', 32)->nullable()->index()->after('username'),
+            'auth_source' => fn (Blueprint $table) => $table->string('auth_source', 24)->default('local')->index()->after('student_code'),
+        ];
+
+        foreach ($columns as $column => $definition) {
+            if (! Schema::hasColumn('users', $column)) {
+                Schema::table('users', $definition);
+            }
+        }
     }
 
     public function down(): void
     {
         Schema::table('users', function (Blueprint $table): void {
-            $table->dropColumn(['legacy_key', 'legacy_user_id', 'student_code', 'auth_source']);
+            $table->dropColumn(['student_code', 'auth_source']);
         });
     }
 };

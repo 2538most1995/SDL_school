@@ -38,6 +38,18 @@ php artisan system:create-admin \
 
 คำสั่งจะถามรหัสผ่านแบบซ่อนค่า หากต้องการผู้ดูแลทุกอำเภอให้ใช้ `--super-admin` และไม่ต้องระบุอำเภอ
 
+สำหรับ Plesk Scheduled Task ซึ่งรับคำถามแบบโต้ตอบไม่ได้ ให้ส่ง `--no-interaction` โดยไม่ต้องส่งรหัสผ่าน ระบบจะสร้างรหัสผ่านชั่วคราวและแสดงใน output ครั้งเดียว:
+
+```bash
+php artisan system:create-admin \
+  --username=system.admin \
+  --name="ผู้ดูแล ระบบ" \
+  --super-admin \
+  --no-interaction
+```
+
+งาน `migrate` และ `system:create-admin` เป็นงานครั้งเดียว ให้ปิดหรือลบ Scheduled Task หลังทำสำเร็จ
+
 ## Environment production
 
 ```dotenv
@@ -69,6 +81,8 @@ php artisan optimize:clear
 php artisan migrate --force
 npm run build
 ```
+
+Migration รองรับฐานที่มีตารางเดิมอยู่แล้วแต่ migration ledger ว่าง โดยจะตรวจ table/column ก่อนสร้างและไม่ลบข้อมูลหรือ password hash เดิม
 
 จากนั้นนำเข้า ZIP/DBF ผ่านเมนู Admin เพื่อให้ข้อมูลนักศึกษาอยู่ในฐานใหม่ของระบบ ไม่ควร copy หรือ query ข้อมูลจากฐานเก่าโดยตรง
 
