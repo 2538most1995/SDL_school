@@ -89,6 +89,8 @@ final class ImportController extends Controller
                 'status' => 'queued',
                 'message' => 'รับไฟล์แล้วและกำลังเริ่มนำเข้าข้อมูล',
                 'progress' => 0,
+                'queued_at' => now()->toIso8601String(),
+                'updated_at' => now()->toIso8601String(),
             ];
             Cache::put(ProcessLegacyZipImport::cacheKey($jobId), $status, now()->addDay());
 
@@ -105,8 +107,6 @@ final class ImportController extends Controller
                     (int) $request->user()->id,
                     $request->ip(),
                 )->onConnection($queueConnection);
-                RunLegacyImportQueueOnce::dispatch($queueConnection)
-                    ->onConnection((string) config('system_data.import_autostart_connection', 'background'));
             } catch (Throwable $dispatchError) {
                 Log::warning('Queue dispatch failed, running import inline: '.$dispatchError->getMessage());
                 ProcessLegacyZipImport::dispatchSync(
@@ -119,6 +119,9 @@ final class ImportController extends Controller
                     $request->ip(),
                 );
             }
+
+            $this->kickImportQueue($jobId, $queueConnection);
+            $status = Cache::get(ProcessLegacyZipImport::cacheKey($jobId), $status);
 
             return response()->json(['data' => $status, 'meta' => [
                 'source' => 'system_database',
@@ -141,6 +144,9 @@ final class ImportController extends Controller
         $status = Cache::get(ProcessLegacyZipImport::cacheKey($job));
         abort_unless(is_array($status), 404, 'ไม่พบสถานะงานนำเข้า');
         abort_unless((int) ($status['district_id'] ?? 0) === (int) $request->attributes->get('district_id'), 403);
+        if (($status['status'] ?? null) === 'queued') {
+            $this->kickImportQueue($job, (string) config('system_data.import_queue_connection', 'database'));
+        }
 
         return response()->json(['data' => $status, 'meta' => [
             'source' => 'system_database',
@@ -225,6 +231,30 @@ final class ImportController extends Controller
             }
         } catch (Throwable) {
             // Ignore if schema checks fail or table already exists
+        }
+    }
+
+    private function kickImportQueue(string $jobId, string $queueConnection): void
+    {
+        $kickKey = ProcessLegacyZipImport::kickCacheKey($jobId);
+        if (! Cache::add($kickKey, true, now()->addSeconds(15))) {
+            return;
+        }
+
+        try {
+            // The deferred driver runs after the 202 response has been sent and
+            // does not require proc_open or a long-running daemon. This is the
+            // reliable path on Plesk/shared hosting. The OS lock in the runner
+            // still prevents overlap with a scheduled queue worker.
+            RunLegacyImportQueueOnce::dispatch($queueConnection)
+                ->onConnection((string) config('system_data.import_autostart_connection', 'deferred'));
+        } catch (Throwable $exception) {
+            Cache::forget($kickKey);
+            Log::warning('Unable to start deferred import worker', [
+                'job_id' => $jobId,
+                'exception' => $exception::class,
+                'message' => $exception->getMessage(),
+            ]);
         }
     }
 }

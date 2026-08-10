@@ -9,6 +9,9 @@ final class LegacyImportQueueRunner
 {
     public function run(string $connection = 'database', bool $once = false): int
     {
+        @set_time_limit(0);
+        @ignore_user_abort(true);
+
         $lockPath = storage_path('framework/legacy-import-worker.lock');
         $handle = @fopen($lockPath, 'c+');
         if ($handle === false) {
@@ -16,9 +19,9 @@ final class LegacyImportQueueRunner
         }
 
         try {
-            // Both the automatic kicker and the Plesk scheduled fallback use
-            // this same OS-level lock. Only one process may touch the SQLite
-            // database queue at a time, even when cache/config is cleared.
+            // Both the deferred automatic kicker and a Plesk scheduled worker
+            // use this lock. Only one worker may process the import queue even
+            // when cache/config is cleared or the status endpoint retries.
             if (! flock($handle, LOCK_EX | LOCK_NB)) {
                 return 0;
             }

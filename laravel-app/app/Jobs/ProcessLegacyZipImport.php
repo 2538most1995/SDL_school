@@ -62,12 +62,15 @@ final class ProcessLegacyZipImport implements ShouldQueue
     /** @param array<string, mixed> $extra */
     private function updateStatus(string $status, string $message, int $progress, array $extra = []): void
     {
+        $previous = Cache::get(self::cacheKey($this->jobId), []);
         Cache::put(self::cacheKey($this->jobId), [
             'job_id' => $this->jobId,
             'district_id' => $this->districtId,
             'status' => $status,
             'message' => $message,
             'progress' => max(0, min(100, $progress)),
+            'queued_at' => is_array($previous) ? ($previous['queued_at'] ?? null) : null,
+            'updated_at' => now()->toIso8601String(),
             ...$extra,
         ], now()->addDay());
     }
@@ -75,5 +78,10 @@ final class ProcessLegacyZipImport implements ShouldQueue
     public static function cacheKey(string $jobId): string
     {
         return 'legacy-import-job:'.$jobId;
+    }
+
+    public static function kickCacheKey(string $jobId): string
+    {
+        return 'legacy-import-kick:'.$jobId;
     }
 }

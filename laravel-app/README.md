@@ -70,7 +70,6 @@ SENA_DEMO_MODE=false
 SYSTEM_STUDENT_DATA_ENABLED=true
 SYSTEM_WRITES_ENABLED=true
 SYSTEM_IMPORT_QUEUE_CONNECTION=database
-SYSTEM_IMPORT_AUTOSTART_CONNECTION=background
 SYSTEM_DATABASE_SESSIONS=true
 ```
 
@@ -107,11 +106,9 @@ DocumentRoot "/Applications/MAMP/htdocs/SDL_school/laravel-app/public"
 
 กำหนด `APP_URL=http://localhost:8888` และ `SANCTUM_STATEFUL_DOMAINS=localhost:8888,127.0.0.1:8888` แล้ว restart MAMP
 
-ถ้าโฮสต์ไม่อนุญาต background process ให้ประมวลผล queue ด้วย:
+ระบบเริ่มประมวลผล import หลังส่ง HTTP response ด้วย `deferred` driver จึงไม่ต้องเปิด background process และใช้งานได้บน shared hosting ที่ปิด `proc_open` หากต้องการ worker สำรอง ให้ตั้ง Scheduled Task รัน `--once` ทุก 1 นาที:
 
 ```bash
-php artisan system:work-import-queue
-# Scheduled Task:
 php artisan system:work-import-queue --once
 ```
 
