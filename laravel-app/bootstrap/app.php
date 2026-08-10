@@ -1,6 +1,7 @@
 <?php
 
 use App\Http\Middleware\EnsureActiveUser;
+use App\Http\Middleware\EnsureLearningSchema;
 use App\Http\Middleware\EnsureRole;
 use App\Http\Middleware\ResolveDistrictContext;
 use App\Http\Middleware\SecurityHeaders;
@@ -23,6 +24,7 @@ return Application::configure(basePath: dirname(__DIR__))
             'active' => EnsureActiveUser::class,
             'role' => EnsureRole::class,
             'district' => ResolveDistrictContext::class,
+            'learning.schema' => EnsureLearningSchema::class,
         ]);
     })
     ->withExceptions(function (Exceptions $exceptions): void {

@@ -90,6 +90,8 @@ Migration รองรับฐานที่มีตารางเดิม�
 
 ระบบยังมี repair migration สำหรับ production ที่ migration ledger เคยบันทึกสำเร็จไม่ตรงกับ schema จริง โดยจะเติมคอลัมน์ผู้ใช้และตาราง `sessions`, `cache`, `jobs`, `audit_logs` ที่ขาดแบบไม่ลบข้อมูลเดิม หลัง deploy ต้องรัน `php artisan migrate --force` และ `php artisan optimize:clear`
 
+เพื่อรองรับ shared hosting ที่ deploy ด้วย Git แต่ยังไม่ได้รันคำสั่งข้างต้น request แรกของโมดูล learning หลังล็อกอินจะตรวจและเติมเฉพาะตาราง/คอลัมน์ learning และ audit ที่จำเป็นแบบ additive ภายใต้ database lock โดยไม่ลบข้อมูลเดิม หาก database user ไม่มีสิทธิ์ `CREATE`/`ALTER` ระบบจะตอบ HTTP 503 พร้อมแจ้งให้รัน migration แทน กลไกนี้เป็น safety net เท่านั้นและไม่แทนที่การรัน migration ตามขั้นตอน deploy
+
 จากนั้นนำเข้า ZIP/DBF ผ่านเมนู Admin เพื่อให้ข้อมูลนักศึกษาอยู่ในฐานใหม่ของระบบ ไม่ควร copy หรือ query ข้อมูลจากฐานเก่าโดยตรง
 
 หากต้องการตารางสอบแบบเดิม ZIP ต้องมี `SCHEDULE.DBF` ของแต่ละระดับที่ใช้งานและ `FIELD.DBF` สำหรับชื่อสนามสอบ ระบบจะนำไฟล์เหล่านี้เข้าเป็นตาราง `db_import_*_schedule` และ `db_import_*_field` ในฐาน `DB_*` ของระบบเอง ส่วนการจัดห้องสอบอ่านจาก `exam_rooms` ในฐานเดียวกัน

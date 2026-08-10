@@ -7,6 +7,7 @@ use App\Models\User;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Http\UploadedFile;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Schema;
 use Illuminate\Support\Facades\Storage;
 use Laravel\Sanctum\Sanctum;
 use Tests\TestCase;
@@ -108,6 +109,67 @@ final class LearningContentWriteTest extends TestCase
         ]));
 
         $this->postJson('/api/v1/learning/assignments', [])->assertForbidden();
+    }
+
+    public function test_learning_request_repairs_schema_missing_from_git_only_deployment_before_saving(): void
+    {
+        Storage::fake('local');
+        $teacher = User::factory()->create([
+            'role' => 'teacher',
+            'district_id' => $this->district->id,
+            'assigned_groups' => ['G-01'],
+        ]);
+        Sanctum::actingAs($teacher);
+
+        Schema::table('learning_resources', function ($table): void {
+            $table->dropIndex(['education_level']);
+            $table->dropIndex(['target_group']);
+            $table->dropColumn(['education_level', 'target_group']);
+        });
+        Schema::table('learning_calendar_events', function ($table): void {
+            $table->dropColumn(['image_path', 'image_updated_at']);
+        });
+        Schema::drop('audit_logs');
+
+        $this->postJson('/api/v1/learning/resources', [
+            'title' => 'สื่อหลัง deploy ผ่าน Git',
+            'subject' => 'พท31001',
+            'description' => 'ทดสอบ schema repair',
+            'resource_type' => 'link',
+            'url' => 'https://example.test/material',
+            'level' => '3',
+            'target_group' => 'G-01',
+        ])->assertCreated();
+
+        $this->assertTrue(Schema::hasColumn('learning_resources', 'education_level'));
+        $this->assertTrue(Schema::hasColumn('learning_resources', 'target_group'));
+        $this->assertTrue(Schema::hasTable('audit_logs'));
+        $this->assertTrue(Schema::hasColumn('learning_calendar_events', 'image_path'));
+        $this->assertTrue(Schema::hasColumn('learning_calendar_events', 'image_updated_at'));
+        $this->assertDatabaseHas('learning_resources', [
+            'title' => 'สื่อหลัง deploy ผ่าน Git',
+            'education_level' => 3,
+            'target_group' => 'G-01',
+        ]);
+        $this->assertDatabaseHas('audit_logs', [
+            'event' => 'learning.resources.created',
+            'district_id' => $this->district->id,
+        ]);
+
+        $activity = $this->post('/api/v1/learning/calendar', [
+            'title' => 'กิจกรรมหลัง deploy ผ่าน Git',
+            'event_type' => 'activity',
+            'event_date' => '2026-08-22',
+            'start_time' => '09:00',
+            'end_time' => '11:00',
+            'target_group' => 'G-01',
+            'image' => UploadedFile::fake()->image('activity.jpg', 1200, 675),
+        ], ['Accept' => 'application/json'])->assertCreated();
+        $imagePath = (string) DB::table('learning_calendar_events')
+            ->where('id', (int) $activity->json('data.id'))
+            ->value('image_path');
+
+        Storage::disk('local')->assertExists($imagePath);
     }
 
     public function test_teacher_can_publish_activity_image_that_targeted_students_can_view(): void

@@ -75,18 +75,18 @@ Route::prefix('v1')->group(function (): void {
         Route::get('/settings/profile/avatar', [ProfileController::class, 'avatar']);
         Route::post('/settings/profile/avatar', [ProfileController::class, 'updateAvatar']);
         Route::delete('/settings/profile/avatar', [ProfileController::class, 'destroyAvatar']);
-        Route::get('/learning/calendar/{event}/image', [CalendarController::class, 'image'])->whereNumber('event');
+        Route::get('/learning/calendar/{event}/image', [CalendarController::class, 'image'])->middleware('learning.schema')->whereNumber('event');
     });
 
     Route::middleware(['auth:sanctum', 'active', 'district'])->group(function (): void {
         Route::get('/portal', PortalController::class);
-        Route::get('/learning', LearningOverviewController::class);
-        Route::get('/learning/assignments', AssignmentController::class);
-        Route::get('/learning/resources', ResourceController::class);
-        Route::get('/learning/lesson-plans', LessonPlanController::class)->middleware('role:teacher,admin,super_admin');
-        Route::get('/learning/calendar', CalendarController::class);
-        Route::get('/learning/schedule', ScheduleController::class);
-        Route::get('/learning/scores', ScoreController::class);
+        Route::get('/learning', LearningOverviewController::class)->middleware('learning.schema');
+        Route::get('/learning/assignments', AssignmentController::class)->middleware('learning.schema');
+        Route::get('/learning/resources', ResourceController::class)->middleware('learning.schema');
+        Route::get('/learning/lesson-plans', LessonPlanController::class)->middleware(['learning.schema', 'role:teacher,admin,super_admin']);
+        Route::get('/learning/calendar', CalendarController::class)->middleware('learning.schema');
+        Route::get('/learning/schedule', ScheduleController::class)->middleware('learning.schema');
+        Route::get('/learning/scores', ScoreController::class)->middleware('learning.schema');
         Route::get('/learning/exam-schedule/pdf', [ExamScheduleDocumentController::class, 'pdf']);
         Route::get('/my-learning', [CurrentStudentController::class, 'profile']);
         Route::get('/grades', [CurrentStudentController::class, 'grades']);
@@ -142,9 +142,9 @@ Route::prefix('v1')->group(function (): void {
 
     Route::middleware(['auth:sanctum', 'active', 'district', 'role:teacher,admin,super_admin'])
         ->group(function (): void {
-            Route::post('/learning/{kind}', [LearningContentController::class, 'store'])->whereIn('kind', ['assignments', 'resources', 'lesson-plans', 'calendar']);
-            Route::patch('/learning/{kind}/{content}', [LearningContentController::class, 'update'])->whereIn('kind', ['assignments', 'resources', 'lesson-plans', 'calendar'])->whereNumber('content');
-            Route::delete('/learning/{kind}/{content}', [LearningContentController::class, 'destroy'])->whereIn('kind', ['assignments', 'resources', 'lesson-plans', 'calendar'])->whereNumber('content');
+            Route::post('/learning/{kind}', [LearningContentController::class, 'store'])->middleware('learning.schema')->whereIn('kind', ['assignments', 'resources', 'lesson-plans', 'calendar']);
+            Route::patch('/learning/{kind}/{content}', [LearningContentController::class, 'update'])->middleware('learning.schema')->whereIn('kind', ['assignments', 'resources', 'lesson-plans', 'calendar'])->whereNumber('content');
+            Route::delete('/learning/{kind}/{content}', [LearningContentController::class, 'destroy'])->middleware('learning.schema')->whereIn('kind', ['assignments', 'resources', 'lesson-plans', 'calendar'])->whereNumber('content');
         });
 
     Route::middleware(['auth:sanctum', 'active', 'district', 'role:super_admin'])

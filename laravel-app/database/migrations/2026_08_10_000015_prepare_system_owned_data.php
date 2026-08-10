@@ -39,13 +39,17 @@ return new class extends Migration
                     $email = trim((string) ($user->email ?? ''))
                         ?: 'user+'.hash('sha256', mb_strtolower($username)).'@system.invalid';
 
-                    DB::table('users')->where('id', $user->id)->update(array_filter([
+                    $updates = array_filter([
                         'name' => $name ?: $username,
                         'email' => $email,
                         'first_name' => $firstName ?: $name ?: $username,
                         'last_name' => $lastName,
-                        'auth_source' => 'local',
-                    ], static fn (mixed $value): bool => $value !== null));
+                    ], static fn (mixed $value): bool => $value !== null);
+                    if (trim((string) ($user->auth_source ?? '')) === '') {
+                        $updates['auth_source'] = 'local';
+                    }
+
+                    DB::table('users')->where('id', $user->id)->update($updates);
                 }
             });
 

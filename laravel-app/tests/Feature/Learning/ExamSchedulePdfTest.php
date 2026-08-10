@@ -33,6 +33,7 @@ final class ExamSchedulePdfTest extends TestCase
         $this->assertStringContainsString("frame-src 'self' blob:", $contentSecurityPolicy);
         $this->assertStringContainsString("object-src 'self' blob:", $contentSecurityPolicy);
         $this->assertStringContainsString("worker-src 'self' blob:", $contentSecurityPolicy);
+        $this->assertStringContainsString("img-src 'self' data: blob:", $contentSecurityPolicy);
         $this->assertStringStartsWith('%PDF-', (string) $response->getContent());
         $this->assertMatchesRegularExpression('/attachment; filename="exam-schedule-student-1\.pdf"/', (string) $response->headers->get('Content-Disposition'));
     }

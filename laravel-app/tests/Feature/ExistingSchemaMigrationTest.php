@@ -153,6 +153,7 @@ final class ExistingSchemaMigrationTest extends TestCase
             $table->string('first_name');
             $table->string('last_name');
             $table->string('role');
+            $table->string('auth_source');
             $table->text('assigned_groups')->nullable();
             $table->unsignedBigInteger('district_id')->nullable();
             $table->timestamp('created_at')->nullable();
@@ -167,6 +168,7 @@ final class ExistingSchemaMigrationTest extends TestCase
             'first_name' => 'ผู้ดูแล',
             'last_name' => 'เดิม',
             'role' => 'admin',
+            'auth_source' => 'legacy',
             'assigned_groups' => '[]',
             'district_id' => 10,
             'created_at' => now(),
@@ -183,7 +185,7 @@ final class ExistingSchemaMigrationTest extends TestCase
             ->first();
         $this->assertSame('existing-bcrypt-hash', $user->password);
         $this->assertSame('ผู้ดูแล เดิม', $user->name);
-        $this->assertSame('local', $user->auth_source);
+        $this->assertSame('legacy', $user->auth_source);
         $this->assertStringEndsWith('@system.invalid', $user->email);
         $this->assertSame(
             'district-10',
