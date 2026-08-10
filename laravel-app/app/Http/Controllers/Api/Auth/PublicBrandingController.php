@@ -16,10 +16,15 @@ final class PublicBrandingController extends Controller
 
     public function show(Request $request): JsonResponse
     {
+        $district = $this->district($request);
+
         return response()->json([
             'data' => [
-                ...$this->branding->payload($this->district($request)),
-                'loginMode' => 'local',
+                ...$this->branding->payload($district),
+                'districtId' => $district->id,
+                'loginMode' => (bool) config('system_data.student_enabled')
+                    ? 'student_credentials'
+                    : 'local',
             ],
             'meta' => ['source' => 'laravel_control_plane'],
         ]);

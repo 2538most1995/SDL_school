@@ -5,11 +5,13 @@ namespace App\Providers;
 use App\Domain\Students\Repositories\DemoStudentRepository;
 use App\Domain\Students\Repositories\LegacyStudentRepository;
 use App\Domain\Students\Repositories\StudentRepository;
+use App\Support\ApplicationBasePath;
 use App\Support\LegacyFptMemoReader;
 use App\Support\ThaiAdministrativeAreaLookup;
 use Illuminate\Contracts\Foundation\Application;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Http;
+use Illuminate\Support\Facades\Vite;
 use Illuminate\Support\ServiceProvider;
 
 class AppServiceProvider extends ServiceProvider
@@ -47,6 +49,21 @@ class AppServiceProvider extends ServiceProvider
         // Laravel's HTTP client must be explicitly reviewed instead of silently
         // turning a page request into an external data dependency.
         Http::preventStrayRequests();
+
+        Vite::createAssetPathsUsing(function (string $path, ?bool $secure = null): string {
+            try {
+                $request = request();
+                $basePath = ApplicationBasePath::resolve($request);
+                $configured = parse_url((string) config('app.asset_url')) ?: [];
+                $origin = isset($configured['scheme'], $configured['host'])
+                    ? $configured['scheme'].'://'.$configured['host'].(isset($configured['port']) ? ':'.$configured['port'] : '')
+                    : $request->getSchemeAndHttpHost();
+
+                return rtrim($origin.$basePath, '/').'/'.ltrim($path, '/');
+            } catch (\Throwable) {
+                return app('url')->asset($path, $secure);
+            }
+        });
 
         try {
             $request = request();

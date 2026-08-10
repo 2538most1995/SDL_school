@@ -8,6 +8,7 @@ export type PublicBranding = {
     portalName: string;
     welcomeMessage: string;
     primaryColor: string;
+    districtId: number;
     districtName: string;
     logoImageUrl: string | null;
     hasCustomLogo: boolean;
@@ -15,7 +16,7 @@ export type PublicBranding = {
     hasCustomHero: boolean;
     dashboardHeroImageUrl: string;
     hasCustomDashboardHero: boolean;
-    loginMode: 'legacy' | 'local';
+    loginMode: 'student_credentials' | 'local';
 };
 
 export function publicBrandingPath(districtId?: string | null): string {

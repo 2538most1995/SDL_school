@@ -4,7 +4,8 @@
 
 ## แหล่งข้อมูล
 
-- ล็อกอินและการจัดการผู้ใช้ใช้ตาราง `users` ภายในระบบ
+- ครู/ผู้ดูแลล็อกอินและจัดการบัญชีผ่านตาราง `users` ภายในระบบ
+- นักศึกษาล็อกอินด้วยเลขบัตรประชาชน 13 หลักและรหัสนักศึกษา โดยตรวจจาก dynamic tables ของ ZIP/DBF ในฐาน `DB_*` เดียวกัน แล้วสร้างบัญชี session ภายในโดยไม่บันทึกเลขบัตรซ้ำใน `users`
 - อำเภอ สิทธิ์ โปรไฟล์ theme branding audit และ queue อยู่ในฐานเดียวกัน
 - งาน สื่อ แผนการสอน ปฏิทิน ตารางสอน และคะแนนใช้ตาราง `learning_*` ภายในระบบ
 - นักศึกษา ผลการเรียน วิชา กพช. และคุณธรรมมาจาก ZIP/DBF ที่ผู้ดูแลนำเข้าผ่านระบบ แล้วสร้าง dynamic tables ในฐาน `DB_*`
@@ -80,6 +81,8 @@ php artisan optimize:clear
 php artisan migrate --force
 npm run build
 ```
+
+ตัวสร้าง URL ของ Vite ตรวจ base path จาก request ด้วย จึงยังสร้าง URL ใต้ `/SDL_school/build/assets/*` ได้แม้ cache เคยเก็บ `ASSET_URL` ที่รากโดเมน แต่ production ควรกำหนด `APP_URL` และ `ASSET_URL` ให้มี `/SDL_school` ถูกต้องตามตัวอย่าง
 
 Migration รองรับฐานที่มีตารางเดิมอยู่แล้วแต่ migration ledger ว่าง โดยจะตรวจ table/column ก่อนสร้างและไม่ลบข้อมูลหรือ password hash เดิม
 

@@ -18,7 +18,7 @@
 
 ### `users`
 
-Laravel users table มี `username`, `first_name`, `last_name`, `student_code`, `auth_source` (ใช้ค่า `local`), role/district/group, display/contact/appearance fields, avatar fields และ timestamps. คอลัมน์ compatibility จาก migration เก่าอาจยังอยู่แต่ไม่ได้ใช้เชื่อมฐานภายนอก. `password`, `remember_token` ถูกซ่อนจาก model output; `contact_email` ถูก encrypt/cast ใน `User` model.
+Laravel users table มี `username`, `first_name`, `last_name`, `student_code`, `auth_source` (`local` สำหรับบัญชีที่ผู้ดูแลสร้าง และ `system_import` สำหรับ session account นักศึกษา), role/district/group, display/contact/appearance fields, avatar fields และ timestamps. การเข้าสู่ระบบนักศึกษาตรวจเลขบัตรประชาชนกับรหัสนักศึกษาจากตาราง import ในฐานเดียวกัน และไม่เก็บเลขบัตรซ้ำใน `users`. คอลัมน์ compatibility จาก migration เก่าอาจยังอยู่แต่ไม่ได้ใช้เชื่อมฐานภายนอก. `password`, `remember_token` ถูกซ่อนจาก model output; `contact_email` ถูก encrypt/cast ใน `User` model.
 
 ### Student canonical domain
 

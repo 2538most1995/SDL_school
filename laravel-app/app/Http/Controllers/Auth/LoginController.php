@@ -2,6 +2,7 @@
 
 namespace App\Http\Controllers\Auth;
 
+use App\Domain\Students\Services\SystemStudentAuthenticator;
 use App\Http\Controllers\Controller;
 use App\Http\Requests\Auth\LoginRequest;
 use App\Models\District;
@@ -13,17 +14,35 @@ use Illuminate\Validation\ValidationException;
 
 final class LoginController extends Controller
 {
+    public function __construct(private readonly SystemStudentAuthenticator $studentAuthenticator) {}
+
     public function store(LoginRequest $request): JsonResponse
     {
-        $field = filter_var($request->string('identifier')->toString(), FILTER_VALIDATE_EMAIL)
-            ? 'email'
-            : 'username';
+        $studentLogin = $request->string('login_type')->toString() === 'student'
+            && (bool) config('system_data.student_enabled');
 
-        $authenticated = Auth::attempt([
-            $field => $request->string('identifier')->toString(),
-            'password' => $request->string('password')->toString(),
-            'disabled_at' => null,
-        ], $request->boolean('remember'));
+        if ($studentLogin) {
+            $user = $this->studentAuthenticator->authenticate(
+                $request->string('identifier')->toString(),
+                $request->string('password')->toString(),
+                $request->integer('district_id') ?: null,
+            );
+            $authenticated = $user !== null;
+
+            if ($user !== null) {
+                Auth::guard('web')->login($user, $request->boolean('remember'));
+            }
+        } else {
+            $field = filter_var($request->string('identifier')->toString(), FILTER_VALIDATE_EMAIL)
+                ? 'email'
+                : 'username';
+
+            $authenticated = Auth::attempt([
+                $field => $request->string('identifier')->toString(),
+                'password' => $request->string('password')->toString(),
+                'disabled_at' => null,
+            ], $request->boolean('remember'));
+        }
 
         if (! $authenticated) {
             throw ValidationException::withMessages([

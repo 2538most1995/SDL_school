@@ -49,7 +49,8 @@ Request → route → Sanctum/auth + active + district/role middleware
 - `EnsureActiveUser`, `EnsureRole`, `ResolveDistrictContext` and `SecurityHeaders` are registered in `bootstrap/app.php`.
 - Protected routes are defined in `routes/api.php`; admin writes are restricted to `admin,super_admin`, learning writes to `teacher,admin,super_admin`, and super-admin branding routes to `super_admin`.
 - POST/PATCH/PUT/DELETE paths use Laravel validation/authentication and audit where applicable. Upload/import paths must retain size/type/path validation.
-- Login checks the local `users` table only. User administration reads and writes the same table and records audit events in the same database.
+- Staff login checks the local `users` table. Student login verifies citizen ID + student code against the latest imported student tables in the same default database, then provisions/refreshes an internal session account without persisting the citizen ID in `users`.
+- User administration reads and writes `users` in the default database and records audit events there; it has no shadow-user or external-database sync.
 
 ## Important routes/controllers/services
 

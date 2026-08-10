@@ -29,4 +29,21 @@ class ExampleTest extends TestCase
             ->assertSee('meta name="app-base-path" content="/SDL_school"', false)
             ->assertSee('https://krumost.com/SDL_school/build/assets/app-', false);
     }
+
+    public function test_request_subdirectory_overrides_a_stale_root_asset_url(): void
+    {
+        config([
+            'app.url' => 'https://krumost.com',
+            'app.asset_url' => 'https://krumost.com',
+        ]);
+
+        $this->withServerVariables([
+            'SCRIPT_NAME' => '/SDL_school/index.php',
+            'SCRIPT_FILENAME' => base_path('../index.php'),
+        ])->get('/SDL_school/login')
+            ->assertOk()
+            ->assertSee('meta name="app-base-path" content="/SDL_school"', false)
+            ->assertSee('https://krumost.com/SDL_school/build/assets/app-', false)
+            ->assertDontSee('https://krumost.com/build/assets/app-', false);
+    }
 }
