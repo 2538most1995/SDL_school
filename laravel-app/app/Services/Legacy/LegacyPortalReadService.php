@@ -31,10 +31,14 @@ final class LegacyPortalReadService
 
         if ($viewer->role === 'student') {
             $studentCode = (string) ($viewer->student_code ?: $viewer->username);
-            $studentId = $this->connection()->table('students')
-                ->where('district_id', $districtId)
-                ->where('student_code', $studentCode)
-                ->value('id');
+            $schema = $this->connection()->getSchemaBuilder();
+            $studentId = $schema->hasTable('students')
+                && $schema->hasColumns('students', ['id', 'district_id', 'student_code'])
+                    ? $this->connection()->table('students')
+                        ->where('district_id', $districtId)
+                        ->where('student_code', $studentCode)
+                        ->value('id')
+                    : null;
             if ($studentId !== null) {
                 $query->leftJoin('learning_submissions as submission', function ($join) use ($studentId): void {
                     $join->on('submission.assignment_id', '=', 'a.id')
