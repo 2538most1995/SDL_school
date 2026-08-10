@@ -31,7 +31,7 @@ return new class extends Migration
         if (! Schema::hasTable('learning_submissions')) {
             Schema::create('learning_submissions', function (Blueprint $table): void {
                 $table->id();
-                $table->foreignId('assignment_id')->constrained('learning_assignments')->cascadeOnDelete();
+                $this->addMatchingForeignId($table, 'assignment_id', 'learning_assignments');
                 $this->addStudentForeignId($table);
                 $table->text('content')->nullable();
                 $table->string('attachment_disk', 40)->nullable();
@@ -48,6 +48,7 @@ return new class extends Migration
             });
         }
 
+        $this->repairMatchingForeignId('learning_submissions', 'assignment_id', 'learning_assignments');
         $this->repairStudentForeignId('learning_submissions');
 
         if (! Schema::hasTable('learning_resources')) {
@@ -136,59 +137,73 @@ return new class extends Migration
 
     private function addStudentForeignId(Blueprint $table): void
     {
-        $this->defineStudentId($table);
-        $table->foreign('student_id')->references('id')->on('students')->cascadeOnDelete();
+        $this->addMatchingForeignId($table, 'student_id', 'students');
     }
 
     private function repairStudentForeignId(string $table): void
     {
-        if (! Schema::hasTable($table) || ! Schema::hasColumn($table, 'student_id')) {
+        $this->repairMatchingForeignId($table, 'student_id', 'students');
+    }
+
+    private function addMatchingForeignId(Blueprint $table, string $column, string $parentTable): void
+    {
+        $this->defineMatchingId($table, $column, $parentTable);
+        $table->foreign($column)->references('id')->on($parentTable)->cascadeOnDelete();
+    }
+
+    private function repairMatchingForeignId(string $table, string $column, string $parentTable): void
+    {
+        if (! Schema::hasTable($table) || ! Schema::hasColumn($table, $column)) {
             return;
         }
 
-        if ($this->hasStudentForeignKey($table)) {
+        if ($this->hasForeignKey($table, $column, $parentTable)) {
             return;
         }
 
         $hasOrphans = DB::table($table.' as child')
-            ->leftJoin('students', 'students.id', '=', 'child.student_id')
-            ->whereNotNull('child.student_id')
-            ->whereNull('students.id')
+            ->leftJoin($parentTable.' as parent', 'parent.id', '=', 'child.'.$column)
+            ->whereNotNull('child.'.$column)
+            ->whereNull('parent.id')
             ->exists();
 
         if ($hasOrphans) {
             return;
         }
 
-        if (! $this->studentIdTypesMatch($table)) {
-            Schema::table($table, function (Blueprint $blueprint): void {
-                $this->defineStudentId($blueprint, change: true);
+        if (! $this->idTypesMatch($table, $column, $parentTable)) {
+            Schema::table($table, function (Blueprint $blueprint) use ($column, $parentTable): void {
+                $this->defineMatchingId($blueprint, $column, $parentTable, change: true);
             });
         }
 
-        Schema::table($table, function (Blueprint $blueprint): void {
-            $blueprint->foreign('student_id')->references('id')->on('students')->cascadeOnDelete();
+        Schema::table($table, function (Blueprint $blueprint) use ($column, $parentTable): void {
+            $blueprint->foreign($column)->references('id')->on($parentTable)->cascadeOnDelete();
         });
     }
 
-    private function defineStudentId(Blueprint $table, bool $change = false): void
-    {
-        $type = strtolower(Schema::getColumnType('students', 'id', true));
+    private function defineMatchingId(
+        Blueprint $table,
+        string $columnName,
+        string $parentTable,
+        bool $change = false,
+    ): void {
+        $type = strtolower(Schema::getColumnType($parentTable, 'id', true));
         $unsigned = str_contains($type, 'unsigned');
 
         $column = str_contains($type, 'bigint')
-            ? ($unsigned ? $table->unsignedBigInteger('student_id') : $table->bigInteger('student_id'))
-            : ($unsigned ? $table->unsignedInteger('student_id') : $table->integer('student_id'));
+            ? ($unsigned ? $table->unsignedBigInteger($columnName) : $table->bigInteger($columnName))
+            : ($unsigned ? $table->unsignedInteger($columnName) : $table->integer($columnName));
 
         if ($change) {
             $column->change();
         }
     }
 
-    private function studentIdTypesMatch(string $table): bool
+    private function idTypesMatch(string $table, string $column, string $parentTable): bool
     {
-        return $this->normalizedIntegerType(Schema::getColumnType('students', 'id', true))
-            === $this->normalizedIntegerType(Schema::getColumnType($table, 'student_id', true));
+        return $this->normalizedIntegerType(Schema::getColumnType($parentTable, 'id', true))
+            === $this->normalizedIntegerType(Schema::getColumnType($table, $column, true));
     }
 
     private function normalizedIntegerType(string $type): string
@@ -202,10 +217,10 @@ return new class extends Migration
         );
     }
 
-    private function hasStudentForeignKey(string $table): bool
+    private function hasForeignKey(string $table, string $column, string $parentTable): bool
     {
         foreach (Schema::getForeignKeys($table) as $foreignKey) {
-            if ($foreignKey['columns'] === ['student_id'] && $foreignKey['foreign_table'] === 'students') {
+            if ($foreignKey['columns'] === [$column] && $foreignKey['foreign_table'] === $parentTable) {
                 return true;
             }
         }
