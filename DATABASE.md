@@ -70,4 +70,4 @@ Existing indexes cover the main district/status/date filters and exam-room distr
 
 ## Migration history
 
-The schema was introduced in the dated migrations from `2026_07_17` onward. `2026_08_07_000014_fix_import_and_exam_room_schema.php` repairs import history/exam rooms and `2026_08_10_000015_prepare_system_owned_data.php` completes local user and learning fields. Run `php artisan migrate:status` against the intended system database before deployment.
+The schema was introduced in the dated migrations from `2026_07_17` onward. `2026_08_07_000014_fix_import_and_exam_room_schema.php` repairs import history/exam rooms, `2026_08_10_000015_prepare_system_owned_data.php` completes local user and learning fields, and `2026_08_10_000016_repair_incomplete_system_schema.php` safely restores user/runtime tables when an older production migration ledger recorded migrations whose tables were not actually created. The repair migration does not delete tables or user data. Run `php artisan migrate:status` against the intended system database before deployment.

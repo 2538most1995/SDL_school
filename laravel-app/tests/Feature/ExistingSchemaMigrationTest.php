@@ -64,14 +64,20 @@ final class ExistingSchemaMigrationTest extends TestCase
         $this->assertSame(0, $exitCode, Artisan::output());
         $this->assertTrue($schema->hasTable('districts'));
         $this->assertTrue($schema->hasTable('learning_assignments'));
+        $this->assertTrue($schema->hasTable('password_reset_tokens'));
+        $this->assertTrue($schema->hasTable('sessions'));
+        $this->assertTrue($schema->hasTable('password_reset_tokens'));
+        $this->assertTrue($schema->hasTable('jobs'));
+        $this->assertTrue($schema->hasTable('audit_logs'));
         $this->assertTrue($schema->hasColumn('users', 'first_name'));
         $this->assertTrue($schema->hasColumn('users', 'auth_source'));
+        $this->assertTrue($schema->hasColumn('users', 'disabled_at'));
         $this->assertSame(
             'preserved-password-hash',
             DB::connection('existing_schema_test')->table('users')->value('password'),
         );
         $this->assertSame(
-            18,
+            19,
             DB::connection('existing_schema_test')->table('migrations')->count(),
         );
 
@@ -83,13 +89,54 @@ final class ExistingSchemaMigrationTest extends TestCase
 
         $this->assertSame(0, $secondExitCode, Artisan::output());
         $this->assertSame(
-            18,
+            19,
             DB::connection('existing_schema_test')->table('migrations')->count(),
         );
         $this->assertSame(
             'preserved-password-hash',
             DB::connection('existing_schema_test')->table('users')->value('password'),
         );
+    }
+
+    public function test_latest_repair_migration_restores_tables_skipped_by_an_old_migration_ledger(): void
+    {
+        $schema = Schema::connection('existing_schema_test');
+        $schema->create('users', function (Blueprint $table): void {
+            $table->id();
+            $table->string('username');
+            $table->string('password');
+        });
+        $schema->create('migrations', function (Blueprint $table): void {
+            $table->id();
+            $table->string('migration');
+            $table->integer('batch');
+        });
+
+        $migrationNames = collect(glob(database_path('migrations/*.php')) ?: [])
+            ->map(fn (string $path): string => pathinfo($path, PATHINFO_FILENAME))
+            ->reject(fn (string $name): bool => str_ends_with($name, 'repair_incomplete_system_schema'))
+            ->values();
+        foreach ($migrationNames as $name) {
+            DB::connection('existing_schema_test')->table('migrations')->insert([
+                'migration' => $name,
+                'batch' => 1,
+            ]);
+        }
+
+        $exitCode = Artisan::call('migrate', [
+            '--database' => 'existing_schema_test',
+            '--force' => true,
+        ]);
+
+        $this->assertSame(0, $exitCode, Artisan::output());
+        $this->assertTrue($schema->hasTable('sessions'));
+        $this->assertTrue($schema->hasTable('cache'));
+        $this->assertTrue($schema->hasTable('jobs'));
+        $this->assertTrue($schema->hasTable('job_batches'));
+        $this->assertTrue($schema->hasTable('failed_jobs'));
+        $this->assertTrue($schema->hasTable('audit_logs'));
+        $this->assertTrue($schema->hasColumn('users', 'first_name'));
+        $this->assertTrue($schema->hasColumn('users', 'auth_source'));
     }
 
     public function test_migrate_repairs_an_existing_local_user_directory_without_losing_passwords(): void

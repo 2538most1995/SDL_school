@@ -84,7 +84,11 @@ npm run build
 
 Migration รองรับฐานที่มีตารางเดิมอยู่แล้วแต่ migration ledger ว่าง โดยจะตรวจ table/column ก่อนสร้างและไม่ลบข้อมูลหรือ password hash เดิม
 
+ระบบยังมี repair migration สำหรับ production ที่ migration ledger เคยบันทึกสำเร็จไม่ตรงกับ schema จริง โดยจะเติมคอลัมน์ผู้ใช้และตาราง `sessions`, `cache`, `jobs`, `audit_logs` ที่ขาดแบบไม่ลบข้อมูลเดิม หลัง deploy ต้องรัน `php artisan migrate --force` และ `php artisan optimize:clear`
+
 จากนั้นนำเข้า ZIP/DBF ผ่านเมนู Admin เพื่อให้ข้อมูลนักศึกษาอยู่ในฐานใหม่ของระบบ ไม่ควร copy หรือ query ข้อมูลจากฐานเก่าโดยตรง
+
+หากต้องการตารางสอบแบบเดิม ZIP ต้องมี `SCHEDULE.DBF` ของแต่ละระดับที่ใช้งานและ `FIELD.DBF` สำหรับชื่อสนามสอบ ระบบจะนำไฟล์เหล่านี้เข้าเป็นตาราง `db_import_*_schedule` และ `db_import_*_field` ในฐาน `DB_*` ของระบบเอง ส่วนการจัดห้องสอบอ่านจาก `exam_rooms` ในฐานเดียวกัน
 
 ## MAMP
 

@@ -5,7 +5,6 @@ namespace App\Services\Legacy;
 use App\Domain\Students\Models\Student;
 use App\Domain\Students\Repositories\StudentRepository;
 use App\Domain\Students\Support\AcademicTerm;
-use App\Support\VisualFoxProDbfReader;
 use Illuminate\Database\DatabaseManager;
 
 final class LegacyExamScheduleService
@@ -13,11 +12,8 @@ final class LegacyExamScheduleService
     /** @var array<int, string|null> */
     private array $batchKeys = [];
 
-    /** @var array<string, string|null> */
-    private array $dbfPaths = [];
-
-    /** @var array<string, list<array<string, mixed>>> */
-    private array $dbfRecords = [];
+    /** @var array<string, list<string>> */
+    private array $importedTables = [];
 
     /** @var array<string, array<string, string>> */
     private array $fieldMaps = [];
@@ -43,15 +39,21 @@ final class LegacyExamScheduleService
         }
 
         $batchKey = $this->activeBatchKey($student->districtId);
-        $schedulePath = $batchKey === null ? null : $this->findDbf($batchKey, 'schedule', (string) $student->level);
-        $fieldPath = $batchKey === null ? null : $this->findDbf($batchKey, 'field');
-        $fields = $this->fieldMap($batchKey, $fieldPath);
+        $scheduleTable = $batchKey === null ? null : ($this->tablesFor($batchKey, 'schedule', (string) $student->level)[0] ?? null);
+        $fieldReady = $batchKey !== null && $this->tablesFor($batchKey, 'field') !== [];
+        $groupReady = $batchKey !== null && $this->tablesFor($batchKey, 'group') !== [];
+        $fields = $this->fieldMap($batchKey);
         $groupFields = $this->groupFieldMap($batchKey);
         $studentGroupFld = $groupFields[trim((string) $student->groupCode)] ?? '';
 
         $rows = [];
-        if ($schedulePath !== null) {
-            foreach ($this->records($schedulePath) as $row) {
+        if ($scheduleTable !== null) {
+            $scheduleRows = $this->database->connection()->table($scheduleTable)
+                ->whereIn('_perf_sub', array_keys($subjects))
+                ->whereIn('_perf_semestry', AcademicTerm::variants($student->currentTerm))
+                ->get();
+            foreach ($scheduleRows as $record) {
+                $row = (array) $record;
                 $code = trim((string) ($row['sub_code'] ?? ''));
                 $rawTerm = trim((string) ($row['semestry'] ?? ''));
                 $term = AcademicTerm::normalize($rawTerm) ?? $rawTerm;
@@ -98,7 +100,13 @@ final class LegacyExamScheduleService
             ],
             'term' => $student->currentTerm,
             'rows' => $rows,
-            'source_ready' => $schedulePath !== null,
+            'source_ready' => $scheduleTable !== null,
+            'sources' => [
+                'schedule' => $scheduleTable !== null,
+                'field' => $fieldReady,
+                'group' => $groupReady,
+                'exam_rooms' => $this->database->connection()->getSchemaBuilder()->hasTable('exam_rooms'),
+            ],
         ];
     }
 
@@ -131,30 +139,34 @@ final class LegacyExamScheduleService
         return $this->batchKeys[$districtId] = preg_match('/^import_\d{10}_[A-Za-z0-9]+$/', $key) === 1 ? $key : null;
     }
 
-    private function findDbf(string $batchKey, string $type, ?string $level = null): ?string
+    /** @return list<string> */
+    private function tablesFor(string $batchKey, string $type, ?string $level = null): array
     {
         $cacheKey = implode('|', [$batchKey, $type, $level ?? '*']);
-        if (array_key_exists($cacheKey, $this->dbfPaths)) {
-            return $this->dbfPaths[$cacheKey];
+        if (array_key_exists($cacheKey, $this->importedTables)) {
+            return $this->importedTables[$cacheKey];
         }
-        $root = rtrim((string) config('system_data.extract_root'), DIRECTORY_SEPARATOR).DIRECTORY_SEPARATOR.$batchKey;
-        if (! is_dir($root)) {
-            return $this->dbfPaths[$cacheKey] = null;
+        if (preg_match('/^import_\d{10}_[A-Za-z0-9]+$/', $batchKey) !== 1
+            || preg_match('/^[a-z]+$/', $type) !== 1
+            || ($level !== null && ! in_array($level, ['1', '2', '3'], true))) {
+            return $this->importedTables[$cacheKey] = [];
         }
-        $matches = [];
-        $iterator = new \RecursiveIteratorIterator(new \RecursiveDirectoryIterator($root, \FilesystemIterator::SKIP_DOTS));
-        foreach ($iterator as $file) {
-            if (! $file->isFile() || strtolower($file->getExtension()) !== 'dbf' || strtolower($file->getBasename('.'.$file->getExtension())) !== $type) {
-                continue;
-            }
-            if ($level !== null && basename($file->getPath()) !== $level) {
-                continue;
-            }
-            $matches[] = $file->getPathname();
-        }
-        sort($matches, SORT_STRING);
 
-        return $this->dbfPaths[$cacheKey] = $matches[0] ?? null;
+        $prefix = 'db_'.$batchKey.'_';
+        $expected = $level === null ? null : $prefix.$level.'_'.$type;
+        $tables = array_values(array_filter(
+            $this->database->connection()->getSchemaBuilder()->getTableListing(null, false),
+            static function (string $table) use ($prefix, $expected, $type): bool {
+                if (preg_match('/^[A-Za-z0-9_]{1,64}$/', $table) !== 1 || ! str_starts_with($table, $prefix)) {
+                    return false;
+                }
+
+                return $expected === null ? str_ends_with($table, '_'.$type) : $table === $expected;
+            },
+        ));
+        sort($tables, SORT_NATURAL | SORT_FLAG_CASE);
+
+        return $this->importedTables[$cacheKey] = $tables;
     }
 
     private function examRoom(Student $student, string $term, string $subjectCode, array $row = [], ?string $batchKey = null): string
@@ -191,13 +203,16 @@ final class LegacyExamScheduleService
         if (! (bool) config('system_data.enabled')) {
             return '-';
         }
+        if (! $this->database->connection()->getSchemaBuilder()->hasTable('exam_rooms')) {
+            return '-';
+        }
         $termCacheKey = implode('|', [$student->districtId, $term]);
         if (! array_key_exists($termCacheKey, $this->examRoomsByTerm)) {
             $this->examRoomsByTerm[$termCacheKey] = $this->database->connection()->table('exam_rooms')
                 ->select(['id', 'subject_code', 'assignment_type', 'start_val', 'end_val', 'room_name'])
                 ->where('district_id', $student->districtId)
                 ->where(function ($q) use ($term): void {
-                    $q->where('term', $term)
+                    $q->whereIn('term', AcademicTerm::variants($term))
                         ->orWhere('term', 'all')
                         ->orWhere('term', '*');
                 })->orderBy('id')->get()->all();
@@ -282,54 +297,28 @@ final class LegacyExamScheduleService
         return strnatcasecmp($val, $start) >= 0 && strnatcasecmp($val, $end) <= 0;
     }
 
-    /** @return list<array<string, mixed>> */
-    private function records(string $path): array
-    {
-        return $this->dbfRecords[$path] ??= iterator_to_array((new VisualFoxProDbfReader($path))->records(), false);
-    }
-
     /** @return array<string, string> */
-    private function fieldMap(?string $batchKey, ?string $path): array
+    private function fieldMap(?string $batchKey): array
     {
-        $cacheKey = 'fieldMap|'.($batchKey ?? '').'|'.($path ?? '');
+        $cacheKey = 'fieldMap|'.($batchKey ?? '');
         if (isset($this->fieldMaps[$cacheKey])) {
             return $this->fieldMaps[$cacheKey];
         }
         $fields = [];
-        if ($path !== null && is_file($path)) {
-            foreach ($this->records($path) as $row) {
-                $code = trim((string) (
-                    $row['fld_code'] ?? $row['fldcode'] ?? $row['field_code'] ?? $row['fld_id'] ?? $row['id'] ?? ''
-                ));
-                $name = trim((string) (
-                    $row['fld_name'] ?? $row['fldname'] ?? $row['field_name'] ?? $row['loc_name'] ?? $row['place_name'] ?? $row['school_name'] ?? $row['name'] ?? $row['title'] ?? ''
-                ));
-                if ($code !== '') {
-                    $fields[$code] = $name !== '' ? $name : $code;
-                }
-            }
-        }
-        if ($fields === [] && $batchKey !== null && (bool) config('system_data.enabled')) {
-            try {
-                $connection = $this->database->connection();
-                $tableNames = ["db_import_{$batchKey}_field", "db_import_{$batchKey}_0_field"];
-                foreach ($tableNames as $tableName) {
-                    if ($connection->getSchemaBuilder()->hasTable($tableName)) {
-                        foreach ($connection->table($tableName)->get() as $r) {
-                            $row = (array) $r;
-                            $code = trim((string) ($row['fld_code'] ?? $row['fldcode'] ?? $row['field_code'] ?? $row['fld_id'] ?? $row['id'] ?? ''));
-                            $name = trim((string) ($row['fld_name'] ?? $row['fldname'] ?? $row['field_name'] ?? $row['loc_name'] ?? $row['place_name'] ?? $row['school_name'] ?? $row['name'] ?? $row['title'] ?? ''));
-                            if ($code !== '') {
-                                $fields[$code] = $name !== '' ? $name : $code;
-                            }
-                        }
-                        if ($fields !== []) {
-                            break;
-                        }
+        if ($batchKey !== null) {
+            foreach ($this->tablesFor($batchKey, 'field') as $table) {
+                foreach ($this->database->connection()->table($table)->get() as $record) {
+                    $row = (array) $record;
+                    $code = trim((string) (
+                        $row['fld_code'] ?? $row['fldcode'] ?? $row['field_code'] ?? $row['fld_id'] ?? $row['id'] ?? ''
+                    ));
+                    $name = trim((string) (
+                        $row['fld_name'] ?? $row['fldname'] ?? $row['field_name'] ?? $row['loc_name'] ?? $row['place_name'] ?? $row['school_name'] ?? $row['name'] ?? $row['title'] ?? ''
+                    ));
+                    if ($code !== '') {
+                        $fields[$code] = $name !== '' ? $name : $code;
                     }
                 }
-            } catch (\Throwable $e) {
-                // Ignore DB query errors
             }
         }
 
@@ -347,37 +336,14 @@ final class LegacyExamScheduleService
             return $this->fieldMaps[$cacheKey];
         }
         $map = [];
-        $groupPath = $this->findDbf($batchKey, 'group');
-        if ($groupPath !== null && is_file($groupPath)) {
-            foreach ($this->records($groupPath) as $row) {
+        foreach ($this->tablesFor($batchKey, 'group') as $table) {
+            foreach ($this->database->connection()->table($table)->get() as $record) {
+                $row = (array) $record;
                 $grpCode = trim((string) ($row['grp_code'] ?? ''));
                 $fldCode = trim((string) ($row['grp_field'] ?? $row['fld_code'] ?? $row['field'] ?? ''));
                 if ($grpCode !== '' && $fldCode !== '') {
                     $map[$grpCode] = $fldCode;
                 }
-            }
-        }
-        if ($map === [] && (bool) config('system_data.enabled')) {
-            try {
-                $connection = $this->database->connection();
-                $tableNames = ["db_import_{$batchKey}_group", "db_import_{$batchKey}_0_group"];
-                foreach ($tableNames as $tableName) {
-                    if ($connection->getSchemaBuilder()->hasTable($tableName)) {
-                        foreach ($connection->table($tableName)->get() as $r) {
-                            $row = (array) $r;
-                            $grpCode = trim((string) ($row['grp_code'] ?? ''));
-                            $fldCode = trim((string) ($row['grp_field'] ?? $row['fld_code'] ?? $row['field'] ?? ''));
-                            if ($grpCode !== '' && $fldCode !== '') {
-                                $map[$grpCode] = $fldCode;
-                            }
-                        }
-                        if ($map !== []) {
-                            break;
-                        }
-                    }
-                }
-            } catch (\Throwable $e) {
-                // Ignore DB query errors
             }
         }
 
@@ -393,49 +359,19 @@ final class LegacyExamScheduleService
         }
 
         $map = [];
-
-        $gradePath = $this->findDbf($batchKey, 'grade', $level);
-        if ($gradePath !== null && is_file($gradePath)) {
-            foreach ($this->records($gradePath) as $row) {
-                $std = trim((string) ($row['std_code'] ?? ''));
-                $stdLast10 = substr($std, -10);
-                $studentLast10 = substr($studentCode, -10);
-                if ($std !== $studentCode && ($stdLast10 === '' || $stdLast10 !== $studentLast10) && ! str_ends_with($std, $studentCode) && ! str_ends_with($studentCode, $std)) {
-                    continue;
-                }
+        $table = $this->tablesFor($batchKey, 'grade', $level)[0] ?? null;
+        if ($table !== null) {
+            $rows = $this->database->connection()->table($table)
+                ->where('_perf_std10', substr($studentCode, -10))
+                ->orWhere('std_code', $studentCode)
+                ->get();
+            foreach ($rows as $record) {
+                $row = (array) $record;
                 $sub = trim((string) ($row['sub_code'] ?? ''));
                 $rm = trim((string) ($row['roomno'] ?? $row['room_no'] ?? $row['room'] ?? ''));
                 if ($sub !== '' && $rm !== '') {
                     $map[$sub] = $rm;
                 }
-            }
-        }
-
-        if ($map === [] && (bool) config('system_data.enabled')) {
-            try {
-                $connection = $this->database->connection();
-                $tableNames = ["db_import_{$batchKey}_{$level}_grade", "db_import_{$batchKey}_grade"];
-                foreach ($tableNames as $tableName) {
-                    if ($connection->getSchemaBuilder()->hasTable($tableName)) {
-                        $rows = $connection->table($tableName)
-                            ->where('_perf_std10', substr($studentCode, -10))
-                            ->orWhere('std_code', $studentCode)
-                            ->get();
-                        foreach ($rows as $r) {
-                            $row = (array) $r;
-                            $sub = trim((string) ($row['sub_code'] ?? ''));
-                            $rm = trim((string) ($row['roomno'] ?? $row['room_no'] ?? $row['room'] ?? ''));
-                            if ($sub !== '' && $rm !== '') {
-                                $map[$sub] = $rm;
-                            }
-                        }
-                        if ($map !== []) {
-                            break;
-                        }
-                    }
-                }
-            } catch (\Throwable $e) {
-                // Ignore DB query errors
             }
         }
 

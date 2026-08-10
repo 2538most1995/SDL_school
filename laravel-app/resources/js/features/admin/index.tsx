@@ -186,7 +186,7 @@ export function AdminUsersPage() {
     );
 }
 
-type ImportBatch = { id: number; batch_key: string; district_name: string; academic_term: string; status: string; row_count: number; table_count: number; warning_count: number; replaced_batch_count?: number; is_active: boolean };
+type ImportBatch = { id: number; batch_key: string; district_name: string; academic_term: string; status: string; row_count: number; table_count: number; warning_count: number; replaced_batch_count?: number; is_active: boolean; exam_schedule_ready?: boolean; missing_exam_data?: string[] };
 type ImportStart = { job_id: string; status: 'queued'; message: string };
 type ImportJob = { job_id: string; status: 'queued' | 'processing' | 'completed' | 'failed'; message: string; progress?: number; processed_rows?: number; total_rows?: number; current_table?: string; result?: ImportBatch };
 type ImportDeleteResult = { deleted: boolean; batch_key: string; removed_table_count: number; removed_zip: boolean; removed_extract_directory: boolean };
@@ -277,6 +277,7 @@ export function AdminImportsPage() {
         { accessorKey: 'academic_term', header: 'ภาคเรียน', size: 110, meta: { compactSize: 64, compactTextAlign: 'center' } },
         { accessorKey: 'row_count', header: 'จำนวนแถว', size: 125, meta: { compactSize: 68, compactTextAlign: 'center' }, cell: ({ getValue }) => Number(getValue()).toLocaleString('th-TH') },
         { accessorKey: 'table_count', header: 'ตาราง', size: 92, meta: { compactSize: 52, compactTextAlign: 'center' } },
+        { id: 'exam_data', header: 'ข้อมูลตารางสอบ', size: 205, meta: { compactSize: 112 }, cell: ({ row }) => row.original.exam_schedule_ready ? <StatusBadge tone="success">ครบ</StatusBadge> : <div><StatusBadge tone="warning">ไม่ครบ</StatusBadge><p className="mt-1 text-xs leading-5 text-amber-800">ขาด {(row.original.missing_exam_data ?? []).join(', ') || 'schedule / field'}</p></div> },
         { accessorKey: 'warning_count', header: 'คำเตือน', size: 105, meta: { compactSize: 62, compactTextAlign: 'center' }, cell: ({ getValue }) => <StatusBadge tone={Number(getValue()) > 0 ? 'warning' : 'success'}>{getValue<number>()}</StatusBadge> },
         { accessorKey: 'status', header: 'สถานะ', size: 135, meta: { compactSize: 76, compactTextAlign: 'center' }, cell: ({ getValue }) => <StatusBadge tone={importTone(getValue<string>())}>{getValue<string>()}</StatusBadge> },
         { id: 'actions', header: 'จัดการ', size: 112, meta: { compactSize: 72, compactTextAlign: 'center' }, enableSorting: false, cell: ({ row }) => <button type="button" onClick={() => confirmDelete(row.original)} disabled={loading || remove.isPending} className="responsive-table-action inline-flex items-center justify-center gap-1.5 rounded-full border border-rose-200 bg-white px-3 py-2 text-xs font-bold text-rose-700 transition hover:bg-rose-50 disabled:cursor-not-allowed disabled:opacity-50" aria-label={`ลบชุดข้อมูล ${row.original.batch_key}`}>{remove.isPending ? <CircleNotch size={16} className="animate-spin" /> : <Trash size={16} weight="bold" />}<span>ลบข้อมูล</span></button> },
@@ -301,6 +302,7 @@ export function AdminImportsPage() {
                     </form>
                 </Panel>
                 <Panel title="ชุดข้อมูลปัจจุบัน" description="แต่ละอำเภอมีชุดข้อมูลใช้งานหนึ่งชุด ชุดก่อนหน้าจะถูกลบเมื่อชุดใหม่ผ่านการนำเข้า">
+                    {imports.data?.data.some((batch) => batch.is_active && batch.exam_schedule_ready === false) && <div role="alert" className="mb-4 rounded-xl border border-amber-200 bg-amber-50 p-4 text-sm leading-6 text-amber-950"><p className="font-black">ข้อมูลนักศึกษาพร้อมใช้ แต่ข้อมูลตารางสอบยังไม่ครบ</p><p className="mt-1">นำเข้า ZIP จาก ITW51 ที่มี SCHEDULE.DBF ในโฟลเดอร์ระดับ 1, 2, 3 และ FIELD.DBF ระบบจะเก็บเป็นตารางในฐานข้อมูลของระบบเอง</p></div>}
                     {imports.isPending && <QuerySkeleton />}{imports.isError && <QueryError onRetry={() => imports.refetch()} />}{imports.data && <DataTable data={imports.data.data} columns={columns} minWidth="wide" />}
                 </Panel>
             </div>

@@ -397,10 +397,35 @@ final class LegacyPortalReadService
             true,
         );
         $activeKey = collect($rows)->first(fn (object $row): bool => $row->status === 'success')?->batch_key;
+        $allTables = $this->connection()->getSchemaBuilder()->getTableListing(null, false);
         $items = [];
         foreach ($rows as $row) {
             $itemStatus = $row->status === 'failed' ? 'failed' : ($row->batch_key === $activeKey ? 'active' : 'archived');
             $term = $this->batchAcademicTerm((string) $row->batch_key);
+            $prefix = 'db_'.(string) $row->batch_key.'_';
+            $batchTables = array_values(array_filter($allTables, static fn (string $table): bool => str_starts_with($table, $prefix)));
+            $levels = [];
+            $scheduleLevels = [];
+            $hasField = false;
+            foreach ($batchTables as $table) {
+                if (preg_match('/^'.preg_quote($prefix, '/').'([123])_student$/', $table, $matches) === 1) {
+                    $levels[] = (int) $matches[1];
+                }
+                if (preg_match('/^'.preg_quote($prefix, '/').'([123])_schedule$/', $table, $matches) === 1) {
+                    $scheduleLevels[] = (int) $matches[1];
+                }
+                $hasField = $hasField || str_ends_with($table, '_field');
+            }
+            $levels = array_values(array_unique($levels));
+            sort($levels);
+            $scheduleLevels = array_values(array_unique($scheduleLevels));
+            $missingExamData = array_map(
+                static fn (int $level): string => 'schedule ระดับ '.$level,
+                array_values(array_diff($levels, $scheduleLevels)),
+            );
+            if (! $hasField) {
+                $missingExamData[] = 'field';
+            }
             $items[] = [
                 'id' => (int) $row->id,
                 'batch_key' => (string) $row->batch_key,
@@ -411,7 +436,9 @@ final class LegacyPortalReadService
                 'status' => $itemStatus,
                 'row_count' => (int) $row->row_count,
                 'table_count' => (int) $row->table_count,
-                'warning_count' => $row->status === 'failed' ? 1 : 0,
+                'warning_count' => ($row->status === 'failed' ? 1 : 0) + count($missingExamData),
+                'exam_schedule_ready' => $missingExamData === [],
+                'missing_exam_data' => $missingExamData,
                 'created_at' => $row->created_at,
                 'activated_at' => $row->batch_key === $activeKey ? $row->created_at : null,
                 'is_active' => $row->batch_key === $activeKey,

@@ -347,6 +347,24 @@ function LearningEditor({ kind, draft, setDraft, pending, error, onClose, onSubm
 
 type ExamStudentOption = { code: string; full_name: string; group: { code: string; name: string }; level: { id: number; label: string } };
 type ExamPrintScope = 'student' | 'group' | 'level';
+type ExamScheduleRow = {
+    subject_code: string;
+    subject_name: string;
+    term: string;
+    exam_date: string;
+    exam_date_display: string;
+    start_time: string;
+    end_time: string;
+    location: string;
+    room: string;
+};
+type ExamSchedulePayload = {
+    student: { code: string; name: string; level: string; group: string; district: string };
+    term: string;
+    rows: ExamScheduleRow[];
+    source_ready: boolean;
+    sources?: { schedule: boolean; field: boolean; group: boolean; exam_rooms: boolean };
+};
 
 function ExamSchedulePage() {
     const { role } = useDemoRole();
@@ -366,6 +384,14 @@ function ExamSchedulePage() {
     });
     const studentCode = params.get('student') ?? '';
     const autoGenerate = params.get('auto') === '1' && studentCode !== '';
+    const schedule = useQuery({
+        queryKey: ['exam-schedule', 'preview', studentCode],
+        queryFn: ({ signal }) => getFeatureDataWithDemo<ExamSchedulePayload>(`/api/v1/students/${encodeURIComponent(studentCode)}/exam-schedule`, {
+            student: { code: studentCode, name: '', level: '', group: '', district: '' },
+            term: '', rows: [], source_ready: false,
+        }, signal),
+        enabled: studentCode !== '',
+    });
     const groupOptions = useMemo(() => {
         const unique = new Map<string, { value: string; label: string; level: number }>();
         for (const student of students.data?.data ?? []) {
@@ -433,6 +459,15 @@ function ExamSchedulePage() {
     }, [autoGenerate, scope, studentCode]);
 
     const selectedStudent = (students.data?.data ?? []).find((student) => student.code === studentCode);
+    const scheduleRows = schedule.data?.data.rows ?? [];
+    const scheduleColumns = useMemo<ColumnDef<ExamScheduleRow>[]>(() => [
+        { accessorKey: 'exam_date_display', header: 'วันสอบ', size: 135, meta: { compactSize: 82, compactTextAlign: 'center' } },
+        { id: 'time', header: 'เวลา', size: 135, meta: { compactSize: 82, compactTextAlign: 'center' }, cell: ({ row }) => `${row.original.start_time} - ${row.original.end_time} น.` },
+        { accessorKey: 'subject_code', header: 'รหัสวิชา', size: 115, meta: { compactSize: 72 }, cell: ({ getValue }) => <span className="font-mono text-xs font-bold text-slate-600">{getValue<string>()}</span> },
+        { accessorKey: 'subject_name', header: 'รายวิชา', size: 260, meta: { compactSize: 140 }, cell: ({ getValue }) => <span className="font-bold text-slate-950">{getValue<string>()}</span> },
+        { accessorKey: 'location', header: 'สนามสอบ', size: 220, meta: { compactSize: 112 } },
+        { accessorKey: 'room', header: 'ห้องสอบ', size: 130, meta: { compactSize: 76, compactTextAlign: 'center' }, cell: ({ getValue }) => <StatusBadge tone="info">{getValue<string>()}</StatusBadge> },
+    ], []);
 
     return <div>
         <PageHeader category="learning" title="ตารางสอบ" description={autoGenerate ? 'ระบบสร้างไฟล์ PDF ตารางสอบของนักศึกษารายนี้ให้อัตโนมัติ' : 'สร้างไฟล์ PDF ด้วย mPDF และฟอนต์ TH Sarabun New แบบรายคน รายกลุ่ม หรือรายระดับชั้น'} icon={Clock} />
@@ -457,6 +492,13 @@ function ExamSchedulePage() {
             {pdfError && <p role="alert" className="mt-4 rounded-xl border border-rose-200 bg-rose-50 p-3 text-sm font-bold text-rose-800">{pdfError}</p>}
             <div className="mt-5 flex flex-wrap justify-end gap-2"><Button type="button" appearance="primary" size="large" icon={<DownloadSimple size={18} weight="bold" />} onClick={generatePdf} disabled={!canGenerate || pdfLoading}>{pdfLoading ? 'กำลังสร้าง PDF' : autoGenerate ? 'สร้าง PDF ใหม่' : 'สร้างและแสดงตัวอย่าง PDF'}</Button>{pdfUrl && <><Button as="a" href={pdfUrl} download={pdfName} appearance="outline" size="large" icon={<DownloadSimple size={18} weight="bold" />}>ดาวน์โหลด PDF</Button><Button type="button" appearance="outline" size="large" icon={<Printer size={18} weight="bold" />} onClick={() => window.open(pdfUrl, '_blank', 'noopener,noreferrer')}>เปิดเพื่อพิมพ์</Button></>}</div>
         </Panel>
+        {scope === 'student' && studentCode !== '' && <Panel title="ตารางสอบจากฐานข้อมูลระบบ" description={`${selectedStudent?.full_name ?? studentCode} · ภาคเรียน ${schedule.data?.data.term || '-'}`}>
+            {schedule.isPending && <QuerySkeleton rows={5} />}
+            {schedule.isError && <QueryError onRetry={() => schedule.refetch()} />}
+            {schedule.data && !schedule.data.data.source_ready && <div role="alert" className="rounded-xl border border-amber-200 bg-amber-50 p-4 text-sm leading-6 text-amber-950"><p className="font-black">ชุดข้อมูลนำเข้าปัจจุบันไม่มีตาราง SCHEDULE</p><p className="mt-1">ให้นำเข้า ZIP จาก ITW51 ที่มี SCHEDULE.DBF ของระดับนี้ ระบบจะสร้างตาราง schedule ในฐานข้อมูลของระบบเองและแสดงตารางสอบที่นี่ โดยไม่เชื่อมฐานข้อมูลหรือ API ภายนอก</p></div>}
+            {schedule.data?.data.source_ready && schedule.data.data.sources?.field === false && <p role="alert" className="mb-4 rounded-xl border border-sky-200 bg-sky-50 p-3 text-sm font-bold text-sky-900">ยังไม่มี FIELD.DBF ในชุดข้อมูลปัจจุบัน ระบบจึงใช้ชื่ออำเภอแทนชื่อสนามสอบจนกว่าจะนำเข้าข้อมูลสนามสอบครบ</p>}
+            {schedule.data?.data.source_ready && <DataTable data={scheduleRows} columns={scheduleColumns} minWidth="wide" emptyTitle="ไม่พบตารางสอบในภาคเรียนนี้" emptyDescription="ตรวจว่า SCHEDULE.DBF มีภาคเรียนและรายวิชาตรงกับวิชาที่นักศึกษาลงทะเบียน" />}
+        </Panel>}
         <Panel title="ตัวอย่างไฟล์ PDF" description={pdfUrl ? 'ตัวอย่างนี้เป็นไฟล์เดียวกับที่ดาวน์โหลดและพิมพ์ ตำแหน่งจึงตรงกันทุกจุด' : autoGenerate ? 'ระบบกำลังสร้างตารางสอบของนักศึกษารายนี้' : 'เลือกขอบเขตแล้วกดสร้าง PDF เพื่อแสดงตัวอย่าง'}>
             {pdfLoading && <QuerySkeleton rows={8} />}
             {pdfUrl ? <iframe src={pdfUrl} title="ตัวอย่างตารางสอบ PDF" className="h-[min(1120px,78vh)] min-h-[680px] w-full rounded-xl border border-slate-200 bg-slate-100" /> : !pdfLoading && <div className="grid min-h-72 place-items-center rounded-xl border border-dashed border-slate-300 bg-slate-50 text-center text-sm text-slate-500">ยังไม่ได้สร้างตัวอย่าง PDF</div>}

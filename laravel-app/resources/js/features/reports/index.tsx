@@ -63,6 +63,17 @@ type AcademicSubjectRow = {
     attended: boolean;
 };
 
+function compareAcademicTermsDescending(left: string, right: string): number {
+    const parse = (value: string) => {
+        const match = value.match(/^([1-4])\/(25\d{2})$/);
+        return match ? [Number(match[2]), Number(match[1])] : [0, 0];
+    };
+    const [leftYear, leftSemester] = parse(left);
+    const [rightYear, rightSemester] = parse(right);
+
+    return rightYear - leftYear || rightSemester - leftSemester || right.localeCompare(left, 'th');
+}
+
 const academicReportKinds: ReportKind[] = ['registered-subjects', 'grade-threshold', 'exam-attendance'];
 
 const commonStudents: ReportRow[] = [
@@ -533,11 +544,11 @@ export function ReportPage({ kind }: { kind: ReportKind }) {
     const payload = report.data?.data;
     const termOptions = useMemo(() => {
         const available = payload?.terms?.filter(Boolean) ?? [];
-        return Array.from(new Set([...(term ? [term] : []), ...available]));
+        return Array.from(new Set([...(term ? [term] : []), ...available])).sort(compareAcademicTermsDescending);
     }, [payload?.terms, term]);
     useEffect(() => {
         if (term !== '') return;
-        const currentTerm = payload?.selected_term ?? payload?.terms?.[0];
+        const currentTerm = [...(payload?.terms ?? [])].sort(compareAcademicTermsDescending)[0] ?? payload?.selected_term;
         if (currentTerm) setTerm(currentTerm);
     }, [payload?.selected_term, payload?.terms, term]);
     const statCards = useMemo<StatCard[]>(() => {
