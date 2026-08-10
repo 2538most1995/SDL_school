@@ -19,7 +19,7 @@ final class ProductionSettingsTest extends TestCase
     public function test_profile_override_is_stored_locally_and_contact_email_is_encrypted(): void
     {
         $district = District::create(['name' => 'อำเภอทดสอบ', 'code' => 'test']);
-        $user = User::factory()->create(['role' => 'teacher', 'district_id' => $district->id, 'auth_source' => 'legacy']);
+        $user = User::factory()->create(['role' => 'teacher', 'district_id' => $district->id, 'auth_source' => 'local']);
         Sanctum::actingAs($user);
 
         $this->patchJson('/api/v1/settings/profile', [
@@ -28,7 +28,7 @@ final class ProductionSettingsTest extends TestCase
         ])->assertOk()
             ->assertJsonPath('data.displayName', 'ชื่อที่เลือกแสดง')
             ->assertJsonPath('data.email', 'viewer@example.test')
-            ->assertJsonPath('data.canChangePassword', false);
+            ->assertJsonPath('data.canChangePassword', true);
 
         $stored = DB::table('users')->where('id', $user->id)->value('contact_email');
         $this->assertNotSame('viewer@example.test', $stored);
@@ -55,7 +55,7 @@ final class ProductionSettingsTest extends TestCase
         $this->assertDatabaseHas('users', ['id' => $user->id, 'color_scheme' => 'violet']);
     }
 
-    public function test_local_user_can_change_password_but_legacy_user_cannot(): void
+    public function test_local_user_can_change_password(): void
     {
         $district = District::create(['name' => 'อำเภอทดสอบ', 'code' => 'password']);
         $user = User::factory()->create([
@@ -81,13 +81,6 @@ final class ProductionSettingsTest extends TestCase
         $this->assertTrue(Hash::check('NewSecure456', (string) $user->fresh()->password));
         $this->assertDatabaseHas('audit_logs', ['user_id' => $user->id, 'event' => 'profile.password_updated']);
 
-        $legacy = User::factory()->create(['role' => 'teacher', 'district_id' => $district->id, 'auth_source' => 'legacy']);
-        Sanctum::actingAs($legacy);
-        $this->patchJson('/api/v1/settings/password', [
-            'current_password' => 'Current123',
-            'password' => 'NewSecure456',
-            'password_confirmation' => 'NewSecure456',
-        ])->assertUnprocessable()->assertJsonValidationErrors('current_password');
     }
 
     public function test_user_can_upload_read_and_remove_private_avatar(): void

@@ -24,7 +24,7 @@ final class StudentReportController extends StudentsApiController
     public function gradesAboveTwo(Request $request): JsonResponse
     {
         $filters = $this->filters($request);
-        $data = config('legacy.student_enabled')
+        $data = config('system_data.student_enabled')
             ? $this->legacyReports->gradesAboveTwo($request->user(), (int) $request->attributes->get('district_id'), $filters)
             : $this->reports->gradesAboveTwo($request->user(), $filters);
 
@@ -34,7 +34,7 @@ final class StudentReportController extends StudentsApiController
     public function newStudents(Request $request): JsonResponse
     {
         $filters = $this->filters($request);
-        $data = config('legacy.student_enabled')
+        $data = config('system_data.student_enabled')
             ? $this->legacyReports->newStudents($request->user(), (int) $request->attributes->get('district_id'), $filters)
             : $this->reports->newStudents($request->user(), $filters);
 
@@ -44,7 +44,7 @@ final class StudentReportController extends StudentsApiController
     public function graduates(Request $request): JsonResponse
     {
         $filters = $this->filters($request);
-        $data = config('legacy.student_enabled')
+        $data = config('system_data.student_enabled')
             ? $this->legacyReports->graduates($request->user(), (int) $request->attributes->get('district_id'), $filters)
             : $this->reports->graduates($request->user(), $filters);
 
@@ -54,7 +54,7 @@ final class StudentReportController extends StudentsApiController
     public function expectedGraduates(Request $request): JsonResponse
     {
         $filters = $this->filters($request);
-        $data = config('legacy.student_enabled')
+        $data = config('system_data.student_enabled')
             ? $this->legacyReports->expectedGraduates($request->user(), (int) $request->attributes->get('district_id'), $filters)
             : $this->reports->expectedGraduates($request->user(), $filters);
 
@@ -64,7 +64,7 @@ final class StudentReportController extends StudentsApiController
     public function transfers(Request $request): JsonResponse
     {
         $filters = $this->filters($request);
-        $data = config('legacy.student_enabled')
+        $data = config('system_data.student_enabled')
             ? $this->legacyReports->transfers($request->user(), (int) $request->attributes->get('district_id'), $filters)
             : $this->reports->transfers($request->user(), $filters);
 
@@ -74,7 +74,7 @@ final class StudentReportController extends StudentsApiController
     public function registeredSubjects(Request $request): JsonResponse
     {
         $filters = $this->filters($request);
-        $data = config('legacy.student_enabled')
+        $data = config('system_data.student_enabled')
             ? $this->legacyReports->registeredSubjects($request->user(), (int) $request->attributes->get('district_id'), $filters)
             : $this->reports->registeredSubjects($request->user(), $filters);
 
@@ -84,7 +84,7 @@ final class StudentReportController extends StudentsApiController
     public function examAttendance(Request $request): JsonResponse
     {
         $filters = $this->filters($request);
-        $data = config('legacy.student_enabled')
+        $data = config('system_data.student_enabled')
             ? $this->legacyReports->examAttendance($request->user(), (int) $request->attributes->get('district_id'), $filters)
             : $this->reports->examAttendance($request->user(), $filters);
 

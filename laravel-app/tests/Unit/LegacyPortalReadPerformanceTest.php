@@ -18,7 +18,7 @@ final class LegacyPortalReadPerformanceTest extends TestCase
 
         $this->connectionName = 'legacy_portal_test_'.str_replace('.', '_', uniqid('', true));
         config([
-            'legacy.connection' => $this->connectionName,
+            'database.default' => $this->connectionName,
             "database.connections.{$this->connectionName}" => [
                 'driver' => 'sqlite',
                 'database' => ':memory:',

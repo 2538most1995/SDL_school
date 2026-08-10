@@ -12,11 +12,11 @@ abstract class StudentsApiController extends Controller
     protected function meta(array $extra = []): array
     {
         return [
-            'mode' => config('legacy.enabled') ? 'production' : 'demo',
-            'source' => config('legacy.enabled') ? 'legacy_read_only' : 'synthetic_canonical_dataset',
+            'mode' => config('system_data.enabled') ? 'production' : 'demo',
+            'source' => config('system_data.enabled') ? 'system_database' : 'synthetic_canonical_dataset',
             'generated_at' => now()->toIso8601String(),
-            'contains_personal_data' => (bool) config('legacy.enabled'),
-            'read_only' => (bool) config('legacy.enabled'),
+            'contains_personal_data' => (bool) config('system_data.enabled'),
+            'read_only' => (bool) config('system_data.enabled'),
             ...$extra,
         ];
     }

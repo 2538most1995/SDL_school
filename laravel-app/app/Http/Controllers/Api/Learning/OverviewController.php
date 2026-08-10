@@ -13,7 +13,7 @@ final class OverviewController extends Controller
 {
     public function __invoke(Request $request, DemoLearningPortal $portal, LegacyPortalReadService $legacy): JsonResponse
     {
-        $production = (bool) config('legacy.enabled');
+        $production = (bool) config('system_data.enabled');
         $data = $production
             ? $legacy->overview($request->user(), (int) $request->attributes->get('district_id'))
             : $portal->overview($request->user()?->name ?? 'ผู้ใช้งานสาธิต');
@@ -21,7 +21,7 @@ final class OverviewController extends Controller
         return response()->json([
             'data' => $data,
             'meta' => $production
-                ? ['mode' => 'production', 'source' => 'legacy_read_only', 'read_only' => true]
+                ? ['mode' => 'production', 'source' => 'system_database', 'read_only' => true]
                 : DemoResponseMeta::item(),
         ]);
     }

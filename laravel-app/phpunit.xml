@@ -30,9 +30,9 @@
         <env name="QUEUE_CONNECTION" value="sync"/>
         <env name="SESSION_DRIVER" value="array"/>
         <env name="SENA_DATA_SOURCE" value="demo"/>
-        <env name="LEGACY_STUDENT_ENABLED" value="false"/>
+        <env name="SYSTEM_STUDENT_DATA_ENABLED" value="false"/>
         <env name="SENA_DEMO_MODE" value="true"/>
-        <env name="SENA_LEGACY_CONFIG_FALLBACK" value="false"/>
+        <env name="SYSTEM_WRITES_ENABLED" value="false"/>
         <env name="PULSE_ENABLED" value="false"/>
         <env name="TELESCOPE_ENABLED" value="false"/>
         <env name="NIGHTWATCH_ENABLED" value="false"/>

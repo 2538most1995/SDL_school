@@ -20,13 +20,13 @@ final class ResourceController extends Controller
             'search' => DemoQueryRules::search(),
         ]);
 
-        $items = config('legacy.enabled')
+        $items = config('system_data.enabled')
             ? $legacy->resources($request->user(), (int) $request->attributes->get('district_id'), $filters['category'] ?? null, $filters['search'] ?? null)
             : $portal->resources($filters['category'] ?? null, $filters['search'] ?? null);
 
         return response()->json([
             'data' => $items,
-            'meta' => config('legacy.enabled') ? ['mode' => 'production', 'source' => 'legacy_controlled_write', 'read_only' => ! (bool) config('legacy.write_enabled'), 'pagination' => ['page' => 1, 'per_page' => count($items), 'total' => count($items), 'last_page' => 1], 'filters' => $filters] : DemoResponseMeta::collection(count($items), $filters),
+            'meta' => config('system_data.enabled') ? ['mode' => 'production', 'source' => 'system_database', 'read_only' => ! (bool) config('system_data.write_enabled'), 'pagination' => ['page' => 1, 'per_page' => count($items), 'total' => count($items), 'last_page' => 1], 'filters' => $filters] : DemoResponseMeta::collection(count($items), $filters),
         ]);
     }
 }

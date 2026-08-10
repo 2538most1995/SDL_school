@@ -2,7 +2,6 @@
 
 namespace App\Http\Controllers\Auth;
 
-use App\Contracts\LegacyIdentityProvider;
 use App\Http\Controllers\Controller;
 use App\Http\Requests\Auth\LoginRequest;
 use App\Models\District;
@@ -10,20 +9,12 @@ use App\Models\User;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
-use Illuminate\Support\Facades\Hash;
-use Illuminate\Support\Str;
 use Illuminate\Validation\ValidationException;
 
 final class LoginController extends Controller
 {
-    public function __construct(private readonly LegacyIdentityProvider $legacy) {}
-
     public function store(LoginRequest $request): JsonResponse
     {
-        if ((bool) config('legacy.enabled')) {
-            return $this->legacyLogin($request);
-        }
-
         $field = filter_var($request->string('identifier')->toString(), FILTER_VALIDATE_EMAIL)
             ? 'email'
             : 'username';
@@ -47,108 +38,14 @@ final class LoginController extends Controller
         return response()->json(['data' => $this->userPayload($user)]);
     }
 
-    private function legacyLogin(LoginRequest $request): JsonResponse
-    {
-        $identifier = $request->string('identifier')->toString();
-        $loginType = $request->string('login_type')->toString();
-        $isStudent = $loginType === 'student' || ($loginType === '' && preg_match('/^\d{13}$/', preg_replace('/\D+/', '', $identifier) ?? '') === 1);
-
-        $identity = $isStudent
-            ? $this->legacy->authenticateStudent($identifier, $request->string('password')->toString())
-            : $this->legacy->authenticateStaff($identifier, $request->string('password')->toString());
-
-        if ($identity === null) {
-            throw ValidationException::withMessages([
-                'identifier' => ['ชื่อผู้ใช้หรือรหัสผ่านไม่ถูกต้อง'],
-            ]);
-        }
-
-        $this->syncLegacyDistricts();
-        $user = $this->syncShadowUser($identity);
-        Auth::guard('web')->login($user, $request->boolean('remember'));
-        $request->session()->regenerate();
-
-        return response()->json(['data' => $this->userPayload($user)]);
-    }
-
-    /** @param array<string, mixed> $identity */
-    private function syncShadowUser(array $identity): User
-    {
-        try {
-            $user = User::query()->firstOrNew(['legacy_key' => $identity['legacy_key']]);
-            $user->fill([
-                'name' => $identity['name'],
-                'email' => 'shadow+'.hash('sha256', (string) $identity['legacy_key']).'@identity.invalid',
-                'username' => $identity['username'],
-                'role' => $identity['role'],
-                'district_id' => $identity['district_id'],
-                'assigned_groups' => $identity['assigned_groups'],
-                'legacy_user_id' => $identity['legacy_user_id'],
-                'student_code' => $identity['student_code'],
-                'auth_source' => 'legacy',
-                'disabled_at' => null,
-            ]);
-            if (! $user->exists) {
-                $user->password = Hash::make(Str::random(64));
-            }
-            $user->save();
-
-            return $user;
-        } catch (\Throwable) {
-            $user = new User();
-            $user->forceFill([
-                'id' => $identity['legacy_user_id'] ?? rand(1000, 9999),
-                'legacy_key' => $identity['legacy_key'],
-                'name' => $identity['name'],
-                'email' => 'shadow+'.hash('sha256', (string) $identity['legacy_key']).'@identity.invalid',
-                'username' => $identity['username'],
-                'role' => $identity['role'],
-                'district_id' => $identity['district_id'],
-                'assigned_groups' => $identity['assigned_groups'],
-                'legacy_user_id' => $identity['legacy_user_id'],
-                'student_code' => $identity['student_code'],
-                'auth_source' => 'legacy',
-                'disabled_at' => null,
-            ]);
-            $user->exists = true;
-
-            return $user;
-        }
-    }
-
-    private function syncLegacyDistricts(): void
-    {
-        try {
-            foreach ($this->legacy->districts() as $legacyDistrict) {
-                District::query()->updateOrCreate(
-                    ['id' => $legacyDistrict['id']],
-                    [
-                        'name' => $legacyDistrict['name'],
-                        'code' => $legacyDistrict['code'],
-                        'is_active' => $legacyDistrict['is_active'],
-                    ],
-                );
-            }
-        } catch (\Throwable) {
-            // Ignore DB sync error on legacy DB lacking districts table
-        }
-    }
-
     /** @return array<string, mixed> */
     private function userPayload(User $user): array
     {
-        try {
-            $districts = District::query()
-                ->where('is_active', true)
-                ->when($user->role !== 'super_admin', fn ($query) => $query->whereKey($user->district_id))
-                ->orderBy('name')
-                ->get(['id', 'name', 'code']);
-        } catch (\Throwable) {
-            $districts = array_values(array_filter(
-                $this->legacy->districts(),
-                static fn (array $d): bool => (bool) ($d['is_active'] ?? true) && ($user->role === 'super_admin' || (int) ($d['id'] ?? 0) === (int) $user->district_id)
-            ));
-        }
+        $districts = District::query()
+            ->where('is_active', true)
+            ->when($user->role !== 'super_admin', fn ($query) => $query->whereKey($user->district_id))
+            ->orderBy('name')
+            ->get(['id', 'name', 'code']);
 
         return [
             'id' => $user->id,

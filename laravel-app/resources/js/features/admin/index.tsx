@@ -61,7 +61,7 @@ function MutationError({ error }: { error: Error | null }) {
     return error ? <p role="alert" className="rounded-xl border border-rose-200 bg-rose-50 p-3 text-sm font-bold text-rose-800">{error.message}</p> : null;
 }
 
-type AdminRole = 'teacher' | 'admin' | 'super_admin';
+type AdminRole = 'student' | 'teacher' | 'admin' | 'super_admin';
 type AdminUser = {
     id: number;
     display_name: string;
@@ -80,7 +80,7 @@ type AdminUser = {
 type AvailableGroup = { code: string; name: string; label: string; level: string | null; advisor: string | null; meeting_place: string | null };
 type UserDraft = { username: string; password: string; first_name: string; last_name: string; role: AdminRole; assigned_groups: string[] };
 
-const roleLabels: Record<AdminRole, string> = { teacher: 'ครู', admin: 'ผู้ดูแลอำเภอ', super_admin: 'ผู้ดูแลสูงสุด' };
+const roleLabels: Record<AdminRole, string> = { student: 'นักศึกษา', teacher: 'ครู', admin: 'ผู้ดูแลอำเภอ', super_admin: 'ผู้ดูแลสูงสุด' };
 const blankUser: UserDraft = { username: '', password: '', first_name: '', last_name: '', role: 'teacher', assigned_groups: [] };
 
 export function AdminUsersPage() {

@@ -18,13 +18,13 @@ final class CalendarController extends Controller
             'type' => ['nullable', 'string', Rule::in(['assignment', 'meeting', 'exam', 'activity'])],
         ]);
 
-        $items = config('legacy.enabled')
+        $items = config('system_data.enabled')
             ? $legacy->calendar($request->user(), (int) $request->attributes->get('district_id'), $filters['type'] ?? null)
             : $portal->calendar($filters['type'] ?? null);
 
         return response()->json([
             'data' => $items,
-            'meta' => config('legacy.enabled') ? ['mode' => 'production', 'source' => 'legacy_controlled_write', 'read_only' => ! (bool) config('legacy.write_enabled'), 'pagination' => ['page' => 1, 'per_page' => count($items), 'total' => count($items), 'last_page' => 1], 'filters' => $filters] : DemoResponseMeta::collection(count($items), $filters),
+            'meta' => config('system_data.enabled') ? ['mode' => 'production', 'source' => 'system_database', 'read_only' => ! (bool) config('system_data.write_enabled'), 'pagination' => ['page' => 1, 'per_page' => count($items), 'total' => count($items), 'last_page' => 1], 'filters' => $filters] : DemoResponseMeta::collection(count($items), $filters),
         ]);
     }
 }

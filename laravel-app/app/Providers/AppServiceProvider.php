@@ -2,18 +2,15 @@
 
 namespace App\Providers;
 
-use App\Contracts\LegacyIdentityProvider;
 use App\Domain\Students\Repositories\DemoStudentRepository;
 use App\Domain\Students\Repositories\LegacyStudentRepository;
 use App\Domain\Students\Repositories\StudentRepository;
-use App\Services\Legacy\LegacyIdentityService;
 use App\Support\LegacyFptMemoReader;
 use App\Support\ThaiAdministrativeAreaLookup;
 use Illuminate\Contracts\Foundation\Application;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Http;
 use Illuminate\Support\ServiceProvider;
-use LogicException;
 
 class AppServiceProvider extends ServiceProvider
 {
@@ -22,24 +19,19 @@ class AppServiceProvider extends ServiceProvider
      */
     public function register(): void
     {
-        $this->app->singleton(LegacyIdentityProvider::class, LegacyIdentityService::class);
         $this->app->singleton(
             LegacyFptMemoReader::class,
-            fn (): LegacyFptMemoReader => new LegacyFptMemoReader((string) config('legacy.fpt_memo_root')),
+            fn (): LegacyFptMemoReader => new LegacyFptMemoReader((string) config('system_data.fpt_memo_root')),
         );
         $this->app->scoped(StudentRepository::class, function (Application $app): StudentRepository {
-            $legacyEnabled = (bool) config('legacy.student_enabled');
+            $systemStudentDataEnabled = (bool) config('system_data.student_enabled');
 
-            if (! $legacyEnabled) {
+            if (! $systemStudentDataEnabled) {
                 return $app->make(DemoStudentRepository::class);
             }
 
-            if (config('database.connections.legacy') === null) {
-                throw new LogicException('LEGACY_STUDENT_ENABLED requires a configured legacy database connection.');
-            }
-
             return new LegacyStudentRepository(
-                DB::connection('legacy'),
+                DB::connection(),
                 $app->make(ThaiAdministrativeAreaLookup::class),
                 $app->make(LegacyFptMemoReader::class),
             );

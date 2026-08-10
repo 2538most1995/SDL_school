@@ -94,12 +94,6 @@ final class ProfileController extends Controller
     {
         $user = $request->user();
 
-        if ($user->auth_source === 'legacy') {
-            throw ValidationException::withMessages([
-                'current_password' => ['บัญชีนี้ต้องเปลี่ยนรหัสผ่านผ่านระบบสถานศึกษาต้นทาง'],
-            ]);
-        }
-
         $validated = $request->validate([
             'current_password' => ['required', 'string'],
             'password' => ['required', 'confirmed', Password::min(8)->letters()->numbers()],
@@ -138,7 +132,7 @@ final class ProfileController extends Controller
             'studentCode' => $user->student_code,
             'roleLabel' => $roles[$user->role] ?? $user->role,
             'districtName' => (string) (District::query()->whereKey($districtId)->value('name') ?? ''),
-            'canChangePassword' => $user->auth_source !== 'legacy',
+            'canChangePassword' => true,
         ];
     }
 

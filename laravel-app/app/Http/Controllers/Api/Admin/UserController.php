@@ -5,12 +5,12 @@ namespace App\Http\Controllers\Api\Admin;
 use App\Domain\Learning\DemoLearningPortal;
 use App\Domain\Learning\DemoResponseMeta;
 use App\Http\Controllers\Controller;
-use App\Models\User;
 use Illuminate\Database\DatabaseManager;
 use Illuminate\Database\Query\Builder;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Hash;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Validation\Rule;
 use Illuminate\Validation\ValidationException;
@@ -28,10 +28,10 @@ final class UserController extends Controller
     public function index(Request $request, DemoLearningPortal $demo): JsonResponse
     {
         $filters = $request->validate([
-            'role' => ['nullable', Rule::in(config('legacy.enabled') ? ['teacher', 'admin', 'super_admin'] : ['student', 'teacher', 'admin', 'super_admin'])],
+            'role' => ['nullable', Rule::in(['student', 'teacher', 'admin', 'super_admin'])],
             'search' => ['nullable', 'string', 'max:100'],
         ]);
-        if (! (bool) config('legacy.enabled')) {
+        if (! (bool) config('system_data.enabled')) {
             $items = array_map(static function (array $item): array {
                 [$firstName, $lastName] = array_pad(explode(' ', (string) $item['display_name'], 2), 2, '');
 
@@ -51,7 +51,7 @@ final class UserController extends Controller
         $groupNames = collect($availableGroups)->pluck('label', 'code')->all();
         $query = $this->userDirectoryConnection()->table('users as user')
             ->leftJoin('districts as district', 'district.id', '=', 'user.district_id')
-            ->whereIn('user.role', ['teacher', 'admin', 'super_admin'])
+            ->whereIn('user.role', ['student', 'teacher', 'admin', 'super_admin'])
             ->where(function (Builder $scope) use ($districtId, $viewer): void {
                 $scope->where('user.district_id', $districtId);
                 if ($viewer->role === 'super_admin') {
@@ -82,8 +82,8 @@ final class UserController extends Controller
             'read_only' => ! $this->writeEnabled(),
             'district_id' => $districtId,
             'allowed_roles' => $viewer->role === 'super_admin'
-                ? ['teacher', 'admin', 'super_admin']
-                : ['teacher', 'admin'],
+                ? ['student', 'teacher', 'admin', 'super_admin']
+                : ['student', 'teacher', 'admin'],
             'available_groups' => $availableGroups,
         ]]);
     }
@@ -95,15 +95,23 @@ final class UserController extends Controller
         $districtId = $this->targetDistrictId($request, $validated['role'], $validated['district_id'] ?? null);
         $this->assertUsernameAvailable($validated['username']);
 
+        $username = trim($validated['username']);
+        $firstName = trim($validated['first_name']);
+        $lastName = trim($validated['last_name']);
         $id = $this->write()->table('users')->insertGetId([
-            'username' => trim($validated['username']),
-            'password' => password_hash($validated['password'], PASSWORD_BCRYPT),
-            'first_name' => trim($validated['first_name']),
-            'last_name' => trim($validated['last_name']),
+            'name' => trim($firstName.' '.$lastName),
+            'email' => $this->systemEmail($username),
+            'username' => $username,
+            'password' => Hash::make($validated['password']),
+            'first_name' => $firstName,
+            'last_name' => $lastName,
             'role' => $validated['role'],
             'district_id' => $districtId,
             'assigned_groups' => json_encode($validated['assigned_groups'] ?? [], JSON_UNESCAPED_UNICODE | JSON_THROW_ON_ERROR),
+            'student_code' => $validated['role'] === 'student' ? $username : null,
+            'auth_source' => 'local',
             'created_at' => now(),
+            'updated_at' => now(),
         ]);
         $row = $this->userRow($request, $id, true);
         $this->audit($request, 'admin.user.created', $id, null, $this->auditPayload($row));
@@ -111,34 +119,41 @@ final class UserController extends Controller
         return response()->json(['data' => $this->payload($row, true, $this->groupNames($this->districtId($request)))], 201);
     }
 
-    public function update(Request $request, int $legacyUser): JsonResponse
+    public function update(Request $request, int $user): JsonResponse
     {
         $this->assertWriteEnabled();
-        $before = $this->userRow($request, $legacyUser, true);
+        $before = $this->userRow($request, $user, true);
         $validated = $this->validated($request, false);
         $districtId = $this->targetDistrictId($request, $validated['role'], $validated['district_id'] ?? $before->district_id);
-        $this->assertUsernameAvailable($validated['username'], $legacyUser);
+        $this->assertUsernameAvailable($validated['username'], $user);
 
-        if ((int) $request->user()->legacy_user_id === $legacyUser
+        if ((int) $request->user()->id === $user
             && ($validated['role'] !== $before->role || $districtId !== ($before->district_id === null ? null : (int) $before->district_id))) {
             throw ValidationException::withMessages(['role' => ['ไม่สามารถเปลี่ยนสิทธิ์หรืออำเภอของบัญชีที่กำลังใช้งาน']]);
         }
 
+        $username = trim($validated['username']);
+        $firstName = trim($validated['first_name']);
+        $lastName = trim($validated['last_name']);
         $changes = [
-            'username' => trim($validated['username']),
-            'first_name' => trim($validated['first_name']),
-            'last_name' => trim($validated['last_name']),
+            'name' => trim($firstName.' '.$lastName),
+            'email' => $this->systemEmail($username),
+            'username' => $username,
+            'first_name' => $firstName,
+            'last_name' => $lastName,
             'role' => $validated['role'],
             'district_id' => $districtId,
             'assigned_groups' => json_encode($validated['assigned_groups'] ?? [], JSON_UNESCAPED_UNICODE | JSON_THROW_ON_ERROR),
+            'student_code' => $validated['role'] === 'student' ? $username : null,
+            'auth_source' => 'local',
+            'updated_at' => now(),
         ];
         if (filled($validated['password'] ?? null)) {
-            $changes['password'] = password_hash($validated['password'], PASSWORD_BCRYPT);
+            $changes['password'] = Hash::make($validated['password']);
         }
-        $this->write()->table('users')->where('id', $legacyUser)->update($changes);
-        $after = $this->userRow($request, $legacyUser, true);
-        $this->syncShadowUser($legacyUser, $after);
-        $this->audit($request, 'admin.user.updated', $legacyUser, $this->auditPayload($before), $this->auditPayload($after));
+        $this->write()->table('users')->where('id', $user)->update($changes);
+        $after = $this->userRow($request, $user, true);
+        $this->audit($request, 'admin.user.updated', $user, $this->auditPayload($before), $this->auditPayload($after));
 
         return response()->json(['data' => $this->payload($after, true, $this->groupNames($this->districtId($request)))]);
     }
@@ -147,8 +162,8 @@ final class UserController extends Controller
     private function validated(Request $request, bool $creating): array
     {
         $roles = $request->user()->role === 'super_admin'
-            ? ['teacher', 'admin', 'super_admin']
-            : ['teacher', 'admin'];
+            ? ['student', 'teacher', 'admin', 'super_admin']
+            : ['student', 'teacher', 'admin'];
 
         return $request->validate([
             'username' => ['required', 'string', 'min:3', 'max:50', 'regex:/^[A-Za-z0-9._@-]+$/'],
@@ -214,38 +229,6 @@ final class UserController extends Controller
         }
     }
 
-    private function syncShadowUser(int $legacyId, object $row): void
-    {
-        try {
-            $shadow = new User;
-            if (! $shadow->getConnection()->getSchemaBuilder()->hasColumn($shadow->getTable(), 'legacy_key')) {
-                Log::warning('admin.user.shadow_sync_skipped', [
-                    'legacy_user_id' => $legacyId,
-                    'reason' => 'missing_legacy_key_column',
-                ]);
-
-                return;
-            }
-
-            User::query()->where('legacy_key', "staff:{$legacyId}")->update([
-                'name' => trim((string) $row->first_name.' '.(string) $row->last_name),
-                'username' => (string) $row->username,
-                'role' => (string) $row->role,
-                'district_id' => $row->district_id,
-                'assigned_groups' => json_encode($this->groups($row->assigned_groups), JSON_UNESCAPED_UNICODE | JSON_THROW_ON_ERROR),
-            ]);
-        } catch (Throwable $exception) {
-            // Some compatibility deployments authenticate directly against the
-            // legacy users table and do not have Laravel shadow-user columns.
-            // The authoritative legacy update has already succeeded, so a
-            // shadow sync failure must not turn that success into HTTP 500.
-            Log::warning('admin.user.shadow_sync_skipped', [
-                'legacy_user_id' => $legacyId,
-                'exception' => $exception::class,
-            ]);
-        }
-    }
-
     /** @return array<string, mixed> */
     private function payload(object $row, bool $canEdit, array $groupNames = []): array
     {
@@ -285,37 +268,31 @@ final class UserController extends Controller
             return [];
         }
 
-        $batch = $connection->selectOne(
-            "SELECT ib.batch_key
-             FROM import_batches ib
-             INNER JOIN import_history ih
-                ON ih.id = ib.import_history_id
-               AND BINARY ih.batch_key = BINARY ib.batch_key
-               AND ih.district_id = ib.district_id
-               AND ih.status = 'success'
-             WHERE ib.district_id = ?
-             ORDER BY COALESCE(ib.created_at, ih.created_at) DESC, ib.batch_key DESC
-             LIMIT 1",
-            [$districtId],
-            true,
-        );
+        $batch = $connection->table('import_batches as ib')
+            ->join('import_history as ih', function ($join): void {
+                $join->on('ih.id', '=', 'ib.import_history_id')
+                    ->on('ih.batch_key', '=', 'ib.batch_key')
+                    ->on('ih.district_id', '=', 'ib.district_id');
+            })
+            ->where('ih.status', 'success')
+            ->where('ib.district_id', $districtId)
+            ->orderByRaw('COALESCE(ib.created_at, ih.created_at) DESC')
+            ->orderByDesc('ib.batch_key')
+            ->select('ib.batch_key')
+            ->first();
         $batchKey = trim((string) ($batch->batch_key ?? ''));
         if (preg_match('/^import_\d{10}_[A-Za-z0-9]+$/', $batchKey) !== 1) {
             return [];
         }
 
-        $tables = $connection->select(
-            'SELECT table_name
-             FROM information_schema.tables
-             WHERE table_schema = DATABASE()
-               AND table_name LIKE ?
-             ORDER BY table_name',
-            ['db_'.$batchKey.'_%_group'],
-            true,
-        );
+        $tables = array_values(array_filter(
+            $connection->getSchemaBuilder()->getTableListing(null, false),
+            static fn (string $table): bool => str_starts_with($table, 'db_'.$batchKey.'_')
+                && str_ends_with($table, '_group'),
+        ));
+        sort($tables, SORT_NATURAL | SORT_FLAG_CASE);
         $groups = [];
-        foreach ($tables as $candidate) {
-            $table = (string) ($candidate->TABLE_NAME ?? $candidate->table_name ?? '');
+        foreach ($tables as $table) {
             if (preg_match('/^db_'.preg_quote($batchKey, '/').'_[A-Za-z0-9]+_group$/', $table) !== 1) {
                 continue;
             }
@@ -366,7 +343,7 @@ final class UserController extends Controller
             'user_id' => $request->user()->id,
             'district_id' => $this->districtId($request),
             'event' => $event,
-            'auditable_type' => 'legacy_user',
+            'auditable_type' => 'system_user',
             'auditable_id' => $id,
             'ip_address' => $request->ip(),
             'before' => $before === null ? null : json_encode($before, JSON_UNESCAPED_UNICODE | JSON_THROW_ON_ERROR),
@@ -387,10 +364,8 @@ final class UserController extends Controller
 
             $connection->table('audit_logs')->insert($entry);
         } catch (Throwable $exception) {
-            // Keep an audit trail in the application log when the optional
-            // control-plane audit table has not been deployed yet. The legacy
-            // user write is authoritative and must not be reported as failed
-            // after it has already committed.
+            // Keep an audit trail in the application log if the system audit
+            // table is temporarily unavailable after the user write commits.
             Log::warning('admin.user.audit_fallback', [
                 ...$entry,
                 'exception' => $exception::class,
@@ -403,9 +378,14 @@ final class UserController extends Controller
         return (int) $request->attributes->get('district_id');
     }
 
+    private function systemEmail(string $username): string
+    {
+        return 'user+'.hash('sha256', mb_strtolower($username)).'@system.invalid';
+    }
+
     private function writeEnabled(): bool
     {
-        return (bool) config('legacy.write_enabled');
+        return (bool) config('system_data.write_enabled');
     }
 
     private function assertWriteEnabled(): void
@@ -415,7 +395,7 @@ final class UserController extends Controller
 
     private function read()
     {
-        return $this->database->connection((string) config('legacy.connection'));
+        return $this->database->connection();
     }
 
     private function userDirectoryConnection()
@@ -425,6 +405,6 @@ final class UserController extends Controller
 
     private function write()
     {
-        return $this->database->connection((string) config('legacy.write_connection'));
+        return $this->database->connection();
     }
 }

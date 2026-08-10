@@ -103,4 +103,4 @@
 - Browser: admin dashboard, student directory/detail, registered-subject report, learning overview, users, exam rooms และ imports
 - Browser role scope: teacher เห็น 3 นักศึกษาใน 2 กลุ่มและเข้า admin route ไม่ได้; student เห็นข้อมูลตนเอง 1 คน ผลการเรียน 6 รายการ และเข้า admin route ไม่ได้
 - Login: staff และ student local/demo login รวมถึง logout
-- ไม่มีการ upload, import, delete หรือเขียนฐาน legacy ระหว่าง smoke test
+- ไม่มีการ upload, import, delete หรือเขียนข้อมูลจริงระหว่าง smoke test

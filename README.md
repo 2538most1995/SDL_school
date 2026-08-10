@@ -1,6 +1,6 @@
 # SDL School
 
-ระบบจัดการข้อมูลนักศึกษาและพอร์ทัลการเรียนรู้สำหรับหลายอำเภอ ปัจจุบันแอปหลักอยู่ใน [`laravel-app/`](laravel-app/) และอ่านข้อมูลนักศึกษา/ผลการเรียนจากฐาน legacy แบบ read-only เมื่อเปิดใช้งานโหมด production data
+ระบบจัดการข้อมูลนักศึกษาและพอร์ทัลการเรียนรู้สำหรับหลายอำเภอ ปัจจุบันแอปหลักอยู่ใน [`laravel-app/`](laravel-app/) และใช้ฐานข้อมูล `DB_*` ของ deployment นี้เพียงแหล่งเดียว
 
 ## Features
 
@@ -22,8 +22,7 @@
 
 - PHP 8.3+ พร้อม PDO, `pdo_mysql`, `mbstring`, `zip`, `iconv`
 - Composer, Node.js และ npm
-- Laravel control-plane database ที่เขียนได้
-- Legacy MySQL database แยกบัญชี SELECT-only เมื่อเปิด `SENA_DATA_SOURCE=legacy`
+- MySQL database ของระบบที่เขียนได้
 
 ## Installation and development
 
@@ -42,7 +41,7 @@ php artisan serve
 
 ## Database setup
 
-Migration ของ Laravel control-plane อยู่ที่ [`laravel-app/database/migrations/`](laravel-app/database/migrations/) รายละเอียดตาราง, foreign key, index และ legacy dynamic tables อยู่ใน [`DATABASE.md`](DATABASE.md)
+Migration อยู่ที่ [`laravel-app/database/migrations/`](laravel-app/database/migrations/) รายละเอียดตาราง, foreign key, index และ dynamic tables จาก ZIP/DBF อยู่ใน [`DATABASE.md`](DATABASE.md)
 
 ## Testing and quality
 
@@ -54,18 +53,16 @@ npm run typecheck
 npm run build
 ```
 
-Real legacy integration tests ต้องเปิด opt-in และใช้ connection แบบอ่านอย่างเดียวตามคำสั่งใน [`laravel-app/README.md`](laravel-app/README.md)
-
 ## Deployment
 
-ให้ web server ชี้ document root ไปที่ `laravel-app/public` เท่านั้น ใช้ฐาน control-plane และ legacy คนละ connection/credential, ตั้ง `LEGACY_WRITE_DB_*` เป็นบัญชีเขียนแยกเมื่อเปิด `SENA_LEGACY_WRITE_ENABLED=true`, ปิด `APP_DEBUG`, เปิด HTTPS และตรวจ `SENA_LEGACY_READ_ONLY=true` ก่อน deploy
+ให้ web server ชี้ document root ไปที่ `laravel-app/public` เท่านั้น ตั้ง `DB_*` ไปยังฐานใหม่ของระบบ รัน migration สร้างผู้ดูแลคนแรกด้วย `php artisan system:create-admin` แล้วนำเข้าข้อมูล ZIP/DBF ผ่านหน้า Admin ห้ามตั้ง `DB_*` ไปยังฐานเดิม
 
 ## Project structure
 
 ```text
 laravel-app/app/Domain/       business domains และ repositories
 laravel-app/app/Http/         controllers, middleware, requests, resources
-laravel-app/app/Services/     legacy integration, import และ PDF services
+laravel-app/app/Services/     import DBF, learning และ PDF services
 laravel-app/database/         migrations, factories, seeders
 laravel-app/routes/           API, web และ console routes
 laravel-app/resources/        React, TypeScript, Blade และ CSS

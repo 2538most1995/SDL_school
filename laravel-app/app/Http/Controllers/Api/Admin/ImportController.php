@@ -8,18 +8,20 @@ use App\Domain\Learning\DemoResponseMeta;
 use App\Http\Controllers\Controller;
 use App\Jobs\ProcessLegacyZipImport;
 use App\Jobs\RunLegacyImportQueueOnce;
-use App\Services\Legacy\LegacyZipImportService;
 use App\Services\Legacy\LegacyPortalReadService;
+use App\Services\Legacy\LegacyZipImportService;
+use Illuminate\Database\Schema\Blueprint;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\DB;
-use Illuminate\Support\Str;
-use InvalidArgumentException;
-use Illuminate\Database\Schema\Blueprint;
+use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Schema;
+use Illuminate\Support\Str;
 use Illuminate\Validation\Rule;
-use Illuminate\Validation\Rules\File;
+use Illuminate\Validation\ValidationException;
+use InvalidArgumentException;
+use Throwable;
 
 final class ImportController extends Controller
 {
@@ -35,18 +37,18 @@ final class ImportController extends Controller
             'search' => DemoQueryRules::search(),
         ]);
 
-        $items = config('legacy.enabled')
+        $items = config('system_data.enabled')
             ? $legacy->imports((int) $request->attributes->get('district_id'), $filters['status'] ?? null, $filters['search'] ?? null)
             : $registry->batches($filters['status'] ?? null, $filters['search'] ?? null);
-        $writeEnabled = (bool) config('legacy.enabled') && (bool) config('legacy.write_enabled');
+        $writeEnabled = (bool) config('system_data.enabled') && (bool) config('system_data.write_enabled');
 
         return response()->json([
             'data' => $items,
             'meta' => [
-                ...(config('legacy.enabled')
-                    ? ['mode' => 'production', 'source' => 'legacy_controlled_write', 'read_only' => ! $writeEnabled, 'pagination' => ['page' => 1, 'per_page' => count($items), 'total' => count($items), 'last_page' => 1], 'filters' => $filters]
+                ...(config('system_data.enabled')
+                    ? ['mode' => 'production', 'source' => 'system_database', 'read_only' => ! $writeEnabled, 'pagination' => ['page' => 1, 'per_page' => count($items), 'total' => count($items), 'last_page' => 1], 'filters' => $filters]
                     : DemoResponseMeta::collection(count($items), $filters)),
-                'legacy_database_connected' => (bool) config('legacy.enabled'),
+                'system_database_connected' => (bool) config('system_data.enabled'),
                 'write_operations_enabled' => $writeEnabled,
             ],
         ]);
@@ -54,7 +56,7 @@ final class ImportController extends Controller
 
     public function store(Request $request): JsonResponse
     {
-        abort_unless((bool) config('legacy.enabled') && (bool) config('legacy.write_enabled'), 503, 'ระบบนำเข้าข้อมูลจริงยังไม่เปิดใช้งาน');
+        abort_unless((bool) config('system_data.enabled') && (bool) config('system_data.write_enabled'), 503, 'ระบบนำเข้าข้อมูลจริงยังไม่เปิดใช้งาน');
 
         try {
             $archive = $request->file('archive');
@@ -92,7 +94,7 @@ final class ImportController extends Controller
 
             $this->ensureJobsQueueTablesExist();
 
-            $queueConnection = (string) config('legacy.import_queue_connection', 'database');
+            $queueConnection = (string) config('system_data.import_queue_connection', 'database');
             try {
                 ProcessLegacyZipImport::dispatch(
                     $jobId,
@@ -104,9 +106,9 @@ final class ImportController extends Controller
                     $request->ip(),
                 )->onConnection($queueConnection);
                 RunLegacyImportQueueOnce::dispatch($queueConnection)
-                    ->onConnection((string) config('legacy.import_autostart_connection', 'background'));
-            } catch (\Throwable $dispatchError) {
-                \Illuminate\Support\Facades\Log::warning('Queue dispatch failed, running import inline: '.$dispatchError->getMessage());
+                    ->onConnection((string) config('system_data.import_autostart_connection', 'background'));
+            } catch (Throwable $dispatchError) {
+                Log::warning('Queue dispatch failed, running import inline: '.$dispatchError->getMessage());
                 ProcessLegacyZipImport::dispatchSync(
                     $jobId,
                     $stagingPath,
@@ -119,15 +121,15 @@ final class ImportController extends Controller
             }
 
             return response()->json(['data' => $status, 'meta' => [
-                'source' => 'legacy_controlled_write',
+                'source' => 'system_database',
                 'read_only' => false,
             ]], 202);
-        } catch (\Illuminate\Validation\ValidationException $e) {
+        } catch (ValidationException $e) {
             $firstError = collect($e->errors())->flatten()->first() ?? 'ข้อมูลที่ส่งมาไม่ถูกต้อง';
 
             return response()->json(['message' => $firstError, 'errors' => $e->errors()], 422);
-        } catch (\Throwable $e) {
-            \Illuminate\Support\Facades\Log::error('Import store error: '.$e->getMessage(), ['exception' => $e]);
+        } catch (Throwable $e) {
+            Log::error('Import store error: '.$e->getMessage(), ['exception' => $e]);
 
             return response()->json(['message' => 'เกิดข้อผิดพลาดในการนำเข้า: '.$e->getMessage()], 500);
         }
@@ -141,14 +143,14 @@ final class ImportController extends Controller
         abort_unless((int) ($status['district_id'] ?? 0) === (int) $request->attributes->get('district_id'), 403);
 
         return response()->json(['data' => $status, 'meta' => [
-            'source' => 'legacy_controlled_write',
+            'source' => 'system_database',
             'read_only' => false,
         ]]);
     }
 
     public function destroy(Request $request, string $batch, LegacyZipImportService $importer): JsonResponse
     {
-        abort_unless((bool) config('legacy.enabled') && (bool) config('legacy.write_enabled'), 503, 'ระบบลบข้อมูลจริงยังไม่เปิดใช้งาน');
+        abort_unless((bool) config('system_data.enabled') && (bool) config('system_data.write_enabled'), 503, 'ระบบลบข้อมูลจริงยังไม่เปิดใช้งาน');
         $districtId = (int) $request->attributes->get('district_id');
 
         try {
@@ -162,7 +164,7 @@ final class ImportController extends Controller
                 'user_id' => (int) $request->user()->id,
                 'district_id' => $districtId,
                 'event' => 'admin.import.deleted',
-                'auditable_type' => 'legacy_import_batch',
+                'auditable_type' => 'system_import_batch',
                 'auditable_id' => null,
                 'ip_address' => $request->ip(),
                 'before' => json_encode(['batch_key' => $batch], JSON_UNESCAPED_UNICODE | JSON_THROW_ON_ERROR),
@@ -174,7 +176,7 @@ final class ImportController extends Controller
         }
 
         return response()->json(['data' => ['deleted' => true, ...$result], 'meta' => [
-            'source' => 'legacy_controlled_write',
+            'source' => 'system_database',
             'read_only' => false,
         ]]);
     }

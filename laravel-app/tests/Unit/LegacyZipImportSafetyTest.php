@@ -20,9 +20,9 @@ final class LegacyZipImportSafetyTest extends TestCase
         parent::setUp();
         $this->workspace = sys_get_temp_dir().'/sena-import-safety-'.bin2hex(random_bytes(6));
         File::makeDirectory($this->workspace, 0750, true);
-        config()->set('legacy.write_enabled', true);
-        config()->set('legacy.zip_root', $this->workspace.'/zips');
-        config()->set('legacy.extract_root', $this->workspace.'/extracted');
+        config()->set('system_data.write_enabled', true);
+        config()->set('system_data.zip_root', $this->workspace.'/zips');
+        config()->set('system_data.extract_root', $this->workspace.'/extracted');
     }
 
     protected function tearDown(): void
@@ -134,7 +134,7 @@ final class LegacyZipImportSafetyTest extends TestCase
             'prefix' => '',
             'foreign_key_constraints' => true,
         ]);
-        config()->set('legacy.write_connection', 'batch_import_test');
+        config()->set('database.default', 'batch_import_test');
         DB::purge('batch_import_test');
 
         $path = $this->workspace.'/grade.dbf';

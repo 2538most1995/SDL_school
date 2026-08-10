@@ -15,7 +15,7 @@ final class LearningContentController extends Controller
         'assignments' => 'learning_assignments',
         'resources' => 'learning_resources',
         'lesson-plans' => 'learning_lesson_plans',
-        'calendar' => 'learning_group_events',
+        'calendar' => 'learning_calendar_events',
     ];
 
     public function __construct(private readonly DatabaseManager $database) {}
@@ -24,11 +24,12 @@ final class LearningContentController extends Controller
     {
         $this->assertWriteEnabled();
         $values = $this->validated($request, $kind);
+        $stored = $this->storedValues($kind, $values);
         $actor = $this->actorId($request);
         $id = $this->write()->table($this->table($kind))->insertGetId([
-            ...$values,
+            ...$stored,
             'district_id' => $this->districtId($request),
-            'created_by' => $actor,
+            $this->actorColumn($kind) => $actor,
             'created_at' => now(),
             'updated_at' => now(),
         ]);
@@ -42,10 +43,11 @@ final class LearningContentController extends Controller
         $this->assertWriteEnabled();
         $row = $this->ownedRow($request, $kind, $content);
         $values = $this->validated($request, $kind);
+        $stored = $this->storedValues($kind, $values);
         $updated = $this->write()->table($this->table($kind))
             ->where('id', $content)->where('district_id', $this->districtId($request))
-            ->when($request->user()->role === 'teacher', fn ($query) => $query->where('created_by', $this->actorId($request)))
-            ->update([...$values, 'updated_at' => now()]);
+            ->when($request->user()->role === 'teacher', fn ($query) => $query->where($this->actorColumn($kind), $this->actorId($request)))
+            ->update([...$stored, 'updated_at' => now()]);
         abort_unless($updated === 1, 404);
         $this->audit($request, "learning.{$kind}.updated", $kind, $content, (array) $row, $values);
 
@@ -58,7 +60,7 @@ final class LearningContentController extends Controller
         $row = $this->ownedRow($request, $kind, $content);
         $deleted = $this->write()->table($this->table($kind))
             ->where('id', $content)->where('district_id', $this->districtId($request))
-            ->when($request->user()->role === 'teacher', fn ($query) => $query->where('created_by', $this->actorId($request)))
+            ->when($request->user()->role === 'teacher', fn ($query) => $query->where($this->actorColumn($kind), $this->actorId($request)))
             ->delete();
         abort_unless($deleted === 1, 404);
         $this->audit($request, "learning.{$kind}.deleted", $kind, $content, (array) $row, null);
@@ -108,7 +110,7 @@ final class LearningContentController extends Controller
     {
         $query = $this->read()->table($this->table($kind))->where('id', $id)->where('district_id', $this->districtId($request));
         if ($request->user()->role === 'teacher') {
-            $query->where('created_by', $this->actorId($request));
+            $query->where($this->actorColumn($kind), $this->actorId($request));
         }
         $row = $query->first();
         abort_unless($row, 404);
@@ -118,12 +120,65 @@ final class LearningContentController extends Controller
 
     private function actorId(Request $request): ?int
     {
-        $id = (int) $request->user()->legacy_user_id;
-        if ($request->user()->role === 'teacher') {
-            abort_unless($id > 0, 403, 'บัญชีครูยังไม่เชื่อมกับผู้ใช้ระบบเดิม');
-        }
+        return (int) $request->user()->id;
+    }
 
-        return $id > 0 ? $id : null;
+    /** @param array<string, mixed> $values
+     * @return array<string, mixed>
+     */
+    private function storedValues(string $kind, array $values): array
+    {
+        return match ($kind) {
+            'assignments' => [
+                'title' => $values['title'],
+                'subject_code' => $values['subject'],
+                'instructions' => $values['description'] ?? null,
+                'due_at' => $values['due_at'],
+                'target_type' => $values['target_mode'],
+                'target_value' => ($values['target_group'] ?? null) ?: null,
+                'status' => $values['status'],
+            ],
+            'resources' => [
+                'title' => $values['title'],
+                'subject_code' => $values['subject'],
+                'description' => $values['description'] ?? null,
+                'resource_type' => $values['resource_type'],
+                'external_url' => $values['url'],
+                'education_level' => ($values['level'] ?? null) ?: null,
+                'target_group' => ($values['target_group'] ?? null) ?: null,
+                'visibility' => 'district',
+            ],
+            'lesson-plans' => [
+                'title' => $values['title'],
+                'subject_code' => $values['subject'],
+                'education_level' => $values['level'],
+                'academic_term' => $values['semester'],
+                'objectives' => $values['objectives'] ?? null,
+                'activities' => $values['activities'] ?? null,
+                'assessment' => $values['assessment'] ?? null,
+                'status' => 'published',
+            ],
+            'calendar' => [
+                'title' => $values['title'],
+                'description' => $values['notes'] ?? null,
+                'event_type' => 'meeting',
+                'starts_at' => $values['event_date'].' '.$values['start_time'].':00',
+                'ends_at' => $values['event_date'].' '.$values['end_time'].':00',
+                'location' => $values['location'] ?? null,
+                'target_type' => filled($values['target_group'] ?? null) ? 'group' : 'all',
+                'target_value' => ($values['target_group'] ?? null) ?: null,
+            ],
+            default => abort(404),
+        };
+    }
+
+    private function actorColumn(string $kind): string
+    {
+        return match ($kind) {
+            'resources' => 'uploaded_by',
+            'lesson-plans' => 'teacher_id',
+            default => 'created_by',
+        };
     }
 
     private function table(string $kind): string
@@ -133,16 +188,31 @@ final class LearningContentController extends Controller
         return self::TABLES[$kind];
     }
 
-    private function districtId(Request $request): int { return (int) $request->attributes->get('district_id'); }
-    private function read() { return $this->database->connection((string) config('legacy.connection')); }
-    private function write() { return $this->database->connection((string) config('legacy.write_connection')); }
-    private function assertWriteEnabled(): void { abort_unless((bool) config('legacy.write_enabled'), 503, 'ระบบเขียนข้อมูลยังไม่เปิดใช้งาน'); }
+    private function districtId(Request $request): int
+    {
+        return (int) $request->attributes->get('district_id');
+    }
+
+    private function read()
+    {
+        return $this->database->connection();
+    }
+
+    private function write()
+    {
+        return $this->database->connection();
+    }
+
+    private function assertWriteEnabled(): void
+    {
+        abort_unless((bool) config('system_data.write_enabled'), 503, 'ระบบเขียนข้อมูลยังไม่เปิดใช้งาน');
+    }
 
     private function audit(Request $request, string $event, string $kind, int $id, ?array $before, ?array $after): void
     {
         DB::table('audit_logs')->insert([
             'user_id' => $request->user()->id, 'district_id' => $this->districtId($request), 'event' => $event,
-            'auditable_type' => "legacy_learning_{$kind}", 'auditable_id' => $id, 'ip_address' => $request->ip(),
+            'auditable_type' => "system_learning_{$kind}", 'auditable_id' => $id, 'ip_address' => $request->ip(),
             'before' => $before === null ? null : json_encode($before, JSON_UNESCAPED_UNICODE | JSON_THROW_ON_ERROR),
             'after' => $after === null ? null : json_encode($after, JSON_UNESCAPED_UNICODE | JSON_THROW_ON_ERROR), 'created_at' => now(),
         ]);

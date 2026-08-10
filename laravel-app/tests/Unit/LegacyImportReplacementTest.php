@@ -21,7 +21,7 @@ final class LegacyImportReplacementTest extends TestCase
         File::makeDirectory($this->workspace, 0750, true);
         File::makeDirectory($this->workspace.'/zips', 0750, true);
         File::makeDirectory($this->workspace.'/extracted', 0750, true);
-        $this->databasePath = $this->workspace.'/legacy.sqlite';
+        $this->databasePath = $this->workspace.'/system.sqlite';
         touch($this->databasePath);
 
         config()->set('database.connections.replacement_test', [
@@ -30,9 +30,9 @@ final class LegacyImportReplacementTest extends TestCase
             'prefix' => '',
             'foreign_key_constraints' => true,
         ]);
-        config()->set('legacy.write_connection', 'replacement_test');
-        config()->set('legacy.zip_root', $this->workspace.'/zips');
-        config()->set('legacy.extract_root', $this->workspace.'/extracted');
+        config()->set('database.default', 'replacement_test');
+        config()->set('system_data.zip_root', $this->workspace.'/zips');
+        config()->set('system_data.extract_root', $this->workspace.'/extracted');
         DB::purge('replacement_test');
 
         Schema::connection('replacement_test')->create('import_history', function ($table): void {

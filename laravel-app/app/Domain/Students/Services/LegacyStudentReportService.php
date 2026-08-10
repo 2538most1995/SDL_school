@@ -475,7 +475,7 @@ final readonly class LegacyStudentReportService
     /** @return list<LegacyTableSet> */
     private function sets(int $districtId): array
     {
-        $connection = $this->database->connection((string) config('legacy.connection', 'legacy'));
+        $connection = $this->database->connection();
         $batch = $connection->selectOne(
             "SELECT ib.batch_key
              FROM import_batches ib
@@ -1135,7 +1135,7 @@ final readonly class LegacyStudentReportService
     /** @return list<array<string, mixed>> */
     private function rows(string $sql, array $bindings = []): array
     {
-        return array_map(static fn (object $row): array => (array) $row, $this->database->connection((string) config('legacy.connection', 'legacy'))->select($sql, $bindings));
+        return array_map(static fn (object $row): array => (array) $row, $this->database->connection()->select($sql, $bindings));
     }
 
     private function identifier(string $identifier): string

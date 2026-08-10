@@ -800,7 +800,7 @@ final class LegacyStudentRepository implements StudentRepository
     /** @template TValue @param callable(): TValue $resolver @return TValue */
     private function rememberAggregate(string $key, callable $resolver): mixed
     {
-        $seconds = max(0, (int) config('legacy.cache_seconds', 300));
+        $seconds = max(0, (int) config('system_data.cache_seconds', 300));
 
         return $seconds === 0 ? $resolver() : Cache::remember($key, $seconds, $resolver);
     }

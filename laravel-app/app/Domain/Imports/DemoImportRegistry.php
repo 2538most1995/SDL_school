@@ -94,7 +94,7 @@ final class DemoImportRegistry
         return [
             'mode' => 'demo',
             'overall_state' => 'locked',
-            'legacy_database' => [
+            'system_database' => [
                 'connected' => false,
                 'reads_enabled' => false,
                 'writes_enabled' => false,

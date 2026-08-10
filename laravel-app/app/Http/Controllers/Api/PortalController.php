@@ -48,7 +48,7 @@ final class PortalController extends Controller
                 'modules' => [],
             ],
             'meta' => [
-                'data_source' => config('legacy.enabled') ? 'legacy_read_only' : 'local',
+                'data_source' => config('system_data.enabled') ? 'system_database' : 'demo',
                 'district_id' => $districtId,
                 'generated_at' => now()->toIso8601String(),
                 'contains_personal_data' => false,

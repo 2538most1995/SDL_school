@@ -22,7 +22,7 @@ final class ExamRoomController extends Controller
 
     public function index(Request $request, DemoLearningPortal $demo): JsonResponse
     {
-        if (! (bool) config('legacy.enabled')) {
+        if (! (bool) config('system_data.enabled')) {
             $filters = $request->validate(['date' => ['nullable', 'date_format:Y-m-d']]);
             $items = $demo->examRooms($filters['date'] ?? null);
 
@@ -40,8 +40,8 @@ final class ExamRoomController extends Controller
             ->limit(500)->get()->map(fn (object $row): array => $this->payload($row))->all();
 
         return response()->json(['data' => $items, 'meta' => [
-            'source' => 'legacy_controlled_write',
-            'read_only' => ! (bool) config('legacy.write_enabled'),
+            'source' => 'system_database',
+            'read_only' => ! (bool) config('system_data.write_enabled'),
             'district_id' => $districtId,
         ]]);
     }
@@ -139,7 +139,7 @@ final class ExamRoomController extends Controller
             'user_id' => $request->user()->id,
             'district_id' => $this->districtId($request),
             'event' => $event,
-            'auditable_type' => 'legacy_exam_room',
+            'auditable_type' => 'system_exam_room',
             'auditable_id' => $id,
             'ip_address' => $request->ip(),
             'before' => $before === null ? null : json_encode($before, JSON_UNESCAPED_UNICODE | JSON_THROW_ON_ERROR),
@@ -155,16 +155,16 @@ final class ExamRoomController extends Controller
 
     private function assertWriteEnabled(): void
     {
-        abort_unless((bool) config('legacy.write_enabled'), 503, 'ระบบเขียนข้อมูลยังไม่เปิดใช้งาน');
+        abort_unless((bool) config('system_data.write_enabled'), 503, 'ระบบเขียนข้อมูลยังไม่เปิดใช้งาน');
     }
 
     private function read()
     {
-        return $this->database->connection((string) config('legacy.connection'));
+        return $this->database->connection();
     }
 
     private function write()
     {
-        return $this->database->connection((string) config('legacy.write_connection'));
+        return $this->database->connection();
     }
 }

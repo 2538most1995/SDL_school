@@ -10,8 +10,8 @@ use App\Http\Controllers\Api\Auth\PublicBrandingController;
 use App\Http\Controllers\Api\Learning\AssignmentController;
 use App\Http\Controllers\Api\Learning\CalendarController;
 use App\Http\Controllers\Api\Learning\ExamScheduleDocumentController;
-use App\Http\Controllers\Api\Learning\LessonPlanController;
 use App\Http\Controllers\Api\Learning\LearningContentController;
+use App\Http\Controllers\Api\Learning\LessonPlanController;
 use App\Http\Controllers\Api\Learning\OverviewController as LearningOverviewController;
 use App\Http\Controllers\Api\Learning\ResourceController;
 use App\Http\Controllers\Api\Learning\ScheduleController;
@@ -23,8 +23,8 @@ use App\Http\Controllers\Api\Settings\NnetScheduleController;
 use App\Http\Controllers\Api\Settings\ProfileController;
 use App\Http\Controllers\Api\Students\CurrentStudentController;
 use App\Http\Controllers\Api\Students\StudentDirectoryController;
-use App\Http\Controllers\Api\Students\StudentGradesController;
 use App\Http\Controllers\Api\Students\StudentExamScheduleController;
+use App\Http\Controllers\Api\Students\StudentGradesController;
 use App\Http\Controllers\Api\Students\StudentKpchController;
 use App\Http\Controllers\Api\Students\StudentMoralController;
 use App\Http\Controllers\Api\Students\StudentReportController;
@@ -120,7 +120,7 @@ Route::prefix('v1')->group(function (): void {
         ->group(function (): void {
             Route::get('/admin/users', [UserController::class, 'index']);
             Route::post('/admin/users', [UserController::class, 'store']);
-            Route::patch('/admin/users/{legacyUser}', [UserController::class, 'update'])->whereNumber('legacyUser');
+            Route::patch('/admin/users/{user}', [UserController::class, 'update'])->whereNumber('user');
             Route::get('/admin/imports', [ImportController::class, 'index']);
             Route::get('/admin/imports/jobs/{job}', [ImportController::class, 'status'])->whereUuid('job');
             Route::post('/admin/imports', [ImportController::class, 'store']);

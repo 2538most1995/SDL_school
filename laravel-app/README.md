@@ -1,44 +1,80 @@
 # Sena Care School Laravel
 
-ระบบใหม่ใช้ Laravel 13 + React 19 + TypeScript โดย TanStack Query จัดการ server state และ TanStack Table จัดการตารางข้อมูล ระบบเชื่อมฐาน Sena Care School เดิมแบบอ่านอย่างเดียว และแยกฐาน Laravel control-plane สำหรับ session, shadow identity, theme, branding และ audit log
+ระบบใช้ Laravel 13 + React 19 + TypeScript และเก็บข้อมูลทั้งหมดในฐานข้อมูลของ deployment นี้ผ่านค่า `DB_*` เท่านั้น ไม่มีการเรียก API หรือเปิด connection ไปยังเว็บไซต์/ฐานข้อมูล Sena Care School เดิม
 
-## สถานะข้อมูลจริง
+## แหล่งข้อมูล
 
-- ล็อกอินครู/ผู้ดูแลตรวจรหัสผ่านกับตาราง `users` เดิม
-- ล็อกอินนักศึกษาใช้เลขบัตรประชาชน + รหัสนักศึกษา + อำเภอ โดยไม่เก็บเลขบัตรในฐาน Laravel
-- นักศึกษา เกรด วิชาลงทะเบียน กพช. และคุณธรรมอ่านจาก latest successful batch ของอำเภอเดียวกัน
-- Learning, ผู้ใช้, ประวัติ import และห้องสอบอ่านตารางจริงตาม role/district/group
-- โปรไฟล์ที่เลือกแสดง, theme และ branding บันทึกในฐาน Laravel พร้อม audit log
-- import ทำงานผ่าน database queue โดยตรวจ ZIP/DBF และสร้างชุดใหม่ให้สำเร็จก่อนแทนที่ชุดเดิมของอำเภอนั้น
+- ล็อกอินและการจัดการผู้ใช้ใช้ตาราง `users` ภายในระบบ
+- อำเภอ สิทธิ์ โปรไฟล์ theme branding audit และ queue อยู่ในฐานเดียวกัน
+- งาน สื่อ แผนการสอน ปฏิทิน ตารางสอน และคะแนนใช้ตาราง `learning_*` ภายในระบบ
+- นักศึกษา ผลการเรียน วิชา กพช. และคุณธรรมมาจาก ZIP/DBF ที่ผู้ดูแลนำเข้าผ่านระบบ แล้วสร้าง dynamic tables ในฐาน `DB_*`
+- ชื่อจังหวัด อำเภอ และตำบลอ่านจาก `resources/data/thai_administrative_areas.csv` ที่ติดมากับ deployment
+- หน้า React เรียกเฉพาะ `/api/v1/*` ของ Laravel แอปเดียวกัน และ Laravel HTTP client ปิดกั้น outbound request ที่ไม่ได้อนุมัติ
 
-## นโยบายแหล่งข้อมูลภายในระบบ
+ชื่อ class/namespace บางส่วนยังมีคำว่า `Legacy` เพื่อรองรับรูปแบบไฟล์ DBF เดิม แต่ไม่มี database connection ชื่อ `legacy` หรือ `legacy_write`
 
-- หน้า React เรียก `/api/v1/*` ของ Laravel แอปเดียวกันเท่านั้น เส้นทางเหล่านี้ไม่ใช่ API ของเว็บไซต์ภายนอก
-- ผู้ใช้งานและสิทธิ์อ่าน/เพิ่ม/แก้ไขตาราง `users` ในฐานข้อมูลของระบบโดยตรง และจำกัดข้อมูลตาม role กับอำเภอ
-- ข้อมูลนักศึกษา ผลการเรียน การเรียนรู้ รายงาน และ import ใช้ฐานข้อมูลหรือไฟล์ที่ติดตั้งอยู่กับระบบ
-- ชื่อจังหวัด อำเภอ และตำบลอ่านจาก `resources/data/thai_administrative_areas.csv` ซึ่งติดมากับ deployment
-- ระบบปิดกั้น HTTP request ภายนอกผ่าน Laravel HTTP client โดยค่าเริ่มต้น เพื่อไม่ให้เกิด dependency ภายนอกโดยไม่ตั้งใจ
+## ติดตั้ง
 
-## Stack
-
-- Laravel 13, Sanctum และ session authentication
-- React 19, TypeScript, TanStack Query และ TanStack Table
-- Tailwind CSS 4, Radix Themes และ Phosphor icons
-- Laravel control-plane DB แยกจาก MySQL legacy
-- MySQL legacy connection ตั้ง session เป็น `TRANSACTION READ ONLY`
-
-## รันระบบปัจจุบันด้วย MAMP
-
-ห้ามใช้ `migrate --seed` ในโหมดข้อมูลจริง เพราะ seeder มีไว้สำหรับ development demo เท่านั้น
+ห้ามตั้ง `DB_*` ไปยังฐานข้อมูลเดิม และห้ามใช้ `migrate --seed` กับฐาน production เพราะ seeder เป็นข้อมูล demo
 
 ```bash
-npm install
 composer install --no-dev --optimize-autoloader
+npm install
+cp .env.example .env
+php artisan key:generate
 php artisan migrate --force
 npm run build
 ```
 
-ตั้ง Apache ของ MAMP ให้ใช้ค่าต่อไปนี้ แล้ว restart MAMP:
+สร้างบัญชีผู้ดูแลแรก:
+
+```bash
+php artisan system:create-admin \
+  --username=system.admin \
+  --name="ผู้ดูแล ระบบ" \
+  --district-code=sena \
+  --district-name="อำเภอเสนา"
+```
+
+คำสั่งจะถามรหัสผ่านแบบซ่อนค่า หากต้องการผู้ดูแลทุกอำเภอให้ใช้ `--super-admin` และไม่ต้องระบุอำเภอ
+
+## Environment production
+
+```dotenv
+APP_ENV=production
+APP_DEBUG=false
+APP_URL=https://example.com/SDL_school
+ASSET_URL=https://example.com/SDL_school
+
+DB_CONNECTION=mysql
+DB_HOST=127.0.0.1
+DB_PORT=3306
+DB_DATABASE=sdl_school
+DB_USERNAME=...
+DB_PASSWORD=...
+
+SENA_DATA_SOURCE=system
+SENA_DEMO_MODE=false
+SYSTEM_STUDENT_DATA_ENABLED=true
+SYSTEM_WRITES_ENABLED=true
+SYSTEM_IMPORT_QUEUE_CONNECTION=database
+SYSTEM_IMPORT_AUTOSTART_CONNECTION=background
+SYSTEM_DATABASE_SESSIONS=true
+```
+
+หลังแก้ `.env` ให้รัน:
+
+```bash
+php artisan optimize:clear
+php artisan migrate --force
+npm run build
+```
+
+จากนั้นนำเข้า ZIP/DBF ผ่านเมนู Admin เพื่อให้ข้อมูลนักศึกษาอยู่ในฐานใหม่ของระบบ ไม่ควร copy หรือ query ข้อมูลจากฐานเก่าโดยตรง
+
+## MAMP
+
+ตั้ง Apache document root ไปที่ `laravel-app/public`:
 
 ```apache
 LoadModule rewrite_module modules/mod_rewrite.so
@@ -51,96 +87,40 @@ DocumentRoot "/Applications/MAMP/htdocs/SDL_school/laravel-app/public"
 </Directory>
 ```
 
-กำหนด `APP_URL=http://localhost:8888` และ `SANCTUM_STATEFUL_DOMAINS=localhost:8888,127.0.0.1:8888` จากนั้นเปิด [http://localhost:8888/index.php](http://localhost:8888/index.php) หรือ [http://localhost:8888/login](http://localhost:8888/login)
+กำหนด `APP_URL=http://localhost:8888` และ `SANCTUM_STATEFUL_DOMAINS=localhost:8888,127.0.0.1:8888` แล้ว restart MAMP
 
-การนำเข้า ZIP/DBF บันทึกงานลง database queue ก่อน แล้วเปิด worker เบื้องหลังอัตโนมัติ จึงไม่ต้องเปิด queue worker แยกใน MAMP ค่าแนะนำคือ:
+ถ้าโฮสต์ไม่อนุญาต background process ให้ประมวลผล queue ด้วย:
 
 ```bash
-SENA_LEGACY_IMPORT_QUEUE_CONNECTION=database
-SENA_LEGACY_IMPORT_AUTOSTART_CONNECTION=background
-DB_QUEUE_RETRY_AFTER=900
+php artisan system:work-import-queue
+# Scheduled Task:
+php artisan system:work-import-queue --once
 ```
 
-ตัวปลุก background จะระบายงาน import ที่ค้างตามลำดับจนคิวว่าง ไม่หยุดหลังงานแรก ใช้ file lock เดียวกับ scheduled worker และตั้งเวลาจองงานให้นานกว่า timeout เพื่อป้องกัน worker สองตัวนำเข้า ZIP เดียวกันซ้ำ หากโฮสต์ปิดการสร้าง background process งานจะยังค้างอย่างปลอดภัยใน database queue และสามารถเปิด worker ด้วย `php artisan legacy:work-import-queue` ได้โดยข้อมูลไม่สูญหาย สำหรับ Plesk Scheduled Task ให้ใช้ `legacy:work-import-queue --once`
-
-หากแก้ `.env` ให้รัน `php artisan config:clear` ก่อนทดสอบ การเปิด `mod_rewrite` จำเป็นต่อการรีเฟรช route เช่น `/app`, `/students` และ `/grades`
-
-## รันโหมด demo แบบไม่แตะฐานข้อมูลจริง
-
-ใช้ไฟล์ SQLite ใหม่และตั้ง `SENA_DEMO_MODE=true`, `SENA_DATA_SOURCE=demo`, `LEGACY_STUDENT_ENABLED=false` จากนั้นรัน:
+## Demo
 
 ```bash
 touch database/demo.sqlite
+# ตั้ง DB_CONNECTION=sqlite, DB_DATABASE เป็น path ของไฟล์
+# ตั้ง SENA_DATA_SOURCE=demo และ SENA_DEMO_MODE=true
 php artisan migrate --seed
 php artisan serve
 ```
 
-บัญชีทดสอบใช้รหัสผ่าน `Demo1234!`: `admin.demo`, `teacher.demo`, `super.demo` และนักศึกษา `6650100001` หน้า login จะแสดง “ชื่อผู้ใช้ + รหัสผ่าน” อัตโนมัติในโหมด demo และแสดง “เลขประจำตัวประชาชน + รหัสนักศึกษา” เมื่อเชื่อม legacy จริง
-
-## Production database configuration
-
-Production ต้องใช้ฐานสองชุดและบัญชีคนละสิทธิ์:
-
-1. `DB_*` เป็นฐาน Laravel control-plane ที่เขียนได้ ห้ามใช้ฐานเดียวกับ legacy
-2. `LEGACY_DB_*` เป็นฐานเดิมด้วยบัญชีที่มี `SELECT` เท่านั้น
-
-ค่าหลัก:
-
-```dotenv
-APP_ENV=production
-APP_DEBUG=false
-APP_URL=https://example.com/SDL_school
-ASSET_URL=https://example.com/SDL_school
-SENA_DEMO_MODE=false
-SENA_DATA_SOURCE=legacy
-LEGACY_STUDENT_ENABLED=true
-SENA_LEGACY_READ_ONLY=true
-SENA_LEGACY_CONFIG_FALLBACK=false
-LEGACY_DB_HOST=127.0.0.1
-LEGACY_DB_PORT=3306
-LEGACY_DB_DATABASE=...
-LEGACY_DB_USERNAME=... # SELECT-only
-LEGACY_DB_PASSWORD=...
-LEGACY_WRITE_DB_HOST=...
-LEGACY_WRITE_DB_PORT=3306
-LEGACY_WRITE_DB_DATABASE=...
-LEGACY_WRITE_DB_USERNAME=... # INSERT/UPDATE account for admin writes
-LEGACY_WRITE_DB_PASSWORD=...
-```
-
-`LEGACY_WRITE_DB_*` ใช้เฉพาะ connection `legacy_write` สำหรับการเพิ่ม/แก้ไขผู้ใช้ ข้อมูลการเรียนรู้ และ import หากไม่กำหนด ระบบจะ fallback ไปใช้ค่า `LEGACY_DB_*` เพื่อรองรับเครื่องพัฒนาเดิม แต่ production ที่เปิด `SENA_LEGACY_WRITE_ENABLED=true` ต้องกำหนดบัญชีเขียนแยกจากบัญชี `SELECT-only` และหลังแก้ `.env` ให้รัน `php artisan optimize:clear` หรือ rebuild config cache ก่อนใช้งาน
-
-ถ้าติดตั้งใต้ subdirectory เช่น `/SDL_school` ต้องให้ทั้ง `APP_URL` และ `ASSET_URL`
-มี path เดียวกัน จากนั้นรัน `php artisan optimize:clear` และ build/deploy `public/build` ใหม่
-เพื่อให้ Vite, React Router และ API ใช้ base path ถูกต้อง
-
-`SENA_LEGACY_CONFIG_FALLBACK=true` ใช้กับ MAMP เครื่องพัฒนาเครื่องนี้เท่านั้น โดย parser อ่านเฉพาะค่าเชื่อมต่อจาก `storage/app/private/legacy-database.credentials` และไม่ execute ไฟล์นั้น ห้ามเปิด fallback บน production
-
-## คำสั่งตรวจสอบ
+## ตรวจสอบ
 
 ```bash
-npm run typecheck
-npm run build
-vendor/bin/pint --test app routes config database/migrations database/seeders tests bootstrap/app.php
 php artisan test
-```
-
-Real database smoke tests เป็น opt-in และอ่านอย่างเดียว:
-
-```bash
-SENA_LEGACY_CONFIG_FALLBACK=true LEGACY_STUDENT_INTEGRATION=true \
-  php artisan test tests/Feature/Students/LegacyStudentRepositoryTest.php
-
-SENA_LEGACY_CONFIG_FALLBACK=true LEGACY_PORTAL_INTEGRATION=true \
-  php artisan test tests/Feature/LegacyProductionReadIntegrationTest.php
+npm run typecheck
+vendor/bin/pint --test app routes config database/migrations database/seeders tests bootstrap/app.php
+npm run build
 ```
 
 ## Production safety
 
-- Document root ต้องชี้ไปที่ `laravel-app/public` เท่านั้น
-- ห้ามชี้ Laravel default connection ไปฐาน legacy และห้ามรัน `artisan migrate` กับฐาน legacy
-- ห้าม include `../auth.php` จาก Laravel เพราะไฟล์นั้นมี request-time DDL และ migration side effects
-- หมุน DB/API secrets เดิมก่อนเปิดผ่านอินเทอร์เน็ต และใช้ secret manager แทน hard-coded fallback
-- เปิด HTTPS พร้อม `SESSION_SECURE_COOKIE=true` และกำหนด `SESSION_DOMAIN`/`SANCTUM_STATEFUL_DOMAINS` ให้ตรงโดเมนจริง
-- ก่อนเปิด import ต้องมี `quarantine → validate → stage → reconcile → approve → atomic activate → rollback`
-- ดูแผน cutover เพิ่มเติมใน [docs/MIGRATION_PLAN.md](docs/MIGRATION_PLAN.md)
+- Document root ต้องชี้ `public` เท่านั้น
+- ใช้ database user ที่จำกัดเฉพาะฐาน `DB_DATABASE` ของระบบ
+- เปิด HTTPS และตั้ง `SESSION_SECURE_COOKIE=true`
+- สำรองฐานข้อมูลและไฟล์ import ก่อน deploy/migrate
+- ทดสอบ migration ในฐาน staging ก่อน production
+- รักษา district scope, role middleware, validation ZIP/DBF และ audit log

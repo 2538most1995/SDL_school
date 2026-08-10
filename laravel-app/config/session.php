@@ -21,9 +21,8 @@ return [
     'driver' => (function () {
         $driver = env('SESSION_DRIVER', 'file');
         if ($driver === 'database') {
-            $legacyEnabled = env('SENA_DATA_SOURCE', 'demo') === 'legacy';
             $dbConnection = env('DB_CONNECTION', 'sqlite');
-            if ($legacyEnabled || $dbConnection === 'mysql') {
+            if ($dbConnection === 'mysql' && ! filter_var(env('SYSTEM_DATABASE_SESSIONS', true), FILTER_VALIDATE_BOOL)) {
                 return 'file';
             }
         }

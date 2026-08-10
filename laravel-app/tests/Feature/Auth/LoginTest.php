@@ -53,15 +53,15 @@ class LoginTest extends TestCase
     {
         District::create(['name' => 'อำเภอเสนา', 'code' => 'sena']);
 
-        config(['legacy.enabled' => false]);
+        config(['system_data.enabled' => false]);
         $this->getJson('/api/v1/auth/branding')
             ->assertOk()
             ->assertJsonPath('data.loginMode', 'local');
 
-        config(['legacy.enabled' => true]);
+        config(['system_data.enabled' => true]);
         $this->getJson('/api/v1/auth/branding')
             ->assertOk()
-            ->assertJsonPath('data.loginMode', 'legacy');
+            ->assertJsonPath('data.loginMode', 'local');
     }
 
     public function test_login_uses_generic_error_for_wrong_credentials(): void

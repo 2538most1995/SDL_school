@@ -39,7 +39,7 @@ Understand → Read docs → Discover → Trace data flow → Analyze
 
 ## Legacy import/data checklist
 
-- Keep legacy connection read-only unless the task explicitly enables a separate write connection.
+- Keep all reads and writes on the deployment-owned default database; do not add a connection to the former database.
 - Preserve district + batch scoping and latest-successful-batch rules.
 - Protect ZIP extraction from Zip Slip, symlinks, excessive entries, decompression bombs and oversized files.
 - Keep DBF encoding/memo handling and dynamic table identifier validation intact.

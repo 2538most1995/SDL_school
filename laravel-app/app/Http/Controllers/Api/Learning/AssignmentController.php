@@ -20,19 +20,19 @@ final class AssignmentController extends Controller
             'search' => DemoQueryRules::search(),
         ]);
 
-        $items = config('legacy.enabled')
+        $items = config('system_data.enabled')
             ? $legacy->assignments($request->user(), (int) $request->attributes->get('district_id'), $filters['status'] ?? null, $filters['search'] ?? null)
             : $portal->assignments($filters['status'] ?? null, $filters['search'] ?? null);
 
         return response()->json([
             'data' => $items,
-            'meta' => config('legacy.enabled') ? $this->realMeta(count($items), $filters) : DemoResponseMeta::collection(count($items), $filters),
+            'meta' => config('system_data.enabled') ? $this->realMeta(count($items), $filters) : DemoResponseMeta::collection(count($items), $filters),
         ]);
     }
 
     /** @param array<string, mixed> $filters */
     private function realMeta(int $total, array $filters): array
     {
-        return ['mode' => 'production', 'source' => 'legacy_controlled_write', 'read_only' => ! (bool) config('legacy.write_enabled'), 'pagination' => ['page' => 1, 'per_page' => $total, 'total' => $total, 'last_page' => 1], 'filters' => $filters];
+        return ['mode' => 'production', 'source' => 'system_database', 'read_only' => ! (bool) config('system_data.write_enabled'), 'pagination' => ['page' => 1, 'per_page' => $total, 'total' => $total, 'last_page' => 1], 'filters' => $filters];
     }
 }

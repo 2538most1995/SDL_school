@@ -2,7 +2,7 @@
 
 ## Purpose and architecture
 
-SDL School is a Laravel 13 + React 19 application for multi-district student administration and learning services. Laravel owns the control-plane data (users, districts, settings, audit, queue and learning write models). When `SENA_DATA_SOURCE=legacy` and `LEGACY_STUDENT_ENABLED=true`, student and imported academic data are read from a separate legacy MySQL connection using a read-only repository.
+SDL School is a Laravel 13 + React 19 application for multi-district student administration and learning services. The deployment owns one database selected by `DB_*`; users, districts, settings, audit, queue, learning data, import registry and imported DBF tables all live in that database. There is no connection to the former Sena Care School database.
 
 ## User types and roles
 
@@ -28,8 +28,8 @@ District scope is resolved by `ResolveDistrictContext`; role checks are enforced
 
 1. A non-super-admin user is limited to the active selected district and their role/group scope.
 2. Student code is not assumed globally unique across district/level; ambiguous lookups fail closed.
-3. Legacy reads use the latest successful batch belonging to the same district; no cross-district fallback.
-4. Legacy table identifiers must be resolved from a validated batch and identifier whitelist; bound parameters are required for values.
+3. Imported student reads use the latest successful batch belonging to the same district; no cross-district fallback.
+4. Dynamic import-table identifiers must be resolved from a validated batch and identifier whitelist; bound parameters are required for values.
 5. Student PII is masked by default and unmasked only for an allowed scope/resource.
 6. Import creates and validates a new batch before replacing old district batches; writes are disabled by default.
 7. Learning writes require teacher/admin/super-admin role and teacher ownership/district checks.
@@ -39,7 +39,7 @@ District scope is resolved by `ResolveDistrictContext`; role checks are enforced
 ```text
 Request → route → Sanctum/auth + active + district/role middleware
         → controller → validation → domain service/repository
-        → control-plane Eloquent/query builder OR legacy read-only connection
+        → Eloquent/query builder on the system default database
         → resource/JSON/PDF → response
 ```
 
@@ -49,7 +49,7 @@ Request → route → Sanctum/auth + active + district/role middleware
 - `EnsureActiveUser`, `EnsureRole`, `ResolveDistrictContext` and `SecurityHeaders` are registered in `bootstrap/app.php`.
 - Protected routes are defined in `routes/api.php`; admin writes are restricted to `admin,super_admin`, learning writes to `teacher,admin,super_admin`, and super-admin branding routes to `super_admin`.
 - POST/PATCH/PUT/DELETE paths use Laravel validation/authentication and audit where applicable. Upload/import paths must retain size/type/path validation.
-- Legacy admin user writes commit to `legacy_write` first. If a compatibility deployment has not installed the optional shadow-user columns or `audit_logs` table, shadow synchronization is skipped and the audit entry falls back to the structured Laravel log; an already successful user mutation must not be returned as HTTP 500.
+- Login checks the local `users` table only. User administration reads and writes the same table and records audit events in the same database.
 
 ## Important routes/controllers/services
 
@@ -57,13 +57,13 @@ Request → route → Sanctum/auth + active + district/role middleware
 - `/api/v1/students*` and `/api/v1/reports/*` → `Api\Students\*`
 - `/api/v1/learning/*` → `Api\Learning\*`
 - `/api/v1/admin/*` → `Api\Admin\*`
-- Student source → `StudentRepository`, `DemoStudentRepository` or `LegacyStudentRepository`
-- Legacy learning/import → `LegacyPortalReadService`, `LegacyZipImportService`, `LegacyExamScheduleService`
+- Student source → `StudentRepository`, `DemoStudentRepository` or imported-DBF repository
+- Learning/import → services under `App\Services\Legacy`; the namespace is historical and does not represent a separate database connection
 - PDF → `ExamScheduleExportService`/mPDF
 
 ## Data and external services
 
-- Legacy MySQL/DBF-derived tables are configured through `config/legacy.php`; live schema/cardinality is `Not verified` in this audit.
+- DBF-derived tables are created in the default database. `config/system_data.php` contains feature flags and import paths only; it cannot select another database connection.
 - ZIP extraction uses `ZipArchive`; DBF parsing uses `VisualFoxProDbfReader`.
 - Staff users, districts, student records, learning data, imports and reports are read from databases/files owned by this deployment. Browser calls under `/api/v1` are same-application endpoints, not third-party APIs.
 - Thai administrative names are resolved from the bundled `resources/data/thai_administrative_areas.csv` snapshot. `ThaiAdministrativeAreaLookup` performs no network request.
@@ -73,18 +73,18 @@ Request → route → Sanctum/auth + active + district/role middleware
 
 - Laravel application, routes, migrations, models/services and tests were audited.
 - Performance fixes are recorded in [`PERFORMANCE.md`](PERFORMANCE.md).
-- Real MySQL EXPLAIN, production response time and live legacy integration are `Not verified`.
+- Real MySQL EXPLAIN and production response time are `Not verified`.
 
 ## Known issues and next tasks
 
 - Student directory performs filtering/sorting/pagination after loading the active roster and aggregates; measure realistic data before redesigning its API.
-- Legacy portal/exam-room integration needs fixture-backed integration tests.
+- Imported DBF reporting needs additional fixture-backed integration tests.
 - Review Pint findings in the existing files and run live query plans before adding indexes.
 
 ## Do not change without checking
 
-- Legacy batch selection, district scope, PII masking, role middleware and API response fields
+- Import batch selection, district scope, PII masking, role middleware and API response fields
 - `2026_08_07_000014_fix_import_and_exam_room_schema.php` and any dynamic import table naming
-- Legacy read-only connection and import write flags
+- Default database connection and import write flags
 - Student academic-term normalization and grade selection rules
-- Frontend response shapes and legacy redirect routes
+- Frontend response shapes and compatibility redirect routes

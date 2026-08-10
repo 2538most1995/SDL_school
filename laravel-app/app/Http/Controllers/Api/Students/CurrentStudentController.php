@@ -129,7 +129,7 @@ final class CurrentStudentController extends Controller
             'data' => $data,
             'meta' => [
                 'demo' => (bool) config('sena.demo_mode'),
-                'data_classification' => config('legacy.enabled') ? 'legacy_read_only' : 'synthetic_demo',
+                'data_classification' => config('system_data.enabled') ? 'system_database' : 'synthetic_demo',
                 'generated_at' => now()->toIso8601String(),
             ],
         ]);

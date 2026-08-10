@@ -14,8 +14,8 @@ final class ScoreController extends Controller
     public function __invoke(Request $request, DemoLearningPortal $portal, LegacyPortalReadService $legacy): JsonResponse
     {
         return response()->json([
-            'data' => config('legacy.enabled') ? $legacy->scores($request->user(), (int) $request->attributes->get('district_id')) : $portal->scores(),
-            'meta' => config('legacy.enabled') ? ['mode' => 'production', 'source' => 'legacy_read_only', 'read_only' => true] : DemoResponseMeta::item(),
+            'data' => config('system_data.enabled') ? $legacy->scores($request->user(), (int) $request->attributes->get('district_id')) : $portal->scores(),
+            'meta' => config('system_data.enabled') ? ['mode' => 'production', 'source' => 'system_database', 'read_only' => true] : DemoResponseMeta::item(),
         ]);
     }
 }

@@ -13,13 +13,13 @@ final class ImportSafetyController extends Controller
 {
     public function __invoke(Request $request, DemoImportRegistry $registry, LegacyPortalReadService $legacy): JsonResponse
     {
-        if (! (bool) config('legacy.enabled')) {
+        if (! (bool) config('system_data.enabled')) {
             return response()->json(['data' => $registry->safetyState(), 'meta' => DemoResponseMeta::item()]);
         }
 
         $districtId = (int) $request->attributes->get('district_id');
         $state = $legacy->safetyState($districtId);
-        $writeEnabled = (bool) config('legacy.write_enabled');
+        $writeEnabled = (bool) config('system_data.write_enabled');
         $state['operations'] = [
             ['key' => 'import-write', 'label' => 'นำเข้าข้อมูลใหม่', 'reason' => 'ตรวจไฟล์และสร้างชุดใหม่ให้สำเร็จก่อนสลับใช้งาน', 'state' => $writeEnabled ? 'enabled' : 'disabled'],
             ['key' => 'cleanup-write', 'label' => 'แทนที่ชุดข้อมูลเดิม', 'reason' => 'ลบ batch ตาราง และไฟล์ชุดเก่าอัตโนมัติเฉพาะอำเภอเดียวกัน', 'state' => $writeEnabled ? 'enabled' : 'disabled'],
@@ -35,7 +35,7 @@ final class ImportSafetyController extends Controller
 
         return response()->json(['data' => $state, 'meta' => [
             'mode' => 'production',
-            'source' => 'legacy_controlled_write',
+            'source' => 'system_database',
             'read_only' => ! $writeEnabled,
         ]]);
     }

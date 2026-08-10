@@ -7,6 +7,7 @@ use App\Models\User;
 use Illuminate\Database\ConnectionInterface;
 use Illuminate\Database\DatabaseManager;
 use Illuminate\Database\Query\Builder;
+use Illuminate\Support\Carbon;
 use Illuminate\Support\Str;
 use InvalidArgumentException;
 
@@ -19,29 +20,33 @@ final class LegacyPortalReadService
     {
         $query = $this->connection()->table('learning_assignments as a')
             ->leftJoin('users as creator', 'creator.id', '=', 'a.created_by')
-            ->selectRaw("a.*, CONCAT(COALESCE(creator.first_name, ''), ' ', COALESCE(creator.last_name, '')) AS teacher_name")
+            ->selectRaw("a.*, COALESCE(creator.name, '') AS teacher_name")
             ->where('a.district_id', $districtId);
 
         $this->scopeTargetedContent($query, $viewer, 'a');
 
         if ($viewer->role === 'student') {
             $studentCode = (string) ($viewer->student_code ?: $viewer->username);
-            $query->leftJoin('learning_assignment_submissions as submission', function ($join) use ($districtId, $studentCode): void {
-                $join->on('submission.assignment_id', '=', 'a.id')
-                    ->where('submission.district_id', '=', $districtId)
-                    ->where('submission.student_code', '=', $studentCode);
-            })->addSelect([
-                'submission.status as submission_state',
-                'submission.score as submission_score',
-                'submission.max_score as submission_max_score',
-            ]);
+            $studentId = $this->connection()->table('students')
+                ->where('district_id', $districtId)
+                ->where('student_code', $studentCode)
+                ->value('id');
+            if ($studentId !== null) {
+                $query->leftJoin('learning_submissions as submission', function ($join) use ($studentId): void {
+                    $join->on('submission.assignment_id', '=', 'a.id')
+                        ->where('submission.student_id', '=', (int) $studentId);
+                })->addSelect([
+                    'submission.status as submission_state',
+                    'submission.score as submission_score',
+                ]);
+            }
         }
 
         if ($search !== null && trim($search) !== '') {
             $needle = '%'.trim($search).'%';
             $query->where(fn (Builder $part) => $part
                 ->where('a.title', 'like', $needle)
-                ->orWhere('a.subject', 'like', $needle));
+                ->orWhere('a.subject_code', 'like', $needle));
         }
 
         $items = $query->orderBy('a.due_at')->limit(250)->get()->map(function (object $row) use ($viewer): array {
@@ -55,8 +60,8 @@ final class LegacyPortalReadService
 
             return [
                 'id' => (string) $row->id,
-                'subject_code' => (string) $row->subject,
-                'subject_name' => (string) $row->subject,
+                'subject_code' => (string) ($row->subject_code ?? ''),
+                'subject_name' => (string) ($row->subject_code ?? ''),
                 'title' => (string) $row->title,
                 'teacher_name' => trim((string) $row->teacher_name) ?: 'ครูผู้สอน',
                 'due_at' => $row->due_at,
@@ -67,14 +72,14 @@ final class LegacyPortalReadService
                     default => $viewer->role === 'student' ? 'not_submitted' : $itemStatus,
                 },
                 'progress_percent' => $submission === 'reviewed' ? 100 : ($submission === 'submitted' ? 80 : 0),
-                'points' => (float) ($row->submission_max_score ?? 0),
+                'points' => (float) ($row->max_score ?? 0),
                 'score' => isset($row->submission_score) ? (float) $row->submission_score : null,
                 'accent' => 'violet',
-                'can_edit' => $viewer->role !== 'teacher' || (int) $row->created_by === (int) $viewer->legacy_user_id,
+                'can_edit' => $viewer->role !== 'teacher' || (int) $row->created_by === (int) $viewer->id,
                 'raw' => [
-                    'title' => (string) $row->title, 'subject' => (string) $row->subject,
-                    'description' => (string) ($row->description ?? ''), 'due_at' => $row->due_at,
-                    'target_group' => (string) ($row->target_group ?? ''), 'target_mode' => (string) $row->target_mode,
+                    'title' => (string) $row->title, 'subject' => (string) ($row->subject_code ?? ''),
+                    'description' => (string) ($row->instructions ?? ''), 'due_at' => $row->due_at,
+                    'target_group' => (string) ($row->target_value ?? ''), 'target_mode' => (string) $row->target_type,
                     'status' => (string) $row->status,
                 ],
             ];
@@ -90,13 +95,13 @@ final class LegacyPortalReadService
     {
         $query = $this->connection()->table('learning_resources as resource')
             ->where('resource.district_id', $districtId);
-        $this->scopeGroupContent($query, $viewer, 'resource');
+        $this->scopeGroupContent($query, $viewer, 'resource', 'target_group', 'uploaded_by');
 
         if ($search !== null && trim($search) !== '') {
             $needle = '%'.trim($search).'%';
             $query->where(fn (Builder $part) => $part
                 ->where('resource.title', 'like', $needle)
-                ->orWhere('resource.subject', 'like', $needle)
+                ->orWhere('resource.subject_code', 'like', $needle)
                 ->orWhere('resource.description', 'like', $needle));
         }
 
@@ -113,17 +118,17 @@ final class LegacyPortalReadService
                 'description' => (string) ($row->description ?? ''),
                 'category' => $mappedCategory,
                 'type' => (string) $row->resource_type,
-                'subject_code' => (string) ($row->subject ?? ''),
+                'subject_code' => (string) ($row->subject_code ?? ''),
                 'duration_minutes' => null,
                 'size_label' => null,
                 'published_at' => $row->created_at,
                 'is_downloadable' => in_array($row->resource_type, ['pdf', 'exercise'], true),
                 'accent' => 'sky',
-                'can_edit' => $viewer->role !== 'teacher' || (int) $row->created_by === (int) $viewer->legacy_user_id,
+                'can_edit' => $viewer->role !== 'teacher' || (int) $row->uploaded_by === (int) $viewer->id,
                 'raw' => [
-                    'title' => (string) $row->title, 'subject' => (string) ($row->subject ?? ''),
+                    'title' => (string) $row->title, 'subject' => (string) ($row->subject_code ?? ''),
                     'description' => (string) ($row->description ?? ''), 'resource_type' => (string) $row->resource_type,
-                    'url' => (string) ($row->url ?? ''), 'level' => (string) ($row->level ?? ''),
+                    'url' => (string) ($row->external_url ?? ''), 'level' => (string) ($row->education_level ?? ''),
                     'target_group' => (string) ($row->target_group ?? ''),
                 ],
             ];
@@ -150,28 +155,33 @@ final class LegacyPortalReadService
      */
     private function calendarItems(User $viewer, int $districtId, ?array $assignments = null, ?string $type = null): array
     {
-        $events = $this->connection()->table('learning_group_events as event')
+        $events = $this->connection()->table('learning_calendar_events as event')
             ->where('event.district_id', $districtId);
-        $this->scopeGroupContent($events, $viewer, 'event');
+        $this->scopeTargetedContent($events, $viewer, 'event');
 
-        $items = $events->orderBy('event.event_date')->orderBy('event.start_time')->limit(250)->get()
-            ->map(fn (object $row): array => [
-                'id' => 'event-'.(int) $row->id,
-                'type' => 'meeting',
-                'title' => (string) $row->title,
-                'starts_at' => trim((string) $row->event_date.' '.(string) $row->start_time),
-                'ends_at' => trim((string) $row->event_date.' '.(string) $row->end_time),
-                'location' => (string) ($row->location ?? ''),
-                'subject_code' => null,
-                'accent' => 'sky',
-                'can_edit' => $viewer->role !== 'teacher' || (int) $row->created_by === (int) $viewer->legacy_user_id,
-                'raw' => [
-                    'title' => (string) $row->title, 'event_date' => (string) $row->event_date,
-                    'start_time' => substr((string) $row->start_time, 0, 5), 'end_time' => substr((string) $row->end_time, 0, 5),
-                    'location' => (string) ($row->location ?? ''), 'target_group' => (string) ($row->target_group ?? ''),
-                    'notes' => (string) ($row->notes ?? ''),
-                ],
-            ])->all();
+        $items = $events->orderBy('event.starts_at')->limit(250)->get()
+            ->map(function (object $row) use ($viewer): array {
+                $startsAt = Carbon::parse($row->starts_at);
+                $endsAt = filled($row->ends_at ?? null) ? Carbon::parse($row->ends_at) : $startsAt;
+
+                return [
+                    'id' => 'event-'.(int) $row->id,
+                    'type' => (string) ($row->event_type ?? 'meeting'),
+                    'title' => (string) $row->title,
+                    'starts_at' => (string) $row->starts_at,
+                    'ends_at' => (string) ($row->ends_at ?? $row->starts_at),
+                    'location' => (string) ($row->location ?? ''),
+                    'subject_code' => null,
+                    'accent' => 'sky',
+                    'can_edit' => $viewer->role !== 'teacher' || (int) $row->created_by === (int) $viewer->id,
+                    'raw' => [
+                        'title' => (string) $row->title, 'event_date' => $startsAt->format('Y-m-d'),
+                        'start_time' => $startsAt->format('H:i'), 'end_time' => $endsAt->format('H:i'),
+                        'location' => (string) ($row->location ?? ''), 'target_group' => (string) ($row->target_value ?? ''),
+                        'notes' => (string) ($row->description ?? ''),
+                    ],
+                ];
+            })->all();
 
         foreach ($assignments ?? $this->assignments($viewer, $districtId) as $assignment) {
             $items[] = [
@@ -196,19 +206,26 @@ final class LegacyPortalReadService
     /** @return array<string, mixed> */
     public function scores(User $viewer, int $districtId): array
     {
-        $query = $this->connection()->table('learning_scores')
-            ->where('district_id', $districtId);
+        $query = $this->connection()->table('learning_submissions as submission')
+            ->join('learning_assignments as assignment', 'assignment.id', '=', 'submission.assignment_id')
+            ->join('students as student', 'student.id', '=', 'submission.student_id')
+            ->where('assignment.district_id', $districtId)
+            ->select([
+                'submission.id', 'submission.score', 'submission.status', 'submission.created_at',
+                'assignment.subject_code', 'assignment.title', 'assignment.max_score',
+            ]);
 
         if ($viewer->role === 'student') {
-            $query->where('student_code', (string) ($viewer->student_code ?: $viewer->username));
+            $query->where('student.student_code', (string) ($viewer->student_code ?: $viewer->username));
         } elseif ($viewer->role === 'teacher') {
-            $query->where('created_by', (int) $viewer->legacy_user_id);
+            $query->where('assignment.created_by', (int) $viewer->id);
         }
 
-        $rows = $query->orderByDesc('created_at')->limit(250)->get();
+        $rows = $query->whereIn('submission.status', ['submitted', 'reviewed'])
+            ->orderByDesc('submission.created_at')->limit(250)->get();
         $courses = $rows->map(static fn (object $row): array => [
             'id' => 'score-'.(int) $row->id,
-            'subject_code' => (string) $row->category,
+            'subject_code' => (string) ($row->subject_code ?? ''),
             'subject_name' => (string) $row->title,
             'credits' => 0,
             'assignment_score' => (float) $row->score,
@@ -226,7 +243,7 @@ final class LegacyPortalReadService
                 'items' => $rows->count(),
             ],
             'courses' => $courses,
-            'disclaimer' => 'คะแนนเก็บจากระบบเดิม ยังไม่ใช่ผลการเรียนปลายภาค',
+            'disclaimer' => 'คะแนนเก็บภายในระบบ ยังไม่ใช่ผลการเรียนปลายภาค',
         ];
     }
 
@@ -235,20 +252,20 @@ final class LegacyPortalReadService
     {
         $query = $this->connection()->table('learning_lesson_plans')->where('district_id', $districtId);
         if ($viewer->role === 'teacher') {
-            $query->where('created_by', (int) $viewer->legacy_user_id);
+            $query->where('teacher_id', (int) $viewer->id);
         }
 
         return $query->orderByDesc('updated_at')->limit(250)->get()->map(fn (object $row): array => [
             'id' => (string) $row->id,
             'title' => (string) $row->title,
             'description' => Str::limit((string) ($row->objectives ?? ''), 180),
-            'course' => (string) ($row->subject ?? ''),
-            'timing' => (string) ($row->semester ?? '-'),
-            'status' => 'เผยแพร่แล้ว',
-            'can_edit' => $viewer->role !== 'teacher' || (int) $row->created_by === (int) $viewer->legacy_user_id,
+            'course' => (string) ($row->subject_code ?? ''),
+            'timing' => (string) ($row->academic_term ?? '-'),
+            'status' => (string) $row->status === 'published' ? 'เผยแพร่แล้ว' : 'ฉบับร่าง',
+            'can_edit' => $viewer->role !== 'teacher' || (int) $row->teacher_id === (int) $viewer->id,
             'raw' => [
-                'title' => (string) $row->title, 'subject' => (string) ($row->subject ?? ''),
-                'level' => (string) ($row->level ?? ''), 'semester' => (string) ($row->semester ?? ''),
+                'title' => (string) $row->title, 'subject' => (string) ($row->subject_code ?? ''),
+                'level' => (string) ($row->education_level ?? ''), 'semester' => (string) ($row->academic_term ?? ''),
                 'objectives' => (string) ($row->objectives ?? ''), 'activities' => (string) ($row->activities ?? ''),
                 'assessment' => (string) ($row->assessment ?? ''),
             ],
@@ -258,18 +275,26 @@ final class LegacyPortalReadService
     /** @return list<array<string, mixed>> */
     public function schedules(User $viewer, int $districtId): array
     {
-        $query = $this->connection()->table('learning_schedules')->where('district_id', $districtId);
-        $this->scopeGroupContent($query, $viewer, 'learning_schedules');
+        $query = $this->connection()->table('learning_schedules as schedule')
+            ->leftJoin('users as teacher', 'teacher.id', '=', 'schedule.teacher_id')
+            ->where('schedule.district_id', $districtId)
+            ->select('schedule.*', 'teacher.name as teacher_name');
+        $this->scopeGroupContent($query, $viewer, 'schedule', 'group_code', 'teacher_id');
         $weekdays = [1 => 'วันจันทร์', 2 => 'วันอังคาร', 3 => 'วันพุธ', 4 => 'วันพฤหัสบดี', 5 => 'วันศุกร์', 6 => 'วันเสาร์', 7 => 'วันอาทิตย์'];
 
-        return $query->orderBy('weekday')->orderBy('start_time')->limit(250)->get()->map(static fn (object $row): array => [
-            'id' => (string) $row->id,
-            'title' => (string) $row->subject,
-            'description' => (string) ($row->teacher_name ?? ''),
-            'course' => $weekdays[(int) $row->weekday] ?? 'ไม่ระบุวัน',
-            'timing' => substr((string) $row->start_time, 0, 5).' - '.substr((string) $row->end_time, 0, 5).' น.',
-            'status' => (string) ($row->location ?? '-'),
-        ])->all();
+        return $query->orderBy('schedule.starts_at')->limit(250)->get()->map(static function (object $row) use ($weekdays): array {
+            $startsAt = Carbon::parse($row->starts_at);
+            $endsAt = filled($row->ends_at ?? null) ? Carbon::parse($row->ends_at) : $startsAt;
+
+            return [
+                'id' => (string) $row->id,
+                'title' => (string) $row->subject_name,
+                'description' => (string) ($row->teacher_name ?? ''),
+                'course' => $weekdays[$startsAt->dayOfWeekIso] ?? 'ไม่ระบุวัน',
+                'timing' => $startsAt->format('H:i').' - '.$endsAt->format('H:i').' น.',
+                'status' => (string) ($row->room ?? '-'),
+            ];
+        })->all();
     }
 
     /** @return array<string, mixed> */
@@ -332,7 +357,9 @@ final class LegacyPortalReadService
             'user.id', 'user.username', 'user.first_name', 'user.last_name', 'user.role',
             'user.district_id', 'user.assigned_groups', 'user.created_at', 'district.name as district_name',
         ])->orderBy('user.role')->orderBy('user.first_name')->limit(250)->get()->map(function (object $row): array {
-            $groups = json_decode((string) ($row->assigned_groups ?? '[]'), true);
+            $groups = is_array($row->assigned_groups ?? null)
+                ? $row->assigned_groups
+                : json_decode((string) ($row->assigned_groups ?? '[]'), true);
 
             return [
                 'id' => (string) $row->id,
@@ -429,7 +456,7 @@ final class LegacyPortalReadService
     public function safetyState(int $districtId): array
     {
         $batchCount = $this->connection()->table('import_batches')->where('district_id', $districtId)->count();
-        $writeEnabled = (bool) config('legacy.write_enabled');
+        $writeEnabled = (bool) config('system_data.write_enabled');
 
         return [
             'operations' => [
@@ -438,7 +465,7 @@ final class LegacyPortalReadService
             ],
             'required_controls' => [
                 ['key' => 'district-scope', 'label' => "ตรวจขอบเขตอำเภอแล้ว ({$districtId})", 'state' => 'ready'],
-                ['key' => 'legacy-read-only', 'label' => 'ฐานเดิมเชื่อมแบบ read-only', 'state' => 'ready'],
+                ['key' => 'system-database', 'label' => 'ใช้ฐานข้อมูลภายในระบบเท่านั้น', 'state' => 'ready'],
                 ['key' => 'batch-registry', 'label' => "พบ batch ในทะเบียน {$batchCount} รายการ", 'state' => $batchCount > 0 ? 'ready' : 'required'],
                 ['key' => 'atomic-activation', 'label' => 'เปิดใช้ชุดใหม่ก่อนลบชุดเดิม', 'state' => $writeEnabled ? 'ready' : 'required'],
             ],
@@ -448,48 +475,53 @@ final class LegacyPortalReadService
     private function scopeTargetedContent(Builder $query, User $viewer, string $alias): void
     {
         if ($viewer->role === 'student') {
-            $studentCode = (string) ($viewer->student_code ?: $viewer->username);
-            $level = $this->studentLevel($viewer);
-            $query->where(function (Builder $scope) use ($alias, $studentCode, $level): void {
-                $scope->where("{$alias}.target_mode", 'all')
-                    ->orWhereExists(fn (Builder $target) => $target
-                        ->selectRaw('1')
-                        ->from('learning_assignment_targets as target')
-                        ->whereColumn('target.assignment_id', "{$alias}.id")
-                        ->whereColumn('target.district_id', "{$alias}.district_id")
-                        ->where('target.student_code', $studentCode));
-                if ($level !== null) {
-                    $scope->orWhere(fn (Builder $part) => $part
-                        ->where("{$alias}.target_mode", 'level')
-                        ->where("{$alias}.target_level", 'like', "%{$level}%"));
+            $groups = $this->groups($viewer);
+            $query->where(function (Builder $scope) use ($alias, $groups): void {
+                $scope->where("{$alias}.target_type", 'all');
+                if ($groups !== []) {
+                    $scope->orWhere(function (Builder $groupScope) use ($alias, $groups): void {
+                        $groupScope->where("{$alias}.target_type", 'group')
+                            ->whereIn("{$alias}.target_value", $groups);
+                    });
                 }
-            })->where("{$alias}.status", 'open');
+            });
+            if ($alias === 'a') {
+                $query->where("{$alias}.status", 'open');
+            }
         } elseif ($viewer->role === 'teacher') {
             $groups = $this->groups($viewer);
-            $query->where(function (Builder $scope) use ($alias, $viewer, $groups): void {
-                $scope->where("{$alias}.created_by", (int) $viewer->legacy_user_id);
+            $query->where(function (Builder $scope) use ($alias, $groups, $viewer): void {
+                $scope->where("{$alias}.created_by", (int) $viewer->id);
                 if ($groups !== []) {
-                    $scope->orWhereIn("{$alias}.target_group", $groups);
+                    $scope->orWhere(function (Builder $groupScope) use ($alias, $groups): void {
+                        $groupScope->where("{$alias}.target_type", 'group')
+                            ->whereIn("{$alias}.target_value", $groups);
+                    });
                 }
             });
         }
     }
 
-    private function scopeGroupContent(Builder $query, User $viewer, string $alias): void
-    {
+    private function scopeGroupContent(
+        Builder $query,
+        User $viewer,
+        string $alias,
+        string $groupColumn = 'target_group',
+        string $actorColumn = 'created_by',
+    ): void {
         $groups = $this->groups($viewer);
         if ($viewer->role === 'student') {
-            $query->where(function (Builder $scope) use ($alias, $groups): void {
-                $scope->whereNull("{$alias}.target_group")->orWhere("{$alias}.target_group", '');
+            $query->where(function (Builder $scope) use ($alias, $groupColumn, $groups): void {
+                $scope->whereNull("{$alias}.{$groupColumn}")->orWhere("{$alias}.{$groupColumn}", '');
                 if ($groups !== []) {
-                    $scope->orWhereIn("{$alias}.target_group", $groups);
+                    $scope->orWhereIn("{$alias}.{$groupColumn}", $groups);
                 }
             });
         } elseif ($viewer->role === 'teacher') {
-            $query->where(function (Builder $scope) use ($alias, $viewer, $groups): void {
-                $scope->where("{$alias}.created_by", (int) $viewer->legacy_user_id);
+            $query->where(function (Builder $scope) use ($actorColumn, $alias, $groupColumn, $groups, $viewer): void {
+                $scope->where("{$alias}.{$actorColumn}", (int) $viewer->id);
                 if ($groups !== []) {
-                    $scope->orWhereIn("{$alias}.target_group", $groups);
+                    $scope->orWhereIn("{$alias}.{$groupColumn}", $groups);
                 }
             });
         }
@@ -499,13 +531,6 @@ final class LegacyPortalReadService
     private function groups(User $viewer): array
     {
         return array_values(array_filter(array_map('strval', $viewer->assigned_groups ?? [])));
-    }
-
-    private function studentLevel(User $viewer): ?int
-    {
-        return preg_match('/^student:\d+:([123]):/', (string) $viewer->legacy_key, $matches) === 1
-            ? (int) $matches[1]
-            : null;
     }
 
     private function batchAcademicTerm(string $batchKey): ?string
@@ -537,7 +562,7 @@ final class LegacyPortalReadService
     private function identifier(string $identifier): string
     {
         if (strlen($identifier) > 64 || preg_match('/^[A-Za-z0-9_]+$/', $identifier) !== 1) {
-            throw new InvalidArgumentException('Invalid legacy table identifier.');
+            throw new InvalidArgumentException('Invalid imported table identifier.');
         }
 
         return "`{$identifier}`";
@@ -545,6 +570,6 @@ final class LegacyPortalReadService
 
     private function connection(): ConnectionInterface
     {
-        return $this->database->connection((string) config('legacy.connection'));
+        return $this->database->connection();
     }
 }

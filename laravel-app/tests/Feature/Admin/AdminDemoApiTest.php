@@ -46,7 +46,7 @@ final class AdminDemoApiTest extends TestCase
             ->assertOk()
             ->assertJsonCount(1, 'data')
             ->assertJsonPath('data.0.id', 'demo-import-002')
-            ->assertJsonPath('meta.legacy_database_connected', false)
+            ->assertJsonPath('meta.system_database_connected', false)
             ->assertJsonPath('meta.write_operations_enabled', false)
             ->assertJsonPath('meta.read_only', true);
 
@@ -54,8 +54,8 @@ final class AdminDemoApiTest extends TestCase
             ->assertOk()
             ->assertJsonPath('data.mode', 'demo')
             ->assertJsonPath('data.overall_state', 'locked')
-            ->assertJsonPath('data.legacy_database.connected', false)
-            ->assertJsonPath('data.legacy_database.writes_enabled', false)
+            ->assertJsonPath('data.system_database.connected', false)
+            ->assertJsonPath('data.system_database.writes_enabled', false)
             ->assertJsonPath('data.operations.0.state', 'disabled')
             ->assertJsonPath('data.operations.2.key', 'activate')
             ->assertJsonPath('data.operations.2.state', 'disabled')

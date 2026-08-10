@@ -5,6 +5,7 @@ namespace App\Services\Legacy;
 use App\Support\VisualFoxProDbfReader;
 use Illuminate\Database\ConnectionInterface;
 use Illuminate\Database\DatabaseManager;
+use Illuminate\Database\Schema\Blueprint;
 use Illuminate\Http\UploadedFile;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Str;
@@ -35,7 +36,7 @@ final class LegacyZipImportService
     /** @return array<string, mixed> */
     public function import(UploadedFile $archive, string $academicTerm, int $districtId, int $userId, ?string $ipAddress, ?callable $progress = null): array
     {
-        if (! (bool) config('legacy.write_enabled')) {
+        if (! (bool) config('system_data.write_enabled')) {
             throw new RuntimeException('ระบบเขียนข้อมูลยังไม่เปิดใช้งาน');
         }
         if (! class_exists(ZipArchive::class)) {
@@ -44,8 +45,8 @@ final class LegacyZipImportService
 
         @set_time_limit(0);
         $batchKey = 'import_'.time().'_'.bin2hex(random_bytes(4));
-        $zipRoot = $this->absoluteDirectory((string) config('legacy.zip_root'));
-        $extractRoot = $this->absoluteDirectory((string) config('legacy.extract_root'));
+        $zipRoot = $this->absoluteDirectory((string) config('system_data.zip_root'));
+        $extractRoot = $this->absoluteDirectory((string) config('system_data.extract_root'));
         $zipPath = $zipRoot.DIRECTORY_SEPARATOR.$batchKey.'.zip';
         $extractPath = $extractRoot.DIRECTORY_SEPARATOR.$batchKey;
         $this->createdTables = [];
@@ -333,7 +334,7 @@ final class LegacyZipImportService
      * sibling FPT file. Activating a DBF without that companion would silently
      * publish a batch whose contact data can never be decoded.
      *
-     * @param list<array{parent: string, type: string, path: string, mtime: int}> $candidates
+     * @param  list<array{parent: string, type: string, path: string, mtime: int}>  $candidates
      */
     private function assertStudentMemoCompanions(array $candidates): void
     {
@@ -447,6 +448,7 @@ final class LegacyZipImportService
                     if ($recordsSeen % 1_000 === 0) {
                         $reportTableProgress($recordsSeen, $insertStart, $insertSpan);
                     }
+
                     continue;
                 }
                 $values = [];
@@ -685,7 +687,7 @@ final class LegacyZipImportService
         try {
             $schema = $this->write()->getSchemaBuilder();
             if (! $schema->hasTable('import_history')) {
-                $schema->create('import_history', function (\Illuminate\Database\Schema\Blueprint $table): void {
+                $schema->create('import_history', function (Blueprint $table): void {
                     $table->id();
                     $table->string('file_name');
                     $table->string('saved_file_name');
@@ -702,11 +704,11 @@ final class LegacyZipImportService
             }
 
             if ($schema->hasTable('import_batches') && ! $schema->hasColumn('import_batches', 'import_history_id')) {
-                $schema->table('import_batches', function (\Illuminate\Database\Schema\Blueprint $table): void {
+                $schema->table('import_batches', function (Blueprint $table): void {
                     $table->unsignedBigInteger('import_history_id')->nullable()->after('district_id');
                 });
             }
-        } catch (\Throwable) {
+        } catch (Throwable) {
             // Safe fallback if already created or restricted permissions
         }
     }
@@ -811,8 +813,8 @@ final class LegacyZipImportService
             $this->write()->getSchemaBuilder()->getTableListing(null, false),
             static fn (string $table): bool => str_starts_with($table, $prefix),
         ));
-        $zipPath = $this->absoluteDirectory((string) config('legacy.zip_root')).DIRECTORY_SEPARATOR.$batchKey.'.zip';
-        $extractPath = $this->absoluteDirectory((string) config('legacy.extract_root')).DIRECTORY_SEPARATOR.$batchKey;
+        $zipPath = $this->absoluteDirectory((string) config('system_data.zip_root')).DIRECTORY_SEPARATOR.$batchKey.'.zip';
+        $extractPath = $this->absoluteDirectory((string) config('system_data.extract_root')).DIRECTORY_SEPARATOR.$batchKey;
         $hadZip = is_file($zipPath);
         $hadExtractDirectory = is_dir($extractPath) || is_link($extractPath);
 
@@ -849,8 +851,8 @@ final class LegacyZipImportService
                 $this->write()->getSchemaBuilder()->getTableListing(null, false),
                 static fn (string $table): bool => str_starts_with($table, $prefix),
             ));
-            $zipPath = $this->absoluteDirectory((string) config('legacy.zip_root')).DIRECTORY_SEPARATOR.$batchKey.'.zip';
-            $extractPath = $this->absoluteDirectory((string) config('legacy.extract_root')).DIRECTORY_SEPARATOR.$batchKey;
+            $zipPath = $this->absoluteDirectory((string) config('system_data.zip_root')).DIRECTORY_SEPARATOR.$batchKey.'.zip';
+            $extractPath = $this->absoluteDirectory((string) config('system_data.extract_root')).DIRECTORY_SEPARATOR.$batchKey;
             $hadZip = is_file($zipPath);
             $hadExtractDirectory = is_dir($extractPath) || is_link($extractPath);
 
@@ -891,8 +893,8 @@ final class LegacyZipImportService
 
     private function removeBatchFiles(string $batchKey): void
     {
-        $zipRoot = $this->absoluteDirectory((string) config('legacy.zip_root'));
-        $extractRoot = $this->absoluteDirectory((string) config('legacy.extract_root'));
+        $zipRoot = $this->absoluteDirectory((string) config('system_data.zip_root'));
+        $extractRoot = $this->absoluteDirectory((string) config('system_data.extract_root'));
         $zipPath = $zipRoot.DIRECTORY_SEPARATOR.$batchKey.'.zip';
         if (is_file($zipPath) && ! @unlink($zipPath)) {
             throw new RuntimeException('ไม่สามารถลบไฟล์ ZIP ชุดเก่าได้');
@@ -971,7 +973,7 @@ final class LegacyZipImportService
             'user_id' => $userId,
             'district_id' => $districtId,
             'event' => 'admin.import.completed',
-            'auditable_type' => 'legacy_import_batch',
+            'auditable_type' => 'system_import_batch',
             'auditable_id' => $historyId,
             'ip_address' => $ipAddress,
             'after' => json_encode($summary, JSON_UNESCAPED_UNICODE | JSON_THROW_ON_ERROR),
@@ -1043,11 +1045,11 @@ final class LegacyZipImportService
 
     private function read(): ConnectionInterface
     {
-        return $this->database->connection((string) config('legacy.connection'));
+        return $this->database->connection();
     }
 
     private function write(): ConnectionInterface
     {
-        return $this->database->connection((string) config('legacy.write_connection'));
+        return $this->database->connection();
     }
 }

@@ -25,10 +25,10 @@ final class ImportAsyncTest extends TestCase
         Storage::fake('local');
         Bus::fake();
         Cache::clear();
-        config()->set('legacy.enabled', true);
-        config()->set('legacy.write_enabled', true);
-        config()->set('legacy.import_queue_connection', 'database');
-        config()->set('legacy.import_autostart_connection', 'background');
+        config()->set('system_data.enabled', true);
+        config()->set('system_data.write_enabled', true);
+        config()->set('system_data.import_queue_connection', 'database');
+        config()->set('system_data.import_autostart_connection', 'background');
         $district = District::create(['name' => 'อำเภอทดสอบ', 'code' => 'async-import']);
         $user = User::factory()->create(['role' => 'admin', 'district_id' => $district->id]);
         Sanctum::actingAs($user);

@@ -107,10 +107,10 @@ final class LegacyExamScheduleService
         if (array_key_exists($districtId, $this->batchKeys)) {
             return $this->batchKeys[$districtId];
         }
-        if (! (bool) config('legacy.student_enabled')) {
+        if (! (bool) config('system_data.student_enabled')) {
             return $this->batchKeys[$districtId] = null;
         }
-        $connection = $this->database->connection((string) config('legacy.connection'));
+        $connection = $this->database->connection();
         $mysql = $connection->getDriverName() === 'mysql';
         $key = (string) ($connection
             ->table('import_batches as batch')
@@ -137,7 +137,7 @@ final class LegacyExamScheduleService
         if (array_key_exists($cacheKey, $this->dbfPaths)) {
             return $this->dbfPaths[$cacheKey];
         }
-        $root = rtrim((string) config('legacy.extract_root'), DIRECTORY_SEPARATOR).DIRECTORY_SEPARATOR.$batchKey;
+        $root = rtrim((string) config('system_data.extract_root'), DIRECTORY_SEPARATOR).DIRECTORY_SEPARATOR.$batchKey;
         if (! is_dir($root)) {
             return $this->dbfPaths[$cacheKey] = null;
         }
@@ -188,12 +188,12 @@ final class LegacyExamScheduleService
 
     private function queryExamRoomDb(Student $student, string $term, string $subjectCode): string
     {
-        if (! (bool) config('legacy.enabled')) {
+        if (! (bool) config('system_data.enabled')) {
             return '-';
         }
         $termCacheKey = implode('|', [$student->districtId, $term]);
         if (! array_key_exists($termCacheKey, $this->examRoomsByTerm)) {
-            $this->examRoomsByTerm[$termCacheKey] = $this->database->connection((string) config('legacy.connection'))->table('exam_rooms')
+            $this->examRoomsByTerm[$termCacheKey] = $this->database->connection()->table('exam_rooms')
                 ->select(['id', 'subject_code', 'assignment_type', 'start_val', 'end_val', 'room_name'])
                 ->where('district_id', $student->districtId)
                 ->where(function ($q) use ($term): void {
@@ -309,9 +309,9 @@ final class LegacyExamScheduleService
                 }
             }
         }
-        if ($fields === [] && $batchKey !== null && (bool) config('legacy.enabled')) {
+        if ($fields === [] && $batchKey !== null && (bool) config('system_data.enabled')) {
             try {
-                $connection = $this->database->connection((string) config('legacy.connection'));
+                $connection = $this->database->connection();
                 $tableNames = ["db_import_{$batchKey}_field", "db_import_{$batchKey}_0_field"];
                 foreach ($tableNames as $tableName) {
                     if ($connection->getSchemaBuilder()->hasTable($tableName)) {
@@ -357,9 +357,9 @@ final class LegacyExamScheduleService
                 }
             }
         }
-        if ($map === [] && (bool) config('legacy.enabled')) {
+        if ($map === [] && (bool) config('system_data.enabled')) {
             try {
-                $connection = $this->database->connection((string) config('legacy.connection'));
+                $connection = $this->database->connection();
                 $tableNames = ["db_import_{$batchKey}_group", "db_import_{$batchKey}_0_group"];
                 foreach ($tableNames as $tableName) {
                     if ($connection->getSchemaBuilder()->hasTable($tableName)) {
@@ -411,9 +411,9 @@ final class LegacyExamScheduleService
             }
         }
 
-        if ($map === [] && (bool) config('legacy.enabled')) {
+        if ($map === [] && (bool) config('system_data.enabled')) {
             try {
-                $connection = $this->database->connection((string) config('legacy.connection'));
+                $connection = $this->database->connection();
                 $tableNames = ["db_import_{$batchKey}_{$level}_grade", "db_import_{$batchKey}_grade"];
                 foreach ($tableNames as $tableName) {
                     if ($connection->getSchemaBuilder()->hasTable($tableName)) {

@@ -25,7 +25,7 @@ final class LearningPortalApiTest extends TestCase
 
     public function test_learning_overview_returns_the_demo_contract_when_legacy_is_disabled(): void
     {
-        config(['legacy.enabled' => false]);
+        config(['system_data.enabled' => false]);
 
         $this->getJson('/api/_contract/learning')
             ->assertOk()

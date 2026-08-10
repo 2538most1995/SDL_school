@@ -1,11 +1,7 @@
 <?php
 
-use App\Support\LegacyDatabaseCredentials;
 use Illuminate\Support\Str;
 use Pdo\Mysql;
-
-$legacy = LegacyDatabaseCredentials::resolve();
-$legacyWrite = LegacyDatabaseCredentials::resolveWrite();
 
 return [
 
@@ -77,47 +73,6 @@ return [
             'engine' => null,
             'options' => extension_loaded('pdo_mysql') ? array_filter([
                 Mysql::ATTR_SSL_CA => env('MYSQL_ATTR_SSL_CA'),
-            ]) : [],
-        ],
-
-        'legacy' => [
-            'driver' => 'mysql',
-            'host' => $legacy['host'] ?? '127.0.0.1',
-            'port' => $legacy['port'] ?: 3306,
-            'database' => $legacy['database'] ?? '',
-            'username' => $legacy['username'] ?? '',
-            'password' => $legacy['password'] ?? '',
-            'unix_socket' => env('LEGACY_DB_SOCKET', ''),
-            'charset' => 'utf8mb4',
-            'collation' => 'utf8mb4_unicode_ci',
-            'prefix' => '',
-            'prefix_indexes' => true,
-            'strict' => true,
-            'engine' => null,
-            'options' => extension_loaded('pdo_mysql') ? array_filter([
-                Mysql::ATTR_SSL_CA => env('LEGACY_MYSQL_ATTR_SSL_CA'),
-                Mysql::ATTR_INIT_COMMAND => filter_var(env('SENA_LEGACY_READ_ONLY', true), FILTER_VALIDATE_BOOL)
-                    ? 'SET SESSION TRANSACTION READ ONLY'
-                    : null,
-            ]) : [],
-        ],
-
-        'legacy_write' => [
-            'driver' => 'mysql',
-            'host' => $legacyWrite['host'] ?? '127.0.0.1',
-            'port' => $legacyWrite['port'] ?: 3306,
-            'database' => $legacyWrite['database'] ?? '',
-            'username' => $legacyWrite['username'] ?? '',
-            'password' => $legacyWrite['password'] ?? '',
-            'unix_socket' => env('LEGACY_DB_SOCKET', ''),
-            'charset' => 'utf8mb4',
-            'collation' => 'utf8mb4_unicode_ci',
-            'prefix' => '',
-            'prefix_indexes' => true,
-            'strict' => true,
-            'engine' => null,
-            'options' => extension_loaded('pdo_mysql') ? array_filter([
-                Mysql::ATTR_SSL_CA => env('LEGACY_MYSQL_ATTR_SSL_CA'),
             ]) : [],
         ],
 

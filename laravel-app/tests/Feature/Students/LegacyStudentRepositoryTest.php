@@ -216,16 +216,13 @@ final class LegacyStudentRepositoryTest extends TestCase
         $this->assertTrue((bool) array_filter($queries, static fn (string $query): bool => str_contains($query, 's.`cardid`')));
     }
 
-    public function test_real_legacy_connection_is_opt_in_and_read_only(): void
+    public function test_real_imported_data_is_opt_in_on_the_system_database(): void
     {
-        if (! filter_var(env('LEGACY_STUDENT_INTEGRATION', false), FILTER_VALIDATE_BOOL)) {
-            $this->markTestSkipped('Set LEGACY_STUDENT_INTEGRATION=true to run the read-only legacy integration test.');
-        }
-        if (config('database.connections.legacy') === null) {
-            $this->markTestSkipped('The legacy connection is not configured.');
+        if (! filter_var(env('SYSTEM_STUDENT_INTEGRATION', false), FILTER_VALIDATE_BOOL)) {
+            $this->markTestSkipped('Set SYSTEM_STUDENT_INTEGRATION=true to test imported data in the system database.');
         }
 
-        $repository = new LegacyStudentRepository(DB::connection('legacy'));
+        $repository = new LegacyStudentRepository(DB::connection());
         $students = $repository->students();
 
         $this->assertIsArray($students);
