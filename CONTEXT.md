@@ -33,7 +33,7 @@ District scope is resolved by `ResolveDistrictContext`; role checks are enforced
 5. Student PII is masked by default and unmasked only for an allowed scope/resource.
 6. Import creates and validates a new batch before replacing old district batches; writes are disabled by default.
 7. Learning writes require teacher/admin/super-admin role and teacher ownership/district checks.
-8. Student login requires an explicit active district and verifies credentials only against current student rows in that district; current status comes from blank finish cause and transfer date, not from whether a grade exists in the latest term.
+8. Student login derives district scope from one unique citizen-ID + student-code match across current-term rosters in active districts; client-supplied district values are ignored and ambiguous matches fail closed.
 
 ## Request/data flow
 
@@ -50,7 +50,7 @@ Request → route → Sanctum/auth + active + district/role middleware
 - `EnsureActiveUser`, `EnsureRole`, `ResolveDistrictContext` and `SecurityHeaders` are registered in `bootstrap/app.php`.
 - Protected routes are defined in `routes/api.php`; admin writes are restricted to `admin,super_admin`, learning writes to `teacher,admin,super_admin`, and super-admin branding routes to `super_admin`.
 - POST/PATCH/PUT/DELETE paths use Laravel validation/authentication and audit where applicable. Upload/import paths must retain size/type/path validation.
-- Staff login checks the local `users` table. Student login verifies citizen ID + student code against the latest imported student tables in the same default database, then provisions/refreshes an internal session account without persisting the citizen ID in `users`.
+- Staff login checks the local `users` table. Student login verifies citizen ID + student code against current-term rows in the latest imported tables across active districts, derives the matching district, then provisions/refreshes an internal session account without persisting the citizen ID in `users`.
 - User administration reads and writes `users` in the default database and records audit events there; it has no shadow-user or external-database sync.
 
 ## Important routes/controllers/services

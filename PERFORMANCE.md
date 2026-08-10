@@ -13,12 +13,12 @@
 | P2 | Live MySQL execution plan/cardinality | Not verified |
 | P3 | Pint findings ในไฟล์เดิม 8 ไฟล์ | Not changed; style-only scope |
 
-## Student login roster correction (2026-08-10)
+## Student login district resolution (2026-08-10)
 
-- **Problem:** student login loaded the whole district roster but the roster query admitted only students with a grade in the latest term plus two recent student codes. Current students without a latest-term grade could never authenticate.
-- **Root cause:** the directory performance filter was also used as the authentication source and treated grade presence as current-student status.
-- **Solution:** the roster query now uses the imported student status fields (`fin_cause` and `trn_date2`) to include current students and exclude graduated, transferred or inactive rows. Login also requires an explicit active district, avoiding an unscoped multi-district scan.
-- **Impact:** authentication and directory aggregates may process more current students than before, but remain batched by district/table set and use existing `_perf_id10`/aggregate indexes.
+- **Problem:** requiring students to choose a district made valid credentials fail when the selected district did not match the imported record, while broadening the shared roster made the student menu show rows outside the current-term cohort.
+- **Solution:** the directory roster is again limited to the latest academic term. Student login does not accept district scope from the client; it matches citizen ID + student code across active-district current-term rosters and derives the district from the single matching record.
+- **Security:** zero or multiple exact matches return the same generic credential error. The citizen ID is not persisted to `users`, and a client-supplied `district_id` cannot redirect the session to another district.
+- **Impact:** a login may load current-term rosters for all active districts. Request-local repository caches still apply, but this is broader than a district-scoped directory request.
 - **Risk:** live MySQL row counts and execution plans for Sena/Phaisali are `Not verified`; run `EXPLAIN` with sanitized production-shaped data after deployment.
 
 ## Functional issues found by browser smoke test

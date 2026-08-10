@@ -1,6 +1,6 @@
-import { useEffect, useState } from 'react';
+import { useState } from 'react';
 import { useMutation, useQuery } from '@tanstack/react-query';
-import { Badge, Button, Field, Input, MessageBar, MessageBarBody, Select, Tab, TabList } from '../components/MaterialUI';
+import { Badge, Button, Field, Input, MessageBar, MessageBarBody, Tab, TabList } from '../components/MaterialUI';
 import {
     ArrowLeft,
     ArrowRight,
@@ -10,7 +10,6 @@ import {
     GraduationCap,
     IdentificationCard,
     LockKey,
-    MapPin,
     Student,
     UserCircle,
 } from '@phosphor-icons/react';
@@ -44,31 +43,14 @@ export function LoginPage() {
     const [identifier, setIdentifier] = useState('');
     const [password, setPassword] = useState('');
     const [showPassword, setShowPassword] = useState(false);
-    const [selectedDistrictId, setSelectedDistrictId] = useState('');
     const rememberedDistrictId = window.localStorage.getItem('sena-district-id');
 
-    const districts = useQuery({
-        queryKey: ['auth', 'districts'],
-        queryFn: ({ signal }) => apiGet<DistrictOption[]>('/api/v1/auth/districts', signal).then((response) => response.data),
-        staleTime: 5 * 60_000,
-    });
-    const brandingDistrictId = selectedDistrictId || rememberedDistrictId;
     const branding = useQuery({
-        queryKey: ['auth', 'branding', brandingDistrictId || 'default'],
-        queryFn: ({ signal }) => apiGet<PublicBranding>(publicBrandingPath(brandingDistrictId), signal).then((response) => response.data),
+        queryKey: ['auth', 'branding', rememberedDistrictId || 'default'],
+        queryFn: ({ signal }) => apiGet<PublicBranding>(publicBrandingPath(rememberedDistrictId), signal).then((response) => response.data),
         staleTime: 5 * 60_000,
     });
     const usesSystemStudentCredentials = branding.data?.loginMode === 'student_credentials';
-
-    useEffect(() => {
-        if (!districts.data?.length || selectedDistrictId === '') return;
-
-        const selectedDistrictExists = districts.data.some((district) => String(district.id) === selectedDistrictId);
-        if (selectedDistrictExists) return;
-
-        setSelectedDistrictId('');
-        window.localStorage.removeItem('sena-district-id');
-    }, [districts.data, selectedDistrictId]);
 
     const login = useMutation({
         meta: { notification: { success: false } },
@@ -76,9 +58,6 @@ export function LoginPage() {
             identifier,
             password,
             login_type: loginType,
-            district_id: loginType === 'student' && usesSystemStudentCredentials
-                ? Number(selectedDistrictId)
-                : branding.data?.districtId,
         }),
         onSuccess: (response) => {
             if (response.data.district_id) {
@@ -94,21 +73,10 @@ export function LoginPage() {
     const error = login.error instanceof ApiError
         ? login.error.errors.identifier?.[0] ?? login.error.message
         : null;
-    const submitDisabled = login.isPending
-        || !identifier
-        || !password
-        || (loginType === 'student' && usesSystemStudentCredentials && !selectedDistrictId);
+    const submitDisabled = login.isPending || !identifier || !password;
 
     const switchType = (type: LoginType) => {
         setLoginType(type);
-        setIdentifier('');
-        setPassword('');
-        login.reset();
-    };
-
-    const changeDistrict = (districtId: string) => {
-        setSelectedDistrictId(districtId);
-        window.localStorage.setItem('sena-district-id', districtId);
         setIdentifier('');
         setPassword('');
         login.reset();
@@ -150,29 +118,6 @@ export function LoginPage() {
                         </TabList>
 
                         <form className="mt-6 space-y-5" onSubmit={(event) => { event.preventDefault(); login.mutate(); }}>
-                            {loginType === 'student' && usesSystemStudentCredentials && (
-                                <Field label="อำเภอของนักศึกษา" required hint="เลือกอำเภอให้ตรงกับชุดข้อมูลที่สถานศึกษานำเข้า">
-                                    <Select
-                                        id="student-district"
-                                        size="large"
-                                        value={selectedDistrictId}
-                                        onChange={(_, data) => changeDistrict(data.value)}
-                                        disabled={districts.isPending || districts.isError}
-                                        className="login-input w-full"
-                                        startAdornment={<MapPin size={21} className="ml-3 text-slate-500" aria-hidden="true" />}
-                                    >
-                                        <option value="">เลือกอำเภอ</option>
-                                        {(districts.data ?? []).map((district) => (
-                                            <option key={district.id} value={district.id}>{district.name}</option>
-                                        ))}
-                                    </Select>
-                                </Field>
-                            )}
-
-                            {loginType === 'student' && usesSystemStudentCredentials && districts.isError && (
-                                <MessageBar intent="error" role="alert"><MessageBarBody>โหลดรายชื่ออำเภอไม่สำเร็จ กรุณารีเฟรชหน้าแล้วลองใหม่</MessageBarBody></MessageBar>
-                            )}
-
                             <Field label={loginType === 'student' && usesSystemStudentCredentials ? 'เลขบัตรประจำตัวประชาชน (13 หลัก)' : 'ชื่อผู้ใช้'} required>
                                 <Input id="identifier" size="large" contentBefore={<IdentificationCard size={21} aria-hidden="true" />} value={identifier} onChange={(event) => setIdentifier(loginType === 'student' && usesSystemStudentCredentials ? event.target.value.replace(/\D/g, '').slice(0, 13) : event.target.value)} autoComplete="username" inputMode={loginType === 'student' && usesSystemStudentCredentials ? 'numeric' : undefined} maxLength={loginType === 'student' && usesSystemStudentCredentials ? 13 : 190} className="login-input w-full" placeholder={loginType === 'student' && usesSystemStudentCredentials ? 'เลขบัตรประชาชน' : 'กรอกชื่อผู้ใช้'} />
                             </Field>

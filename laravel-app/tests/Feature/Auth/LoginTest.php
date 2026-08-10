@@ -78,7 +78,6 @@ class LoginTest extends TestCase
             'identifier' => '1101700203451',
             'password' => '1234567890',
             'login_type' => 'student',
-            'district_id' => $district->id,
         ])->assertOk()
             ->assertJsonPath('data.username', '1234567890')
             ->assertJsonPath('data.role', 'student')
@@ -93,26 +92,16 @@ class LoginTest extends TestCase
         $this->assertNotContains('1101700203451', array_map('strval', $user->getAttributes()));
     }
 
-    public function test_student_login_rejects_wrong_or_cross_district_credentials(): void
+    public function test_student_login_rejects_wrong_credentials(): void
     {
         config(['system_data.student_enabled' => true]);
         $district = District::create(['name' => 'อำเภอเสนา', 'code' => 'sena']);
-        $other = District::create(['name' => 'อำเภออื่น', 'code' => 'other']);
         $this->useStudents($this->student($district));
 
         $this->postJson('/auth/login', [
             'identifier' => '1101700203452',
             'password' => '1234567890',
             'login_type' => 'student',
-            'district_id' => $district->id,
-        ])->assertUnprocessable()
-            ->assertJsonPath('errors.identifier.0', 'ชื่อผู้ใช้หรือรหัสผ่านไม่ถูกต้อง');
-
-        $this->postJson('/auth/login', [
-            'identifier' => '1101700203451',
-            'password' => '1234567890',
-            'login_type' => 'student',
-            'district_id' => $other->id,
         ])->assertUnprocessable()
             ->assertJsonPath('errors.identifier.0', 'ชื่อผู้ใช้หรือรหัสผ่านไม่ถูกต้อง');
 
@@ -120,18 +109,39 @@ class LoginTest extends TestCase
         $this->assertDatabaseCount('users', 0);
     }
 
-    public function test_system_student_login_requires_an_active_district(): void
+    public function test_student_login_derives_district_and_ignores_client_district(): void
     {
         config(['system_data.student_enabled' => true]);
         $district = District::create(['name' => 'อำเภอเสนา', 'code' => 'sena']);
+        $other = District::create(['name' => 'อำเภออื่น', 'code' => 'other']);
         $this->useStudents($this->student($district));
 
         $this->postJson('/auth/login', [
             'identifier' => '1101700203451',
             'password' => '1234567890',
             'login_type' => 'student',
+            'district_id' => $other->id,
+        ])->assertOk()
+            ->assertJsonPath('data.district_id', $district->id);
+
+        $user = User::query()->where('student_code', '1234567890')->firstOrFail();
+        $this->assertAuthenticatedAs($user);
+        $this->assertSame($district->id, $user->district_id);
+    }
+
+    public function test_student_login_rejects_ambiguous_credentials_across_districts(): void
+    {
+        config(['system_data.student_enabled' => true]);
+        $district = District::create(['name' => 'อำเภอเสนา', 'code' => 'sena']);
+        $other = District::create(['name' => 'อำเภออื่น', 'code' => 'other']);
+        $this->useStudents($this->student($district), $this->student($other));
+
+        $this->postJson('/auth/login', [
+            'identifier' => '1101700203451',
+            'password' => '1234567890',
+            'login_type' => 'student',
         ])->assertUnprocessable()
-            ->assertJsonValidationErrors('district_id');
+            ->assertJsonPath('errors.identifier.0', 'ชื่อผู้ใช้หรือรหัสผ่านไม่ถูกต้อง');
 
         $this->assertGuest();
         $this->assertDatabaseCount('users', 0);
@@ -154,7 +164,6 @@ class LoginTest extends TestCase
             'identifier' => '1101700203451',
             'password' => '1234567890',
             'login_type' => 'student',
-            'district_id' => $district->id,
         ])->assertUnprocessable();
 
         $this->assertGuest();
