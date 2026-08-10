@@ -33,6 +33,7 @@ District scope is resolved by `ResolveDistrictContext`; role checks are enforced
 5. Student PII is masked by default and unmasked only for an allowed scope/resource.
 6. Import creates and validates a new batch before replacing old district batches; writes are disabled by default.
 7. Learning writes require teacher/admin/super-admin role and teacher ownership/district checks.
+8. Student login requires an explicit active district and verifies credentials only against current student rows in that district; current status comes from blank finish cause and transfer date, not from whether a grade exists in the latest term.
 
 ## Request/data flow
 

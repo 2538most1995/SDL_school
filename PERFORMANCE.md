@@ -13,6 +13,14 @@
 | P2 | Live MySQL execution plan/cardinality | Not verified |
 | P3 | Pint findings ในไฟล์เดิม 8 ไฟล์ | Not changed; style-only scope |
 
+## Student login roster correction (2026-08-10)
+
+- **Problem:** student login loaded the whole district roster but the roster query admitted only students with a grade in the latest term plus two recent student codes. Current students without a latest-term grade could never authenticate.
+- **Root cause:** the directory performance filter was also used as the authentication source and treated grade presence as current-student status.
+- **Solution:** the roster query now uses the imported student status fields (`fin_cause` and `trn_date2`) to include current students and exclude graduated, transferred or inactive rows. Login also requires an explicit active district, avoiding an unscoped multi-district scan.
+- **Impact:** authentication and directory aggregates may process more current students than before, but remain batched by district/table set and use existing `_perf_id10`/aggregate indexes.
+- **Risk:** live MySQL row counts and execution plans for Sena/Phaisali are `Not verified`; run `EXPLAIN` with sanitized production-shaped data after deployment.
+
 ## Functional issues found by browser smoke test
 
 การทดสอบด้วย browser จริงบน SQLite demo แยกจากฐานใช้งานพบและแก้ regression เพิ่มเติม 3 จุด:

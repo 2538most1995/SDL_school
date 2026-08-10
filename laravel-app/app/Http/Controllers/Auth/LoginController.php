@@ -25,7 +25,7 @@ final class LoginController extends Controller
             $user = $this->studentAuthenticator->authenticate(
                 $request->string('identifier')->toString(),
                 $request->string('password')->toString(),
-                $request->integer('district_id') ?: null,
+                $request->integer('district_id'),
             );
             $authenticated = $user !== null;
 

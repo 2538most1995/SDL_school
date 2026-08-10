@@ -120,6 +120,23 @@ class LoginTest extends TestCase
         $this->assertDatabaseCount('users', 0);
     }
 
+    public function test_system_student_login_requires_an_active_district(): void
+    {
+        config(['system_data.student_enabled' => true]);
+        $district = District::create(['name' => 'อำเภอเสนา', 'code' => 'sena']);
+        $this->useStudents($this->student($district));
+
+        $this->postJson('/auth/login', [
+            'identifier' => '1101700203451',
+            'password' => '1234567890',
+            'login_type' => 'student',
+        ])->assertUnprocessable()
+            ->assertJsonValidationErrors('district_id');
+
+        $this->assertGuest();
+        $this->assertDatabaseCount('users', 0);
+    }
+
     public function test_disabled_imported_student_account_cannot_log_in(): void
     {
         config(['system_data.student_enabled' => true]);

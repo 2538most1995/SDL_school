@@ -106,7 +106,7 @@ final class LegacyStudentRepositoryTest extends TestCase
                     str_contains($query, 'AS hours') => [
                         (object) ['code' => '6650100001', 'hours' => '128'],
                     ],
-                    str_contains($query, 'latest_students') => [
+                    str_contains($query, "TRIM(COALESCE(s.fin_cause, '')) = ''") => [
                         (object) [
                             'code' => '6650100001',
                             'prename' => 'นาย',
@@ -211,7 +211,13 @@ final class LegacyStudentRepositoryTest extends TestCase
             $this->assertStringContainsString($batch, $query);
             $this->assertStringNotContainsString($otherBatch, $query);
         }
-        $this->assertTrue((bool) array_filter($queries, static fn (string $query): bool => str_contains($query, 'EXISTS')));
+        $studentQuery = current(array_filter(
+            $queries,
+            static fn (string $query): bool => str_contains($query, "TRIM(COALESCE(s.fin_cause, '')) = ''"),
+        ));
+        $this->assertIsString($studentQuery);
+        $this->assertStringContainsString("TRIM(COALESCE(s.trn_date2, '')) = ''", $studentQuery);
+        $this->assertStringNotContainsString('latest_students', $studentQuery);
         $this->assertTrue((bool) array_filter($queries, static fn (string $query): bool => str_contains($query, '_perf_std10')));
         $this->assertTrue((bool) array_filter($queries, static fn (string $query): bool => str_contains($query, 's.`cardid`')));
     }

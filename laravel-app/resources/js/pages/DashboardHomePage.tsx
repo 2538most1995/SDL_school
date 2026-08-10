@@ -5,9 +5,12 @@ import {
     BookOpenText,
     Books,
     CalendarBlank,
+    CaretRight,
+    ChartBar,
     Clock,
     Database,
     GraduationCap,
+    Heart,
     MapPin,
     Sparkle,
     Student,
@@ -64,9 +67,31 @@ type SummaryCardSpec = {
     breakdown?: AnalyticsDatum[];
 };
 
-const quickMenu: Array<{ label: string; description: string; route: string; studentRoute?: string; icon: Icon; tone: DashboardTone }> = [
+type StudentProfile = {
+    name: string;
+    code: string;
+    level: string;
+    group: string;
+    advisor: string;
+    currentTerm: string;
+    nextMeeting: string;
+};
+
+type StudentMetricSpec = {
+    label: string;
+    eyebrow: string;
+    value: string;
+    suffix?: string;
+    detail: string;
+    route: string;
+    action: string;
+    icon: Icon;
+    tone: 'blue' | 'rose' | 'amber';
+};
+
+const quickMenu: Array<{ label: string; description: string; route: string; icon: Icon; tone: DashboardTone }> = [
     { label: 'ตารางสอบ', description: 'วัน เวลา และห้องสอบ', route: '/learning/schedule', icon: Clock, tone: 'amber' },
-    { label: 'วิชาที่ลงทะเบียน', description: 'รายวิชาตามภาคเรียน', route: '/reports/registered-subjects', studentRoute: '/grades', icon: Books, tone: 'violet' },
+    { label: 'วิชาที่ลงทะเบียน', description: 'รายวิชาตามภาคเรียน', route: '/reports/registered-subjects', icon: Books, tone: 'violet' },
 ];
 
 const formatNumber = (value: number | null, digits = 0) => value === null
@@ -96,6 +121,228 @@ function DashboardSkeleton() {
             <div className="grid gap-5 md:grid-cols-2">
                 {[1, 2].map((item) => <div key={item} className="h-72 rounded-[18px] bg-slate-200" />)}
             </div>
+        </div>
+    );
+}
+
+const calendarWeekdays = ['อา', 'จ', 'อ', 'พ', 'พฤ', 'ศ', 'ส'];
+
+const eventTimestamp = (item: CalendarItem) => {
+    const value = new Date(item.starts_at.replace(' ', 'T')).getTime();
+    return Number.isNaN(value) ? 0 : value;
+};
+
+function StudentCalendar({ events }: { events: CalendarItem[] }) {
+    const today = new Date();
+    const year = today.getFullYear();
+    const month = today.getMonth();
+    const firstDay = new Date(year, month, 1).getDay();
+    const daysInMonth = new Date(year, month + 1, 0).getDate();
+    const previousMonthDays = new Date(year, month, 0).getDate();
+    const monthLabel = new Intl.DateTimeFormat('th-TH', { month: 'long', year: 'numeric' }).format(today);
+    const eventDays = new Set(events.flatMap((item) => {
+        const date = new Date(item.starts_at.replace(' ', 'T'));
+        return !Number.isNaN(date.getTime()) && date.getFullYear() === year && date.getMonth() === month
+            ? [date.getDate()]
+            : [];
+    }));
+    const cells = Array.from({ length: 42 }, (_, index) => {
+        const dayOffset = index - firstDay + 1;
+        if (dayOffset < 1) return { day: previousMonthDays + dayOffset, current: false };
+        if (dayOffset > daysInMonth) return { day: dayOffset - daysInMonth, current: false };
+        return { day: dayOffset, current: true };
+    });
+
+    return (
+        <section className="student-calendar" aria-labelledby="student-calendar-title">
+            <div className="flex items-center justify-between gap-3">
+                <div>
+                    <p className="text-xs font-bold text-brand-700">ปฏิทินของฉัน</p>
+                    <h2 id="student-calendar-title" className="mt-1 text-lg font-black text-slate-950">{monthLabel}</h2>
+                </div>
+                <Link to="/learning/calendar" className="student-text-link" aria-label="ดูปฏิทินทั้งหมด">
+                    ดูทั้งหมด <CaretRight size={15} weight="bold" aria-hidden="true" />
+                </Link>
+            </div>
+            <div className="student-calendar__grid mt-5" aria-label={`ปฏิทินเดือน${monthLabel}`}>
+                {calendarWeekdays.map((weekday) => <span key={weekday} className="student-calendar__weekday">{weekday}</span>)}
+                {cells.map((cell, index) => {
+                    const isToday = cell.current && cell.day === today.getDate();
+                    const hasEvent = cell.current && eventDays.has(cell.day);
+                    return (
+                        <span
+                            key={`${cell.current ? 'current' : 'adjacent'}-${cell.day}-${index}`}
+                            className={`student-calendar__day${cell.current ? '' : ' student-calendar__day--muted'}${isToday ? ' student-calendar__day--today' : ''}${hasEvent ? ' student-calendar__day--event' : ''}`}
+                            aria-current={isToday ? 'date' : undefined}
+                        >
+                            {cell.day}
+                        </span>
+                    );
+                })}
+            </div>
+            <div className="mt-4 flex flex-wrap gap-x-4 gap-y-2 text-[11px] font-semibold text-slate-500">
+                <span className="inline-flex items-center gap-1.5"><i className="size-2 rounded-full bg-brand-600" aria-hidden="true" />วันนี้</span>
+                <span className="inline-flex items-center gap-1.5"><i className="size-2 rounded-full bg-emerald-500" aria-hidden="true" />มีกำหนดการ</span>
+            </div>
+        </section>
+    );
+}
+
+function StudentFeaturedActivity({ item, imageUrl, loading }: { item?: CalendarItem; imageUrl: string; loading: boolean }) {
+    return (
+        <section className="student-feature" aria-labelledby="student-feature-title">
+            <div className="flex items-center justify-between gap-3">
+                <div>
+                    <p className="text-xs font-bold text-brand-700">อัปเดตล่าสุด</p>
+                    <h2 id="student-feature-title" className="mt-1 text-lg font-black text-slate-950">กิจกรรมล่าสุด</h2>
+                </div>
+                <Link to="/learning/calendar" className="student-text-link">
+                    ดูทั้งหมด <CaretRight size={15} weight="bold" aria-hidden="true" />
+                </Link>
+            </div>
+            {loading ? (
+                <div className="mt-5 aspect-[16/9] animate-pulse rounded-[16px] bg-slate-100" />
+            ) : item ? (
+                <Link to="/learning/calendar" className="student-feature__media group mt-5">
+                    <img src={imageUrl} alt="ภาพประกอบกิจกรรมของนักศึกษา" className="size-full object-cover" />
+                    <span className="student-feature__scrim" aria-hidden="true" />
+                    <span className="student-feature__caption">
+                        <strong className="block text-base font-black leading-6 text-white sm:text-lg">{item.title}</strong>
+                        <span className="mt-1.5 flex flex-wrap items-center gap-x-3 gap-y-1 text-xs font-semibold text-white/85">
+                            <time dateTime={item.starts_at}>{formatEventDate(item.starts_at)}</time>
+                            {item.location && <span>{item.location}</span>}
+                        </span>
+                    </span>
+                </Link>
+            ) : (
+                <div className="student-feature__empty mt-5">
+                    <CalendarBlank size={30} weight="duotone" aria-hidden="true" />
+                    <strong>ยังไม่มีกิจกรรมล่าสุด</strong>
+                    <span>เมื่อครูเพิ่มกิจกรรม รายการล่าสุดจะแสดงที่นี่</span>
+                </div>
+            )}
+        </section>
+    );
+}
+
+function StudentTermPanel({ term, profile, viewedAt }: { term: string | null; profile?: StudentProfile; viewedAt: string }) {
+    return (
+        <aside className="student-term-panel" aria-labelledby="student-term-title">
+            <div className="flex items-center justify-between gap-4">
+                <h2 id="student-term-title" className="text-lg font-black text-brand-900">ข้อมูลภาคเรียน</h2>
+                <span className="grid size-12 place-items-center rounded-2xl border border-brand-200 bg-brand-50 text-brand-700">
+                    <GraduationCap size={25} weight="duotone" aria-hidden="true" />
+                </span>
+            </div>
+            <dl className="student-term-panel__list mt-5">
+                <div>
+                    <dt>ภาคเรียน</dt>
+                    <dd>{term ?? profile?.currentTerm ?? '-'}</dd>
+                </div>
+                <div>
+                    <dt>กลุ่มเรียน</dt>
+                    <dd>{profile?.group || '-'}</dd>
+                </div>
+                <div>
+                    <dt>ระดับการศึกษา</dt>
+                    <dd>{profile?.level || '-'}</dd>
+                </div>
+                <div>
+                    <dt>เปิดดูข้อมูลเมื่อ</dt>
+                    <dd className="student-term-panel__date">{viewedAt}</dd>
+                </div>
+            </dl>
+            <Link to="/my-learning" className="student-term-panel__action">ดูข้อมูลของฉัน <ArrowRight size={17} weight="bold" aria-hidden="true" /></Link>
+        </aside>
+    );
+}
+
+function StudentMetricCard({ card }: { card: StudentMetricSpec }) {
+    const MetricIcon = card.icon;
+
+    return (
+        <article className={`student-metric-card student-metric-card--${card.tone}`}>
+            <div className="flex items-start gap-4">
+                <span className="student-metric-card__icon"><MetricIcon size={27} weight="duotone" aria-hidden="true" /></span>
+                <div className="min-w-0">
+                    <p className="text-xs font-bold text-slate-500">{card.eyebrow}</p>
+                    <h2 className="mt-1 text-lg font-black text-slate-900">{card.label}</h2>
+                </div>
+            </div>
+            <p className="student-metric-card__value mt-7">
+                {card.value}{card.suffix && <span>{card.suffix}</span>}
+            </p>
+            <p className="mt-3 text-xs font-semibold leading-5 text-slate-500">{card.detail}</p>
+            <Link to={card.route} className="student-metric-card__action">
+                {card.action} <ArrowRight size={16} weight="bold" aria-hidden="true" />
+            </Link>
+        </article>
+    );
+}
+
+function StudentDashboard({
+    portal,
+    profile,
+    events,
+    calendarPending,
+    activityImageUrl,
+}: {
+    portal: PortalData;
+    profile?: StudentProfile;
+    events: CalendarItem[];
+    calendarPending: boolean;
+    activityImageUrl: string;
+}) {
+    const analytics = portal.analytics;
+    const latestActivity = events
+        .filter((item) => item.type === 'meeting' || item.type === 'activity')
+        .sort((left, right) => eventTimestamp(right) - eventTimestamp(left))[0];
+    const moralResult = analytics.moral.find((item) => item.value > 0)?.label ?? 'ยังไม่มีผล';
+    const viewedAt = new Intl.DateTimeFormat('th-TH', {
+        day: 'numeric', month: 'long', year: 'numeric', hour: '2-digit', minute: '2-digit',
+    }).format(new Date());
+    const metrics: StudentMetricSpec[] = [
+        {
+            label: 'ผลการเรียน', eyebrow: 'คะแนนเฉลี่ยสะสม (GPA)', value: formatNumber(analytics.averages.gpax, 2),
+            detail: analytics.current_term ? `ข้อมูลล่าสุดภาคเรียน ${analytics.current_term}` : 'คำนวณจากผลการเรียนล่าสุด',
+            route: '/grades', action: 'ดูรายละเอียดผลการเรียน', icon: ChartBar, tone: 'blue',
+        },
+        {
+            label: 'กพช.', eyebrow: 'กิจกรรมพัฒนาคุณภาพชีวิต', value: formatNumber(analytics.averages.kpch_hours, 1), suffix: ' ชั่วโมง',
+            detail: 'ชั่วโมงสะสมจากข้อมูลกิจกรรมของคุณ', route: '/kpch', action: 'ดูรายละเอียด กพช.', icon: Clock, tone: 'rose',
+        },
+        {
+            label: 'คุณธรรม', eyebrow: 'ผลการประเมินล่าสุด', value: moralResult,
+            detail: 'ระดับคุณธรรมจากข้อมูลภาคเรียนล่าสุด', route: '/moral', action: 'ดูรายละเอียดคุณธรรม', icon: Heart, tone: 'amber',
+        },
+    ];
+
+    return (
+        <div className="space-y-6 pb-2">
+            <section className="student-dashboard-shell">
+                <div className="student-dashboard-shell__main">
+                    <header className="student-dashboard-intro">
+                        <p className="inline-flex items-center gap-2 text-sm font-black text-brand-700"><Sparkle size={18} weight="fill" aria-hidden="true" />สวัสดี {portal.viewer.name}</p>
+                        <h1 className="mt-3 text-3xl font-black leading-[1.18] tracking-[-0.035em] text-slate-950 sm:text-4xl">หน้าหลักนักศึกษา</h1>
+                        <p className="mt-3 max-w-[52ch] text-sm font-semibold leading-7 text-slate-600 sm:text-base">ติดตามผลการเรียน กิจกรรม และการพัฒนาตนเองให้ครบทุกด้านในที่เดียว</p>
+                    </header>
+                    <div className="student-dashboard-shell__content">
+                        <StudentCalendar events={events} />
+                        <StudentFeaturedActivity item={latestActivity} imageUrl={activityImageUrl} loading={calendarPending} />
+                    </div>
+                </div>
+                <StudentTermPanel term={analytics.current_term} profile={profile} viewedAt={viewedAt} />
+            </section>
+
+            <section aria-labelledby="student-metrics-title">
+                <div className="mb-4">
+                    <h2 id="student-metrics-title" className="text-xl font-black tracking-[-0.02em] text-slate-950">สรุปการเรียนของคุณ</h2>
+                    <p className="mt-1 text-sm text-slate-500">ข้อมูลส่วนตัวล่าสุดตามภาคเรียนและสิทธิ์บัญชีนักศึกษา</p>
+                </div>
+                <div className="grid gap-4 md:grid-cols-3">
+                    {metrics.map((card) => <StudentMetricCard key={card.label} card={card} />)}
+                </div>
+            </section>
         </div>
     );
 }
@@ -193,6 +440,12 @@ export function DashboardHomePage() {
         queryFn: ({ signal }) => apiGet<CalendarItem[]>('/api/v1/learning/calendar', signal).then((response) => response.data),
         staleTime: 2 * 60_000,
     });
+    const studentProfile = useQuery({
+        queryKey: ['dashboard', 'student-profile', districtId],
+        queryFn: ({ signal }) => apiGet<StudentProfile>('/api/v1/my-learning', signal).then((response) => response.data),
+        enabled: role === 'student',
+        staleTime: 5 * 60_000,
+    });
 
     if (portal.isPending) return <DashboardSkeleton />;
 
@@ -249,6 +502,18 @@ export function DashboardHomePage() {
             tone: 'amber',
         },
     ];
+
+    if (role === 'student') {
+        return (
+            <StudentDashboard
+                portal={portal.data}
+                profile={studentProfile.data}
+                events={events}
+                calendarPending={calendar.isPending}
+                activityImageUrl={withAppBasePath('/images/sena-students-hero.png')}
+            />
+        );
+    }
 
     return (
         <div className="space-y-6 pb-2">
@@ -324,9 +589,8 @@ export function DashboardHomePage() {
                 <nav className="mt-4 grid grid-cols-1 gap-3 sm:grid-cols-2" aria-label="เมนูลัดหน้าแรก">
                     {quickMenu.map((item) => {
                         const ItemIcon = item.icon;
-                        const route = role === 'student' && item.studentRoute ? item.studentRoute : item.route;
                         return (
-                            <Link key={item.label} to={route} className={`group dashboard-quick-link dashboard-quick-link--${item.tone}`}>
+                            <Link key={item.label} to={item.route} className={`group dashboard-quick-link dashboard-quick-link--${item.tone}`}>
                                 <span className="dashboard-quick-link__icon"><ItemIcon size={22} weight="duotone" aria-hidden="true" /></span>
                                 <span className="min-w-0">
                                     <strong className="block text-sm font-black leading-5 text-slate-900">{item.label}</strong>

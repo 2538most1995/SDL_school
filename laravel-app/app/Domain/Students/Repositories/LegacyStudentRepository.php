@@ -68,7 +68,7 @@ final class LegacyStudentRepository implements StudentRepository
             }
 
             foreach ($sets as $set) {
-                $studentRows = $this->activeStudentRows($set, $latestTerm);
+                $studentRows = $this->activeStudentRows($set);
                 $studentCodes = array_values(array_unique(array_filter(array_map(
                     static fn (array $row): string => trim((string) ($row['code'] ?? '')),
                     $studentRows,
@@ -520,19 +520,11 @@ final class LegacyStudentRepository implements StudentRepository
     }
 
     /** @return list<array<string, mixed>> */
-    private function activeStudentRows(LegacyTableSet $set, string $latestTerm): array
+    private function activeStudentRows(LegacyTableSet $set): array
     {
         $student = $this->identifier($set->student);
-        $grade = $this->identifier($set->grade);
         $citizenIdColumn = $this->firstExistingColumn($set->student, ['_perf_cardid', 'cardid']);
         $citizenId = $citizenIdColumn === null ? 'NULL' : 's.'.$this->identifier($citizenIdColumn);
-        $variants = AcademicTerm::variants($latestTerm);
-        if ($variants === []) {
-            return [];
-        }
-
-        $bindings = $variants;
-        $placeholders = implode(',', array_fill(0, count($variants), '?'));
         $groupJoin = '';
         $groupName = 's.grp_code';
         if ($set->group !== null) {
@@ -575,22 +567,10 @@ final class LegacyStudentRepository implements StudentRepository
              FROM {$student} s
              {$groupJoin}
              WHERE s._perf_id10 IS NOT NULL
-               AND (EXISTS (
-                    SELECT 1 FROM {$grade} active_grade
-                    WHERE active_grade._perf_std10 = s._perf_id10
-                      AND active_grade._perf_semestry IN ({$placeholders})
-               ) OR EXISTS (
-                    SELECT 1 FROM (
-                        SELECT recent_student._perf_id10
-                        FROM {$student} recent_student
-                        WHERE recent_student._perf_id10 IS NOT NULL
-                        ORDER BY recent_student._perf_id10 DESC
-                        LIMIT 2
-                    ) latest_students
-                    WHERE latest_students._perf_id10 = s._perf_id10
-               ))
+               AND TRIM(COALESCE(s.fin_cause, '')) = ''
+               AND TRIM(COALESCE(s.trn_date2, '')) = ''
              ORDER BY s._perf_id10 ASC",
-            $bindings,
+            [],
         );
     }
 

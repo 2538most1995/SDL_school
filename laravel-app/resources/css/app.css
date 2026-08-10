@@ -768,6 +768,366 @@ textarea {
     box-shadow: var(--ui-shadow-card);
 }
 
+.student-dashboard-shell {
+    display: grid;
+    gap: 1rem;
+    overflow: hidden;
+    border: 1px solid color-mix(in srgb, var(--ui-accent-200) 72%, var(--ui-border));
+    border-radius: 24px;
+    padding: clamp(1rem, 2.2vw, 1.75rem);
+    background:
+        radial-gradient(circle at 78% 5%, color-mix(in srgb, var(--ui-accent-100) 58%, transparent), transparent 22rem),
+        linear-gradient(145deg, color-mix(in srgb, var(--ui-accent-50) 82%, var(--ui-surface)), var(--ui-surface));
+    box-shadow: 0 18px 44px color-mix(in srgb, var(--ui-accent-700) 9%, transparent), 0 2px 5px rgb(var(--ui-shadow) / 0.05);
+}
+
+.student-dashboard-shell__main {
+    display: grid;
+    min-width: 0;
+    gap: 1.25rem;
+}
+
+.student-dashboard-intro {
+    padding: 0.4rem 0.25rem 0;
+}
+
+.student-dashboard-shell__content {
+    display: grid;
+    min-width: 0;
+    gap: 1rem;
+}
+
+.student-calendar,
+.student-feature,
+.student-term-panel,
+.student-metric-card {
+    min-width: 0;
+    border: 1px solid color-mix(in srgb, var(--ui-accent-200) 56%, var(--ui-border));
+    border-radius: 18px;
+    background: color-mix(in srgb, var(--ui-surface) 94%, var(--ui-accent-50));
+    box-shadow: 0 10px 28px rgb(var(--ui-shadow) / 0.065), 0 1px 2px rgb(var(--ui-shadow) / 0.04);
+}
+
+.student-calendar,
+.student-feature,
+.student-term-panel {
+    padding: 1.15rem;
+}
+
+.student-text-link {
+    display: inline-flex;
+    min-height: 2.25rem;
+    flex: 0 0 auto;
+    align-items: center;
+    gap: 0.15rem;
+    border-radius: 10px;
+    color: var(--ui-accent-700);
+    padding: 0.35rem 0.45rem;
+    font-size: 0.75rem;
+    font-weight: 800;
+    transition: color 150ms ease, background-color 150ms ease, transform 150ms var(--ui-ease-out);
+}
+
+.student-text-link:active {
+    transform: scale(0.97);
+}
+
+.student-calendar__grid {
+    display: grid;
+    grid-template-columns: repeat(7, minmax(0, 1fr));
+    gap: 0.18rem;
+}
+
+.student-calendar__weekday,
+.student-calendar__day {
+    display: grid;
+    min-width: 0;
+    place-items: center;
+    text-align: center;
+}
+
+.student-calendar__weekday {
+    height: 1.6rem;
+    color: var(--ui-text-muted);
+    font-size: 0.7rem;
+    font-weight: 800;
+}
+
+.student-calendar__day {
+    position: relative;
+    aspect-ratio: 1;
+    max-height: 2.35rem;
+    border-radius: 10px;
+    color: var(--ui-text);
+    font-size: 0.75rem;
+    font-weight: 700;
+}
+
+.student-calendar__day--muted {
+    color: var(--ui-text-soft);
+    opacity: 0.45;
+}
+
+.student-calendar__day--today {
+    background: var(--ui-accent-600);
+    color: white;
+    box-shadow: 0 6px 14px color-mix(in srgb, var(--ui-accent-600) 28%, transparent);
+}
+
+.student-calendar__day--event:not(.student-calendar__day--today)::after {
+    content: "";
+    position: absolute;
+    inset-inline-start: 50%;
+    inset-block-end: 0.1rem;
+    width: 0.26rem;
+    height: 0.26rem;
+    border-radius: 999px;
+    background: #10b981;
+    transform: translateX(-50%);
+}
+
+.student-feature__media {
+    position: relative;
+    display: block;
+    min-height: 13rem;
+    aspect-ratio: 16 / 9;
+    overflow: hidden;
+    border-radius: 16px;
+    background: var(--ui-surface-muted);
+    isolation: isolate;
+}
+
+.student-feature__media img {
+    transition: transform 220ms var(--ui-ease-out);
+}
+
+.student-feature__scrim {
+    position: absolute;
+    inset: 0;
+    background: linear-gradient(180deg, transparent 34%, rgb(6 20 43 / 0.88) 100%);
+}
+
+.student-feature__caption {
+    position: absolute;
+    inset-inline: 0;
+    inset-block-end: 0;
+    padding: 1rem;
+}
+
+.student-feature__empty {
+    display: grid;
+    min-height: 13rem;
+    place-content: center;
+    justify-items: center;
+    gap: 0.4rem;
+    border: 1px dashed var(--ui-border-strong);
+    border-radius: 16px;
+    background: var(--ui-surface-muted);
+    color: var(--ui-text-muted);
+    text-align: center;
+}
+
+.student-feature__empty strong {
+    color: var(--ui-text);
+    font-size: 0.9rem;
+}
+
+.student-feature__empty span {
+    max-width: 30ch;
+    font-size: 0.75rem;
+    line-height: 1.45;
+}
+
+.student-term-panel {
+    align-self: stretch;
+    border-color: color-mix(in srgb, var(--ui-accent-300) 64%, var(--ui-border));
+    background: linear-gradient(155deg, color-mix(in srgb, var(--ui-accent-50) 88%, var(--ui-surface)), var(--ui-surface));
+}
+
+.student-term-panel__list > div {
+    padding: 0.9rem 0;
+    border-block-start: 1px solid color-mix(in srgb, var(--ui-accent-200) 52%, var(--ui-border));
+}
+
+.student-term-panel__list > div:first-child {
+    border-block-start: 0;
+    padding-block-start: 0;
+}
+
+.student-term-panel__list dt {
+    color: var(--ui-text-muted);
+    font-size: 0.72rem;
+    font-weight: 700;
+}
+
+.student-term-panel__list dd {
+    margin: 0.25rem 0 0;
+    color: var(--ui-accent-800);
+    font-size: 1.12rem;
+    font-weight: 900;
+    line-height: 1.45;
+}
+
+.student-term-panel__list .student-term-panel__date {
+    font-size: 0.88rem;
+}
+
+.student-term-panel__action,
+.student-metric-card__action {
+    display: inline-flex;
+    width: 100%;
+    min-height: 2.75rem;
+    align-items: center;
+    justify-content: center;
+    gap: 0.5rem;
+    border-radius: 12px;
+    font-size: 0.8rem;
+    font-weight: 800;
+    transition: transform 150ms var(--ui-ease-out), background-color 150ms ease, border-color 150ms ease;
+}
+
+.student-term-panel__action {
+    border: 1px solid var(--ui-accent-200);
+    background: var(--ui-accent-50);
+    color: var(--ui-accent-700);
+}
+
+.student-term-panel__action:active,
+.student-metric-card__action:active {
+    transform: scale(0.98);
+}
+
+.student-metric-card {
+    --student-metric-accent: #2563eb;
+    --student-metric-ink: #1e40af;
+    --student-metric-soft: #dbeafe;
+    position: relative;
+    overflow: hidden;
+    min-height: 18rem;
+    padding: 1.4rem;
+    border-color: color-mix(in srgb, var(--student-metric-accent) 28%, var(--ui-border));
+    background: linear-gradient(145deg, color-mix(in srgb, var(--student-metric-soft) 74%, var(--ui-surface)), var(--ui-surface) 78%);
+}
+
+.student-metric-card--rose {
+    --student-metric-accent: #e43e68;
+    --student-metric-ink: #a51645;
+    --student-metric-soft: #ffe4e9;
+}
+
+.student-metric-card--amber {
+    --student-metric-accent: #d97706;
+    --student-metric-ink: #9a4f08;
+    --student-metric-soft: #fff1c7;
+}
+
+.student-metric-card__icon {
+    display: grid;
+    width: 3.25rem;
+    height: 3.25rem;
+    flex: 0 0 auto;
+    place-items: center;
+    border-radius: 16px;
+    background: color-mix(in srgb, var(--student-metric-soft) 82%, var(--ui-surface));
+    color: var(--student-metric-accent);
+    box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--student-metric-accent) 18%, transparent);
+}
+
+.student-metric-card__value {
+    color: var(--student-metric-ink);
+    font-size: clamp(2.25rem, 4vw, 3rem);
+    font-weight: 900;
+    line-height: 1;
+    letter-spacing: -0.045em;
+}
+
+.student-metric-card__value span {
+    margin-inline-start: 0.3rem;
+    font-size: 0.95rem;
+    letter-spacing: normal;
+}
+
+.student-metric-card__action {
+    position: absolute;
+    inset-inline: 1.4rem;
+    inset-block-end: 1.25rem;
+    width: auto;
+    border-block-start: 1px solid color-mix(in srgb, var(--student-metric-accent) 20%, var(--ui-border));
+    border-radius: 0;
+    color: var(--student-metric-accent);
+    padding-block-start: 0.75rem;
+}
+
+@media (hover: hover) and (pointer: fine) {
+    .student-text-link:hover,
+    .student-term-panel__action:hover {
+        background: color-mix(in srgb, var(--ui-accent-100) 74%, var(--ui-surface));
+    }
+
+    .student-feature__media:hover img {
+        transform: scale(1.025);
+    }
+
+    .student-metric-card__action:hover {
+        color: var(--student-metric-ink);
+    }
+}
+
+@media (min-width: 640px) {
+    .student-dashboard-shell {
+        gap: 1.25rem;
+    }
+
+    .student-dashboard-shell__content {
+        grid-template-columns: minmax(15rem, 0.8fr) minmax(0, 1.35fr);
+    }
+}
+
+@media (min-width: 1100px) {
+    .student-dashboard-shell {
+        grid-template-columns: minmax(0, 1fr) minmax(15rem, 0.29fr);
+        gap: 1.5rem;
+    }
+
+    .student-term-panel {
+        padding: 1.35rem;
+    }
+}
+
+@media (max-width: 639px) {
+    .student-feature {
+        order: -1;
+    }
+
+    .student-feature__media {
+        min-height: 11.5rem;
+    }
+
+    .student-calendar,
+    .student-feature,
+    .student-term-panel,
+    .student-metric-card {
+        border-radius: 16px;
+    }
+
+    .student-metric-card {
+        min-height: 16.5rem;
+    }
+}
+
+[data-ui-mode='dark'] :where(.student-dashboard-shell, .student-calendar, .student-feature, .student-term-panel, .student-metric-card) {
+    background: var(--ui-surface);
+}
+
+[data-ui-mode='dark'] .student-metric-card {
+    background: linear-gradient(145deg, color-mix(in srgb, var(--student-metric-accent) 14%, var(--ui-surface)), var(--ui-surface) 75%);
+}
+
+[data-ui-mode='dark'] .student-metric-card__value,
+[data-ui-mode='dark'] .student-term-panel__list dd {
+    color: color-mix(in srgb, var(--student-metric-accent, var(--ui-accent-500)) 48%, white);
+}
+
 .dashboard-summary-card,
 .dashboard-panel,
 .dashboard-quick-link {

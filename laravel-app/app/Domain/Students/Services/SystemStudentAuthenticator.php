@@ -13,12 +13,12 @@ final readonly class SystemStudentAuthenticator
 {
     public function __construct(private StudentRepository $students) {}
 
-    public function authenticate(string $citizenIdentifier, string $studentCode, ?int $districtId = null): ?User
+    public function authenticate(string $citizenIdentifier, string $studentCode, int $districtId): ?User
     {
         $citizenId = preg_replace('/\D+/u', '', $citizenIdentifier) ?? '';
         $studentCode = trim($studentCode);
 
-        if (strlen($citizenId) !== 13 || $studentCode === '' || mb_strlen($studentCode) > 32) {
+        if (strlen($citizenId) !== 13 || $studentCode === '' || mb_strlen($studentCode) > 32 || $districtId < 1) {
             return null;
         }
 
