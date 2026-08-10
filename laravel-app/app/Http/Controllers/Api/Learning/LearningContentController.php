@@ -3,12 +3,15 @@
 namespace App\Http\Controllers\Api\Learning;
 
 use App\Http\Controllers\Controller;
+use App\Services\Learning\DistrictLearningGroupCatalog;
 use Illuminate\Database\DatabaseManager;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
+use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Storage;
 use Illuminate\Validation\Rule;
+use Illuminate\Validation\ValidationException;
 use Throwable;
 
 final class LearningContentController extends Controller
@@ -20,7 +23,10 @@ final class LearningContentController extends Controller
         'calendar' => 'learning_calendar_events',
     ];
 
-    public function __construct(private readonly DatabaseManager $database) {}
+    public function __construct(
+        private readonly DatabaseManager $database,
+        private readonly DistrictLearningGroupCatalog $groupCatalog,
+    ) {}
 
     public function store(Request $request, string $kind): JsonResponse
     {
@@ -145,7 +151,8 @@ final class LearningContentController extends Controller
             ],
             'calendar' => [
                 'title' => ['required', 'string', 'max:220'], 'event_date' => ['required', 'date_format:Y-m-d'],
-                'start_time' => ['required', 'date_format:H:i'], 'end_time' => ['required', 'date_format:H:i', 'after:start_time'],
+                'end_date' => ['nullable', 'date_format:Y-m-d', 'after_or_equal:event_date'],
+                'start_time' => ['required', 'date_format:H:i'], 'end_time' => ['required', 'date_format:H:i'],
                 'event_type' => ['sometimes', Rule::in(['meeting', 'activity', 'exam'])],
                 'location' => ['nullable', 'string', 'max:255'], 'target_group' => ['nullable', 'string', 'max:120'],
                 'notes' => ['nullable', 'string', 'max:5000'], 'remove_image' => ['sometimes', 'boolean'],
@@ -154,8 +161,30 @@ final class LearningContentController extends Controller
             default => abort(404),
         };
         $values = $request->validate($rules);
-        if ($request->user()->role === 'teacher' && isset($values['target_group']) && $values['target_group'] !== '') {
-            abort_unless(in_array((string) $values['target_group'], array_map('strval', $request->user()->assigned_groups ?? []), true), 403, 'กลุ่มนี้อยู่นอกขอบเขตที่รับผิดชอบ');
+        if ($kind === 'calendar') {
+            $values['end_date'] = ($values['end_date'] ?? null) ?: $values['event_date'];
+            $startsAt = Carbon::createFromFormat('Y-m-d H:i', $values['event_date'].' '.$values['start_time']);
+            $endsAt = Carbon::createFromFormat('Y-m-d H:i', $values['end_date'].' '.$values['end_time']);
+            if (! $endsAt->greaterThan($startsAt)) {
+                throw ValidationException::withMessages([
+                    'end_time' => 'วันและเวลาสิ้นสุดต้องอยู่หลังวันและเวลาเริ่ม',
+                ]);
+            }
+        }
+        if (filled($values['target_group'] ?? null)) {
+            $allowed = $this->groupCatalog->canTarget(
+                $request->user(),
+                $this->districtId($request),
+                (string) $values['target_group'],
+            );
+            if ($request->user()->role === 'teacher') {
+                abort_unless($allowed, 403, 'กลุ่มนี้อยู่นอกขอบเขตที่รับผิดชอบ');
+            }
+            if (! $allowed) {
+                throw ValidationException::withMessages([
+                    'target_group' => 'ไม่พบกลุ่มเรียนนี้ในข้อมูลปัจจุบันของอำเภอ',
+                ]);
+            }
         }
 
         return $values;
@@ -218,7 +247,7 @@ final class LearningContentController extends Controller
                 'description' => $values['notes'] ?? null,
                 'event_type' => $values['event_type'] ?? 'meeting',
                 'starts_at' => $values['event_date'].' '.$values['start_time'].':00',
-                'ends_at' => $values['event_date'].' '.$values['end_time'].':00',
+                'ends_at' => $values['end_date'].' '.$values['end_time'].':00',
                 'location' => $values['location'] ?? null,
                 'target_type' => filled($values['target_group'] ?? null) ? 'group' : 'all',
                 'target_value' => ($values['target_group'] ?? null) ?: null,

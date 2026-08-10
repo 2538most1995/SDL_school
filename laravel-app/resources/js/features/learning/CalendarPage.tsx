@@ -39,11 +39,19 @@ type CalendarDraft = {
     title: string;
     event_type: 'meeting' | 'activity' | 'exam';
     event_date: string;
+    end_date: string;
     start_time: string;
     end_time: string;
     location: string;
     target_group: string;
     notes: string;
+};
+
+type AvailableGroup = {
+    code: string;
+    name: string;
+    label: string;
+    level: string | null;
 };
 
 const eventTypeLabels: Record<CalendarEvent['type'], string> = {
@@ -74,10 +82,34 @@ function dateKey(date: Date): string {
     return `${year}-${month}-${day}`;
 }
 
-function eventDateKey(event: CalendarEvent): string {
-    const date = parseEventDate(event.starts_at);
+function eventDateKeys(event: CalendarEvent, month: Date): string[] {
+    const start = parseEventDate(event.starts_at);
+    const rawEnd = parseEventDate(event.ends_at || event.starts_at);
+    if (Number.isNaN(start.getTime())) return [];
+    const end = Number.isNaN(rawEnd.getTime()) || rawEnd < start ? start : rawEnd;
+    const cursor = new Date(start.getFullYear(), start.getMonth(), start.getDate());
+    const finalDay = new Date(end.getFullYear(), end.getMonth(), end.getDate());
+    const keys: string[] = [];
 
-    return Number.isNaN(date.getTime()) ? '' : dateKey(date);
+    for (let index = 0; cursor <= finalDay && index < 370; index += 1) {
+        if (cursor.getFullYear() === month.getFullYear() && cursor.getMonth() === month.getMonth()) {
+            keys.push(dateKey(cursor));
+        }
+        cursor.setDate(cursor.getDate() + 1);
+    }
+
+    return keys;
+}
+
+function eventOverlapsMonth(event: CalendarEvent, month: Date): boolean {
+    const start = parseEventDate(event.starts_at);
+    const rawEnd = parseEventDate(event.ends_at || event.starts_at);
+    if (Number.isNaN(start.getTime())) return false;
+    const end = Number.isNaN(rawEnd.getTime()) || rawEnd < start ? start : rawEnd;
+    const monthStart = new Date(month.getFullYear(), month.getMonth(), 1);
+    const nextMonth = new Date(month.getFullYear(), month.getMonth() + 1, 1);
+
+    return start < nextMonth && end >= monthStart;
 }
 
 function formatEventDateTime(value: string): string {
@@ -87,13 +119,6 @@ function formatEventDateTime(value: string): string {
     return new Intl.DateTimeFormat('th-TH', {
         day: 'numeric', month: 'long', year: 'numeric', hour: '2-digit', minute: '2-digit',
     }).format(date);
-}
-
-function formatEventTime(value: string): string {
-    const date = parseEventDate(value);
-    if (Number.isNaN(date.getTime())) return value || '-';
-
-    return new Intl.DateTimeFormat('th-TH', { hour: '2-digit', minute: '2-digit' }).format(date);
 }
 
 function calendarContentId(event: CalendarEvent): string | null {
@@ -149,7 +174,7 @@ function CalendarDetail({ event, canManage, onClose, onEdit, onDelete }: {
                     </div>
                     <dl className="mt-5 grid gap-3 rounded-2xl bg-slate-50 p-4 text-sm sm:grid-cols-2">
                         <div><dt className="font-bold text-slate-500">วันและเวลาเริ่ม</dt><dd className="mt-1 font-black text-slate-900">{formatEventDateTime(event.starts_at)}</dd></div>
-                        <div><dt className="font-bold text-slate-500">เวลาสิ้นสุด</dt><dd className="mt-1 font-black text-slate-900">{formatEventTime(event.ends_at)} น.</dd></div>
+                        <div><dt className="font-bold text-slate-500">วันและเวลาสิ้นสุด</dt><dd className="mt-1 font-black text-slate-900">{formatEventDateTime(event.ends_at)}</dd></div>
                         <div className="sm:col-span-2"><dt className="font-bold text-slate-500">สถานที่</dt><dd className="mt-1 font-black text-slate-900">{event.location || 'ไม่ระบุสถานที่'}</dd></div>
                     </dl>
                     {event.description && <p className="mt-5 whitespace-pre-line text-sm font-medium leading-7 text-slate-700">{event.description}</p>}
@@ -164,22 +189,25 @@ function CalendarDetail({ event, canManage, onClose, onEdit, onDelete }: {
     );
 }
 
-function CalendarEditor({ event, pending, error, onClose, onSubmit }: {
+function CalendarEditor({ event, pending, error, onClose, onSubmit, availableGroups }: {
     event: CalendarEvent | 'new';
     pending: boolean;
     error: Error | null;
     onClose: () => void;
     onSubmit: (form: FormData) => void;
+    availableGroups: AvailableGroup[];
 }) {
     const raw = event === 'new' ? undefined : event.raw;
+    const matchedGroup = availableGroups.find((group) => group.code === raw?.target_group || group.name === raw?.target_group);
     const [draft, setDraft] = useState<CalendarDraft>({
         title: raw?.title ?? '',
         event_type: (raw?.event_type as CalendarDraft['event_type'] | undefined) ?? 'activity',
         event_date: raw?.event_date ?? dateKey(new Date()),
+        end_date: raw?.end_date ?? raw?.event_date ?? dateKey(new Date()),
         start_time: raw?.start_time ?? '09:00',
         end_time: raw?.end_time ?? '12:00',
         location: raw?.location ?? '',
-        target_group: raw?.target_group ?? '',
+        target_group: matchedGroup?.code ?? raw?.target_group ?? '',
         notes: raw?.notes ?? '',
     });
     const [image, setImage] = useState<File | null>(null);
@@ -208,11 +236,12 @@ function CalendarEditor({ event, pending, error, onClose, onSubmit }: {
                 <form onSubmit={submit} className="grid max-h-[78vh] gap-4 overflow-y-auto p-5 sm:grid-cols-2 sm:p-7">
                     <Field label="ชื่อกิจกรรม" required className="sm:col-span-2"><Input value={draft.title} onChange={(_, data) => setDraft({ ...draft, title: data.value })} maxLength={220} required /></Field>
                     <Field label="ประเภทกิจกรรม" required><Select value={draft.event_type} onChange={(_, data) => setDraft({ ...draft, event_type: data.value as CalendarDraft['event_type'] })} required><option value="activity">กิจกรรม</option><option value="meeting">พบกลุ่ม</option><option value="exam">สอบ</option></Select></Field>
-                    <Field label="วันที่" required><Input type="date" value={draft.event_date} onChange={(_, data) => setDraft({ ...draft, event_date: data.value })} required /></Field>
+                    <Field label="วันที่เริ่ม" required><Input type="date" value={draft.event_date} onChange={(_, data) => setDraft({ ...draft, event_date: data.value, end_date: draft.end_date < data.value ? data.value : draft.end_date })} required /></Field>
+                    <Field label="วันที่สิ้นสุด" hint="เลือกวันเดียวกันสำหรับกิจกรรมวันเดียว" required><Input type="date" min={draft.event_date} value={draft.end_date} onChange={(_, data) => setDraft({ ...draft, end_date: data.value })} required /></Field>
                     <Field label="เวลาเริ่ม" required><Input type="time" value={draft.start_time} onChange={(_, data) => setDraft({ ...draft, start_time: data.value })} required /></Field>
                     <Field label="เวลาสิ้นสุด" required><Input type="time" value={draft.end_time} onChange={(_, data) => setDraft({ ...draft, end_time: data.value })} required /></Field>
                     <Field label="สถานที่"><Input value={draft.location} onChange={(_, data) => setDraft({ ...draft, location: data.value })} maxLength={255} /></Field>
-                    <Field label="กลุ่มเป้าหมาย" hint="เว้นว่างเพื่อให้นักศึกษาทุกกลุ่มในอำเภอมองเห็น"><Input value={draft.target_group} onChange={(_, data) => setDraft({ ...draft, target_group: data.value })} maxLength={120} /></Field>
+                    <Field label="กลุ่มเป้าหมาย" hint="เลือกทุกกลุ่มเพื่อให้นักศึกษาทั้งอำเภอมองเห็น"><Select value={draft.target_group} onChange={(_, data) => setDraft({ ...draft, target_group: data.value })}><option value="">ทุกกลุ่มเรียนในอำเภอ</option>{availableGroups.map((group) => <option key={group.code} value={group.code}>{group.label} · รหัส {group.code}</option>)}</Select></Field>
                     <label className="sm:col-span-2"><span className="mb-1.5 block text-sm font-bold text-slate-700">รายละเอียดกิจกรรม</span><textarea value={draft.notes} onChange={(changeEvent) => setDraft({ ...draft, notes: changeEvent.target.value })} rows={4} maxLength={5000} className="w-full rounded-xl border border-slate-300 p-3 outline-none focus:border-brand-500" /></label>
                     <div className="sm:col-span-2">
                         <span className="mb-1.5 block text-sm font-bold text-slate-700">รูปภาพกิจกรรม</span>
@@ -243,19 +272,20 @@ export function CalendarPage() {
         queryFn: ({ signal }) => getFeatureDataWithDemo<CalendarEvent[]>('/api/v1/learning/calendar', [], signal),
     });
     const events = useMemo(() => [...(query.data?.data ?? [])].sort((left, right) => parseEventDate(left.starts_at).getTime() - parseEventDate(right.starts_at).getTime()), [query.data?.data]);
+    const availableGroups = (query.data?.meta.available_groups as AvailableGroup[] | undefined) ?? [];
     const canManage = query.data !== undefined && role !== 'student' && query.data.meta.read_only !== true;
     const monthEvents = useMemo(() => events.filter((event) => {
-        const date = parseEventDate(event.starts_at);
-        return !Number.isNaN(date.getTime()) && date.getFullYear() === month.getFullYear() && date.getMonth() === month.getMonth() && (type === 'all' || event.type === type);
+        return eventOverlapsMonth(event, month) && (type === 'all' || event.type === type);
     }), [events, month, type]);
     const eventsByDate = useMemo(() => {
         const map = new Map<string, CalendarEvent[]>();
         for (const event of monthEvents) {
-            const key = eventDateKey(event);
-            map.set(key, [...(map.get(key) ?? []), event]);
+            for (const key of eventDateKeys(event, month)) {
+                map.set(key, [...(map.get(key) ?? []), event]);
+            }
         }
         return map;
-    }, [monthEvents]);
+    }, [monthEvents, month]);
     const cells = useMemo(() => {
         const first = new Date(month.getFullYear(), month.getMonth(), 1);
         return Array.from({ length: 42 }, (_, index) => {
@@ -323,7 +353,7 @@ export function CalendarPage() {
                 </>}
             </Panel>
             {selected && <CalendarDetail event={selected} canManage={canManage} onClose={() => setSelected(null)} onEdit={() => { save.reset(); setEditor(selected); }} onDelete={deleteSelected} />}
-            {editor && <CalendarEditor event={editor} pending={save.isPending} error={save.error} onClose={() => setEditor(null)} onSubmit={(form) => save.mutate(form)} />}
+            {editor && <CalendarEditor event={editor} pending={save.isPending} error={save.error} availableGroups={availableGroups} onClose={() => setEditor(null)} onSubmit={(form) => save.mutate(form)} />}
         </div>
     );
 }

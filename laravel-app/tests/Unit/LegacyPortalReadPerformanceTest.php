@@ -2,6 +2,7 @@
 
 namespace Tests\Unit;
 
+use App\Services\Learning\DistrictLearningGroupCatalog;
 use App\Services\Legacy\LegacyPortalReadService;
 use Illuminate\Database\Events\QueryExecuted;
 use Illuminate\Database\Schema\Blueprint;
@@ -68,7 +69,10 @@ final class LegacyPortalReadPerformanceTest extends TestCase
             $queries[] = $query->sql;
         });
 
-        $items = (new LegacyPortalReadService(app('db')))->users(1);
+        $items = (new LegacyPortalReadService(
+            app('db'),
+            $this->app->make(DistrictLearningGroupCatalog::class),
+        ))->users(1);
 
         $this->assertCount(1, $items);
         $this->assertSame('อำเภอทดสอบ', $items[0]['district_name']);

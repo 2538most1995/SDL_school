@@ -133,6 +133,22 @@ const eventTimestamp = (item: CalendarItem) => {
     return Number.isNaN(value) ? 0 : value;
 };
 
+const eventDaysForMonth = (item: CalendarItem, year: number, month: number): number[] => {
+    const start = new Date(item.starts_at.replace(' ', 'T'));
+    const parsedEnd = new Date((item.ends_at || item.starts_at).replace(' ', 'T'));
+    if (Number.isNaN(start.getTime())) return [];
+    const end = Number.isNaN(parsedEnd.getTime()) || parsedEnd < start ? start : parsedEnd;
+    const cursor = new Date(start.getFullYear(), start.getMonth(), start.getDate());
+    const finalDay = new Date(end.getFullYear(), end.getMonth(), end.getDate());
+    const days: number[] = [];
+    for (let index = 0; cursor <= finalDay && index < 370; index += 1) {
+        if (cursor.getFullYear() === year && cursor.getMonth() === month) days.push(cursor.getDate());
+        cursor.setDate(cursor.getDate() + 1);
+    }
+
+    return days;
+};
+
 function StudentCalendar({ events }: { events: CalendarItem[] }) {
     const today = new Date();
     const year = today.getFullYear();
@@ -141,12 +157,7 @@ function StudentCalendar({ events }: { events: CalendarItem[] }) {
     const daysInMonth = new Date(year, month + 1, 0).getDate();
     const previousMonthDays = new Date(year, month, 0).getDate();
     const monthLabel = new Intl.DateTimeFormat('th-TH', { month: 'long', year: 'numeric' }).format(today);
-    const eventDays = new Set(events.flatMap((item) => {
-        const date = new Date(item.starts_at.replace(' ', 'T'));
-        return !Number.isNaN(date.getTime()) && date.getFullYear() === year && date.getMonth() === month
-            ? [date.getDate()]
-            : [];
-    }));
+    const eventDays = new Set(events.flatMap((item) => eventDaysForMonth(item, year, month)));
     const cells = Array.from({ length: 42 }, (_, index) => {
         const dayOffset = index - firstDay + 1;
         if (dayOffset < 1) return { day: previousMonthDays + dayOffset, current: false };
@@ -295,9 +306,10 @@ function StudentDashboard({
     activityImageUrl: string;
 }) {
     const analytics = portal.analytics;
-    const latestActivity = events
+    const activities = events
         .filter((item) => item.type === 'meeting' || item.type === 'activity')
-        .sort((left, right) => eventTimestamp(right) - eventTimestamp(left))[0];
+        .sort((left, right) => eventTimestamp(right) - eventTimestamp(left));
+    const latestActivity = activities.find((item) => Boolean(item.image_url)) ?? activities[0];
     const moralResult = analytics.moral.find((item) => item.value > 0)?.label ?? 'ยังไม่มีผล';
     const viewedAt = new Intl.DateTimeFormat('th-TH', {
         day: 'numeric', month: 'long', year: 'numeric', hour: '2-digit', minute: '2-digit',

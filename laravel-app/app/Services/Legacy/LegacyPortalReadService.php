@@ -4,6 +4,7 @@ namespace App\Services\Legacy;
 
 use App\Domain\Students\Support\AcademicTerm;
 use App\Models\User;
+use App\Services\Learning\DistrictLearningGroupCatalog;
 use Illuminate\Database\ConnectionInterface;
 use Illuminate\Database\DatabaseManager;
 use Illuminate\Database\Query\Builder;
@@ -13,7 +14,10 @@ use InvalidArgumentException;
 
 final class LegacyPortalReadService
 {
-    public function __construct(private readonly DatabaseManager $database) {}
+    public function __construct(
+        private readonly DatabaseManager $database,
+        private readonly DistrictLearningGroupCatalog $groupCatalog,
+    ) {}
 
     /** @return list<array<string, mixed>> */
     public function assignments(User $viewer, int $districtId, ?string $status = null, ?string $search = null): array
@@ -180,6 +184,7 @@ final class LegacyPortalReadService
                     'can_edit' => $viewer->role !== 'teacher' || (int) $row->created_by === (int) $viewer->id,
                     'raw' => [
                         'title' => (string) $row->title, 'event_date' => $startsAt->format('Y-m-d'),
+                        'end_date' => $endsAt->format('Y-m-d'),
                         'start_time' => $startsAt->format('H:i'), 'end_time' => $endsAt->format('H:i'),
                         'event_type' => (string) ($row->event_type ?? 'meeting'),
                         'location' => (string) ($row->location ?? ''), 'target_group' => (string) ($row->target_value ?? ''),
@@ -507,7 +512,7 @@ final class LegacyPortalReadService
     private function scopeTargetedContent(Builder $query, User $viewer, string $alias): void
     {
         if ($viewer->role === 'student') {
-            $groups = $this->groups($viewer);
+            $groups = $this->groups($viewer, (int) $viewer->district_id);
             $query->where(function (Builder $scope) use ($alias, $groups): void {
                 $scope->where("{$alias}.target_type", 'all');
                 if ($groups !== []) {
@@ -521,7 +526,7 @@ final class LegacyPortalReadService
                 $query->where("{$alias}.status", 'open');
             }
         } elseif ($viewer->role === 'teacher') {
-            $groups = $this->groups($viewer);
+            $groups = $this->groups($viewer, (int) $viewer->district_id);
             $query->where(function (Builder $scope) use ($alias, $groups, $viewer): void {
                 $scope->where("{$alias}.created_by", (int) $viewer->id);
                 if ($groups !== []) {
@@ -541,7 +546,7 @@ final class LegacyPortalReadService
         string $groupColumn = 'target_group',
         string $actorColumn = 'created_by',
     ): void {
-        $groups = $this->groups($viewer);
+        $groups = $this->groups($viewer, (int) $viewer->district_id);
         if ($viewer->role === 'student') {
             $query->where(function (Builder $scope) use ($alias, $groupColumn, $groups): void {
                 $scope->whereNull("{$alias}.{$groupColumn}")->orWhere("{$alias}.{$groupColumn}", '');
@@ -560,9 +565,9 @@ final class LegacyPortalReadService
     }
 
     /** @return list<string> */
-    private function groups(User $viewer): array
+    private function groups(User $viewer, int $districtId): array
     {
-        return array_values(array_filter(array_map('strval', $viewer->assigned_groups ?? [])));
+        return $this->groupCatalog->aliasesForViewer($viewer, $districtId);
     }
 
     private function batchAcademicTerm(string $batchKey): ?string

@@ -5,6 +5,7 @@ namespace App\Http\Controllers\Api\Learning;
 use App\Domain\Learning\DemoLearningPortal;
 use App\Domain\Learning\DemoResponseMeta;
 use App\Http\Controllers\Controller;
+use App\Services\Learning\DistrictLearningGroupCatalog;
 use App\Services\Legacy\LegacyPortalReadService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
@@ -15,8 +16,12 @@ use Symfony\Component\HttpFoundation\StreamedResponse;
 
 final class CalendarController extends Controller
 {
-    public function __invoke(Request $request, DemoLearningPortal $portal, LegacyPortalReadService $legacy): JsonResponse
-    {
+    public function __invoke(
+        Request $request,
+        DemoLearningPortal $portal,
+        LegacyPortalReadService $legacy,
+        DistrictLearningGroupCatalog $groupCatalog,
+    ): JsonResponse {
         $filters = $request->validate([
             'type' => ['nullable', 'string', Rule::in(['assignment', 'meeting', 'exam', 'activity'])],
         ]);
@@ -25,13 +30,19 @@ final class CalendarController extends Controller
             ? $legacy->calendar($request->user(), (int) $request->attributes->get('district_id'), $filters['type'] ?? null)
             : $portal->calendar($filters['type'] ?? null);
 
+        $districtId = (int) $request->attributes->get('district_id');
+        $viewer = $request->user();
+        $availableGroups = $viewer === null || $viewer->role === 'student'
+            ? []
+            : $groupCatalog->groupsForViewer($viewer, $districtId);
+
         return response()->json([
             'data' => $items,
-            'meta' => config('system_data.enabled') ? ['mode' => 'production', 'source' => 'system_database', 'read_only' => ! (bool) config('system_data.write_enabled'), 'pagination' => ['page' => 1, 'per_page' => count($items), 'total' => count($items), 'last_page' => 1], 'filters' => $filters] : DemoResponseMeta::collection(count($items), $filters),
+            'meta' => config('system_data.enabled') ? ['mode' => 'production', 'source' => 'system_database', 'read_only' => ! (bool) config('system_data.write_enabled'), 'available_groups' => $availableGroups, 'pagination' => ['page' => 1, 'per_page' => count($items), 'total' => count($items), 'last_page' => 1], 'filters' => $filters] : [...DemoResponseMeta::collection(count($items), $filters), 'available_groups' => []],
         ]);
     }
 
-    public function image(Request $request, int $event): StreamedResponse
+    public function image(Request $request, int $event, DistrictLearningGroupCatalog $groupCatalog): StreamedResponse
     {
         $viewer = $request->user();
         $districtId = $viewer->role === 'super_admin'
@@ -44,7 +55,7 @@ final class CalendarController extends Controller
             ->where('district_id', $districtId);
 
         if ($viewer->role === 'student') {
-            $groups = array_values(array_filter(array_map('strval', $viewer->assigned_groups ?? [])));
+            $groups = $groupCatalog->aliasesForViewer($viewer, (int) $districtId);
             $query->where(function ($scope) use ($groups): void {
                 $scope->where('target_type', 'all');
                 if ($groups !== []) {
@@ -54,7 +65,7 @@ final class CalendarController extends Controller
                 }
             });
         } elseif ($viewer->role === 'teacher') {
-            $groups = array_values(array_filter(array_map('strval', $viewer->assigned_groups ?? [])));
+            $groups = $groupCatalog->aliasesForViewer($viewer, (int) $districtId);
             $query->where(function ($scope) use ($groups, $viewer): void {
                 $scope->where('created_by', (int) $viewer->id);
                 if ($groups !== []) {

@@ -2,6 +2,8 @@
 
 namespace Tests\Feature\Learning;
 
+use App\Domain\Students\Models\Student;
+use App\Domain\Students\Repositories\StudentRepository;
 use App\Models\District;
 use App\Models\User;
 use Illuminate\Foundation\Testing\RefreshDatabase;
@@ -240,6 +242,111 @@ final class LearningContentWriteTest extends TestCase
         ]));
         $this->getJson('/api/v1/learning/calendar')->assertOk()->assertJsonCount(0, 'data');
         $this->get("/api/v1/learning/calendar/{$eventId}/image")->assertNotFound();
+    }
+
+    public function test_calendar_activity_can_span_multiple_days(): void
+    {
+        $teacher = User::factory()->create([
+            'role' => 'teacher',
+            'district_id' => $this->district->id,
+            'assigned_groups' => [],
+        ]);
+        Sanctum::actingAs($teacher);
+
+        $created = $this->postJson('/api/v1/learning/calendar', [
+            'title' => 'ค่ายพัฒนาผู้เรียน',
+            'event_type' => 'activity',
+            'event_date' => '2026-08-21',
+            'end_date' => '2026-08-23',
+            'start_time' => '08:30',
+            'end_time' => '16:00',
+            'target_group' => '',
+        ])->assertCreated()
+            ->assertJsonPath('data.end_date', '2026-08-23');
+        $eventId = (int) $created->json('data.id');
+
+        $this->assertDatabaseHas('learning_calendar_events', [
+            'id' => $eventId,
+            'starts_at' => '2026-08-21 08:30:00',
+            'ends_at' => '2026-08-23 16:00:00',
+            'target_type' => 'all',
+        ]);
+        $this->getJson('/api/v1/learning/calendar')
+            ->assertOk()
+            ->assertJsonPath('data.0.raw.event_date', '2026-08-21')
+            ->assertJsonPath('data.0.raw.end_date', '2026-08-23');
+
+        $this->postJson('/api/v1/learning/calendar', [
+            'title' => 'เวลาผิดลำดับ',
+            'event_type' => 'activity',
+            'event_date' => '2026-08-21',
+            'end_date' => '2026-08-21',
+            'start_time' => '16:00',
+            'end_time' => '08:30',
+        ])->assertUnprocessable()->assertJsonValidationErrors('end_time');
+    }
+
+    public function test_student_group_name_alias_can_view_existing_activity_and_image(): void
+    {
+        Storage::fake('local');
+        $studentModel = new Student(
+            code: 'ST-ALIAS',
+            districtId: $this->district->id,
+            districtName: $this->district->name,
+            prefix: 'นาย',
+            firstName: 'นักศึกษา',
+            lastName: 'กลุ่มจริง',
+            level: 2,
+            levelLabel: 'มัธยมศึกษาตอนต้น',
+            groupCode: 'G-01',
+            groupName: 'สำโรงชัย กลุ่ม 1',
+            enrollmentTerm: '1/2568',
+            currentTerm: '1/2569',
+            status: 'active',
+            statusLabel: 'กำลังศึกษา',
+            gpax: 3.0,
+            creditsEarned: 30,
+            creditsRequired: 76,
+            kpchHours: 50,
+            moralResult: 'ดี',
+        );
+        $repository = $this->createMock(StudentRepository::class);
+        $repository->method('students')->willReturn([$studentModel]);
+        $this->app->instance(StudentRepository::class, $repository);
+
+        $creator = User::factory()->create([
+            'role' => 'admin',
+            'district_id' => $this->district->id,
+        ]);
+        $eventId = (int) DB::table('learning_calendar_events')->insertGetId([
+            'district_id' => $this->district->id,
+            'created_by' => $creator->id,
+            'title' => 'กิจกรรมที่บันทึกด้วยชื่อกลุ่มเดิม',
+            'event_type' => 'activity',
+            'starts_at' => '2026-08-25 09:00:00',
+            'ends_at' => '2026-08-25 12:00:00',
+            'target_type' => 'group',
+            'target_value' => 'สำโรงชัย กลุ่ม 1',
+            'image_path' => "learning/calendar/{$this->district->id}/pending/activity.jpg",
+            'created_at' => now(),
+            'updated_at' => now(),
+        ]);
+        $imagePath = "learning/calendar/{$this->district->id}/{$eventId}/activity.jpg";
+        DB::table('learning_calendar_events')->where('id', $eventId)->update(['image_path' => $imagePath]);
+        Storage::disk('local')->put($imagePath, 'image-data');
+
+        Sanctum::actingAs(User::factory()->create([
+            'role' => 'student',
+            'district_id' => $this->district->id,
+            'student_code' => 'ST-ALIAS',
+            'assigned_groups' => [],
+        ]));
+
+        $this->getJson('/api/v1/learning/calendar')
+            ->assertOk()
+            ->assertJsonPath('data.0.id', 'event-'.$eventId)
+            ->assertJsonPath('data.0.image_url', fn (string $url): bool => str_contains($url, "/calendar/{$eventId}/image"));
+        $this->get("/api/v1/learning/calendar/{$eventId}/image")->assertOk();
     }
 
     public function test_learning_reads_use_only_canonical_system_tables(): void
