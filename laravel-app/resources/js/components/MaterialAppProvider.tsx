@@ -6,7 +6,7 @@ import {
     createTheme,
     type Theme,
 } from '@mui/material';
-import { useEffect, useMemo, useState, type CSSProperties, type ReactNode } from 'react';
+import { useLayoutEffect, useMemo, useState, type CSSProperties, type ReactNode } from 'react';
 import {
     APPEARANCE_CHANGE_EVENT,
     DEFAULT_APPEARANCE,
@@ -260,7 +260,7 @@ export function MaterialAppProvider({ children }: { children: ReactNode }) {
     const [appearance, setAppearance] = useState(loadStoredAppearance);
     const [mode, setMode] = useState(resolveMode);
 
-    useEffect(() => {
+    useLayoutEffect(() => {
         const handleAppearance = (event: Event) => {
             const detail = (event as CustomEvent<AppearanceSettings>).detail;
             if (detail) setAppearance(detail);
