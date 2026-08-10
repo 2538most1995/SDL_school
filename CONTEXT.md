@@ -20,7 +20,7 @@ District scope is resolved by `ResolveDistrictContext`; role checks are enforced
 - Authentication/profile/appearance and district branding
 - Student directory and current-student academic endpoints
 - Student reports: overview, new students, graduates, transfers, registrations, grade threshold and attendance
-- Learning: assignments, resources, calendar, schedules, lesson plans, scores and content writes
+- Learning: assignments, resources, calendar activities with private images, schedules, lesson plans, scores and content writes
 - Admin: users, import status/safety, ZIP/DBF imports, exam rooms and branding
 - Legacy compatibility redirects for old `.php` paths
 
@@ -34,6 +34,7 @@ District scope is resolved by `ResolveDistrictContext`; role checks are enforced
 6. Import creates and validates a new batch before replacing old district batches; writes are disabled by default.
 7. Learning writes require teacher/admin/super-admin role and teacher ownership/district checks.
 8. Student login derives district scope from one unique citizen-ID + student-code match across current-term rosters in active districts; client-supplied district values are ignored and ambiguous matches fail closed.
+9. Calendar activities and their private images are visible only within the event district and `all`/assigned-group target; only teacher/admin/super-admin roles can create or change them, and teacher writes remain creator/group scoped.
 
 ## Request/data flow
 

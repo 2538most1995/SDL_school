@@ -168,15 +168,20 @@ final class LegacyPortalReadService
                     'id' => 'event-'.(int) $row->id,
                     'type' => (string) ($row->event_type ?? 'meeting'),
                     'title' => (string) $row->title,
+                    'description' => (string) ($row->description ?? ''),
                     'starts_at' => (string) $row->starts_at,
                     'ends_at' => (string) ($row->ends_at ?? $row->starts_at),
                     'location' => (string) ($row->location ?? ''),
                     'subject_code' => null,
                     'accent' => 'sky',
+                    'image_url' => filled($row->image_path ?? null)
+                        ? '/api/v1/learning/calendar/'.(int) $row->id.'/image?district_id='.(int) $row->district_id.'&v='.rawurlencode((string) ($row->image_updated_at ?? $row->updated_at ?? ''))
+                        : null,
                     'can_edit' => $viewer->role !== 'teacher' || (int) $row->created_by === (int) $viewer->id,
                     'raw' => [
                         'title' => (string) $row->title, 'event_date' => $startsAt->format('Y-m-d'),
                         'start_time' => $startsAt->format('H:i'), 'end_time' => $endsAt->format('H:i'),
+                        'event_type' => (string) ($row->event_type ?? 'meeting'),
                         'location' => (string) ($row->location ?? ''), 'target_group' => (string) ($row->target_value ?? ''),
                         'notes' => (string) ($row->description ?? ''),
                     ],

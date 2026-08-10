@@ -34,6 +34,7 @@ import { getFeatureDataWithDemo } from '../api';
 import { sendFeatureData } from '../api';
 import { useDemoRole } from '../../context/DemoRoleContext';
 import { withAppBasePath } from '../../lib/urls';
+import { CalendarPage } from './CalendarPage';
 
 type LearningOverview = {
     studentName: string;
@@ -240,6 +241,7 @@ function learningTone(status: string): StatusTone {
 
 export function LearningListPage({ kind }: { kind: LearningKind }) {
     if (kind === 'schedule') return <ExamSchedulePage />;
+    if (kind === 'calendar') return <CalendarPage />;
 
     const config = learningConfig[kind];
     const { role } = useDemoRole();

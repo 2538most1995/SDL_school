@@ -75,6 +75,7 @@ Route::prefix('v1')->group(function (): void {
         Route::get('/settings/profile/avatar', [ProfileController::class, 'avatar']);
         Route::post('/settings/profile/avatar', [ProfileController::class, 'updateAvatar']);
         Route::delete('/settings/profile/avatar', [ProfileController::class, 'destroyAvatar']);
+        Route::get('/learning/calendar/{event}/image', [CalendarController::class, 'image'])->whereNumber('event');
     });
 
     Route::middleware(['auth:sanctum', 'active', 'district'])->group(function (): void {

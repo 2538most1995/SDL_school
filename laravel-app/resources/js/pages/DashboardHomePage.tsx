@@ -56,6 +56,7 @@ type CalendarItem = {
     ends_at: string;
     location: string;
     subject_code: string | null;
+    image_url?: string | null;
 };
 
 type SummaryCardSpec = {
@@ -328,7 +329,7 @@ function StudentDashboard({
                     </header>
                     <div className="student-dashboard-shell__content">
                         <StudentCalendar events={events} />
-                        <StudentFeaturedActivity item={latestActivity} imageUrl={activityImageUrl} loading={calendarPending} />
+                        <StudentFeaturedActivity item={latestActivity} imageUrl={latestActivity?.image_url ? withAppBasePath(latestActivity.image_url) : activityImageUrl} loading={calendarPending} />
                     </div>
                 </div>
                 <StudentTermPanel term={analytics.current_term} profile={profile} viewedAt={viewedAt} />

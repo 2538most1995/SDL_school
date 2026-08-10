@@ -37,7 +37,7 @@ Domain classes under `app/Domain/Students/Models/` (`Student`, `Grade`, `Registe
 - `learning_submissions`: assignment/student, content/attachment, submission/review status, score/feedback; UNIQUE (`assignment_id`, `student_id`)
 - `learning_resources`: district, uploader, title/description, subject, education level, target group, resource/storage fields, visibility
 - `learning_lesson_plans`: district, teacher, subject, education level, academic term, content fields และ status
-- `learning_calendar_events`: district, creator, title/content, event type, start/end, location and targeting; index (`district_id`, `starts_at`)
+- `learning_calendar_events`: district, creator, title/content, event type, start/end, location, targeting, private `image_path` and `image_updated_at`; index (`district_id`, `starts_at`). รูปกิจกรรมเก็บใน local private storage และส่งผ่าน authenticated endpoint ที่ตรวจ district/group scope
 - `learning_schedules`: district, term, subject, group, teacher, type, start/end and room; indexed term/subject/group/type/start
 - `exam_rooms`: latest repair migration uses `term`, `subject_code`, `assignment_type`, `start_val`, `end_val`, `room_name`, district/import batch and timestamps; index (`district_id`, `term`, `subject_code`)
 
@@ -70,6 +70,6 @@ Existing indexes cover the main district/status/date filters and exam-room distr
 
 ## Migration history
 
-The schema was introduced in the dated migrations from `2026_07_17` onward. `2026_08_07_000014_fix_import_and_exam_room_schema.php` repairs import history/exam rooms, `2026_08_10_000015_prepare_system_owned_data.php` completes local user and learning fields, and `2026_08_10_000016_repair_incomplete_system_schema.php` safely restores user/runtime tables when an older production migration ledger recorded migrations whose tables were not actually created. The repair migration does not delete tables or user data. Run `php artisan migrate:status` against the intended system database before deployment.
+The schema was introduced in the dated migrations from `2026_07_17` onward. `2026_08_07_000014_fix_import_and_exam_room_schema.php` repairs import history/exam rooms, `2026_08_10_000015_prepare_system_owned_data.php` completes local user and learning fields, `2026_08_10_000016_repair_incomplete_system_schema.php` safely restores user/runtime tables, and `2026_08_10_000017_repair_calendar_events_and_add_media.php` restores a missing calendar table when necessary and adds private activity-image fields. These repair migrations do not delete tables or user data. Run `php artisan migrate:status` against the intended system database before deployment.
 
 The canonical student and learning migrations inspect the actual parent-key types before creating foreign-key columns, including student, assignment, district and user references. This supports adopted local tables whose primary keys are `INT`, repairs child tables left behind by a failed MySQL foreign-key statement, and never deletes orphaned rows to force a constraint. A reference is left unconstrained when an adopted parent table has no `id` column.

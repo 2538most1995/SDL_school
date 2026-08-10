@@ -77,7 +77,7 @@ final class ExistingSchemaMigrationTest extends TestCase
             DB::connection('existing_schema_test')->table('users')->value('password'),
         );
         $this->assertSame(
-            19,
+            20,
             DB::connection('existing_schema_test')->table('migrations')->count(),
         );
 
@@ -89,7 +89,7 @@ final class ExistingSchemaMigrationTest extends TestCase
 
         $this->assertSame(0, $secondExitCode, Artisan::output());
         $this->assertSame(
-            19,
+            20,
             DB::connection('existing_schema_test')->table('migrations')->count(),
         );
         $this->assertSame(

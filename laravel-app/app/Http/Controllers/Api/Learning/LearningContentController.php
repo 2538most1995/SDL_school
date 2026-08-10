@@ -7,7 +7,9 @@ use Illuminate\Database\DatabaseManager;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Storage;
 use Illuminate\Validation\Rule;
+use Throwable;
 
 final class LearningContentController extends Controller
 {
@@ -26,16 +28,37 @@ final class LearningContentController extends Controller
         $values = $this->validated($request, $kind);
         $stored = $this->storedValues($kind, $values);
         $actor = $this->actorId($request);
-        $id = $this->write()->table($this->table($kind))->insertGetId([
-            ...$stored,
-            'district_id' => $this->districtId($request),
-            $this->actorColumn($kind) => $actor,
-            'created_at' => now(),
-            'updated_at' => now(),
-        ]);
-        $this->audit($request, "learning.{$kind}.created", $kind, $id, null, $values);
+        $storedImagePath = null;
 
-        return response()->json(['data' => ['id' => (string) $id, ...$values]], 201);
+        try {
+            $id = $this->write()->transaction(function () use ($request, $kind, $values, $stored, $actor, &$storedImagePath): int {
+                $id = (int) $this->write()->table($this->table($kind))->insertGetId([
+                    ...$stored,
+                    'district_id' => $this->districtId($request),
+                    $this->actorColumn($kind) => $actor,
+                    'created_at' => now(),
+                    'updated_at' => now(),
+                ]);
+                $storedImagePath = $this->storeCalendarImage($request, $kind, $id, $values);
+                if ($storedImagePath !== null) {
+                    $this->write()->table($this->table($kind))->where('id', $id)->update([
+                        'image_path' => $storedImagePath,
+                        'image_updated_at' => now(),
+                    ]);
+                }
+                $this->audit($request, "learning.{$kind}.created", $kind, $id, null, $this->auditValues($values));
+
+                return $id;
+            });
+        } catch (Throwable $exception) {
+            if ($storedImagePath !== null) {
+                Storage::disk('local')->delete($storedImagePath);
+            }
+
+            throw $exception;
+        }
+
+        return response()->json(['data' => ['id' => (string) $id, ...$this->responseValues($values)]], 201);
     }
 
     public function update(Request $request, string $kind, int $content): JsonResponse
@@ -44,14 +67,40 @@ final class LearningContentController extends Controller
         $row = $this->ownedRow($request, $kind, $content);
         $values = $this->validated($request, $kind);
         $stored = $this->storedValues($kind, $values);
-        $updated = $this->write()->table($this->table($kind))
-            ->where('id', $content)->where('district_id', $this->districtId($request))
-            ->when($request->user()->role === 'teacher', fn ($query) => $query->where($this->actorColumn($kind), $this->actorId($request)))
-            ->update([...$stored, 'updated_at' => now()]);
-        abort_unless($updated === 1, 404);
-        $this->audit($request, "learning.{$kind}.updated", $kind, $content, (array) $row, $values);
+        $oldImagePath = $kind === 'calendar' ? (string) ($row->image_path ?? '') : '';
+        $newImagePath = null;
+        $removeImage = $kind === 'calendar' && (bool) ($values['remove_image'] ?? false);
 
-        return response()->json(['data' => ['id' => (string) $content, ...$values]]);
+        try {
+            $newImagePath = $this->storeCalendarImage($request, $kind, $content, $values);
+            $media = match (true) {
+                $newImagePath !== null => ['image_path' => $newImagePath, 'image_updated_at' => now()],
+                $removeImage => ['image_path' => null, 'image_updated_at' => now()],
+                default => [],
+            };
+            $updated = $this->write()->table($this->table($kind))
+                ->where('id', $content)->where('district_id', $this->districtId($request))
+                ->when($request->user()->role === 'teacher', fn ($query) => $query->where($this->actorColumn($kind), $this->actorId($request)))
+                ->update([...$stored, ...$media, 'updated_at' => now()]);
+        } catch (Throwable $exception) {
+            if ($newImagePath !== null) {
+                Storage::disk('local')->delete($newImagePath);
+            }
+
+            throw $exception;
+        }
+        if ($updated !== 1) {
+            if ($newImagePath !== null) {
+                Storage::disk('local')->delete($newImagePath);
+            }
+            abort(404);
+        }
+        if (($newImagePath !== null || $removeImage) && $this->isOwnedCalendarImage($this->districtId($request), $content, $oldImagePath)) {
+            Storage::disk('local')->delete($oldImagePath);
+        }
+        $this->audit($request, "learning.{$kind}.updated", $kind, $content, (array) $row, $this->auditValues($values));
+
+        return response()->json(['data' => ['id' => (string) $content, ...$this->responseValues($values)]]);
     }
 
     public function destroy(Request $request, string $kind, int $content): JsonResponse
@@ -63,6 +112,10 @@ final class LearningContentController extends Controller
             ->when($request->user()->role === 'teacher', fn ($query) => $query->where($this->actorColumn($kind), $this->actorId($request)))
             ->delete();
         abort_unless($deleted === 1, 404);
+        $imagePath = $kind === 'calendar' ? (string) ($row->image_path ?? '') : '';
+        if ($this->isOwnedCalendarImage($this->districtId($request), $content, $imagePath)) {
+            Storage::disk('local')->delete($imagePath);
+        }
         $this->audit($request, "learning.{$kind}.deleted", $kind, $content, (array) $row, null);
 
         return response()->json(['data' => ['deleted' => true, 'id' => (string) $content]]);
@@ -93,8 +146,10 @@ final class LearningContentController extends Controller
             'calendar' => [
                 'title' => ['required', 'string', 'max:220'], 'event_date' => ['required', 'date_format:Y-m-d'],
                 'start_time' => ['required', 'date_format:H:i'], 'end_time' => ['required', 'date_format:H:i', 'after:start_time'],
+                'event_type' => ['sometimes', Rule::in(['meeting', 'activity', 'exam'])],
                 'location' => ['nullable', 'string', 'max:255'], 'target_group' => ['nullable', 'string', 'max:120'],
-                'notes' => ['nullable', 'string', 'max:5000'],
+                'notes' => ['nullable', 'string', 'max:5000'], 'remove_image' => ['sometimes', 'boolean'],
+                'image' => ['nullable', 'file', 'image', 'mimes:jpg,jpeg,png,webp', 'max:6144', 'dimensions:min_width=480,min_height=270,max_width=6000,max_height=6000'],
             ],
             default => abort(404),
         };
@@ -161,7 +216,7 @@ final class LearningContentController extends Controller
             'calendar' => [
                 'title' => $values['title'],
                 'description' => $values['notes'] ?? null,
-                'event_type' => 'meeting',
+                'event_type' => $values['event_type'] ?? 'meeting',
                 'starts_at' => $values['event_date'].' '.$values['start_time'].':00',
                 'ends_at' => $values['event_date'].' '.$values['end_time'].':00',
                 'location' => $values['location'] ?? null,
@@ -206,6 +261,51 @@ final class LearningContentController extends Controller
     private function assertWriteEnabled(): void
     {
         abort_unless((bool) config('system_data.write_enabled'), 503, 'ระบบเขียนข้อมูลยังไม่เปิดใช้งาน');
+    }
+
+    /** @param array<string, mixed> $values */
+    private function storeCalendarImage(Request $request, string $kind, int $contentId, array $values): ?string
+    {
+        if ($kind !== 'calendar' || ! isset($values['image'])) {
+            return null;
+        }
+
+        $path = $values['image']->store(
+            "learning/calendar/{$this->districtId($request)}/{$contentId}",
+            'local',
+        );
+        abort_if($path === false, 500, 'ไม่สามารถบันทึกรูปกิจกรรมได้');
+
+        return $path;
+    }
+
+    private function isOwnedCalendarImage(int $districtId, int $contentId, string $path): bool
+    {
+        return $path !== '' && str_starts_with($path, "learning/calendar/{$districtId}/{$contentId}/");
+    }
+
+    /** @param array<string, mixed> $values
+     * @return array<string, mixed>
+     */
+    private function responseValues(array $values): array
+    {
+        unset($values['image'], $values['remove_image']);
+
+        return $values;
+    }
+
+    /** @param array<string, mixed> $values
+     * @return array<string, mixed>
+     */
+    private function auditValues(array $values): array
+    {
+        $audit = $this->responseValues($values);
+
+        if (isset($values['image']) || array_key_exists('remove_image', $values)) {
+            $audit['image_changed'] = isset($values['image']) || (bool) ($values['remove_image'] ?? false);
+        }
+
+        return $audit;
     }
 
     private function audit(Request $request, string $event, string $kind, int $id, ?array $before, ?array $after): void

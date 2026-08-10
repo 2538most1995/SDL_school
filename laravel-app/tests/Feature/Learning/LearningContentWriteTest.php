@@ -5,7 +5,9 @@ namespace Tests\Feature\Learning;
 use App\Models\District;
 use App\Models\User;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Http\UploadedFile;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Storage;
 use Laravel\Sanctum\Sanctum;
 use Tests\TestCase;
 
@@ -106,6 +108,63 @@ final class LearningContentWriteTest extends TestCase
         ]));
 
         $this->postJson('/api/v1/learning/assignments', [])->assertForbidden();
+    }
+
+    public function test_teacher_can_publish_activity_image_that_targeted_students_can_view(): void
+    {
+        Storage::fake('local');
+        $teacher = User::factory()->create([
+            'role' => 'teacher',
+            'district_id' => $this->district->id,
+            'assigned_groups' => ['G-01'],
+        ]);
+        Sanctum::actingAs($teacher);
+
+        $created = $this->post('/api/v1/learning/calendar', [
+            'title' => 'กิจกรรมปลูกต้นไม้',
+            'event_type' => 'activity',
+            'event_date' => '2026-08-21',
+            'start_time' => '09:00',
+            'end_time' => '11:00',
+            'location' => 'ชุมชนบ้านแถว',
+            'target_group' => 'G-01',
+            'notes' => 'แต่งกายให้เหมาะสม',
+            'image' => UploadedFile::fake()->image('activity.jpg', 1200, 675),
+        ], ['Accept' => 'application/json'])->assertCreated();
+        $eventId = (int) $created->json('data.id');
+        $path = (string) DB::table('learning_calendar_events')->where('id', $eventId)->value('image_path');
+        Storage::disk('local')->assertExists($path);
+
+        $student = User::factory()->create([
+            'role' => 'student',
+            'district_id' => $this->district->id,
+            'assigned_groups' => ['G-01'],
+        ]);
+        Sanctum::actingAs($student);
+
+        $this->getJson('/api/v1/learning/calendar')
+            ->assertOk()
+            ->assertJsonPath('data.0.id', 'event-'.$eventId)
+            ->assertJsonPath('data.0.type', 'activity')
+            ->assertJsonPath('data.0.description', 'แต่งกายให้เหมาะสม')
+            ->assertJsonPath('data.0.image_url', fn (string $url): bool => str_contains($url, "/calendar/{$eventId}/image"));
+        $this->get("/api/v1/learning/calendar/{$eventId}/image")
+            ->assertOk()
+            ->assertHeader('content-type', 'image/jpeg');
+
+        Sanctum::actingAs(User::factory()->create(['role' => 'super_admin', 'district_id' => null]));
+        $this->get("/api/v1/learning/calendar/{$eventId}/image")->assertUnprocessable();
+        $this->get("/api/v1/learning/calendar/{$eventId}/image?district_id={$this->district->id}")
+            ->assertOk()
+            ->assertHeader('content-type', 'image/jpeg');
+
+        Sanctum::actingAs(User::factory()->create([
+            'role' => 'student',
+            'district_id' => $this->district->id,
+            'assigned_groups' => ['G-99'],
+        ]));
+        $this->getJson('/api/v1/learning/calendar')->assertOk()->assertJsonCount(0, 'data');
+        $this->get("/api/v1/learning/calendar/{$eventId}/image")->assertNotFound();
     }
 
     public function test_learning_reads_use_only_canonical_system_tables(): void
