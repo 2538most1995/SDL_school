@@ -171,6 +171,8 @@ final class LegacyPortalReadService
             ->map(function (object $row) use ($viewer): array {
                 $startsAt = Carbon::parse($row->starts_at);
                 $endsAt = filled($row->ends_at ?? null) ? Carbon::parse($row->ends_at) : $startsAt;
+                $dailySchedule = $this->calendarDailySchedule($row, $startsAt, $endsAt);
+                $externalUrl = $this->safeHttpUrl((string) ($row->external_url ?? ''));
 
                 return [
                     'id' => 'event-'.(int) $row->id,
@@ -182,6 +184,9 @@ final class LegacyPortalReadService
                     'location' => (string) ($row->location ?? ''),
                     'subject_code' => null,
                     'accent' => 'sky',
+                    'external_url' => $externalUrl,
+                    'featured_on_dashboard' => (bool) ($row->featured_on_dashboard ?? false),
+                    'schedule_days' => $dailySchedule,
                     'image_url' => filled($row->image_path ?? null)
                         ? '/api/v1/learning/calendar/'.(int) $row->id.'/image?district_id='.(int) $row->district_id.'&v='.rawurlencode((string) ($row->image_updated_at ?? $row->updated_at ?? ''))
                         : null,
@@ -192,7 +197,9 @@ final class LegacyPortalReadService
                         'start_time' => $startsAt->format('H:i'), 'end_time' => $endsAt->format('H:i'),
                         'event_type' => (string) ($row->event_type ?? 'meeting'),
                         'location' => (string) ($row->location ?? ''), 'target_group' => (string) ($row->target_value ?? ''),
-                        'notes' => (string) ($row->description ?? ''),
+                        'notes' => (string) ($row->description ?? ''), 'external_url' => $externalUrl ?? '',
+                        'featured_on_dashboard' => (bool) ($row->featured_on_dashboard ?? false),
+                        'daily_schedule' => $dailySchedule,
                     ],
                 ];
             })->all();
@@ -215,6 +222,55 @@ final class LegacyPortalReadService
         return $type === null
             ? $items
             : array_values(array_filter($items, static fn (array $item): bool => $item['type'] === $type));
+    }
+
+    /** @return list<array{date: string, start_time: string, end_time: string}> */
+    private function calendarDailySchedule(object $row, Carbon $startsAt, Carbon $endsAt): array
+    {
+        $decoded = json_decode((string) ($row->daily_schedule ?? ''), true);
+        if (is_array($decoded) && $decoded !== []) {
+            $schedule = [];
+            foreach ($decoded as $day) {
+                if (! is_array($day)
+                    || preg_match('/^\d{4}-\d{2}-\d{2}$/', (string) ($day['date'] ?? '')) !== 1
+                    || preg_match('/^\d{2}:\d{2}$/', (string) ($day['start_time'] ?? '')) !== 1
+                    || preg_match('/^\d{2}:\d{2}$/', (string) ($day['end_time'] ?? '')) !== 1) {
+                    continue;
+                }
+                $schedule[] = [
+                    'date' => (string) $day['date'],
+                    'start_time' => (string) $day['start_time'],
+                    'end_time' => (string) $day['end_time'],
+                ];
+            }
+            if ($schedule !== []) {
+                usort($schedule, static fn (array $left, array $right): int => strcmp($left['date'], $right['date']));
+
+                return $schedule;
+            }
+        }
+
+        $schedule = [];
+        $cursor = $startsAt->copy()->startOfDay();
+        $lastDate = $endsAt->copy()->startOfDay();
+        for ($index = 0; $cursor->lte($lastDate) && $index < 370; $index++, $cursor->addDay()) {
+            $schedule[] = [
+                'date' => $cursor->format('Y-m-d'),
+                'start_time' => $startsAt->format('H:i'),
+                'end_time' => $endsAt->format('H:i'),
+            ];
+        }
+
+        return $schedule;
+    }
+
+    private function safeHttpUrl(string $value): ?string
+    {
+        $url = trim($value);
+
+        return preg_match('/^https?:\/\//i', $url) === 1 && filter_var($url, FILTER_VALIDATE_URL)
+            ? $url
+            : null;
     }
 
     /** @return array<string, mixed> */

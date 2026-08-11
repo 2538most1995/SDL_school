@@ -19,7 +19,7 @@ final class LearningSchemaReadiness
         'learning_submissions' => ['assignment_id', 'student_id', 'content', 'attachment_disk', 'attachment_path', 'original_filename', 'submitted_at', 'status', 'score', 'feedback', 'reviewed_by', 'reviewed_at', 'created_at', 'updated_at'],
         'learning_resources' => ['district_id', 'uploaded_by', 'title', 'description', 'subject_code', 'education_level', 'resource_type', 'storage_disk', 'storage_path', 'external_url', 'visibility', 'target_group', 'created_at', 'updated_at'],
         'learning_lesson_plans' => ['district_id', 'teacher_id', 'subject_code', 'education_level', 'academic_term', 'title', 'objectives', 'activities', 'assessment', 'status', 'created_at', 'updated_at'],
-        'learning_calendar_events' => ['district_id', 'created_by', 'title', 'description', 'event_type', 'starts_at', 'ends_at', 'location', 'target_type', 'target_value', 'image_path', 'image_updated_at', 'created_at', 'updated_at'],
+        'learning_calendar_events' => ['district_id', 'created_by', 'title', 'description', 'event_type', 'starts_at', 'ends_at', 'location', 'target_type', 'target_value', 'image_path', 'image_updated_at', 'daily_schedule', 'external_url', 'featured_on_dashboard', 'created_at', 'updated_at'],
         'audit_logs' => ['user_id', 'district_id', 'event', 'auditable_type', 'auditable_id', 'ip_address', 'request_id', 'before', 'after', 'context', 'created_at'],
     ];
 
@@ -267,6 +267,9 @@ final class LearningSchemaReadiness
                 $table->string('target_value', 120)->nullable();
                 $table->string('image_path')->nullable();
                 $table->timestamp('image_updated_at')->nullable();
+                $table->json('daily_schedule')->nullable();
+                $table->string('external_url', 2000)->nullable();
+                $table->boolean('featured_on_dashboard')->default(false)->index();
                 $table->timestamps();
             });
 
@@ -285,6 +288,9 @@ final class LearningSchemaReadiness
         $this->addMissingColumn($schema, 'learning_calendar_events', 'target_value', fn (Blueprint $table) => $table->string('target_value', 120)->nullable());
         $this->addMissingColumn($schema, 'learning_calendar_events', 'image_path', fn (Blueprint $table) => $table->string('image_path')->nullable());
         $this->addMissingColumn($schema, 'learning_calendar_events', 'image_updated_at', fn (Blueprint $table) => $table->timestamp('image_updated_at')->nullable());
+        $this->addMissingColumn($schema, 'learning_calendar_events', 'daily_schedule', fn (Blueprint $table) => $table->json('daily_schedule')->nullable());
+        $this->addMissingColumn($schema, 'learning_calendar_events', 'external_url', fn (Blueprint $table) => $table->string('external_url', 2000)->nullable());
+        $this->addMissingColumn($schema, 'learning_calendar_events', 'featured_on_dashboard', fn (Blueprint $table) => $table->boolean('featured_on_dashboard')->default(false));
         $this->addTimestamps($schema, 'learning_calendar_events');
     }
 

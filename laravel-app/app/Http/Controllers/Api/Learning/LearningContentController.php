@@ -52,6 +52,7 @@ final class LearningContentController extends Controller
                         'image_updated_at' => now(),
                     ]);
                 }
+                $this->enforceFeaturedSelection($request, $kind, $id, $values);
                 $this->audit($request, "learning.{$kind}.created", $kind, $id, null, $this->auditValues($values));
 
                 return $id;
@@ -84,10 +85,17 @@ final class LearningContentController extends Controller
                 $removeImage => ['image_path' => null, 'image_updated_at' => now()],
                 default => [],
             };
-            $updated = $this->write()->table($this->table($kind))
-                ->where('id', $content)->where('district_id', $this->districtId($request))
-                ->when($request->user()->role === 'teacher', fn ($query) => $query->where($this->actorColumn($kind), $this->actorId($request)))
-                ->update([...$stored, ...$media, 'updated_at' => now()]);
+            $updated = $this->write()->transaction(function () use ($request, $kind, $content, $stored, $media, $values): int {
+                $updated = $this->write()->table($this->table($kind))
+                    ->where('id', $content)->where('district_id', $this->districtId($request))
+                    ->when($request->user()->role === 'teacher', fn ($query) => $query->where($this->actorColumn($kind), $this->actorId($request)))
+                    ->update([...$stored, ...$media, 'updated_at' => now()]);
+                if ($updated === 1) {
+                    $this->enforceFeaturedSelection($request, $kind, $content, $values);
+                }
+
+                return $updated;
+            });
         } catch (Throwable $exception) {
             if ($newImagePath !== null) {
                 Storage::disk('local')->delete($newImagePath);
@@ -155,6 +163,12 @@ final class LearningContentController extends Controller
                 'start_time' => ['required', 'date_format:H:i'], 'end_time' => ['required', 'date_format:H:i'],
                 'event_type' => ['sometimes', Rule::in(['meeting', 'activity', 'exam'])],
                 'location' => ['nullable', 'string', 'max:255'], 'target_group' => ['nullable', 'string', 'max:120'],
+                'external_url' => ['nullable', 'url:http,https', 'max:2000'],
+                'featured_on_dashboard' => ['sometimes', 'boolean'],
+                'daily_schedule' => ['nullable', 'array', 'max:31'],
+                'daily_schedule.*.date' => ['required', 'date_format:Y-m-d'],
+                'daily_schedule.*.start_time' => ['required', 'date_format:H:i'],
+                'daily_schedule.*.end_time' => ['required', 'date_format:H:i'],
                 'notes' => ['nullable', 'string', 'max:5000'], 'remove_image' => ['sometimes', 'boolean'],
                 'image' => ['nullable', 'file', 'image', 'mimes:jpg,jpeg,png,webp', 'max:6144', 'dimensions:min_width=480,min_height=270,max_width=6000,max_height=6000'],
             ],
@@ -163,12 +177,12 @@ final class LearningContentController extends Controller
         $values = $request->validate($rules);
         if ($kind === 'calendar') {
             $values['end_date'] = ($values['end_date'] ?? null) ?: $values['event_date'];
-            $startsAt = Carbon::createFromFormat('Y-m-d H:i', $values['event_date'].' '.$values['start_time']);
-            $endsAt = Carbon::createFromFormat('Y-m-d H:i', $values['end_date'].' '.$values['end_time']);
-            if (! $endsAt->greaterThan($startsAt)) {
-                throw ValidationException::withMessages([
-                    'end_time' => 'วันและเวลาสิ้นสุดต้องอยู่หลังวันและเวลาเริ่ม',
-                ]);
+            $values['daily_schedule'] = $this->normalizeDailySchedule($values);
+            $values['start_time'] = $values['daily_schedule'][0]['start_time'];
+            $values['end_time'] = $values['daily_schedule'][array_key_last($values['daily_schedule'])]['end_time'];
+            $values['external_url'] = ($values['external_url'] ?? null) ?: null;
+            if (array_key_exists('featured_on_dashboard', $values) && $request->user()->role === 'teacher') {
+                abort(403, 'เฉพาะผู้ดูแลอำเภอเท่านั้นที่เลือกกิจกรรมสำหรับหน้าแรกได้');
             }
         }
         if (filled($values['target_group'] ?? null)) {
@@ -251,6 +265,11 @@ final class LearningContentController extends Controller
                 'location' => $values['location'] ?? null,
                 'target_type' => filled($values['target_group'] ?? null) ? 'group' : 'all',
                 'target_value' => ($values['target_group'] ?? null) ?: null,
+                'daily_schedule' => json_encode($values['daily_schedule'], JSON_UNESCAPED_UNICODE | JSON_THROW_ON_ERROR),
+                'external_url' => $values['external_url'] ?? null,
+                ...(array_key_exists('featured_on_dashboard', $values)
+                    ? ['featured_on_dashboard' => (bool) $values['featured_on_dashboard']]
+                    : []),
             ],
             default => abort(404),
         };
@@ -290,6 +309,71 @@ final class LearningContentController extends Controller
     private function assertWriteEnabled(): void
     {
         abort_unless((bool) config('system_data.write_enabled'), 503, 'ระบบเขียนข้อมูลยังไม่เปิดใช้งาน');
+    }
+
+    /** @param array<string, mixed> $values
+     * @return list<array{date: string, start_time: string, end_time: string}>
+     */
+    private function normalizeDailySchedule(array $values): array
+    {
+        $startDate = Carbon::createFromFormat('Y-m-d', (string) $values['event_date'])->startOfDay();
+        $endDate = Carbon::createFromFormat('Y-m-d', (string) $values['end_date'])->startOfDay();
+        $expectedDates = [];
+        for ($date = $startDate->copy(); $date->lte($endDate); $date->addDay()) {
+            $expectedDates[] = $date->format('Y-m-d');
+            if (count($expectedDates) > 31) {
+                throw ValidationException::withMessages([
+                    'end_date' => 'กิจกรรมหนึ่งรายการกำหนดต่อเนื่องได้ไม่เกิน 31 วัน',
+                ]);
+            }
+        }
+
+        $provided = $values['daily_schedule'] ?? [];
+        $usesDailySchedule = $provided !== [];
+        if ($provided === []) {
+            $provided = array_map(static fn (string $date): array => [
+                'date' => $date,
+                'start_time' => (string) $values['start_time'],
+                'end_time' => (string) $values['end_time'],
+            ], $expectedDates);
+        }
+        usort($provided, static fn (array $left, array $right): int => strcmp((string) $left['date'], (string) $right['date']));
+        $providedDates = array_column($provided, 'date');
+        if ($providedDates !== $expectedDates || count(array_unique($providedDates)) !== count($providedDates)) {
+            throw ValidationException::withMessages([
+                'daily_schedule' => 'กรุณากำหนดเวลาให้ครบทุกวันตั้งแต่วันเริ่มถึงวันสิ้นสุด',
+            ]);
+        }
+
+        return array_map(static function (array $day, int $index) use ($usesDailySchedule): array {
+            $startsAt = Carbon::createFromFormat('Y-m-d H:i', $day['date'].' '.$day['start_time']);
+            $endsAt = Carbon::createFromFormat('Y-m-d H:i', $day['date'].' '.$day['end_time']);
+            if (! $endsAt->greaterThan($startsAt)) {
+                throw ValidationException::withMessages([
+                    $usesDailySchedule ? "daily_schedule.{$index}.end_time" : 'end_time' => 'เวลาสิ้นสุดของแต่ละวันต้องอยู่หลังเวลาเริ่ม',
+                ]);
+            }
+
+            return [
+                'date' => (string) $day['date'],
+                'start_time' => (string) $day['start_time'],
+                'end_time' => (string) $day['end_time'],
+            ];
+        }, $provided, array_keys($provided));
+    }
+
+    /** @param array<string, mixed> $values */
+    private function enforceFeaturedSelection(Request $request, string $kind, int $contentId, array $values): void
+    {
+        if ($kind !== 'calendar' || ! ($values['featured_on_dashboard'] ?? false)) {
+            return;
+        }
+
+        $this->write()->table('learning_calendar_events')
+            ->where('district_id', $this->districtId($request))
+            ->where('id', '!=', $contentId)
+            ->where('featured_on_dashboard', true)
+            ->update(['featured_on_dashboard' => false, 'updated_at' => now()]);
     }
 
     /** @param array<string, mixed> $values */

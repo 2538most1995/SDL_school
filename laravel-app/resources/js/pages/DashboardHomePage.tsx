@@ -57,6 +57,7 @@ type CalendarItem = {
     location: string;
     subject_code: string | null;
     image_url?: string | null;
+    featured_on_dashboard?: boolean;
 };
 
 type SummaryCardSpec = {
@@ -328,7 +329,7 @@ function StudentDashboard({
     const calendarEvents = events
         .filter((item) => item.type !== 'assignment')
         .sort((left, right) => eventTimestamp(right) - eventTimestamp(left));
-    const latestActivity = calendarEvents[0];
+    const latestActivity = calendarEvents.find((item) => item.featured_on_dashboard) ?? calendarEvents[0];
     const moralResult = analytics.moral.find((item) => item.value > 0)?.label ?? 'ยังไม่มีผล';
     const viewedAt = new Intl.DateTimeFormat('th-TH', {
         day: 'numeric', month: 'long', year: 'numeric', hour: '2-digit', minute: '2-digit',

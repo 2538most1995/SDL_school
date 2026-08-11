@@ -129,7 +129,8 @@ final class LearningContentWriteTest extends TestCase
             $table->dropColumn(['education_level', 'target_group']);
         });
         Schema::table('learning_calendar_events', function ($table): void {
-            $table->dropColumn(['location', 'image_path', 'image_updated_at']);
+            $table->dropIndex(['featured_on_dashboard']);
+            $table->dropColumn(['location', 'image_path', 'image_updated_at', 'daily_schedule', 'external_url', 'featured_on_dashboard']);
         });
         Schema::table('learning_assignments', function ($table): void {
             $table->dropColumn('instructions');
@@ -158,6 +159,9 @@ final class LearningContentWriteTest extends TestCase
         $this->assertTrue(Schema::hasColumn('learning_calendar_events', 'image_path'));
         $this->assertTrue(Schema::hasColumn('learning_calendar_events', 'image_updated_at'));
         $this->assertTrue(Schema::hasColumn('learning_calendar_events', 'location'));
+        $this->assertTrue(Schema::hasColumn('learning_calendar_events', 'daily_schedule'));
+        $this->assertTrue(Schema::hasColumn('learning_calendar_events', 'external_url'));
+        $this->assertTrue(Schema::hasColumn('learning_calendar_events', 'featured_on_dashboard'));
         $this->assertTrue(Schema::hasColumn('learning_assignments', 'instructions'));
         $this->assertTrue(Schema::hasColumn('learning_submissions', 'attachment_disk'));
         $this->assertTrue(Schema::hasColumn('learning_lesson_plans', 'objectives'));
@@ -259,22 +263,34 @@ final class LearningContentWriteTest extends TestCase
             'event_date' => '2026-08-21',
             'end_date' => '2026-08-23',
             'start_time' => '08:30',
-            'end_time' => '16:00',
+            'end_time' => '14:00',
+            'daily_schedule' => [
+                ['date' => '2026-08-21', 'start_time' => '08:30', 'end_time' => '16:00'],
+                ['date' => '2026-08-22', 'start_time' => '10:00', 'end_time' => '15:30'],
+                ['date' => '2026-08-23', 'start_time' => '09:15', 'end_time' => '14:00'],
+            ],
+            'external_url' => 'https://example.test/activity-registration',
             'target_group' => '',
         ])->assertCreated()
-            ->assertJsonPath('data.end_date', '2026-08-23');
+            ->assertJsonPath('data.end_date', '2026-08-23')
+            ->assertJsonPath('data.daily_schedule.1.start_time', '10:00');
         $eventId = (int) $created->json('data.id');
 
         $this->assertDatabaseHas('learning_calendar_events', [
             'id' => $eventId,
             'starts_at' => '2026-08-21 08:30:00',
-            'ends_at' => '2026-08-23 16:00:00',
+            'ends_at' => '2026-08-23 14:00:00',
             'target_type' => 'all',
+            'external_url' => 'https://example.test/activity-registration',
         ]);
+        $storedSchedule = json_decode((string) DB::table('learning_calendar_events')->where('id', $eventId)->value('daily_schedule'), true, 512, JSON_THROW_ON_ERROR);
+        $this->assertSame('10:00', $storedSchedule[1]['start_time']);
         $this->getJson('/api/v1/learning/calendar')
             ->assertOk()
             ->assertJsonPath('data.0.raw.event_date', '2026-08-21')
-            ->assertJsonPath('data.0.raw.end_date', '2026-08-23');
+            ->assertJsonPath('data.0.raw.end_date', '2026-08-23')
+            ->assertJsonPath('data.0.schedule_days.1.start_time', '10:00')
+            ->assertJsonPath('data.0.external_url', 'https://example.test/activity-registration');
 
         $this->postJson('/api/v1/learning/calendar', [
             'title' => 'เวลาผิดลำดับ',
@@ -284,6 +300,76 @@ final class LearningContentWriteTest extends TestCase
             'start_time' => '16:00',
             'end_time' => '08:30',
         ])->assertUnprocessable()->assertJsonValidationErrors('end_time');
+
+        $this->postJson('/api/v1/learning/calendar', [
+            'title' => 'กำหนดเวลาไม่ครบวัน',
+            'event_type' => 'activity',
+            'event_date' => '2026-08-21',
+            'end_date' => '2026-08-23',
+            'start_time' => '09:00',
+            'end_time' => '12:00',
+            'daily_schedule' => [
+                ['date' => '2026-08-21', 'start_time' => '09:00', 'end_time' => '12:00'],
+                ['date' => '2026-08-23', 'start_time' => '09:00', 'end_time' => '12:00'],
+            ],
+        ])->assertUnprocessable()->assertJsonValidationErrors('daily_schedule');
+    }
+
+    public function test_admin_can_choose_one_dashboard_event_and_teacher_cannot_replace_it(): void
+    {
+        $admin = User::factory()->create([
+            'role' => 'admin',
+            'district_id' => $this->district->id,
+        ]);
+        Sanctum::actingAs($admin);
+
+        $firstId = (int) $this->postJson('/api/v1/learning/calendar', [
+            'title' => 'กิจกรรมหน้าแรกเดิม',
+            'event_type' => 'activity',
+            'event_date' => '2026-08-24',
+            'start_time' => '09:00',
+            'end_time' => '12:00',
+            'featured_on_dashboard' => true,
+        ])->assertCreated()->json('data.id');
+        $secondId = (int) $this->postJson('/api/v1/learning/calendar', [
+            'title' => 'กิจกรรมหน้าแรกใหม่',
+            'event_type' => 'meeting',
+            'event_date' => '2026-08-25',
+            'start_time' => '13:00',
+            'end_time' => '15:00',
+            'featured_on_dashboard' => true,
+        ])->assertCreated()->json('data.id');
+
+        $this->assertDatabaseHas('learning_calendar_events', ['id' => $firstId, 'featured_on_dashboard' => false]);
+        $this->assertDatabaseHas('learning_calendar_events', ['id' => $secondId, 'featured_on_dashboard' => true]);
+
+        $student = User::factory()->create([
+            'role' => 'student',
+            'district_id' => $this->district->id,
+            'assigned_groups' => [],
+        ]);
+        Sanctum::actingAs($student);
+        $this->getJson('/api/v1/learning/calendar')
+            ->assertOk()
+            ->assertJsonFragment([
+                'id' => 'event-'.$secondId,
+                'featured_on_dashboard' => true,
+            ]);
+
+        $teacher = User::factory()->create([
+            'role' => 'teacher',
+            'district_id' => $this->district->id,
+            'assigned_groups' => [],
+        ]);
+        Sanctum::actingAs($teacher);
+        $this->postJson('/api/v1/learning/calendar', [
+            'title' => 'ครูพยายามเปลี่ยนหน้าแรก',
+            'event_type' => 'activity',
+            'event_date' => '2026-08-26',
+            'start_time' => '09:00',
+            'end_time' => '12:00',
+            'featured_on_dashboard' => true,
+        ])->assertForbidden();
     }
 
     public function test_student_group_name_alias_can_view_existing_activity_and_image(): void

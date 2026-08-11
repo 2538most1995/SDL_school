@@ -38,6 +38,7 @@ final class ExistingSchemaMigrationTest extends TestCase
 
     public function test_migrate_adopts_existing_users_table_when_migration_ledger_is_empty(): void
     {
+        $expectedMigrationCount = count(glob(database_path('migrations/*.php')) ?: []);
         $schema = Schema::connection('existing_schema_test');
         $schema->create('users', function (Blueprint $table): void {
             $table->id();
@@ -77,7 +78,7 @@ final class ExistingSchemaMigrationTest extends TestCase
             DB::connection('existing_schema_test')->table('users')->value('password'),
         );
         $this->assertSame(
-            20,
+            $expectedMigrationCount,
             DB::connection('existing_schema_test')->table('migrations')->count(),
         );
 
@@ -89,7 +90,7 @@ final class ExistingSchemaMigrationTest extends TestCase
 
         $this->assertSame(0, $secondExitCode, Artisan::output());
         $this->assertSame(
-            20,
+            $expectedMigrationCount,
             DB::connection('existing_schema_test')->table('migrations')->count(),
         );
         $this->assertSame(

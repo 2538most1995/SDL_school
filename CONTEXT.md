@@ -34,7 +34,7 @@ District scope is resolved by `ResolveDistrictContext`; role checks are enforced
 6. Import creates and validates a new batch before replacing old district batches; writes are disabled by default.
 7. Learning writes require teacher/admin/super-admin role and teacher ownership/district checks.
 8. Student login derives district scope from one unique citizen-ID + student-code match across current-term rosters in active districts; client-supplied district values are ignored and ambiguous matches fail closed.
-9. Calendar activities and their private images are visible only within the event district and `all`/assigned-group target; only teacher/admin/super-admin roles can create or change them, and teacher writes remain creator/group scoped.
+9. Calendar activities, per-day schedules, external links and private images are visible only within the event district and `all`/assigned-group target; only teacher/admin/super-admin roles can create or change them, teacher writes remain creator/group scoped, and only admin/super-admin may choose the single district activity featured on the student dashboard.
 10. Authenticated learning routes run an idempotent additive readiness check so a Git-only shared-hosting deploy can repair missing learning/audit tables or columns before the first read/write; normal deployments still run migrations.
 
 ## Request/data flow
