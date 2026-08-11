@@ -16,7 +16,7 @@
 ## Student login district resolution (2026-08-10)
 
 - **Problem:** requiring students to choose a district made valid credentials fail when the selected district did not match the imported record, while broadening the shared roster made the student menu show rows outside the current-term cohort.
-- **Solution:** the directory roster is again limited to the latest academic term. Student login does not accept district scope from the client; it matches citizen ID + student code across active-district current-term rosters and derives the district from the single matching record.
+- **Solution:** the directory roster is again limited to the latest academic term. Student login does not accept district scope from the client; it matches citizen ID across active-district current-term rosters and derives the district from the single matching record. Student code is no longer a login input.
 - **Security:** zero or multiple exact matches return the same generic credential error. The citizen ID is not persisted to `users`, and a client-supplied `district_id` cannot redirect the session to another district.
 - **Impact:** a login may load current-term rosters for all active districts. Request-local repository caches still apply, but this is broader than a district-scoped directory request.
 - **Risk:** live MySQL row counts and execution plans for Sena/Phaisali are `Not verified`; run `EXPLAIN` with sanitized production-shaped data after deployment.
@@ -27,7 +27,7 @@
 
 1. `GET /api/v1/learning` เคยตอบ 404 ใน demo mode เพราะ overview บังคับ legacy อย่างเดียว ปัจจุบันมี canonical demo fallback และ contract test
 2. ห้องสอบ demo ส่ง field คนละชุดกับหน้า admin ทำให้ตารางแสดง `undefined` ปัจจุบันใช้ contract เดียวกับ production (`term`, `subject_code`, `assignment_type`, `start_val`, `end_val`, `room_name`, `capacity`)
-3. หน้า login นักศึกษาเคยแสดงเลขบัตรประชาชน + รหัสนักศึกษาแม้ local/demo auth ต้องใช้ username + password ปัจจุบัน public branding API ระบุ `loginMode` และ UI เปลี่ยน field/ข้อความตามโหมด
+3. หน้า login นักศึกษาใช้เลขบัตรประชาชนช่องเดียวเมื่อเปิดข้อมูลนักศึกษาจากระบบ ส่วน local/demo auth ใช้ username + password โดย public branding API ระบุ `loginMode` ให้ UI เลือก field ตามโหมด
 
 หน้า Learning Overview แสดงวันที่ย่อภาษาไทยแทน ISO timestamp เพื่อให้อ่านได้ใน card ขนาดเล็ก
 

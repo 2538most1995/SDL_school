@@ -24,7 +24,6 @@ final class LoginController extends Controller
         if ($studentLogin) {
             $user = $this->studentAuthenticator->authenticate(
                 $request->string('identifier')->toString(),
-                $request->string('password')->toString(),
             );
             $authenticated = $user !== null;
 
@@ -45,7 +44,9 @@ final class LoginController extends Controller
 
         if (! $authenticated) {
             throw ValidationException::withMessages([
-                'identifier' => ['ชื่อผู้ใช้หรือรหัสผ่านไม่ถูกต้อง'],
+                'identifier' => [$studentLogin
+                    ? 'เลขบัตรประชาชนไม่ถูกต้อง'
+                    : 'ชื่อผู้ใช้หรือรหัสผ่านไม่ถูกต้อง'],
             ]);
         }
 

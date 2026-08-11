@@ -50,15 +50,14 @@ export function LoginPage() {
         queryFn: ({ signal }) => apiGet<PublicBranding>(publicBrandingPath(rememberedDistrictId), signal).then((response) => response.data),
         staleTime: 5 * 60_000,
     });
-    const usesSystemStudentCredentials = branding.data?.loginMode === 'student_credentials';
+    const usesCitizenIdLogin = branding.data?.loginMode === 'student_credentials';
+    const isCitizenIdLogin = loginType === 'student' && usesCitizenIdLogin;
 
     const login = useMutation({
         meta: { notification: { success: false } },
-        mutationFn: () => apiPost<LoginUser>('/auth/login', {
-            identifier,
-            password,
-            login_type: loginType,
-        }),
+        mutationFn: () => apiPost<LoginUser>('/auth/login', isCitizenIdLogin
+            ? { identifier, login_type: loginType }
+            : { identifier, password, login_type: loginType }),
         onSuccess: (response) => {
             if (response.data.district_id) {
                 window.localStorage.setItem('sena-district-id', String(response.data.district_id));
@@ -73,7 +72,7 @@ export function LoginPage() {
     const error = login.error instanceof ApiError
         ? login.error.errors.identifier?.[0] ?? login.error.message
         : null;
-    const submitDisabled = login.isPending || !identifier || !password;
+    const submitDisabled = login.isPending || !identifier || (!isCitizenIdLogin && !password);
 
     const switchType = (type: LoginType) => {
         setLoginType(type);
@@ -107,7 +106,7 @@ export function LoginPage() {
                         </div>
 
                         <div className="mt-9">
-                            <Badge appearance="tint" color="brand" icon={<CheckCircle size={16} weight="fill" />}>{usesSystemStudentCredentials ? 'ข้อมูลฐานระบบภายใน' : 'โหมดบัญชีภายใน'}</Badge>
+                            <Badge appearance="tint" color="brand" icon={<CheckCircle size={16} weight="fill" />}>{usesCitizenIdLogin ? 'ข้อมูลฐานระบบภายใน' : 'โหมดบัญชีภายใน'}</Badge>
                             <h2 className="mt-4 text-3xl font-black tracking-[-0.03em] text-slate-950 sm:text-4xl">ยินดีต้อนรับกลับมา</h2>
                             <p className="mt-3 text-slate-600">เลือกประเภทผู้ใช้งาน แล้วเข้าสู่พื้นที่ของคุณ</p>
                         </div>
@@ -118,13 +117,15 @@ export function LoginPage() {
                         </TabList>
 
                         <form className="mt-6 space-y-5" onSubmit={(event) => { event.preventDefault(); login.mutate(); }}>
-                            <Field label={loginType === 'student' && usesSystemStudentCredentials ? 'เลขบัตรประจำตัวประชาชน (13 หลัก)' : 'ชื่อผู้ใช้'} required>
-                                <Input id="identifier" size="large" contentBefore={<IdentificationCard size={21} aria-hidden="true" />} value={identifier} onChange={(event) => setIdentifier(loginType === 'student' && usesSystemStudentCredentials ? event.target.value.replace(/\D/g, '').slice(0, 13) : event.target.value)} autoComplete="username" inputMode={loginType === 'student' && usesSystemStudentCredentials ? 'numeric' : undefined} maxLength={loginType === 'student' && usesSystemStudentCredentials ? 13 : 190} className="login-input w-full" placeholder={loginType === 'student' && usesSystemStudentCredentials ? 'เลขบัตรประชาชน' : 'กรอกชื่อผู้ใช้'} />
+                            <Field label={isCitizenIdLogin ? 'เลขบัตรประจำตัวประชาชน (13 หลัก)' : 'ชื่อผู้ใช้'} required>
+                                <Input id="identifier" size="large" contentBefore={<IdentificationCard size={21} aria-hidden="true" />} value={identifier} onChange={(event) => setIdentifier(isCitizenIdLogin ? event.target.value.replace(/\D/g, '').slice(0, 13) : event.target.value)} autoComplete="username" inputMode={isCitizenIdLogin ? 'numeric' : undefined} maxLength={isCitizenIdLogin ? 13 : 190} className="login-input w-full" placeholder={isCitizenIdLogin ? 'เลขบัตรประชาชน' : 'กรอกชื่อผู้ใช้'} />
                             </Field>
 
-                            <Field label={loginType === 'student' && usesSystemStudentCredentials ? 'รหัสนักศึกษา' : 'รหัสผ่าน'} required>
-                                <Input id="password" size="large" contentBefore={<LockKey size={21} aria-hidden="true" />} contentAfter={loginType === 'staff' || !usesSystemStudentCredentials ? <Button type="button" appearance="transparent" size="small" icon={showPassword ? <EyeSlash size={20} /> : <Eye size={20} />} onClick={() => setShowPassword((value) => !value)} aria-label={showPassword ? 'ซ่อนรหัสผ่าน' : 'แสดงรหัสผ่าน'} /> : undefined} type={loginType === 'student' && usesSystemStudentCredentials || showPassword ? 'text' : 'password'} value={password} onChange={(event) => setPassword(event.target.value)} autoComplete={loginType === 'student' && usesSystemStudentCredentials ? 'off' : 'current-password'} className="login-input w-full" placeholder={loginType === 'student' && usesSystemStudentCredentials ? 'รหัสนักศึกษา' : 'กรอกรหัสผ่าน'} />
-                            </Field>
+                            {!isCitizenIdLogin && (
+                                <Field label="รหัสผ่าน" required>
+                                    <Input id="password" size="large" contentBefore={<LockKey size={21} aria-hidden="true" />} contentAfter={<Button type="button" appearance="transparent" size="small" icon={showPassword ? <EyeSlash size={20} /> : <Eye size={20} />} onClick={() => setShowPassword((value) => !value)} aria-label={showPassword ? 'ซ่อนรหัสผ่าน' : 'แสดงรหัสผ่าน'} />} type={showPassword ? 'text' : 'password'} value={password} onChange={(event) => setPassword(event.target.value)} autoComplete="current-password" className="login-input w-full" placeholder="กรอกรหัสผ่าน" />
+                                </Field>
+                            )}
 
                             {error && <MessageBar intent="error" role="alert"><MessageBarBody>{error}</MessageBarBody></MessageBar>}
 

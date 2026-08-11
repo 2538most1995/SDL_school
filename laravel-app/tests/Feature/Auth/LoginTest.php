@@ -67,7 +67,7 @@ class LoginTest extends TestCase
             ->assertJsonPath('data.loginMode', 'student_credentials');
     }
 
-    public function test_student_can_log_in_with_citizen_id_and_student_code_from_system_database(): void
+    public function test_student_can_log_in_with_citizen_id_only_from_system_database(): void
     {
         config(['system_data.student_enabled' => true]);
         $district = District::create(['name' => 'อำเภอเสนา', 'code' => 'sena']);
@@ -76,7 +76,6 @@ class LoginTest extends TestCase
 
         $this->postJson('/auth/login', [
             'identifier' => '1101700203451',
-            'password' => '1234567890',
             'login_type' => 'student',
         ])->assertOk()
             ->assertJsonPath('data.username', '1234567890')
@@ -100,10 +99,9 @@ class LoginTest extends TestCase
 
         $this->postJson('/auth/login', [
             'identifier' => '1101700203452',
-            'password' => '1234567890',
             'login_type' => 'student',
         ])->assertUnprocessable()
-            ->assertJsonPath('errors.identifier.0', 'ชื่อผู้ใช้หรือรหัสผ่านไม่ถูกต้อง');
+            ->assertJsonPath('errors.identifier.0', 'เลขบัตรประชาชนไม่ถูกต้อง');
 
         $this->assertGuest();
         $this->assertDatabaseCount('users', 0);
@@ -118,7 +116,6 @@ class LoginTest extends TestCase
 
         $this->postJson('/auth/login', [
             'identifier' => '1101700203451',
-            'password' => '1234567890',
             'login_type' => 'student',
             'district_id' => $other->id,
         ])->assertOk()
@@ -134,14 +131,16 @@ class LoginTest extends TestCase
         config(['system_data.student_enabled' => true]);
         $district = District::create(['name' => 'อำเภอเสนา', 'code' => 'sena']);
         $other = District::create(['name' => 'อำเภออื่น', 'code' => 'other']);
-        $this->useStudents($this->student($district), $this->student($other));
+        $this->useStudents(
+            $this->student($district),
+            $this->student($other, '0987654321'),
+        );
 
         $this->postJson('/auth/login', [
             'identifier' => '1101700203451',
-            'password' => '1234567890',
             'login_type' => 'student',
         ])->assertUnprocessable()
-            ->assertJsonPath('errors.identifier.0', 'ชื่อผู้ใช้หรือรหัสผ่านไม่ถูกต้อง');
+            ->assertJsonPath('errors.identifier.0', 'เลขบัตรประชาชนไม่ถูกต้อง');
 
         $this->assertGuest();
         $this->assertDatabaseCount('users', 0);
@@ -162,7 +161,6 @@ class LoginTest extends TestCase
 
         $this->postJson('/auth/login', [
             'identifier' => '1101700203451',
-            'password' => '1234567890',
             'login_type' => 'student',
         ])->assertUnprocessable();
 
@@ -194,10 +192,10 @@ class LoginTest extends TestCase
         ])->assertUnprocessable();
     }
 
-    private function student(District $district): Student
+    private function student(District $district, string $code = '1234567890'): Student
     {
         return new Student(
-            code: '1234567890',
+            code: $code,
             districtId: $district->id,
             districtName: $district->name,
             prefix: '',

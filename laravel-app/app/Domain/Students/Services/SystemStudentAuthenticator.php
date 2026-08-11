@@ -13,24 +13,22 @@ final readonly class SystemStudentAuthenticator
 {
     public function __construct(private StudentRepository $students) {}
 
-    public function authenticate(string $citizenIdentifier, string $studentCode): ?User
+    public function authenticate(string $citizenIdentifier): ?User
     {
         $citizenId = preg_replace('/\D+/u', '', $citizenIdentifier) ?? '';
-        $studentCode = trim($studentCode);
 
-        if (strlen($citizenId) !== 13 || $studentCode === '' || mb_strlen($studentCode) > 32) {
+        if (strlen($citizenId) !== 13) {
             return null;
         }
 
         $matches = array_values(array_filter(
             $this->students->students(),
-            static fn (Student $student): bool => hash_equals($student->code, $studentCode)
-                && $student->citizenId !== null
+            static fn (Student $student): bool => $student->citizenId !== null
                 && hash_equals($student->citizenId, $citizenId),
         ));
 
-        // The credential pair must identify exactly one current student. This
-        // derives district scope from imported data and fails closed on duplicates.
+        // The citizen ID must identify exactly one current student. This derives
+        // district scope from imported data and fails closed on duplicates.
         if (count($matches) !== 1) {
             return null;
         }
