@@ -794,6 +794,7 @@ textarea {
 
 .student-dashboard-shell {
     display: grid;
+    grid-template-columns: minmax(0, 1fr);
     gap: 1rem;
     overflow: hidden;
     border: 1px solid color-mix(in srgb, var(--ui-accent-200) 72%, var(--ui-border));
@@ -808,6 +809,7 @@ textarea {
 .student-dashboard-shell__main {
     display: grid;
     min-width: 0;
+    max-width: 100%;
     gap: 1.25rem;
 }
 
@@ -818,7 +820,15 @@ textarea {
 .student-dashboard-shell__content {
     display: grid;
     min-width: 0;
+    max-width: 100%;
     gap: 1rem;
+}
+
+.student-dashboard-shell > *,
+.student-dashboard-shell__main > *,
+.student-dashboard-shell__content > * {
+    min-width: 0;
+    max-width: 100%;
 }
 
 .student-calendar,
@@ -836,6 +846,10 @@ textarea {
 .student-feature,
 .student-term-panel {
     padding: 1.15rem;
+}
+
+.student-feature {
+    overflow: hidden;
 }
 
 .student-text-link {
@@ -913,7 +927,10 @@ textarea {
 .student-feature__media {
     position: relative;
     display: block;
-    min-height: 13rem;
+    width: 100%;
+    min-width: 0;
+    max-width: 100%;
+    min-height: 0;
     aspect-ratio: 16 / 9;
     overflow: hidden;
     border-radius: 16px;
@@ -922,6 +939,10 @@ textarea {
 }
 
 .student-feature__media img {
+    display: block;
+    width: 100%;
+    height: 100%;
+    max-width: 100%;
     transition: transform 220ms var(--ui-ease-out);
 }
 
@@ -935,7 +956,9 @@ textarea {
     position: absolute;
     inset-inline: 0;
     inset-block-end: 0;
+    min-width: 0;
     padding: 1rem;
+    overflow-wrap: anywhere;
 }
 
 .student-feature__empty {
@@ -990,6 +1013,7 @@ textarea {
     font-size: 1.12rem;
     font-weight: 900;
     line-height: 1.45;
+    overflow-wrap: anywhere;
 }
 
 .student-term-panel__list .student-term-panel__date {
@@ -1103,13 +1127,13 @@ textarea {
     }
 
     .student-dashboard-shell__content {
-        grid-template-columns: minmax(15rem, 0.8fr) minmax(0, 1.35fr);
+        grid-template-columns: minmax(13.5rem, 0.8fr) minmax(0, 1.35fr);
     }
 }
 
-@media (min-width: 1100px) {
+@media (min-width: 1280px) {
     .student-dashboard-shell {
-        grid-template-columns: minmax(0, 1fr) minmax(15rem, 0.29fr);
+        grid-template-columns: minmax(0, 1fr) clamp(15rem, 21vw, 19rem);
         gap: 1.5rem;
     }
 
@@ -1124,7 +1148,7 @@ textarea {
     }
 
     .student-feature__media {
-        min-height: 11.5rem;
+        aspect-ratio: 4 / 3;
     }
 
     .student-calendar,
