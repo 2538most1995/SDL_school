@@ -1202,16 +1202,21 @@ textarea {
 }
 
 .student-activity-list {
-    display: grid;
+    display: flex;
+    flex: 1 1 auto;
     min-height: 0;
+    flex-direction: column;
     gap: 0.8rem;
     overflow-y: auto;
+    overscroll-behavior: contain;
     padding: clamp(0.8rem, 2vw, 1.25rem);
 }
 
 .student-activity-list__item {
     display: grid;
     min-width: 0;
+    min-height: fit-content;
+    flex: 0 0 auto;
     overflow: hidden;
     border: 1px solid var(--ui-border);
     border-radius: 16px;
@@ -1227,6 +1232,7 @@ textarea {
 .student-activity-list__item > div {
     min-width: 0;
     padding: 1rem;
+    overflow: visible;
 }
 
 .student-activity-list__item h3 {
@@ -1468,6 +1474,7 @@ textarea {
     .student-activity-list__item > img {
         height: 100%;
         min-height: 12rem;
+        align-self: stretch;
     }
 }
 

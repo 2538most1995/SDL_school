@@ -475,7 +475,7 @@ function StudentDashboard({
             route: '/grades', action: 'ดูรายละเอียดผลการเรียน', icon: ChartBar, tone: 'blue',
         },
         {
-            label: 'กพช.', eyebrow: 'กิจกรรมพัฒนาคุณภาพชีวิต', value: formatNumber(analytics.averages.kpch_hours, 1), suffix: ' ชั่วโมง',
+            label: 'กพช.', eyebrow: 'กิจกรรมพัฒนาคุณภาพชีวิต', value: formatNumber(analytics.averages.kpch_hours), suffix: ' ชั่วโมง',
             detail: 'ชั่วโมงสะสมจากข้อมูลกิจกรรมของคุณ', route: '/kpch', action: 'ดูรายละเอียด กพช.', icon: Clock, tone: 'rose',
         },
         {
