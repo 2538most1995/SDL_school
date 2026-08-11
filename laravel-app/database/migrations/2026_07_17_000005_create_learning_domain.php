@@ -66,7 +66,7 @@ return new class extends Migration
                 $table->string('resource_type', 32)->default('file')->index();
                 $table->string('storage_disk', 40)->nullable();
                 $table->string('storage_path')->nullable();
-                $table->string('external_url')->nullable();
+                $table->string('external_url', 2000)->nullable();
                 $table->string('visibility', 24)->default('district')->index();
                 $table->timestamps();
             });

@@ -103,6 +103,15 @@ final class LegacyPortalReadService
     {
         $query = $this->connection()->table('learning_resources as resource')
             ->where('resource.district_id', $districtId);
+        if ($viewer->role === 'student') {
+            $educationLevel = $this->groupCatalog->educationLevelForViewer($viewer, $districtId);
+            $query->where(function (Builder $scope) use ($educationLevel): void {
+                $scope->whereNull('resource.education_level');
+                if ($educationLevel !== null) {
+                    $scope->orWhere('resource.education_level', $educationLevel);
+                }
+            });
+        }
         $this->scopeGroupContent($query, $viewer, 'resource', 'target_group', 'uploaded_by');
 
         if ($search !== null && trim($search) !== '') {
@@ -130,7 +139,8 @@ final class LegacyPortalReadService
                 'duration_minutes' => null,
                 'size_label' => null,
                 'published_at' => $row->created_at,
-                'is_downloadable' => in_array($row->resource_type, ['pdf', 'exercise'], true),
+                'is_downloadable' => filled($row->storage_path ?? null),
+                'file_url' => filled($row->storage_path ?? null) ? url("/api/v1/learning/resources/{$row->id}/file") : null,
                 'accent' => 'sky',
                 'can_edit' => $viewer->role !== 'teacher' || (int) $row->uploaded_by === (int) $viewer->id,
                 'raw' => [

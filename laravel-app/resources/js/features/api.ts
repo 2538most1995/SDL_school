@@ -88,7 +88,7 @@ function responseError<T extends { message?: string; errors?: Record<string, str
     return new ApiError(firstValidationError ?? result?.message ?? statusMessages[status] ?? `ไม่สามารถบันทึกข้อมูลได้ (HTTP ${status})`, status, result?.errors ?? {});
 }
 
-export async function sendFeatureData<T>(path: string, method: 'POST' | 'PATCH' | 'DELETE', payload?: unknown): Promise<ApiResponse<T>> {
+export async function sendFeatureData<T>(path: string, method: 'POST' | 'PUT' | 'PATCH' | 'DELETE', payload?: unknown): Promise<ApiResponse<T>> {
     const isForm = payload instanceof FormData;
     const token = csrfToken();
     const districtId = window.localStorage.getItem('sena-district-id');

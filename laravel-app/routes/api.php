@@ -14,6 +14,7 @@ use App\Http\Controllers\Api\Learning\LearningContentController;
 use App\Http\Controllers\Api\Learning\LessonPlanController;
 use App\Http\Controllers\Api\Learning\OverviewController as LearningOverviewController;
 use App\Http\Controllers\Api\Learning\ResourceController;
+use App\Http\Controllers\Api\Learning\ResourceFileController;
 use App\Http\Controllers\Api\Learning\ScheduleController;
 use App\Http\Controllers\Api\Learning\ScoreController;
 use App\Http\Controllers\Api\PortalController;
@@ -83,10 +84,12 @@ Route::prefix('v1')->group(function (): void {
         Route::get('/learning', LearningOverviewController::class)->middleware('learning.schema');
         Route::get('/learning/assignments', AssignmentController::class)->middleware('learning.schema');
         Route::get('/learning/resources', ResourceController::class)->middleware('learning.schema');
+        Route::get('/learning/resources/{resource}/file', ResourceFileController::class)->middleware('learning.schema')->whereNumber('resource');
         Route::get('/learning/lesson-plans', LessonPlanController::class)->middleware(['learning.schema', 'role:teacher,admin,super_admin']);
         Route::get('/learning/calendar', CalendarController::class)->middleware('learning.schema');
         Route::get('/learning/schedule', ScheduleController::class)->middleware('learning.schema');
         Route::get('/learning/scores', ScoreController::class)->middleware('learning.schema');
+        Route::get('/learning/scores/workspace', [ScoreController::class, 'workspace'])->middleware(['learning.schema', 'role:teacher,admin,super_admin']);
         Route::get('/learning/exam-schedule/pdf', [ExamScheduleDocumentController::class, 'pdf']);
         Route::get('/my-learning', [CurrentStudentController::class, 'profile']);
         Route::get('/grades', [CurrentStudentController::class, 'grades']);
@@ -145,6 +148,9 @@ Route::prefix('v1')->group(function (): void {
             Route::post('/learning/{kind}', [LearningContentController::class, 'store'])->middleware('learning.schema')->whereIn('kind', ['assignments', 'resources', 'lesson-plans', 'calendar']);
             Route::patch('/learning/{kind}/{content}', [LearningContentController::class, 'update'])->middleware('learning.schema')->whereIn('kind', ['assignments', 'resources', 'lesson-plans', 'calendar'])->whereNumber('content');
             Route::delete('/learning/{kind}/{content}', [LearningContentController::class, 'destroy'])->middleware('learning.schema')->whereIn('kind', ['assignments', 'resources', 'lesson-plans', 'calendar'])->whereNumber('content');
+            Route::post('/learning/scores/scorebooks', [ScoreController::class, 'store'])->middleware('learning.schema');
+            Route::put('/learning/scores/scorebooks/{scorebook}/structure', [ScoreController::class, 'structure'])->middleware('learning.schema')->whereNumber('scorebook');
+            Route::put('/learning/scores/scorebooks/{scorebook}/entries', [ScoreController::class, 'entries'])->middleware('learning.schema')->whereNumber('scorebook');
         });
 
     Route::middleware(['auth:sanctum', 'active', 'district', 'role:super_admin'])

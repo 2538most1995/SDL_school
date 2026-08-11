@@ -163,6 +163,27 @@ final class DistrictLearningGroupCatalog
         return false;
     }
 
+    public function educationLevelForViewer(User $viewer, int $districtId): ?int
+    {
+        if ($viewer->role !== 'student') {
+            return null;
+        }
+
+        $studentCode = trim((string) ($viewer->student_code ?: $viewer->username));
+        if ($studentCode === '') {
+            return null;
+        }
+        $matches = array_values(array_filter(
+            $this->students->students([$districtId]),
+            static fn ($student): bool => $student->code === $studentCode,
+        ));
+        if (count($matches) !== 1 || ! in_array($matches[0]->level, [1, 2, 3], true)) {
+            return null;
+        }
+
+        return $matches[0]->level;
+    }
+
     /**
      * Older free-text forms commonly stored one of these audience labels as if
      * it were a group name. They mean every student in the same district.

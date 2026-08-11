@@ -10,6 +10,7 @@ use Illuminate\Http\Request;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Storage;
+use Illuminate\Support\Str;
 use Illuminate\Validation\Rule;
 use Illuminate\Validation\ValidationException;
 use Throwable;
@@ -35,9 +36,10 @@ final class LearningContentController extends Controller
         $stored = $this->storedValues($kind, $values);
         $actor = $this->actorId($request);
         $storedImagePath = null;
+        $storedResourcePath = null;
 
         try {
-            $id = $this->write()->transaction(function () use ($request, $kind, $values, $stored, $actor, &$storedImagePath): int {
+            $id = $this->write()->transaction(function () use ($request, $kind, $values, $stored, $actor, &$storedImagePath, &$storedResourcePath): int {
                 $id = (int) $this->write()->table($this->table($kind))->insertGetId([
                     ...$stored,
                     'district_id' => $this->districtId($request),
@@ -52,6 +54,13 @@ final class LearningContentController extends Controller
                         'image_updated_at' => now(),
                     ]);
                 }
+                $storedResourcePath = $this->storeResourceFile($request, $kind, $id, $values);
+                if ($storedResourcePath !== null) {
+                    $this->write()->table($this->table($kind))->where('id', $id)->update([
+                        'storage_disk' => 'local',
+                        'storage_path' => $storedResourcePath,
+                    ]);
+                }
                 $this->enforceFeaturedSelection($request, $kind, $id, $values);
                 $this->audit($request, "learning.{$kind}.created", $kind, $id, null, $this->auditValues($values));
 
@@ -60,6 +69,9 @@ final class LearningContentController extends Controller
         } catch (Throwable $exception) {
             if ($storedImagePath !== null) {
                 Storage::disk('local')->delete($storedImagePath);
+            }
+            if ($storedResourcePath !== null) {
+                Storage::disk('local')->delete($storedResourcePath);
             }
 
             throw $exception;
@@ -72,24 +84,32 @@ final class LearningContentController extends Controller
     {
         $this->assertWriteEnabled();
         $row = $this->ownedRow($request, $kind, $content);
-        $values = $this->validated($request, $kind);
+        $values = $this->validated($request, $kind, $row);
         $stored = $this->storedValues($kind, $values);
         $oldImagePath = $kind === 'calendar' ? (string) ($row->image_path ?? '') : '';
         $newImagePath = null;
+        $oldResourcePath = $kind === 'resources' ? (string) ($row->storage_path ?? '') : '';
+        $newResourcePath = null;
         $removeImage = $kind === 'calendar' && (bool) ($values['remove_image'] ?? false);
 
         try {
             $newImagePath = $this->storeCalendarImage($request, $kind, $content, $values);
+            $newResourcePath = $this->storeResourceFile($request, $kind, $content, $values);
             $media = match (true) {
                 $newImagePath !== null => ['image_path' => $newImagePath, 'image_updated_at' => now()],
                 $removeImage => ['image_path' => null, 'image_updated_at' => now()],
                 default => [],
             };
-            $updated = $this->write()->transaction(function () use ($request, $kind, $content, $stored, $media, $values): int {
+            $resourceMedia = match (true) {
+                $newResourcePath !== null => ['storage_disk' => 'local', 'storage_path' => $newResourcePath],
+                $kind === 'resources' && $this->usesExternalUrl($values) => ['storage_disk' => null, 'storage_path' => null],
+                default => [],
+            };
+            $updated = $this->write()->transaction(function () use ($request, $kind, $content, $stored, $media, $resourceMedia, $values): int {
                 $updated = $this->write()->table($this->table($kind))
                     ->where('id', $content)->where('district_id', $this->districtId($request))
                     ->when($request->user()->role === 'teacher', fn ($query) => $query->where($this->actorColumn($kind), $this->actorId($request)))
-                    ->update([...$stored, ...$media, 'updated_at' => now()]);
+                    ->update([...$stored, ...$media, ...$resourceMedia, 'updated_at' => now()]);
                 if ($updated === 1) {
                     $this->enforceFeaturedSelection($request, $kind, $content, $values);
                 }
@@ -100,6 +120,9 @@ final class LearningContentController extends Controller
             if ($newImagePath !== null) {
                 Storage::disk('local')->delete($newImagePath);
             }
+            if ($newResourcePath !== null) {
+                Storage::disk('local')->delete($newResourcePath);
+            }
 
             throw $exception;
         }
@@ -107,12 +130,19 @@ final class LearningContentController extends Controller
             if ($newImagePath !== null) {
                 Storage::disk('local')->delete($newImagePath);
             }
+            if ($newResourcePath !== null) {
+                Storage::disk('local')->delete($newResourcePath);
+            }
             abort(404);
         }
         if (($newImagePath !== null || $removeImage) && $this->isOwnedCalendarImage($this->districtId($request), $content, $oldImagePath)) {
             Storage::disk('local')->delete($oldImagePath);
         }
-        $this->audit($request, "learning.{$kind}.updated", $kind, $content, (array) $row, $this->auditValues($values));
+        if (($newResourcePath !== null || ($kind === 'resources' && $this->usesExternalUrl($values)))
+            && $this->isOwnedResourceFile($this->districtId($request), $content, $oldResourcePath)) {
+            Storage::disk('local')->delete($oldResourcePath);
+        }
+        $this->audit($request, "learning.{$kind}.updated", $kind, $content, $this->auditBefore($kind, $row), $this->auditValues($values));
 
         return response()->json(['data' => ['id' => (string) $content, ...$this->responseValues($values)]]);
     }
@@ -130,13 +160,17 @@ final class LearningContentController extends Controller
         if ($this->isOwnedCalendarImage($this->districtId($request), $content, $imagePath)) {
             Storage::disk('local')->delete($imagePath);
         }
-        $this->audit($request, "learning.{$kind}.deleted", $kind, $content, (array) $row, null);
+        $resourcePath = $kind === 'resources' ? (string) ($row->storage_path ?? '') : '';
+        if ($this->isOwnedResourceFile($this->districtId($request), $content, $resourcePath)) {
+            Storage::disk('local')->delete($resourcePath);
+        }
+        $this->audit($request, "learning.{$kind}.deleted", $kind, $content, $this->auditBefore($kind, $row), null);
 
         return response()->json(['data' => ['deleted' => true, 'id' => (string) $content]]);
     }
 
     /** @return array<string, mixed> */
-    private function validated(Request $request, string $kind): array
+    private function validated(Request $request, string $kind, ?object $existing = null): array
     {
         $rules = match ($kind) {
             'assignments' => [
@@ -146,9 +180,11 @@ final class LearningContentController extends Controller
                 'status' => ['required', Rule::in(['draft', 'open', 'closed'])],
             ],
             'resources' => [
-                'title' => ['required', 'string', 'max:220'], 'subject' => ['required', 'string', 'max:120'],
-                'description' => ['nullable', 'string', 'max:5000'], 'resource_type' => ['required', Rule::in(['link', 'video', 'youtube', 'pdf', 'exercise'])],
-                'url' => ['required', 'url:http,https', 'max:2000'], 'level' => ['nullable', Rule::in(['1', '2', '3'])],
+                'title' => ['required', 'string', 'max:220'], 'subject' => ['required', 'string', 'max:32'],
+                'description' => ['nullable', 'string', 'max:5000'], 'resource_type' => ['required', Rule::in(['link', 'video', 'youtube', 'pdf', 'exercise', 'file'])],
+                'url' => [Rule::requiredIf(fn (): bool => $this->requestUsesExternalUrl($request)), 'nullable', 'url:http,https', 'max:2000'],
+                'file' => [Rule::requiredIf(fn (): bool => $this->resourceFileIsRequired($request, $existing)), 'nullable', 'file', 'mimes:pdf,doc,docx,ppt,pptx,xls,xlsx,zip', 'max:20480'],
+                'level' => ['nullable', Rule::in(['1', '2', '3'])],
                 'target_group' => ['nullable', 'string', 'max:120'],
             ],
             'lesson-plans' => [
@@ -175,6 +211,19 @@ final class LearningContentController extends Controller
             default => abort(404),
         };
         $values = $request->validate($rules);
+        if ($kind === 'resources') {
+            $external = $this->usesExternalUrl($values);
+            if ($external && isset($values['file'])) {
+                throw ValidationException::withMessages(['file' => 'สื่อประเภทลิงก์ไม่สามารถแนบไฟล์ได้']);
+            }
+            if (! $external && filled($values['url'] ?? null)) {
+                throw ValidationException::withMessages(['url' => 'สื่อประเภทไฟล์ไม่สามารถใช้ลิงก์ภายนอกได้']);
+            }
+            if (($values['resource_type'] ?? null) === 'pdf' && isset($values['file'])
+                && strtolower((string) $values['file']->getClientOriginalExtension()) !== 'pdf') {
+                throw ValidationException::withMessages(['file' => 'สื่อประเภท PDF ต้องแนบไฟล์ PDF เท่านั้น']);
+            }
+        }
         if ($kind === 'calendar') {
             $values['end_date'] = ($values['end_date'] ?? null) ?: $values['event_date'];
             $values['daily_schedule'] = $this->normalizeDailySchedule($values);
@@ -241,7 +290,7 @@ final class LearningContentController extends Controller
                 'subject_code' => $values['subject'],
                 'description' => $values['description'] ?? null,
                 'resource_type' => $values['resource_type'],
-                'external_url' => $values['url'],
+                'external_url' => $this->usesExternalUrl($values) ? $values['url'] : null,
                 'education_level' => ($values['level'] ?? null) ?: null,
                 'target_group' => ($values['target_group'] ?? null) ?: null,
                 'visibility' => 'district',
@@ -397,12 +446,63 @@ final class LearningContentController extends Controller
         return $path !== '' && str_starts_with($path, "learning/calendar/{$districtId}/{$contentId}/");
     }
 
+    /** @param array<string, mixed> $values */
+    private function storeResourceFile(Request $request, string $kind, int $contentId, array $values): ?string
+    {
+        if ($kind !== 'resources' || ! isset($values['file'])) {
+            return null;
+        }
+
+        $extension = strtolower((string) $values['file']->getClientOriginalExtension());
+        $filename = Str::uuid()->toString().($extension === '' ? '' : '.'.$extension);
+        $path = $values['file']->storeAs(
+            "learning/resources/{$this->districtId($request)}/{$contentId}",
+            $filename,
+            'local',
+        );
+        abort_if($path === false, 500, 'ไม่สามารถบันทึกไฟล์สื่อการเรียนได้');
+
+        return $path;
+    }
+
+    private function isOwnedResourceFile(int $districtId, int $contentId, string $path): bool
+    {
+        return $path !== '' && str_starts_with($path, "learning/resources/{$districtId}/{$contentId}/");
+    }
+
+    private function requestUsesExternalUrl(Request $request): bool
+    {
+        return in_array((string) $request->input('resource_type'), ['link', 'video', 'youtube'], true);
+    }
+
+    /** @param array<string, mixed> $values */
+    private function usesExternalUrl(array $values): bool
+    {
+        return in_array((string) ($values['resource_type'] ?? ''), ['link', 'video', 'youtube'], true);
+    }
+
+    private function resourceFileIsRequired(Request $request, ?object $existing): bool
+    {
+        if ($this->requestUsesExternalUrl($request)) {
+            return false;
+        }
+        if ($existing === null || trim((string) ($existing->storage_path ?? '')) === '') {
+            return true;
+        }
+
+        return (string) ($existing->resource_type ?? '') !== (string) $request->input('resource_type');
+    }
+
     /** @param array<string, mixed> $values
      * @return array<string, mixed>
      */
     private function responseValues(array $values): array
     {
-        unset($values['image'], $values['remove_image']);
+        $hasFile = isset($values['file']);
+        unset($values['image'], $values['remove_image'], $values['file']);
+        if ($hasFile) {
+            $values['has_file'] = true;
+        }
 
         return $values;
     }
@@ -414,11 +514,27 @@ final class LearningContentController extends Controller
     {
         $audit = $this->responseValues($values);
 
+        if (array_key_exists('resource_type', $audit)) {
+            unset($audit['url']);
+            $audit['resource_source'] = $this->usesExternalUrl($values) ? 'external_url' : 'private_file';
+        }
+
         if (isset($values['image']) || array_key_exists('remove_image', $values)) {
             $audit['image_changed'] = isset($values['image']) || (bool) ($values['remove_image'] ?? false);
         }
 
         return $audit;
+    }
+
+    /** @return array<string, mixed> */
+    private function auditBefore(string $kind, object $row): array
+    {
+        $before = (array) $row;
+        if ($kind === 'resources') {
+            unset($before['storage_disk'], $before['storage_path'], $before['external_url']);
+        }
+
+        return $before;
     }
 
     private function audit(Request $request, string $event, string $kind, int $id, ?array $before, ?array $after): void

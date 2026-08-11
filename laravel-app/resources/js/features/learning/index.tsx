@@ -34,7 +34,9 @@ import { getFeatureDataWithDemo } from '../api';
 import { sendFeatureData } from '../api';
 import { useDemoRole } from '../../context/DemoRoleContext';
 import { withAppBasePath } from '../../lib/urls';
+import { showSuccessAlert } from '../../lib/feedback';
 import { CalendarPage } from './CalendarPage';
+import { ScorebookPage } from './ScorebookPage';
 
 type LearningOverview = {
     studentName: string;
@@ -160,10 +162,11 @@ function normalizeLearningPayload(kind: LearningKind, payload: unknown, fallback
             };
         }
         if (kind === 'resources') {
+            const raw = (record.raw ?? {}) as Record<string, string>;
             return {
                 id: String(record.id ?? index), title: String(record.title ?? 'สื่อการเรียน'), subtitle: String(record.description ?? record.size_label ?? ''),
                 course: String(record.subject_code ?? 'ทุกวิชา'), timing: thaiDate(record.published_at), status: String(record.category ?? record.type ?? 'สื่อ'),
-                canEdit: record.can_edit !== false, raw: record.raw as Record<string, string> | undefined,
+                canEdit: record.can_edit !== false, raw: { ...raw, file_url: String(record.file_url ?? '') },
             };
         }
         if (kind === 'calendar') {
@@ -242,13 +245,16 @@ function learningTone(status: string): StatusTone {
 export function LearningListPage({ kind }: { kind: LearningKind }) {
     if (kind === 'schedule') return <ExamSchedulePage />;
     if (kind === 'calendar') return <CalendarPage />;
+    if (kind === 'scores') return <ScorebookPage />;
 
     const config = learningConfig[kind];
     const { role } = useDemoRole();
     const queryClient = useQueryClient();
-    const [course, setCourse] = useState('ทั้งหมด');
+    const [searchParams] = useSearchParams();
+    const [course, setCourse] = useState(() => kind === 'resources' ? searchParams.get('course') || 'ทั้งหมด' : 'ทั้งหมด');
     const [editing, setEditing] = useState<LearningRow | 'new' | null>(null);
     const [draft, setDraft] = useState<Record<string, string>>({});
+    const [resourceFile, setResourceFile] = useState<File | null>(null);
     const query = useQuery({
         queryKey: ['learning', kind, course],
         queryFn: async ({ signal }) => {
@@ -259,12 +265,29 @@ export function LearningListPage({ kind }: { kind: LearningKind }) {
     const rows = query.data?.data.rows ?? [];
     const courses = useMemo(() => ['ทั้งหมด', ...Array.from(new Set(rows.map((row) => row.course)))], [rows]);
     const filteredRows = course === 'ทั้งหมด' ? rows : rows.filter((row) => row.course === course);
-    const canManage = query.data !== undefined && role !== 'student' && kind !== 'scores' && query.data.meta.read_only !== true;
+    const canManage = query.data !== undefined && role !== 'student' && query.data.meta.read_only !== true;
+    const resourcePayload = () => {
+        const payload = new FormData();
+        const external = ['link', 'video', 'youtube'].includes(draft.resource_type ?? 'link');
+        Object.entries(draft).forEach(([key, value]) => {
+            if (key !== 'file_url' && (key !== 'url' || external)) payload.append(key, value);
+        });
+        if (!external && resourceFile) payload.append('file', resourceFile);
+        if (editing !== 'new') payload.append('_method', 'PATCH');
+        return payload;
+    };
     const save = useMutation({
-        mutationFn: () => editing === 'new'
+        mutationFn: () => kind === 'resources'
+            ? sendFeatureData(`/api/v1/learning/resources${editing === 'new' ? '' : `/${editing?.id ?? ''}`}`, 'POST', resourcePayload())
+            : editing === 'new'
             ? sendFeatureData(`/api/v1/learning/${kind}`, 'POST', draft)
             : sendFeatureData(`/api/v1/learning/${kind}/${editing?.id ?? ''}`, 'PATCH', draft),
-        onSuccess: () => { setEditing(null); void queryClient.invalidateQueries({ queryKey: ['learning', kind] }); },
+        onSuccess: () => {
+            setEditing(null);
+            setResourceFile(null);
+            showSuccessAlert(kind === 'resources' ? 'บันทึกสื่อการเรียนแล้ว' : 'บันทึกข้อมูลแล้ว');
+            void queryClient.invalidateQueries({ queryKey: ['learning', kind] });
+        },
     });
     const remove = useMutation({
         mutationFn: (row: LearningRow) => sendFeatureData(`/api/v1/learning/${kind}/${row.id}`, 'DELETE'),
@@ -277,15 +300,18 @@ export function LearningListPage({ kind }: { kind: LearningKind }) {
             'lesson-plans': { title: '', subject: '', level: '1', semester: '', objectives: '', activities: '', assessment: '' },
             calendar: { title: '', event_date: '', start_time: '09:00', end_time: '12:00', location: '', target_group: '', notes: '' },
         };
-        setDraft(defaults[kind] ?? {}); setEditing('new'); save.reset();
+        setDraft(defaults[kind] ?? {}); setResourceFile(null); setEditing('new'); save.reset();
     };
-    const openEdit = (row: LearningRow) => { setDraft(row.raw ?? {}); setEditing(row); save.reset(); };
+    const openEdit = (row: LearningRow) => { setDraft(row.raw ?? {}); setResourceFile(null); setEditing(row); save.reset(); };
     const columns = useMemo<ColumnDef<LearningRow>[]>(() => [
         { accessorKey: 'title', header: 'รายการ', size: 300, meta: { compactSize: 150 }, cell: ({ row }) => <div><p className="font-bold text-slate-950">{row.original.title}</p><p className="mt-0.5 text-xs text-slate-500">{row.original.subtitle}</p></div> },
         { accessorKey: 'course', header: 'วิชา', size: 180, meta: { compactSize: 92 } },
         { accessorKey: 'timing', header: config.timingLabel, size: 180, meta: { compactSize: 90, compactTextAlign: 'center' } },
         { accessorKey: 'status', header: config.actionLabel, size: 145, meta: { compactSize: 78, compactTextAlign: 'center' }, cell: ({ getValue }) => <StatusBadge tone={learningTone(getValue<string>())}>{getValue<string>()}</StatusBadge> },
-        ...(kind === 'resources' ? [{ id: 'open-resource', header: 'เปิดสื่อ', size: 118, meta: { compactSize: 46, compactTextAlign: 'center' }, enableSorting: false, cell: ({ row }: { row: { original: LearningRow } }) => row.original.raw?.url ? <a href={row.original.raw.url} target="_blank" rel="noopener noreferrer" className="responsive-table-action inline-flex items-center gap-1.5 whitespace-nowrap rounded-lg border border-brand-200 bg-brand-50 px-2.5 py-1.5 text-sm font-bold text-brand-800 hover:bg-brand-100" aria-label={`เปิดสื่อ ${row.original.title}`}><DownloadSimple size={16} /> <span>เปิดสื่อ</span></a> : <span className="text-xs text-slate-400" aria-label="ไม่มีลิงก์">-</span> } as ColumnDef<LearningRow>] : []),
+        ...(kind === 'resources' ? [{ id: 'open-resource', header: 'เปิดสื่อ', size: 118, meta: { compactSize: 46, compactTextAlign: 'center' }, enableSorting: false, cell: ({ row }: { row: { original: LearningRow } }) => {
+            const source = row.original.raw?.file_url || row.original.raw?.url;
+            return source ? <a href={source} target="_blank" rel="noopener noreferrer" className="responsive-table-action inline-flex items-center gap-1.5 whitespace-nowrap rounded-lg border border-brand-200 bg-brand-50 px-2.5 py-1.5 text-sm font-bold text-brand-800 hover:bg-brand-100" aria-label={`เปิดสื่อ ${row.original.title}`}><DownloadSimple size={16} /> <span>{row.original.raw?.file_url ? 'ดาวน์โหลด' : 'เปิดสื่อ'}</span></a> : <span className="text-xs text-slate-400" aria-label="ไม่มีสื่อ">-</span>;
+        } } as ColumnDef<LearningRow>] : []),
         ...(canManage ? [{ id: 'manage', header: 'จัดการ', size: 118, meta: { compactSize: 76, compactTextAlign: 'center' }, enableSorting: false, cell: ({ row }: { row: { original: LearningRow } }) => row.original.canEdit && row.original.raw ? <div className="flex justify-center gap-1"><button type="button" onClick={() => openEdit(row.original)} className="responsive-table-action rounded-lg border border-slate-200 p-2 text-slate-600 hover:text-brand-700" aria-label={`แก้ไข ${row.original.title}`}><PencilSimple size={16} /></button><button type="button" onClick={() => { if (window.confirm(`ยืนยันลบ ${row.original.title}?`)) remove.mutate(row.original); }} className="responsive-table-action rounded-lg border border-slate-200 p-2 text-slate-600 hover:text-rose-700" aria-label={`ลบ ${row.original.title}`}><Trash size={16} /></button></div> : <span className="text-xs text-slate-400">อ่านอย่างเดียว</span> } as ColumnDef<LearningRow>] : []),
     ], [canManage, config, kind]);
     const summary = query.data?.data;
@@ -312,7 +338,7 @@ export function LearningListPage({ kind }: { kind: LearningKind }) {
                 {query.isError && <QueryError onRetry={() => query.refetch()} />}
                 {query.data && <DataTable data={filteredRows} columns={columns} emptyTitle="ยังไม่มีรายการ" emptyDescription="รายการใหม่จะแสดงที่นี่เมื่อครูเผยแพร่" />}
             </Panel>
-            {editing && <LearningEditor kind={kind} draft={draft} setDraft={setDraft} pending={save.isPending} error={save.error} onClose={() => setEditing(null)} onSubmit={(event) => { event.preventDefault(); save.mutate(); }} />}
+            {editing && <LearningEditor kind={kind} draft={draft} setDraft={setDraft} resourceFile={resourceFile} setResourceFile={setResourceFile} isNew={editing === 'new'} originalResourceType={editing === 'new' ? null : editing.raw?.resource_type ?? null} pending={save.isPending} error={save.error} onClose={() => setEditing(null)} onSubmit={(event) => { event.preventDefault(); save.mutate(); }} />}
         </div>
     );
 }
@@ -324,8 +350,8 @@ const editorFields: Partial<Record<LearningKind, Array<{ key: string; label: str
         { key: 'status', label: 'สถานะ', options: [['draft', 'ฉบับร่าง'], ['open', 'เผยแพร่'], ['closed', 'ปิดงาน']] }, { key: 'description', label: 'รายละเอียด', type: 'textarea' },
     ],
     resources: [
-        { key: 'title', label: 'ชื่อสื่อ' }, { key: 'subject', label: 'รายวิชา' }, { key: 'url', label: 'ลิงก์ http/https', type: 'url' },
-        { key: 'resource_type', label: 'ประเภท', options: [['link', 'ลิงก์'], ['video', 'วิดีโอ'], ['youtube', 'YouTube'], ['pdf', 'PDF'], ['exercise', 'แบบฝึกหัด']] },
+        { key: 'title', label: 'ชื่อสื่อ' }, { key: 'subject', label: 'รหัสวิชา' },
+        { key: 'resource_type', label: 'ประเภท', options: [['link', 'ลิงก์'], ['video', 'วิดีโอ'], ['youtube', 'YouTube'], ['pdf', 'PDF'], ['exercise', 'แบบฝึกหัด'], ['file', 'ไฟล์เอกสาร']] },
         { key: 'level', label: 'ระดับ', options: [['', 'ทุกระดับ'], ['1', 'ประถม'], ['2', 'ม.ต้น'], ['3', 'ม.ปลาย']] }, { key: 'target_group', label: 'กลุ่มเป้าหมาย' }, { key: 'description', label: 'รายละเอียด', type: 'textarea' },
     ],
     'lesson-plans': [
@@ -338,10 +364,14 @@ const editorFields: Partial<Record<LearningKind, Array<{ key: string; label: str
     ],
 };
 
-function LearningEditor({ kind, draft, setDraft, pending, error, onClose, onSubmit }: { kind: LearningKind; draft: Record<string, string>; setDraft: (draft: Record<string, string>) => void; pending: boolean; error: Error | null; onClose: () => void; onSubmit: (event: FormEvent) => void }) {
-    const fields = editorFields[kind] ?? [];
-    return <div className="fixed inset-0 z-[70] grid place-items-center overflow-y-auto bg-slate-950/50 p-3" role="dialog" aria-modal="true"><section className="my-auto w-full max-w-2xl rounded-2xl bg-white shadow-2xl"><header className="flex items-center justify-between border-b border-slate-100 p-5"><h2 className="text-xl font-black">เพิ่มหรือแก้ไขข้อมูล learning</h2><button type="button" onClick={onClose} className="p-2" aria-label="ปิด"><X size={20} /></button></header><form onSubmit={onSubmit} className="grid max-h-[75vh] gap-4 overflow-y-auto p-5 sm:grid-cols-2">
-        {fields.map((field) => <label key={field.key} className={field.type === 'textarea' ? 'sm:col-span-2' : ''}><span className="mb-1.5 block text-sm font-bold text-slate-700">{field.label}</span>{field.options ? <select required={field.key !== 'level' && field.key !== 'target_group'} value={draft[field.key] ?? ''} onChange={(event) => setDraft({ ...draft, [field.key]: event.target.value })} className="h-11 w-full rounded-xl border border-slate-300 bg-white px-3">{field.options.map(([value, label]) => <option key={value} value={value}>{label}</option>)}</select> : field.type === 'textarea' ? <textarea value={draft[field.key] ?? ''} onChange={(event) => setDraft({ ...draft, [field.key]: event.target.value })} rows={4} className="w-full rounded-xl border border-slate-300 p-3" /> : <input required={!['target_group', 'location'].includes(field.key)} type={field.type ?? 'text'} value={draft[field.key] ?? ''} onChange={(event) => setDraft({ ...draft, [field.key]: event.target.value })} className="h-11 w-full rounded-xl border border-slate-300 bg-white px-3" />}</label>)}
+function LearningEditor({ kind, draft, setDraft, resourceFile, setResourceFile, isNew, originalResourceType, pending, error, onClose, onSubmit }: { kind: LearningKind; draft: Record<string, string>; setDraft: (draft: Record<string, string>) => void; resourceFile: File | null; setResourceFile: (file: File | null) => void; isNew: boolean; originalResourceType: string | null; pending: boolean; error: Error | null; onClose: () => void; onSubmit: (event: FormEvent) => void }) {
+    const externalResource = kind === 'resources' && ['link', 'video', 'youtube'].includes(draft.resource_type ?? 'link');
+    const resourceFileRequired = isNew || !draft.file_url || draft.resource_type !== originalResourceType;
+    const fields = (editorFields[kind] ?? []).filter((field) => field.key !== 'url');
+    return <div className="fixed inset-0 z-[70] grid place-items-center overflow-y-auto bg-slate-950/50 p-3" role="dialog" aria-modal="true"><section className="my-auto w-full max-w-2xl rounded-2xl bg-white shadow-2xl"><header className="flex items-center justify-between border-b border-slate-100 p-5"><div><h2 className="text-xl font-black">{kind === 'resources' ? 'ข้อมูลสื่อการเรียน' : 'เพิ่มหรือแก้ไขข้อมูล'}</h2>{kind === 'resources' && <p className="mt-1 text-sm text-slate-500">แนบไฟล์จริงหรือระบุลิงก์ตามประเภทสื่อ</p>}</div><button type="button" onClick={onClose} className="p-2" aria-label="ปิด"><X size={20} /></button></header><form onSubmit={onSubmit} className="grid max-h-[75vh] gap-4 overflow-y-auto p-5 sm:grid-cols-2">
+        {fields.map((field) => <label key={field.key} className={field.type === 'textarea' ? 'sm:col-span-2' : ''}><span className="mb-1.5 block text-sm font-bold text-slate-700">{field.label}</span>{field.options ? <select required={field.key !== 'level' && field.key !== 'target_group'} value={draft[field.key] ?? ''} onChange={(event) => { if (field.key === 'resource_type') setResourceFile(null); setDraft({ ...draft, [field.key]: event.target.value }); }} className="h-11 w-full rounded-xl border border-slate-300 bg-white px-3">{field.options.map(([value, label]) => <option key={value} value={value}>{label}</option>)}</select> : field.type === 'textarea' ? <textarea value={draft[field.key] ?? ''} onChange={(event) => setDraft({ ...draft, [field.key]: event.target.value })} rows={4} className="w-full rounded-xl border border-slate-300 p-3" /> : <input required={!['target_group', 'location'].includes(field.key)} type={field.type ?? 'text'} value={draft[field.key] ?? ''} onChange={(event) => setDraft({ ...draft, [field.key]: event.target.value })} className="h-11 w-full rounded-xl border border-slate-300 bg-white px-3" />}</label>)}
+        {kind === 'resources' && externalResource && <label className="sm:col-span-2"><span className="mb-1.5 block text-sm font-bold text-slate-700">ลิงก์ http/https</span><input required type="url" value={draft.url ?? ''} onChange={(event) => setDraft({ ...draft, url: event.target.value })} placeholder="https://" className="h-11 w-full rounded-xl border border-slate-300 bg-white px-3" /></label>}
+        {kind === 'resources' && !externalResource && <label className="sm:col-span-2"><span className="mb-1.5 block text-sm font-bold text-slate-700">ไฟล์สื่อ {resourceFileRequired ? '(จำเป็น)' : '(เลือกเมื่อจะเปลี่ยนไฟล์)'}</span><input required={resourceFileRequired} type="file" accept=".pdf,.doc,.docx,.ppt,.pptx,.xls,.xlsx,.zip" onChange={(event) => setResourceFile(event.target.files?.[0] ?? null)} className="block w-full rounded-xl border border-slate-300 bg-white p-2.5 text-sm file:mr-3 file:rounded-lg file:border-0 file:bg-brand-50 file:px-3 file:py-2 file:font-bold file:text-brand-800" /><p className="mt-1.5 text-xs text-slate-500">รองรับ PDF, Word, PowerPoint, Excel และ ZIP ขนาดไม่เกิน 20 MB{resourceFile ? ` • ${resourceFile.name}` : ''}</p></label>}
         {error && <p role="alert" className="rounded-xl bg-rose-50 p-3 text-sm font-bold text-rose-800 sm:col-span-2">{error.message}</p>}
         <div className="flex justify-end gap-2 sm:col-span-2"><button type="button" onClick={onClose} className="rounded-full border border-slate-200 px-5 py-2.5 text-sm font-bold">ยกเลิก</button><button type="submit" disabled={pending} className="rounded-full bg-brand-700 px-5 py-2.5 text-sm font-bold text-white disabled:bg-slate-300">{pending ? 'กำลังบันทึก' : 'บันทึกข้อมูล'}</button></div>
     </form></section></div>;

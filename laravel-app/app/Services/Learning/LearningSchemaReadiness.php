@@ -20,7 +20,19 @@ final class LearningSchemaReadiness
         'learning_resources' => ['district_id', 'uploaded_by', 'title', 'description', 'subject_code', 'education_level', 'resource_type', 'storage_disk', 'storage_path', 'external_url', 'visibility', 'target_group', 'created_at', 'updated_at'],
         'learning_lesson_plans' => ['district_id', 'teacher_id', 'subject_code', 'education_level', 'academic_term', 'title', 'objectives', 'activities', 'assessment', 'status', 'created_at', 'updated_at'],
         'learning_calendar_events' => ['district_id', 'created_by', 'title', 'description', 'event_type', 'starts_at', 'ends_at', 'location', 'target_type', 'target_value', 'image_path', 'image_updated_at', 'daily_schedule', 'external_url', 'featured_on_dashboard', 'created_at', 'updated_at'],
+        'learning_scorebooks' => ['district_id', 'created_by', 'academic_term', 'subject_code', 'subject_name', 'education_level', 'group_code', 'created_at', 'updated_at'],
+        'learning_score_components' => ['scorebook_id', 'title', 'max_score', 'position', 'created_at', 'updated_at'],
+        'learning_score_entries' => ['scorebook_id', 'component_id', 'student_code', 'score', 'updated_by', 'created_at', 'updated_at'],
+        'learning_score_notes' => ['scorebook_id', 'student_code', 'note', 'updated_by', 'created_at', 'updated_at'],
         'audit_logs' => ['user_id', 'district_id', 'event', 'auditable_type', 'auditable_id', 'ip_address', 'request_id', 'before', 'after', 'context', 'created_at'],
+    ];
+
+    /** @var array<string, list<string>> */
+    private const INDEX_REQUIREMENTS = [
+        'learning_scorebooks' => ['learning_scorebooks_course_scope_unique', 'learning_scorebooks_course_scope_index'],
+        'learning_score_components' => ['learning_score_components_scorebook_id_position_unique'],
+        'learning_score_entries' => ['learning_score_entries_unique'],
+        'learning_score_notes' => ['learning_score_notes_scorebook_id_student_code_unique'],
     ];
 
     public function __construct(private readonly DatabaseManager $database) {}
@@ -80,6 +92,20 @@ final class LearningSchemaReadiness
                     $missing[] = $table.'.'.$column;
                 }
             }
+            if ($table === 'learning_resources' && $this->resourceExternalUrlNeedsWidening($schema)) {
+                $missing[] = 'learning_resources.external_url_width';
+            }
+        }
+
+        foreach (self::INDEX_REQUIREMENTS as $table => $indexes) {
+            if (! $schema->hasTable($table)) {
+                continue;
+            }
+            foreach ($indexes as $index) {
+                if (! $schema->hasIndex($table, $index)) {
+                    $missing[] = $table.'.'.$index;
+                }
+            }
         }
 
         return $missing;
@@ -93,6 +119,7 @@ final class LearningSchemaReadiness
         $this->ensureResources($schema);
         $this->ensureLessonPlans($schema);
         $this->ensureCalendar($schema);
+        $this->ensureScorebooks($schema);
         $this->ensureAuditLogs($schema);
     }
 
@@ -192,7 +219,7 @@ final class LearningSchemaReadiness
                 $table->string('resource_type', 32)->default('file')->index();
                 $table->string('storage_disk', 40)->nullable();
                 $table->string('storage_path')->nullable();
-                $table->string('external_url')->nullable();
+                $table->string('external_url', 2000)->nullable();
                 $table->string('visibility', 24)->default('district')->index();
                 $table->string('target_group', 120)->nullable()->index();
                 $table->timestamps();
@@ -210,10 +237,28 @@ final class LearningSchemaReadiness
         $this->addMissingColumn($schema, 'learning_resources', 'resource_type', fn (Blueprint $table) => $table->string('resource_type', 32)->default('file'));
         $this->addMissingColumn($schema, 'learning_resources', 'storage_disk', fn (Blueprint $table) => $table->string('storage_disk', 40)->nullable());
         $this->addMissingColumn($schema, 'learning_resources', 'storage_path', fn (Blueprint $table) => $table->string('storage_path')->nullable());
-        $this->addMissingColumn($schema, 'learning_resources', 'external_url', fn (Blueprint $table) => $table->string('external_url')->nullable());
+        $this->addMissingColumn($schema, 'learning_resources', 'external_url', fn (Blueprint $table) => $table->string('external_url', 2000)->nullable());
         $this->addMissingColumn($schema, 'learning_resources', 'visibility', fn (Blueprint $table) => $table->string('visibility', 24)->default('district'));
         $this->addMissingColumn($schema, 'learning_resources', 'target_group', fn (Blueprint $table) => $table->string('target_group', 120)->nullable());
         $this->addTimestamps($schema, 'learning_resources');
+        if ($this->resourceExternalUrlNeedsWidening($schema)) {
+            $schema->table('learning_resources', function (Blueprint $table): void {
+                $table->string('external_url', 2000)->nullable()->change();
+            });
+        }
+    }
+
+    private function resourceExternalUrlNeedsWidening(Builder $schema): bool
+    {
+        if ($this->database->connection()->getDriverName() !== 'mysql'
+            || ! $schema->hasTable('learning_resources')
+            || ! $schema->hasColumn('learning_resources', 'external_url')) {
+            return false;
+        }
+
+        $type = strtolower($schema->getColumnType('learning_resources', 'external_url', true));
+
+        return preg_match('/varchar\((\d+)\)/', $type, $matches) === 1 && (int) $matches[1] < 2000;
     }
 
     private function ensureLessonPlans(Builder $schema): void
@@ -292,6 +337,131 @@ final class LearningSchemaReadiness
         $this->addMissingColumn($schema, 'learning_calendar_events', 'external_url', fn (Blueprint $table) => $table->string('external_url', 2000)->nullable());
         $this->addMissingColumn($schema, 'learning_calendar_events', 'featured_on_dashboard', fn (Blueprint $table) => $table->boolean('featured_on_dashboard')->default(false));
         $this->addTimestamps($schema, 'learning_calendar_events');
+    }
+
+    private function ensureScorebooks(Builder $schema): void
+    {
+        if (! $schema->hasTable('learning_scorebooks')) {
+            $schema->create('learning_scorebooks', function (Blueprint $table): void {
+                $table->id();
+                $table->unsignedBigInteger('district_id')->index();
+                $table->unsignedBigInteger('created_by')->index();
+                $table->string('academic_term', 16)->index();
+                $table->string('subject_code', 32)->index();
+                $table->string('subject_name', 220);
+                $table->unsignedTinyInteger('education_level')->index();
+                $table->string('group_code', 120)->default('')->index();
+                $table->timestamps();
+            });
+        } else {
+            $this->addMissingColumn($schema, 'learning_scorebooks', 'district_id', fn (Blueprint $table) => $table->unsignedBigInteger('district_id')->nullable());
+            $this->addMissingColumn($schema, 'learning_scorebooks', 'created_by', fn (Blueprint $table) => $table->unsignedBigInteger('created_by')->nullable());
+            $this->addMissingColumn($schema, 'learning_scorebooks', 'academic_term', fn (Blueprint $table) => $table->string('academic_term', 16)->nullable());
+            $this->addMissingColumn($schema, 'learning_scorebooks', 'subject_code', fn (Blueprint $table) => $table->string('subject_code', 32)->nullable());
+            $this->addMissingColumn($schema, 'learning_scorebooks', 'subject_name', fn (Blueprint $table) => $table->string('subject_name', 220)->nullable());
+            $this->addMissingColumn($schema, 'learning_scorebooks', 'education_level', fn (Blueprint $table) => $table->unsignedTinyInteger('education_level')->nullable());
+            $this->addMissingColumn($schema, 'learning_scorebooks', 'group_code', fn (Blueprint $table) => $table->string('group_code', 120)->default(''));
+            $this->addTimestamps($schema, 'learning_scorebooks');
+        }
+
+        if (! $schema->hasTable('learning_score_components')) {
+            $schema->create('learning_score_components', function (Blueprint $table): void {
+                $table->id();
+                $table->unsignedBigInteger('scorebook_id')->index();
+                $table->string('title', 120);
+                $table->decimal('max_score', 7, 2);
+                $table->unsignedSmallInteger('position')->default(0);
+                $table->timestamps();
+            });
+        } else {
+            $this->addMissingColumn($schema, 'learning_score_components', 'scorebook_id', fn (Blueprint $table) => $table->unsignedBigInteger('scorebook_id')->nullable());
+            $this->addMissingColumn($schema, 'learning_score_components', 'title', fn (Blueprint $table) => $table->string('title', 120)->nullable());
+            $this->addMissingColumn($schema, 'learning_score_components', 'max_score', fn (Blueprint $table) => $table->decimal('max_score', 7, 2)->nullable());
+            $this->addMissingColumn($schema, 'learning_score_components', 'position', fn (Blueprint $table) => $table->unsignedSmallInteger('position')->default(0));
+            $this->addTimestamps($schema, 'learning_score_components');
+        }
+
+        if (! $schema->hasTable('learning_score_entries')) {
+            $schema->create('learning_score_entries', function (Blueprint $table): void {
+                $table->id();
+                $table->unsignedBigInteger('scorebook_id')->index();
+                $table->unsignedBigInteger('component_id')->index();
+                $table->string('student_code', 64)->index();
+                $table->decimal('score', 7, 2)->nullable();
+                $table->unsignedBigInteger('updated_by')->nullable()->index();
+                $table->timestamps();
+            });
+        } else {
+            $this->addMissingColumn($schema, 'learning_score_entries', 'scorebook_id', fn (Blueprint $table) => $table->unsignedBigInteger('scorebook_id')->nullable());
+            $this->addMissingColumn($schema, 'learning_score_entries', 'component_id', fn (Blueprint $table) => $table->unsignedBigInteger('component_id')->nullable());
+            $this->addMissingColumn($schema, 'learning_score_entries', 'student_code', fn (Blueprint $table) => $table->string('student_code', 64)->nullable());
+            $this->addMissingColumn($schema, 'learning_score_entries', 'score', fn (Blueprint $table) => $table->decimal('score', 7, 2)->nullable());
+            $this->addMissingColumn($schema, 'learning_score_entries', 'updated_by', fn (Blueprint $table) => $table->unsignedBigInteger('updated_by')->nullable());
+            $this->addTimestamps($schema, 'learning_score_entries');
+        }
+
+        if (! $schema->hasTable('learning_score_notes')) {
+            $schema->create('learning_score_notes', function (Blueprint $table): void {
+                $table->id();
+                $table->unsignedBigInteger('scorebook_id')->index();
+                $table->string('student_code', 64)->index();
+                $table->text('note')->nullable();
+                $table->unsignedBigInteger('updated_by')->nullable()->index();
+                $table->timestamps();
+            });
+        } else {
+            $this->addMissingColumn($schema, 'learning_score_notes', 'scorebook_id', fn (Blueprint $table) => $table->unsignedBigInteger('scorebook_id')->nullable());
+            $this->addMissingColumn($schema, 'learning_score_notes', 'student_code', fn (Blueprint $table) => $table->string('student_code', 64)->nullable());
+            $this->addMissingColumn($schema, 'learning_score_notes', 'note', fn (Blueprint $table) => $table->text('note')->nullable());
+            $this->addMissingColumn($schema, 'learning_score_notes', 'updated_by', fn (Blueprint $table) => $table->unsignedBigInteger('updated_by')->nullable());
+            $this->addTimestamps($schema, 'learning_score_notes');
+        }
+
+        $this->ensureScorebookIndexes($schema);
+    }
+
+    private function ensureScorebookIndexes(Builder $schema): void
+    {
+        $indexes = [
+            'learning_scorebooks' => [
+                ['learning_scorebooks_district_id_index', ['district_id'], false],
+                ['learning_scorebooks_created_by_index', ['created_by'], false],
+                ['learning_scorebooks_academic_term_index', ['academic_term'], false],
+                ['learning_scorebooks_subject_code_index', ['subject_code'], false],
+                ['learning_scorebooks_education_level_index', ['education_level'], false],
+                ['learning_scorebooks_group_code_index', ['group_code'], false],
+                ['learning_scorebooks_course_scope_unique', ['district_id', 'academic_term', 'subject_code', 'education_level', 'group_code'], true],
+                ['learning_scorebooks_course_scope_index', ['district_id', 'academic_term', 'subject_code', 'education_level'], false],
+            ],
+            'learning_score_components' => [
+                ['learning_score_components_scorebook_id_index', ['scorebook_id'], false],
+                ['learning_score_components_scorebook_id_position_unique', ['scorebook_id', 'position'], true],
+            ],
+            'learning_score_entries' => [
+                ['learning_score_entries_scorebook_id_index', ['scorebook_id'], false],
+                ['learning_score_entries_component_id_index', ['component_id'], false],
+                ['learning_score_entries_student_code_index', ['student_code'], false],
+                ['learning_score_entries_updated_by_index', ['updated_by'], false],
+                ['learning_score_entries_unique', ['scorebook_id', 'component_id', 'student_code'], true],
+            ],
+            'learning_score_notes' => [
+                ['learning_score_notes_scorebook_id_index', ['scorebook_id'], false],
+                ['learning_score_notes_student_code_index', ['student_code'], false],
+                ['learning_score_notes_updated_by_index', ['updated_by'], false],
+                ['learning_score_notes_scorebook_id_student_code_unique', ['scorebook_id', 'student_code'], true],
+            ],
+        ];
+
+        foreach ($indexes as $tableName => $definitions) {
+            foreach ($definitions as [$name, $columns, $unique]) {
+                if ($schema->hasIndex($tableName, $name)) {
+                    continue;
+                }
+                $schema->table($tableName, static function (Blueprint $table) use ($name, $columns, $unique): void {
+                    $unique ? $table->unique($columns, $name) : $table->index($columns, $name);
+                });
+            }
+        }
     }
 
     private function ensureAuditLogs(Builder $schema): void

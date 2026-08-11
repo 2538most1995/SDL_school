@@ -460,6 +460,32 @@ final readonly class LegacyStudentReportService
         ];
     }
 
+    /**
+     * Return the registration source used by learning scorebooks.
+     *
+     * This deliberately reuses the historical grade/student/subject join rather
+     * than loading subjects once per student. Teacher group scope and the latest
+     * successful district import remain enforced by the existing helpers.
+     *
+     * @param  array<string, mixed>  $filters
+     * @return array{terms: list<string>, selected_term: ?string, rows: list<array<string, mixed>>}
+     */
+    public function scorebookRegistrations(User $viewer, int $districtId, array $filters): array
+    {
+        $sets = $this->filteredSets($this->sets($districtId), $filters);
+        $terms = $this->registeredSubjectTerms($viewer, $sets, $filters);
+        $selectedTerm = $this->selectedTerm($filters, $terms);
+        $rows = $selectedTerm === null
+            ? []
+            : $this->registeredSubjectRows($viewer, $sets, $filters, $selectedTerm);
+
+        return [
+            'terms' => $terms,
+            'selected_term' => $selectedTerm,
+            'rows' => $rows,
+        ];
+    }
+
     /** @param array<string, mixed> $filters */
     public function gradesAboveTwo(User $viewer, int $districtId, array $filters): array
     {

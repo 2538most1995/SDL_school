@@ -113,6 +113,165 @@ final class LearningContentWriteTest extends TestCase
         $this->postJson('/api/v1/learning/assignments', [])->assertForbidden();
     }
 
+    public function test_teacher_can_store_private_resource_file_and_only_targeted_viewers_can_download_it(): void
+    {
+        Storage::fake('local');
+        $studentModel = new Student(
+            code: 'ST-RESOURCE',
+            districtId: $this->district->id,
+            districtName: $this->district->name,
+            prefix: 'นาย',
+            firstName: 'นักศึกษา',
+            lastName: 'ทดสอบสื่อ',
+            level: 3,
+            levelLabel: 'มัธยมศึกษาตอนปลาย',
+            groupCode: 'G-01',
+            groupName: 'กลุ่ม 1',
+            enrollmentTerm: '1/2568',
+            currentTerm: '1/2569',
+            status: 'active',
+            statusLabel: 'กำลังศึกษา',
+            gpax: 3.0,
+            creditsEarned: 30,
+            creditsRequired: 76,
+            kpchHours: 50,
+            moralResult: 'ดี',
+        );
+        $levelTwoStudent = new Student(
+            code: 'ST-LEVEL-2',
+            districtId: $this->district->id,
+            districtName: $this->district->name,
+            prefix: 'นางสาว',
+            firstName: 'นักศึกษา',
+            lastName: 'ต่างระดับ',
+            level: 2,
+            levelLabel: 'มัธยมศึกษาตอนต้น',
+            groupCode: 'G-01',
+            groupName: 'กลุ่ม 1',
+            enrollmentTerm: '1/2568',
+            currentTerm: '1/2569',
+            status: 'active',
+            statusLabel: 'กำลังศึกษา',
+            gpax: 3.0,
+            creditsEarned: 30,
+            creditsRequired: 76,
+            kpchHours: 50,
+            moralResult: 'ดี',
+        );
+        $repository = $this->createMock(StudentRepository::class);
+        $repository->method('students')->willReturn([$studentModel, $levelTwoStudent]);
+        $this->app->instance(StudentRepository::class, $repository);
+        $teacher = User::factory()->create([
+            'role' => 'teacher',
+            'district_id' => $this->district->id,
+            'assigned_groups' => ['G-01'],
+        ]);
+        Sanctum::actingAs($teacher);
+
+        $created = $this->post('/api/v1/learning/resources', [
+            'title' => 'คู่มือทดสอบ',
+            'subject' => 'พท31001',
+            'description' => 'เอกสารสำหรับกลุ่มที่รับผิดชอบ',
+            'resource_type' => 'pdf',
+            'level' => '3',
+            'target_group' => 'G-01',
+            'file' => UploadedFile::fake()->create('guide.pdf', 100, 'application/pdf'),
+        ], ['Accept' => 'application/json'])->assertCreated();
+        $resourceId = (int) $created->json('data.id');
+        $path = (string) DB::table('learning_resources')->where('id', $resourceId)->value('storage_path');
+
+        Storage::disk('local')->assertExists($path);
+        $this->assertDatabaseHas('learning_resources', [
+            'id' => $resourceId,
+            'district_id' => $this->district->id,
+            'uploaded_by' => $teacher->id,
+            'resource_type' => 'pdf',
+            'storage_disk' => 'local',
+            'external_url' => null,
+            'target_group' => 'G-01',
+        ]);
+        $this->patchJson("/api/v1/learning/resources/{$resourceId}", [
+            'title' => 'คู่มือทดสอบ (แก้ไข)',
+            'subject' => 'พท31001',
+            'description' => 'แก้ข้อมูลโดยคงไฟล์เดิม',
+            'resource_type' => 'pdf',
+            'level' => '3',
+            'target_group' => 'G-01',
+        ])->assertOk();
+        $this->assertSame($path, DB::table('learning_resources')->where('id', $resourceId)->value('storage_path'));
+        Storage::disk('local')->assertExists($path);
+        $audit = DB::table('audit_logs')->where('event', 'learning.resources.updated')->latest('id')->first();
+        $this->assertArrayNotHasKey('storage_path', json_decode((string) $audit->before, true, flags: JSON_THROW_ON_ERROR));
+        $this->assertArrayNotHasKey('url', json_decode((string) $audit->after, true, flags: JSON_THROW_ON_ERROR));
+        $this->getJson('/api/v1/learning/resources')
+            ->assertOk()
+            ->assertJsonPath('data.0.file_url', fn (string $url): bool => str_contains($url, "/resources/{$resourceId}/file"));
+        $this->get("/api/v1/learning/resources/{$resourceId}/file")->assertOk();
+
+        Sanctum::actingAs(User::factory()->create([
+            'role' => 'student',
+            'district_id' => $this->district->id,
+            'student_code' => 'ST-NOT-FOUND',
+            'assigned_groups' => ['G-02'],
+        ]));
+        $this->get("/api/v1/learning/resources/{$resourceId}/file")->assertNotFound();
+
+        Sanctum::actingAs(User::factory()->create([
+            'role' => 'student',
+            'district_id' => $this->district->id,
+            'student_code' => 'ST-LEVEL-2',
+            'assigned_groups' => ['G-01'],
+        ]));
+        $this->getJson('/api/v1/learning/resources')->assertOk()->assertJsonCount(0, 'data');
+        $this->get("/api/v1/learning/resources/{$resourceId}/file")->assertNotFound();
+
+        Sanctum::actingAs(User::factory()->create([
+            'role' => 'student',
+            'district_id' => $this->district->id,
+            'student_code' => 'ST-RESOURCE',
+            'assigned_groups' => ['G-01'],
+        ]));
+        $this->get("/api/v1/learning/resources/{$resourceId}/file")->assertOk();
+
+        Sanctum::actingAs($teacher);
+        $this->deleteJson("/api/v1/learning/resources/{$resourceId}")->assertOk();
+        Storage::disk('local')->assertMissing($path);
+    }
+
+    public function test_resource_write_contract_rejects_unsafe_files_and_values_that_exceed_schema_limits(): void
+    {
+        Storage::fake('local');
+        Sanctum::actingAs(User::factory()->create([
+            'role' => 'teacher',
+            'district_id' => $this->district->id,
+        ]));
+
+        $this->post('/api/v1/learning/resources', [
+            'title' => 'ไฟล์ไม่ปลอดภัย',
+            'subject' => 'พท31001',
+            'resource_type' => 'file',
+            'file' => UploadedFile::fake()->create('payload.php', 10, 'text/x-php'),
+        ], ['Accept' => 'application/json'])
+            ->assertUnprocessable()
+            ->assertJsonValidationErrors('file');
+
+        $this->postJson('/api/v1/learning/resources', [
+            'title' => 'รหัสวิชายาวเกิน schema',
+            'subject' => str_repeat('ก', 33),
+            'resource_type' => 'link',
+            'url' => 'https://example.test/material',
+        ])->assertUnprocessable()->assertJsonValidationErrors('subject');
+
+        $longUrl = 'https://example.test/material?token='.str_repeat('a', 500);
+        $this->postJson('/api/v1/learning/resources', [
+            'title' => 'ลิงก์ยาวที่ยังอยู่ในขอบเขต',
+            'subject' => 'พท31001',
+            'resource_type' => 'link',
+            'url' => $longUrl,
+        ])->assertCreated();
+        $this->assertDatabaseHas('learning_resources', ['external_url' => $longUrl]);
+    }
+
     public function test_learning_request_repairs_schema_missing_from_git_only_deployment_before_saving(): void
     {
         Storage::fake('local');
