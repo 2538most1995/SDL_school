@@ -985,6 +985,332 @@ textarea {
     line-height: 1.45;
 }
 
+.student-activity-overlay {
+    position: fixed;
+    inset: 0;
+    z-index: 70;
+    display: grid;
+    overflow-y: auto;
+    place-items: center;
+    padding: clamp(0.6rem, 2vw, 1.5rem);
+    background: rgb(6 20 43 / 0.62);
+    backdrop-filter: blur(5px);
+}
+
+.student-activity-dialog {
+    width: min(100%, 46rem);
+    max-height: calc(100dvh - 1.2rem);
+    overflow-y: auto;
+    border: 1px solid var(--ui-border);
+    border-radius: 22px;
+    background: var(--ui-surface);
+    box-shadow: 0 30px 80px rgb(6 20 43 / 0.3);
+}
+
+.student-activity-dialog--list {
+    display: flex;
+    width: min(100%, 58rem);
+    overflow: hidden;
+    flex-direction: column;
+}
+
+.student-activity-dialog__image {
+    position: relative;
+    display: block;
+    width: 100%;
+    overflow: hidden;
+    background: #06142b;
+}
+
+.student-activity-dialog__image img {
+    display: block;
+    width: 100%;
+    max-height: min(42vh, 22rem);
+    aspect-ratio: 16 / 8;
+    object-fit: cover;
+}
+
+.student-activity-dialog__image > span {
+    position: absolute;
+    inset-inline-end: 0.8rem;
+    inset-block-end: 0.8rem;
+    display: inline-flex;
+    align-items: center;
+    gap: 0.4rem;
+    border-radius: 999px;
+    padding: 0.45rem 0.7rem;
+    background: rgb(6 20 43 / 0.82);
+    color: #f8fafc;
+    font-size: 0.72rem;
+    font-weight: 800;
+}
+
+.student-activity-dialog__body {
+    padding: clamp(1rem, 3vw, 1.75rem);
+}
+
+.student-activity-dialog__close {
+    display: grid;
+    width: 2.5rem;
+    height: 2.5rem;
+    flex: 0 0 auto;
+    place-items: center;
+    border-radius: 999px;
+    color: var(--ui-text-muted);
+}
+
+.student-activity-type {
+    display: inline-flex;
+    border: 1px solid var(--ui-accent-200);
+    border-radius: 999px;
+    padding: 0.3rem 0.65rem;
+    background: var(--ui-accent-50);
+    color: var(--ui-accent-800);
+    font-size: 0.72rem;
+    font-weight: 900;
+}
+
+.student-activity-dialog__schedule {
+    margin-block-start: 1.25rem;
+    border-radius: 16px;
+    padding: 1rem;
+    background: var(--ui-surface-muted);
+}
+
+.student-activity-dialog__schedule h3 {
+    color: var(--ui-text);
+    font-size: 0.85rem;
+    font-weight: 900;
+}
+
+.student-activity-dialog__schedule dl {
+    margin-block-start: 0.65rem;
+}
+
+.student-activity-dialog__schedule dl > div {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    justify-content: space-between;
+    gap: 0.3rem 1rem;
+    border-block-start: 1px solid var(--ui-border);
+    padding-block: 0.65rem;
+}
+
+.student-activity-dialog__schedule dl > div:first-child {
+    border-block-start: 0;
+}
+
+.student-activity-dialog__schedule dt {
+    color: var(--ui-text-muted);
+    font-size: 0.78rem;
+    font-weight: 700;
+}
+
+.student-activity-dialog__schedule dd {
+    margin: 0;
+    color: var(--ui-text);
+    font-size: 0.82rem;
+    font-weight: 900;
+}
+
+.student-activity-dialog__schedule > p {
+    display: flex;
+    gap: 0.6rem;
+    border-block-start: 1px solid var(--ui-border);
+    padding-block-start: 0.8rem;
+    color: var(--ui-accent-700);
+}
+
+.student-activity-dialog__schedule > p span,
+.student-activity-dialog__schedule > p strong {
+    display: block;
+}
+
+.student-activity-dialog__schedule > p span {
+    color: var(--ui-text);
+    font-size: 0.82rem;
+    font-weight: 700;
+}
+
+.student-activity-dialog__schedule > p strong {
+    margin-block-end: 0.15rem;
+    color: var(--ui-text-muted);
+    font-size: 0.72rem;
+}
+
+.student-activity-dialog__description,
+.student-activity-list__description {
+    white-space: pre-line;
+    overflow-wrap: anywhere;
+    color: var(--ui-text-muted);
+    font-size: 0.85rem;
+    font-weight: 600;
+    line-height: 1.8;
+}
+
+.student-activity-dialog__description {
+    margin-block-start: 1.15rem;
+}
+
+.student-activity-dialog__link,
+.student-activity-dialog__primary {
+    display: inline-flex;
+    min-height: 2.65rem;
+    align-items: center;
+    justify-content: center;
+    gap: 0.45rem;
+    border-radius: 12px;
+    padding-inline: 1rem;
+    font-size: 0.8rem;
+    font-weight: 900;
+}
+
+.student-activity-dialog__link {
+    border: 1px solid var(--ui-accent-200);
+    background: var(--ui-accent-50);
+    color: var(--ui-accent-800);
+}
+
+.student-activity-dialog__primary {
+    min-width: 5rem;
+    background: var(--ui-accent-600);
+    color: white;
+}
+
+.student-activity-dialog__list-header {
+    display: flex;
+    flex: 0 0 auto;
+    align-items: flex-start;
+    justify-content: space-between;
+    gap: 1rem;
+    border-block-end: 1px solid var(--ui-border);
+    padding: clamp(1rem, 3vw, 1.5rem);
+}
+
+.student-activity-dialog__list-header p {
+    color: var(--ui-accent-700);
+    font-size: 0.75rem;
+    font-weight: 900;
+}
+
+.student-activity-dialog__list-header h2 {
+    margin-block-start: 0.25rem;
+    color: var(--ui-text);
+    font-size: clamp(1.2rem, 3vw, 1.65rem);
+    font-weight: 900;
+}
+
+.student-activity-list {
+    display: grid;
+    min-height: 0;
+    gap: 0.8rem;
+    overflow-y: auto;
+    padding: clamp(0.8rem, 2vw, 1.25rem);
+}
+
+.student-activity-list__item {
+    display: grid;
+    min-width: 0;
+    overflow: hidden;
+    border: 1px solid var(--ui-border);
+    border-radius: 16px;
+    background: var(--ui-surface);
+}
+
+.student-activity-list__item > img {
+    width: 100%;
+    height: 11rem;
+    object-fit: cover;
+}
+
+.student-activity-list__item > div {
+    min-width: 0;
+    padding: 1rem;
+}
+
+.student-activity-list__item h3 {
+    margin-block-start: 0.55rem;
+    overflow-wrap: anywhere;
+    color: var(--ui-text);
+    font-size: 1rem;
+    font-weight: 900;
+    line-height: 1.55;
+}
+
+.student-activity-list__item p {
+    display: flex;
+    align-items: flex-start;
+    gap: 0.45rem;
+    margin-block-start: 0.4rem;
+    color: var(--ui-text-muted);
+    font-size: 0.78rem;
+    font-weight: 700;
+}
+
+.student-activity-list__description {
+    margin-block-start: 0.65rem;
+}
+
+.student-activity-list__item button {
+    display: inline-flex;
+    min-height: 2.4rem;
+    align-items: center;
+    gap: 0.25rem;
+    margin-block-start: 0.8rem;
+    color: var(--ui-accent-700);
+    font-size: 0.78rem;
+    font-weight: 900;
+}
+
+.student-activity-list__empty {
+    display: grid;
+    min-height: 16rem;
+    place-content: center;
+    justify-items: center;
+    gap: 0.4rem;
+    color: var(--ui-text-muted);
+    text-align: center;
+}
+
+.student-activity-list__empty strong {
+    color: var(--ui-text);
+}
+
+.student-activity-list__empty span {
+    font-size: 0.78rem;
+}
+
+.student-activity-image-viewer {
+    position: fixed;
+    inset: 0;
+    z-index: 90;
+    display: grid;
+    place-items: center;
+    padding: 1rem;
+    background: rgb(2 6 23 / 0.96);
+}
+
+.student-activity-image-viewer > button {
+    position: absolute;
+    inset-inline-end: 1rem;
+    inset-block-start: 1rem;
+    display: grid;
+    width: 2.8rem;
+    height: 2.8rem;
+    place-items: center;
+    border-radius: 999px;
+    background: rgb(255 255 255 / 0.12);
+    color: white;
+}
+
+.student-activity-image-viewer > img {
+    max-width: min(96vw, 100rem);
+    max-height: 92dvh;
+    border-radius: 14px;
+    object-fit: contain;
+}
+
 .student-term-panel {
     align-self: stretch;
     border-color: color-mix(in srgb, var(--ui-accent-300) 64%, var(--ui-border));
@@ -1119,6 +1445,11 @@ textarea {
     .student-metric-card__action:hover {
         color: var(--student-metric-ink);
     }
+
+    .student-activity-dialog__close:hover,
+    .student-activity-list__item button:hover {
+        background: var(--ui-surface-muted);
+    }
 }
 
 @media (min-width: 640px) {
@@ -1128,6 +1459,15 @@ textarea {
 
     .student-dashboard-shell__content {
         grid-template-columns: minmax(13.5rem, 0.8fr) minmax(0, 1.35fr);
+    }
+
+    .student-activity-list__item {
+        grid-template-columns: 12rem minmax(0, 1fr);
+    }
+
+    .student-activity-list__item > img {
+        height: 100%;
+        min-height: 12rem;
     }
 }
 

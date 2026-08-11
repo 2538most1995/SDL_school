@@ -1,6 +1,8 @@
 import { useQuery } from '@tanstack/react-query';
 import {
     ArrowRight,
+    ArrowSquareOut,
+    ArrowsOut,
     Bell,
     BookOpenText,
     Books,
@@ -16,9 +18,10 @@ import {
     Student,
     UsersThree,
     WarningCircle,
+    X,
 } from '@phosphor-icons/react';
 import type { Icon } from '@phosphor-icons/react';
-import type { ReactNode } from 'react';
+import { useState, type ReactNode } from 'react';
 import { Link } from 'react-router-dom';
 import { useDemoRole, type DemoRole } from '../context/DemoRoleContext';
 import { apiGet } from '../lib/api';
@@ -57,7 +60,14 @@ type CalendarItem = {
     location: string;
     subject_code: string | null;
     image_url?: string | null;
+    description?: string;
+    external_url?: string | null;
     featured_on_dashboard?: boolean;
+    schedule_days?: Array<{
+        date: string;
+        start_time: string;
+        end_time: string;
+    }>;
 };
 
 type SummaryCardSpec = {
@@ -105,6 +115,22 @@ const formatEventDate = (value: string) => {
     if (Number.isNaN(date.getTime())) return value || '-';
 
     return new Intl.DateTimeFormat('th-TH', { day: 'numeric', month: 'short', year: '2-digit' }).format(date);
+};
+
+const formatEventDateTime = (value: string) => {
+    const date = new Date(value.replace(' ', 'T'));
+    if (Number.isNaN(date.getTime())) return value || '-';
+
+    return new Intl.DateTimeFormat('th-TH', {
+        day: 'numeric', month: 'long', year: 'numeric', hour: '2-digit', minute: '2-digit',
+    }).format(date);
+};
+
+const formatScheduleDate = (value: string) => {
+    const date = new Date(`${value}T00:00:00`);
+    if (Number.isNaN(date.getTime())) return value;
+
+    return new Intl.DateTimeFormat('th-TH', { weekday: 'short', day: 'numeric', month: 'short', year: 'numeric' }).format(date);
 };
 
 const shortLevelLabel = (label: string) => ({
@@ -208,7 +234,17 @@ const calendarTypeLabel: Record<CalendarItem['type'], string> = {
     exam: 'สอบ',
 };
 
-function StudentFeaturedActivity({ item, loading }: { item?: CalendarItem; loading: boolean }) {
+function StudentFeaturedActivity({
+    item,
+    loading,
+    onSelect,
+    onShowAll,
+}: {
+    item?: CalendarItem;
+    loading: boolean;
+    onSelect: (item: CalendarItem) => void;
+    onShowAll: () => void;
+}) {
     const imageUrl = item?.image_url ? withAppBasePath(item.image_url) : null;
 
     return (
@@ -218,14 +254,14 @@ function StudentFeaturedActivity({ item, loading }: { item?: CalendarItem; loadi
                     <p className="text-xs font-bold text-brand-700">อัปเดตล่าสุด</p>
                     <h2 id="student-feature-title" className="mt-1 text-lg font-black text-slate-950">กิจกรรมล่าสุด</h2>
                 </div>
-                <Link to="/learning/calendar" className="student-text-link">
+                <button type="button" onClick={onShowAll} className="student-text-link" aria-haspopup="dialog">
                     ดูทั้งหมด <CaretRight size={15} weight="bold" aria-hidden="true" />
-                </Link>
+                </button>
             </div>
             {loading ? (
                 <div className="mt-5 aspect-[16/9] animate-pulse rounded-[16px] bg-slate-100" />
             ) : item && imageUrl ? (
-                <Link to="/learning/calendar" className="student-feature__media group mt-5">
+                <button type="button" onClick={() => onSelect(item)} className="student-feature__media group mt-5 text-left" aria-haspopup="dialog" aria-label={`ดูรายละเอียด ${item.title}`}>
                     <img src={imageUrl} alt={`ภาพประกอบ ${item.title}`} className="size-full object-cover" />
                     <span className="student-feature__scrim" aria-hidden="true" />
                     <span className="student-feature__caption">
@@ -235,9 +271,9 @@ function StudentFeaturedActivity({ item, loading }: { item?: CalendarItem; loadi
                             {item.location && <span>{item.location}</span>}
                         </span>
                     </span>
-                </Link>
+                </button>
             ) : item ? (
-                <Link to="/learning/calendar" className="student-feature__empty mt-5">
+                <button type="button" onClick={() => onSelect(item)} className="student-feature__empty mt-5 w-full" aria-haspopup="dialog">
                     {item.type === 'exam'
                         ? <Bell size={30} weight="duotone" aria-hidden="true" />
                         : <CalendarBlank size={30} weight="duotone" aria-hidden="true" />}
@@ -247,7 +283,7 @@ function StudentFeaturedActivity({ item, loading }: { item?: CalendarItem; loadi
                         {formatEventDate(item.starts_at)}
                         {item.location ? ` · ${item.location}` : ''}
                     </span>
-                </Link>
+                </button>
             ) : (
                 <div className="student-feature__empty mt-5">
                     <CalendarBlank size={30} weight="duotone" aria-hidden="true" />
@@ -256,6 +292,102 @@ function StudentFeaturedActivity({ item, loading }: { item?: CalendarItem; loadi
                 </div>
             )}
         </section>
+    );
+}
+
+function StudentActivityDetail({ item, onClose }: { item: CalendarItem; onClose: () => void }) {
+    const [imageOpen, setImageOpen] = useState(false);
+    const imageUrl = item.image_url ? withAppBasePath(item.image_url) : null;
+    const scheduleDays = item.schedule_days ?? [];
+
+    return (
+        <div className="student-activity-overlay" role="dialog" aria-modal="true" aria-labelledby="student-activity-detail-title">
+            <section className="student-activity-dialog">
+                {imageUrl && (
+                    <button type="button" onClick={() => setImageOpen(true)} className="student-activity-dialog__image group" aria-label={`เปิดดูรูป ${item.title} ขนาดเต็ม`}>
+                        <img src={imageUrl} alt={`ภาพกิจกรรม ${item.title}`} />
+                        <span><ArrowsOut size={16} weight="bold" aria-hidden="true" />คลิกดูรูปเต็ม</span>
+                    </button>
+                )}
+                <div className="student-activity-dialog__body">
+                    <div className="flex items-start justify-between gap-4">
+                        <div className="min-w-0">
+                            <span className="student-activity-type">{calendarTypeLabel[item.type]}</span>
+                            <h2 id="student-activity-detail-title" className="mt-3 text-xl font-black leading-8 text-slate-950 sm:text-2xl">{item.title}</h2>
+                        </div>
+                        <button type="button" onClick={onClose} className="student-activity-dialog__close" aria-label="ปิดรายละเอียด"><X size={22} weight="bold" /></button>
+                    </div>
+                    <div className="student-activity-dialog__schedule">
+                        <h3>วันและเวลาของกิจกรรม</h3>
+                        {scheduleDays.length > 0 ? (
+                            <dl>
+                                {scheduleDays.map((day) => (
+                                    <div key={day.date}>
+                                        <dt>{formatScheduleDate(day.date)}</dt>
+                                        <dd>{day.start_time}-{day.end_time} น.</dd>
+                                    </div>
+                                ))}
+                            </dl>
+                        ) : (
+                            <dl>
+                                <div><dt>เริ่ม</dt><dd>{formatEventDateTime(item.starts_at)}</dd></div>
+                                <div><dt>สิ้นสุด</dt><dd>{formatEventDateTime(item.ends_at)}</dd></div>
+                            </dl>
+                        )}
+                        <p><MapPin size={17} weight="duotone" aria-hidden="true" /><span><strong>สถานที่</strong>{item.location || 'ไม่ระบุสถานที่'}</span></p>
+                    </div>
+                    {item.description && <p className="student-activity-dialog__description">{item.description}</p>}
+                    <div className="mt-5 flex flex-wrap justify-end gap-2">
+                        {item.external_url && <a href={item.external_url} target="_blank" rel="noopener noreferrer" className="student-activity-dialog__link"><ArrowSquareOut size={18} weight="bold" />เปิดลิงก์กิจกรรม</a>}
+                        <button type="button" onClick={onClose} className="student-activity-dialog__primary">ปิด</button>
+                    </div>
+                </div>
+            </section>
+            {imageOpen && imageUrl && (
+                <div className="student-activity-image-viewer" role="dialog" aria-modal="true" aria-label={`รูป ${item.title} ขนาดเต็ม`} onClick={() => setImageOpen(false)}>
+                    <button type="button" onClick={() => setImageOpen(false)} aria-label="ปิดรูปขนาดเต็ม"><X size={25} weight="bold" /></button>
+                    <img src={imageUrl} alt={`ภาพกิจกรรม ${item.title}`} onClick={(event) => event.stopPropagation()} />
+                </div>
+            )}
+        </div>
+    );
+}
+
+function StudentActivityList({ items, onClose, onSelect }: {
+    items: CalendarItem[];
+    onClose: () => void;
+    onSelect: (item: CalendarItem) => void;
+}) {
+    return (
+        <div className="student-activity-overlay" role="dialog" aria-modal="true" aria-labelledby="student-activity-list-title">
+            <section className="student-activity-dialog student-activity-dialog--list">
+                <header className="student-activity-dialog__list-header">
+                    <div>
+                        <p>กิจกรรมของฉัน</p>
+                        <h2 id="student-activity-list-title">รายละเอียดกิจกรรมทั้งหมด</h2>
+                    </div>
+                    <button type="button" onClick={onClose} className="student-activity-dialog__close" aria-label="ปิดรายการกิจกรรม"><X size={22} weight="bold" /></button>
+                </header>
+                <div className="student-activity-list">
+                    {items.length > 0 ? items.map((item) => {
+                        const imageUrl = item.image_url ? withAppBasePath(item.image_url) : null;
+                        return (
+                            <article key={item.id} className="student-activity-list__item">
+                                {imageUrl && <img src={imageUrl} alt={`ภาพกิจกรรม ${item.title}`} loading="lazy" />}
+                                <div>
+                                    <span className="student-activity-type">{calendarTypeLabel[item.type]}</span>
+                                    <h3>{item.title}</h3>
+                                    <p><Clock size={16} weight="duotone" aria-hidden="true" />{formatEventDateTime(item.starts_at)}</p>
+                                    <p><MapPin size={16} weight="duotone" aria-hidden="true" />{item.location || 'ไม่ระบุสถานที่'}</p>
+                                    {item.description && <div className="student-activity-list__description">{item.description}</div>}
+                                    <button type="button" onClick={() => onSelect(item)}>ดูรายละเอียดทั้งหมด <CaretRight size={16} weight="bold" /></button>
+                                </div>
+                            </article>
+                        );
+                    }) : <div className="student-activity-list__empty"><CalendarBlank size={36} weight="duotone" /><strong>ยังไม่มีกิจกรรม</strong><span>เมื่อมีการเผยแพร่กิจกรรม รายการจะแสดงที่นี่</span></div>}
+                </div>
+            </section>
+        </div>
     );
 }
 
@@ -325,6 +457,8 @@ function StudentDashboard({
     events: CalendarItem[];
     calendarPending: boolean;
 }) {
+    const [selectedActivity, setSelectedActivity] = useState<CalendarItem | null>(null);
+    const [activityListOpen, setActivityListOpen] = useState(false);
     const analytics = portal.analytics;
     const calendarEvents = events
         .filter((item) => item.type !== 'assignment')
@@ -361,7 +495,12 @@ function StudentDashboard({
                     </header>
                     <div className="student-dashboard-shell__content">
                         <StudentCalendar events={events} />
-                        <StudentFeaturedActivity item={latestActivity} loading={calendarPending} />
+                        <StudentFeaturedActivity
+                            item={latestActivity}
+                            loading={calendarPending}
+                            onSelect={setSelectedActivity}
+                            onShowAll={() => setActivityListOpen(true)}
+                        />
                     </div>
                 </div>
                 <StudentTermPanel term={analytics.current_term} profile={profile} viewedAt={viewedAt} />
@@ -376,6 +515,17 @@ function StudentDashboard({
                     {metrics.map((card) => <StudentMetricCard key={card.label} card={card} />)}
                 </div>
             </section>
+            {activityListOpen && (
+                <StudentActivityList
+                    items={calendarEvents}
+                    onClose={() => setActivityListOpen(false)}
+                    onSelect={(item) => {
+                        setActivityListOpen(false);
+                        setSelectedActivity(item);
+                    }}
+                />
+            )}
+            {selectedActivity && <StudentActivityDetail item={selectedActivity} onClose={() => setSelectedActivity(null)} />}
         </div>
     );
 }
