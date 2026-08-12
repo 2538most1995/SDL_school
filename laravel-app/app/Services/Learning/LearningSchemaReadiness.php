@@ -95,6 +95,9 @@ final class LearningSchemaReadiness
             if ($table === 'learning_resources' && $this->resourceExternalUrlNeedsWidening($schema)) {
                 $missing[] = 'learning_resources.external_url_width';
             }
+            if ($table === 'learning_resources' && $this->resourceTypeNeedsWidening($schema)) {
+                $missing[] = 'learning_resources.resource_type_type';
+            }
         }
 
         foreach (self::INDEX_REQUIREMENTS as $table => $indexes) {
@@ -246,6 +249,11 @@ final class LearningSchemaReadiness
                 $table->string('external_url', 2000)->nullable()->change();
             });
         }
+        if ($this->resourceTypeNeedsWidening($schema)) {
+            $schema->table('learning_resources', function (Blueprint $table): void {
+                $table->string('resource_type', 32)->default('file')->change();
+            });
+        }
     }
 
     private function resourceExternalUrlNeedsWidening(Builder $schema): bool
@@ -259,6 +267,19 @@ final class LearningSchemaReadiness
         $type = strtolower($schema->getColumnType('learning_resources', 'external_url', true));
 
         return preg_match('/varchar\((\d+)\)/', $type, $matches) === 1 && (int) $matches[1] < 2000;
+    }
+
+    private function resourceTypeNeedsWidening(Builder $schema): bool
+    {
+        if ($this->database->connection()->getDriverName() !== 'mysql'
+            || ! $schema->hasTable('learning_resources')
+            || ! $schema->hasColumn('learning_resources', 'resource_type')) {
+            return false;
+        }
+
+        $type = strtolower($schema->getColumnType('learning_resources', 'resource_type', true));
+
+        return str_starts_with($type, 'enum');
     }
 
     private function ensureLessonPlans(Builder $schema): void

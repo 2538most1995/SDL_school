@@ -47,6 +47,8 @@ type ButtonProps = Omit<MuiButtonProps, 'size' | 'variant' | 'startIcon' | 'endI
     as?: ElementType;
     href?: string;
     download?: string;
+    target?: string;
+    rel?: string;
 };
 
 const buttonVariants: Record<Appearance, MuiButtonProps['variant']> = {

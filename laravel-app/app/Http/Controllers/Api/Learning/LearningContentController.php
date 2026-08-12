@@ -35,13 +35,15 @@ final class LearningContentController extends Controller
         $values = $this->validated($request, $kind);
         $stored = $this->storedValues($kind, $values);
         $actor = $this->actorId($request);
+        $compatibilityValues = $this->compatibilityValues($kind, $values, $actor);
         $storedImagePath = null;
         $storedResourcePath = null;
 
         try {
-            $id = $this->write()->transaction(function () use ($request, $kind, $values, $stored, $actor, &$storedImagePath, &$storedResourcePath): int {
+            $id = $this->write()->transaction(function () use ($request, $kind, $values, $stored, $compatibilityValues, $actor, &$storedImagePath, &$storedResourcePath): int {
                 $id = (int) $this->write()->table($this->table($kind))->insertGetId([
                     ...$stored,
+                    ...$compatibilityValues,
                     'district_id' => $this->districtId($request),
                     $this->actorColumn($kind) => $actor,
                     'created_at' => now(),
@@ -86,6 +88,7 @@ final class LearningContentController extends Controller
         $row = $this->ownedRow($request, $kind, $content);
         $values = $this->validated($request, $kind, $row);
         $stored = $this->storedValues($kind, $values);
+        $compatibilityValues = $this->compatibilityValues($kind, $values, $this->actorId($request));
         $oldImagePath = $kind === 'calendar' ? (string) ($row->image_path ?? '') : '';
         $newImagePath = null;
         $oldResourcePath = $kind === 'resources' ? (string) ($row->storage_path ?? '') : '';
@@ -105,11 +108,11 @@ final class LearningContentController extends Controller
                 $kind === 'resources' && $this->usesExternalUrl($values) => ['storage_disk' => null, 'storage_path' => null],
                 default => [],
             };
-            $updated = $this->write()->transaction(function () use ($request, $kind, $content, $stored, $media, $resourceMedia, $values): int {
+            $updated = $this->write()->transaction(function () use ($request, $kind, $content, $stored, $compatibilityValues, $media, $resourceMedia, $values): int {
                 $updated = $this->write()->table($this->table($kind))
                     ->where('id', $content)->where('district_id', $this->districtId($request))
                     ->when($request->user()->role === 'teacher', fn ($query) => $query->where($this->actorColumn($kind), $this->actorId($request)))
-                    ->update([...$stored, ...$media, ...$resourceMedia, 'updated_at' => now()]);
+                    ->update([...$stored, ...$compatibilityValues, ...$media, ...$resourceMedia, 'updated_at' => now()]);
                 if ($updated === 1) {
                     $this->enforceFeaturedSelection($request, $kind, $content, $values);
                 }
@@ -292,7 +295,7 @@ final class LearningContentController extends Controller
                 'resource_type' => $values['resource_type'],
                 'external_url' => $this->usesExternalUrl($values) ? $values['url'] : null,
                 'education_level' => ($values['level'] ?? null) ?: null,
-                'target_group' => ($values['target_group'] ?? null) ?: null,
+                'target_group' => ($values['target_group'] ?? null) ?: '',
                 'visibility' => 'district',
             ],
             'lesson-plans' => [
@@ -331,6 +334,37 @@ final class LearningContentController extends Controller
             'lesson-plans' => 'teacher_id',
             default => 'created_by',
         };
+    }
+
+    /**
+     * Older deployment-owned resource tables can retain required columns from
+     * the pre-Laravel form. Keep those columns populated while canonical reads
+     * and writes continue to use the current resource fields.
+     *
+     * @param  array<string, mixed>  $values
+     * @return array<string, mixed>
+     */
+    private function compatibilityValues(string $kind, array $values, ?int $actor): array
+    {
+        if ($kind !== 'resources') {
+            return [];
+        }
+
+        $columns = array_flip($this->write()->getSchemaBuilder()->getColumnListing('learning_resources'));
+        $externalUrl = $this->usesExternalUrl($values) ? (string) ($values['url'] ?? '') : '';
+        $compatibility = [];
+        foreach ([
+            'subject' => (string) ($values['subject'] ?? ''),
+            'url' => $externalUrl,
+            'level' => (string) ($values['level'] ?? ''),
+            'created_by' => $actor,
+        ] as $column => $value) {
+            if (isset($columns[$column])) {
+                $compatibility[$column] = $value;
+            }
+        }
+
+        return $compatibility;
     }
 
     private function table(string $kind): string

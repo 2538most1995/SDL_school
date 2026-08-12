@@ -82,6 +82,8 @@ php artisan migrate --force
 npm run build
 ```
 
+การอัปเดตคลังสื่อรอบวันที่ 12 สิงหาคม 2569 มี migration ที่ปรับ `learning_resources.resource_type` จาก enum เก่าของตารางที่ระบบรับช่วงมาเป็น string ของ schema ปัจจุบันโดยไม่ลบข้อมูล หลัง deploy ต้องรัน `php artisan migrate --force` ก่อนทดสอบบันทึกลิงก์ วิดีโอ หรือไฟล์สื่อ
+
 ตัวสร้าง URL ของ Vite ตรวจ base path จาก request ด้วย จึงยังสร้าง URL ใต้ `/SDL_school/build/assets/*` ได้แม้ cache เคยเก็บ `ASSET_URL` ที่รากโดเมน แต่ production ควรกำหนด `APP_URL` และ `ASSET_URL` ให้มี `/SDL_school` ถูกต้องตามตัวอย่าง
 
 Migration รองรับฐานที่มีตารางเดิมอยู่แล้วแต่ migration ledger ว่าง โดยจะตรวจ table/column ก่อนสร้างและไม่ลบข้อมูลหรือ password hash เดิม

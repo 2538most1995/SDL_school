@@ -272,6 +272,79 @@ final class LearningContentWriteTest extends TestCase
         $this->assertDatabaseHas('learning_resources', ['external_url' => $longUrl]);
     }
 
+    public function test_resource_form_receives_scoped_group_options_and_can_save_youtube_for_every_group(): void
+    {
+        $batch = 'import_1700000300_groups';
+        $historyId = DB::table('import_history')->insertGetId([
+            'file_name' => 'itw51.zip',
+            'saved_file_name' => 'itw51.zip',
+            'batch_key' => $batch,
+            'file_size_kb' => 100,
+            'level' => 'ทุกระดับ',
+            'file_count' => 1,
+            'status' => 'success',
+            'district_id' => $this->district->id,
+            'created_at' => now(),
+        ]);
+        DB::table('import_batches')->insert([
+            'district_id' => $this->district->id,
+            'import_history_id' => $historyId,
+            'batch_key' => $batch,
+            'status' => 'active',
+            'created_at' => now(),
+            'updated_at' => now(),
+        ]);
+        $groupTable = 'db_'.$batch.'_2_group';
+        Schema::create($groupTable, function ($table): void {
+            $table->id();
+            $table->string('grp_code');
+            $table->string('grp_name');
+            $table->string('grp_class');
+        });
+        DB::table($groupTable)->insert([
+            ['grp_code' => 'G-01', 'grp_name' => 'กลุ่มบางนมโค', 'grp_class' => '2'],
+            ['grp_code' => 'G-02', 'grp_name' => 'กลุ่มสามกอ', 'grp_class' => '2'],
+        ]);
+        Schema::table('learning_resources', function ($table): void {
+            $table->string('subject');
+            $table->text('url');
+            $table->string('level');
+            $table->unsignedBigInteger('created_by');
+        });
+        $teacher = User::factory()->create([
+            'role' => 'teacher',
+            'district_id' => $this->district->id,
+            'assigned_groups' => ['G-01'],
+        ]);
+        Sanctum::actingAs($teacher);
+
+        $this->getJson('/api/v1/learning/resources')
+            ->assertOk()
+            ->assertJsonCount(1, 'meta.available_groups')
+            ->assertJsonPath('meta.available_groups.0.code', 'G-01')
+            ->assertJsonPath('meta.available_groups.0.name', 'กลุ่มบางนมโค');
+
+        $this->postJson('/api/v1/learning/resources', [
+            'title' => 'ทักษะการเรียนรู้',
+            'subject' => 'ทร21001',
+            'description' => 'ทดสอบ',
+            'resource_type' => 'youtube',
+            'url' => 'https://www.youtube.com/watch?v=bV3W62zZcTc',
+            'level' => '2',
+            'target_group' => '',
+        ])->assertCreated();
+        $this->assertDatabaseHas('learning_resources', [
+            'title' => 'ทักษะการเรียนรู้',
+            'external_url' => 'https://www.youtube.com/watch?v=bV3W62zZcTc',
+            'education_level' => 2,
+            'target_group' => '',
+            'subject' => 'ทร21001',
+            'url' => 'https://www.youtube.com/watch?v=bV3W62zZcTc',
+            'level' => '2',
+            'created_by' => $teacher->id,
+        ]);
+    }
+
     public function test_learning_request_repairs_schema_missing_from_git_only_deployment_before_saving(): void
     {
         Storage::fake('local');

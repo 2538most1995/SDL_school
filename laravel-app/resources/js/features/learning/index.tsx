@@ -47,6 +47,13 @@ type LearningOverview = {
     upcoming: Array<{ id: string; date: string; title: string; meta: string; type: string }>;
 };
 
+type LearningGroupOption = {
+    code: string;
+    name: string;
+    label: string;
+    level: string | null;
+};
+
 const demoOverview: LearningOverview = {
     studentName: 'ณัฐชา',
     dueAssignments: 3,
@@ -263,6 +270,9 @@ export function LearningListPage({ kind }: { kind: LearningKind }) {
         },
     });
     const rows = query.data?.data.rows ?? [];
+    const availableGroups = Array.isArray(query.data?.meta.available_groups)
+        ? query.data.meta.available_groups as LearningGroupOption[]
+        : [];
     const courses = useMemo(() => ['ทั้งหมด', ...Array.from(new Set(rows.map((row) => row.course)))], [rows]);
     const filteredRows = course === 'ทั้งหมด' ? rows : rows.filter((row) => row.course === course);
     const canManage = query.data !== undefined && role !== 'student' && query.data.meta.read_only !== true;
@@ -338,7 +348,7 @@ export function LearningListPage({ kind }: { kind: LearningKind }) {
                 {query.isError && <QueryError onRetry={() => query.refetch()} />}
                 {query.data && <DataTable data={filteredRows} columns={columns} emptyTitle="ยังไม่มีรายการ" emptyDescription="รายการใหม่จะแสดงที่นี่เมื่อครูเผยแพร่" />}
             </Panel>
-            {editing && <LearningEditor kind={kind} draft={draft} setDraft={setDraft} resourceFile={resourceFile} setResourceFile={setResourceFile} isNew={editing === 'new'} originalResourceType={editing === 'new' ? null : editing.raw?.resource_type ?? null} pending={save.isPending} error={save.error} onClose={() => setEditing(null)} onSubmit={(event) => { event.preventDefault(); save.mutate(); }} />}
+            {editing && <LearningEditor kind={kind} draft={draft} setDraft={setDraft} availableGroups={availableGroups} resourceFile={resourceFile} setResourceFile={setResourceFile} isNew={editing === 'new'} originalResourceType={editing === 'new' ? null : editing.raw?.resource_type ?? null} pending={save.isPending} error={save.error} onClose={() => setEditing(null)} onSubmit={(event) => { event.preventDefault(); save.mutate(); }} />}
         </div>
     );
 }
@@ -364,12 +374,12 @@ const editorFields: Partial<Record<LearningKind, Array<{ key: string; label: str
     ],
 };
 
-function LearningEditor({ kind, draft, setDraft, resourceFile, setResourceFile, isNew, originalResourceType, pending, error, onClose, onSubmit }: { kind: LearningKind; draft: Record<string, string>; setDraft: (draft: Record<string, string>) => void; resourceFile: File | null; setResourceFile: (file: File | null) => void; isNew: boolean; originalResourceType: string | null; pending: boolean; error: Error | null; onClose: () => void; onSubmit: (event: FormEvent) => void }) {
+function LearningEditor({ kind, draft, setDraft, availableGroups, resourceFile, setResourceFile, isNew, originalResourceType, pending, error, onClose, onSubmit }: { kind: LearningKind; draft: Record<string, string>; setDraft: (draft: Record<string, string>) => void; availableGroups: LearningGroupOption[]; resourceFile: File | null; setResourceFile: (file: File | null) => void; isNew: boolean; originalResourceType: string | null; pending: boolean; error: Error | null; onClose: () => void; onSubmit: (event: FormEvent) => void }) {
     const externalResource = kind === 'resources' && ['link', 'video', 'youtube'].includes(draft.resource_type ?? 'link');
     const resourceFileRequired = isNew || !draft.file_url || draft.resource_type !== originalResourceType;
     const fields = (editorFields[kind] ?? []).filter((field) => field.key !== 'url');
     return <div className="fixed inset-0 z-[70] grid place-items-center overflow-y-auto bg-slate-950/50 p-3" role="dialog" aria-modal="true"><section className="my-auto w-full max-w-2xl rounded-2xl bg-white shadow-2xl"><header className="flex items-center justify-between border-b border-slate-100 p-5"><div><h2 className="text-xl font-black">{kind === 'resources' ? 'ข้อมูลสื่อการเรียน' : 'เพิ่มหรือแก้ไขข้อมูล'}</h2>{kind === 'resources' && <p className="mt-1 text-sm text-slate-500">แนบไฟล์จริงหรือระบุลิงก์ตามประเภทสื่อ</p>}</div><button type="button" onClick={onClose} className="p-2" aria-label="ปิด"><X size={20} /></button></header><form onSubmit={onSubmit} className="grid max-h-[75vh] gap-4 overflow-y-auto p-5 sm:grid-cols-2">
-        {fields.map((field) => <label key={field.key} className={field.type === 'textarea' ? 'sm:col-span-2' : ''}><span className="mb-1.5 block text-sm font-bold text-slate-700">{field.label}</span>{field.options ? <select required={field.key !== 'level' && field.key !== 'target_group'} value={draft[field.key] ?? ''} onChange={(event) => { if (field.key === 'resource_type') setResourceFile(null); setDraft({ ...draft, [field.key]: event.target.value }); }} className="h-11 w-full rounded-xl border border-slate-300 bg-white px-3">{field.options.map(([value, label]) => <option key={value} value={value}>{label}</option>)}</select> : field.type === 'textarea' ? <textarea value={draft[field.key] ?? ''} onChange={(event) => setDraft({ ...draft, [field.key]: event.target.value })} rows={4} className="w-full rounded-xl border border-slate-300 p-3" /> : <input required={!['target_group', 'location'].includes(field.key)} type={field.type ?? 'text'} value={draft[field.key] ?? ''} onChange={(event) => setDraft({ ...draft, [field.key]: event.target.value })} className="h-11 w-full rounded-xl border border-slate-300 bg-white px-3" />}</label>)}
+        {fields.map((field) => <label key={field.key} className={field.type === 'textarea' ? 'sm:col-span-2' : ''}><span className="mb-1.5 block text-sm font-bold text-slate-700">{field.label}</span>{kind === 'resources' && field.key === 'target_group' ? <select value={draft.target_group ?? ''} onChange={(event) => setDraft({ ...draft, target_group: event.target.value })} className="h-11 w-full rounded-xl border border-slate-300 bg-white px-3"><option value="">นักศึกษาทุกกลุ่มในอำเภอ</option>{availableGroups.map((group) => <option key={group.code} value={group.code}>{group.label} · รหัส {group.code}</option>)}</select> : field.options ? <select required={field.key !== 'level' && field.key !== 'target_group'} value={draft[field.key] ?? ''} onChange={(event) => { if (field.key === 'resource_type') setResourceFile(null); setDraft({ ...draft, [field.key]: event.target.value }); }} className="h-11 w-full rounded-xl border border-slate-300 bg-white px-3">{field.options.map(([value, label]) => <option key={value} value={value}>{label}</option>)}</select> : field.type === 'textarea' ? <textarea value={draft[field.key] ?? ''} onChange={(event) => setDraft({ ...draft, [field.key]: event.target.value })} rows={4} className="w-full rounded-xl border border-slate-300 p-3" /> : <input required={!['target_group', 'location'].includes(field.key)} type={field.type ?? 'text'} value={draft[field.key] ?? ''} onChange={(event) => setDraft({ ...draft, [field.key]: event.target.value })} className="h-11 w-full rounded-xl border border-slate-300 bg-white px-3" />}</label>)}
         {kind === 'resources' && externalResource && <label className="sm:col-span-2"><span className="mb-1.5 block text-sm font-bold text-slate-700">ลิงก์ http/https</span><input required type="url" value={draft.url ?? ''} onChange={(event) => setDraft({ ...draft, url: event.target.value })} placeholder="https://" className="h-11 w-full rounded-xl border border-slate-300 bg-white px-3" /></label>}
         {kind === 'resources' && !externalResource && <label className="sm:col-span-2"><span className="mb-1.5 block text-sm font-bold text-slate-700">ไฟล์สื่อ {resourceFileRequired ? '(จำเป็น)' : '(เลือกเมื่อจะเปลี่ยนไฟล์)'}</span><input required={resourceFileRequired} type="file" accept=".pdf,.doc,.docx,.ppt,.pptx,.xls,.xlsx,.zip" onChange={(event) => setResourceFile(event.target.files?.[0] ?? null)} className="block w-full rounded-xl border border-slate-300 bg-white p-2.5 text-sm file:mr-3 file:rounded-lg file:border-0 file:bg-brand-50 file:px-3 file:py-2 file:font-bold file:text-brand-800" /><p className="mt-1.5 text-xs text-slate-500">รองรับ PDF, Word, PowerPoint, Excel และ ZIP ขนาดไม่เกิน 20 MB{resourceFile ? ` • ${resourceFile.name}` : ''}</p></label>}
         {error && <p role="alert" className="rounded-xl bg-rose-50 p-3 text-sm font-bold text-rose-800 sm:col-span-2">{error.message}</p>}
@@ -397,6 +407,34 @@ type ExamSchedulePayload = {
     source_ready: boolean;
     sources?: { schedule: boolean; field: boolean; group: boolean; exam_rooms: boolean };
 };
+
+const EXAM_SCHEDULE_EMPTY_MESSAGE = 'ยังไม่พบตารางสอบในภาคเรียนปัจจุบัน รอเจ้าหน้าที่อัปเดตข้อมูล';
+
+function MobileExamSchedulePreview({ document, pdfUrl, pdfName }: { document: ExamSchedulePayload | undefined; pdfUrl: string; pdfName: string }) {
+    return <div className="lg:hidden">
+        <section className="rounded-xl border border-slate-200 bg-white p-4 shadow-sm">
+            <div className="border-b border-slate-200 pb-3 text-center">
+                <p className="text-lg font-black text-slate-950">ตารางสอบ</p>
+                <p className="mt-1 break-all text-xs text-slate-500">{pdfName}</p>
+            </div>
+            {document ? <>
+                <dl className="grid grid-cols-2 gap-x-4 gap-y-3 py-4 text-sm">
+                    <div className="col-span-2"><dt className="text-xs font-bold text-slate-500">ชื่อ-สกุล</dt><dd className="mt-0.5 font-bold text-slate-950">{document.student.name || '-'}</dd></div>
+                    <div><dt className="text-xs font-bold text-slate-500">รหัสนักศึกษา</dt><dd className="mt-0.5 font-bold text-slate-950">{document.student.code || '-'}</dd></div>
+                    <div><dt className="text-xs font-bold text-slate-500">ภาคเรียน</dt><dd className="mt-0.5 font-bold text-slate-950">{document.term || '-'}</dd></div>
+                    <div><dt className="text-xs font-bold text-slate-500">ระดับชั้น</dt><dd className="mt-0.5 font-bold text-slate-950">{document.student.level || '-'}</dd></div>
+                    <div><dt className="text-xs font-bold text-slate-500">กลุ่ม</dt><dd className="mt-0.5 font-bold text-slate-950">{document.student.group || '-'}</dd></div>
+                </dl>
+                {document.rows.length > 0 ? <div className="grid gap-3">{document.rows.map((row, index) => <article key={`${row.subject_code}-${row.exam_date}-${index}`} className="rounded-xl bg-slate-50 p-3.5">
+                    <div className="flex items-start justify-between gap-3"><div className="min-w-0"><p className="font-bold text-slate-950">{row.subject_name}</p><p className="mt-0.5 text-xs font-bold text-slate-500">{row.subject_code}</p></div><StatusBadge tone="info">{row.room}</StatusBadge></div>
+                    <dl className="mt-3 grid gap-2 text-sm text-slate-700"><div><dt className="inline font-bold">วันสอบ: </dt><dd className="inline">{row.exam_date_display}</dd></div><div><dt className="inline font-bold">เวลา: </dt><dd className="inline">{row.start_time} - {row.end_time} น.</dd></div><div><dt className="inline font-bold">สนามสอบ: </dt><dd className="inline">{row.location}</dd></div></dl>
+                </article>)}</div> : <p role="status" className="rounded-xl border border-amber-200 bg-amber-50 p-4 text-center text-sm font-bold leading-6 text-amber-950">{EXAM_SCHEDULE_EMPTY_MESSAGE}</p>}
+            </> : <p className="py-6 text-center text-sm leading-6 text-slate-600">ไฟล์ PDF พร้อมแล้ว กดปุ่มด้านล่างเพื่อเปิดดูเอกสารฉบับเต็ม</p>}
+            <Button as="a" href={pdfUrl} target="_blank" rel="noopener noreferrer" appearance="outline" size="large" icon={<DownloadSimple size={18} weight="bold" />} className="mt-4 w-full">เปิดไฟล์ PDF</Button>
+        </section>
+        <p className="mt-2 text-xs leading-5 text-slate-500">บนมือถือระบบแสดงเนื้อหาแบบอ่านง่าย ส่วนไฟล์ที่เปิดจากปุ่มเป็นเอกสารเดียวกับที่ใช้ดาวน์โหลดและพิมพ์</p>
+    </div>;
+}
 
 function ExamSchedulePage() {
     const { role } = useDemoRole();
@@ -522,18 +560,18 @@ function ExamSchedulePage() {
             {!autoGenerate && students.isPending && <QuerySkeleton rows={2} />}
             {!autoGenerate && students.isError && <QueryError onRetry={() => students.refetch()} />}
             {pdfError && <p role="alert" className="mt-4 rounded-xl border border-rose-200 bg-rose-50 p-3 text-sm font-bold text-rose-800">{pdfError}</p>}
-            <div className="mt-5 flex flex-wrap justify-end gap-2"><Button type="button" appearance="primary" size="large" icon={<DownloadSimple size={18} weight="bold" />} onClick={generatePdf} disabled={!canGenerate || pdfLoading}>{pdfLoading ? 'กำลังสร้าง PDF' : autoGenerate ? 'สร้าง PDF ใหม่' : 'สร้างและแสดงตัวอย่าง PDF'}</Button>{pdfUrl && <><Button as="a" href={pdfUrl} download={pdfName} appearance="outline" size="large" icon={<DownloadSimple size={18} weight="bold" />}>ดาวน์โหลด PDF</Button><Button type="button" appearance="outline" size="large" icon={<Printer size={18} weight="bold" />} onClick={() => window.open(pdfUrl, '_blank', 'noopener,noreferrer')}>เปิดเพื่อพิมพ์</Button></>}</div>
+            <div className="mt-5 flex flex-wrap justify-end gap-2"><Button type="button" appearance="primary" size="large" icon={<DownloadSimple size={18} weight="bold" />} onClick={generatePdf} disabled={!canGenerate || pdfLoading}>{pdfLoading ? 'กำลังสร้าง PDF' : autoGenerate ? 'สร้าง PDF ใหม่' : 'สร้างและแสดงตัวอย่าง PDF'}</Button>{pdfUrl && <><Button as="a" href={pdfUrl} download={pdfName} appearance="outline" size="large" icon={<DownloadSimple size={18} weight="bold" />}>ดาวน์โหลด PDF</Button><Button as="a" href={pdfUrl} target="_blank" rel="noopener noreferrer" appearance="outline" size="large" icon={<Printer size={18} weight="bold" />}>เปิดเพื่อพิมพ์</Button></>}</div>
         </Panel>
         {scope === 'student' && studentCode !== '' && <Panel title="ตารางสอบจากฐานข้อมูลระบบ" description={`${selectedStudent?.full_name ?? studentCode} · ภาคเรียน ${schedule.data?.data.term || '-'}`}>
             {schedule.isPending && <QuerySkeleton rows={5} />}
             {schedule.isError && <QueryError onRetry={() => schedule.refetch()} />}
-            {schedule.data && !schedule.data.data.source_ready && <div role="alert" className="rounded-xl border border-amber-200 bg-amber-50 p-4 text-sm leading-6 text-amber-950"><p className="font-black">ชุดข้อมูลนำเข้าปัจจุบันไม่มีตาราง SCHEDULE</p><p className="mt-1">ให้นำเข้า ZIP จาก ITW51 ที่มี SCHEDULE.DBF ของระดับนี้ ระบบจะสร้างตาราง schedule ในฐานข้อมูลของระบบเองและแสดงตารางสอบที่นี่ โดยไม่เชื่อมฐานข้อมูลหรือ API ภายนอก</p></div>}
-            {schedule.data?.data.source_ready && schedule.data.data.sources?.field === false && <p role="alert" className="mb-4 rounded-xl border border-sky-200 bg-sky-50 p-3 text-sm font-bold text-sky-900">ยังไม่มี FIELD.DBF ในชุดข้อมูลปัจจุบัน ระบบจึงใช้ชื่ออำเภอแทนชื่อสนามสอบจนกว่าจะนำเข้าข้อมูลสนามสอบครบ</p>}
-            {schedule.data?.data.source_ready && <DataTable data={scheduleRows} columns={scheduleColumns} minWidth="wide" emptyTitle="ไม่พบตารางสอบในภาคเรียนนี้" emptyDescription="ตรวจว่า SCHEDULE.DBF มีภาคเรียนและรายวิชาตรงกับวิชาที่นักศึกษาลงทะเบียน" />}
+            {schedule.data && scheduleRows.length === 0 && <p role="status" className="rounded-xl border border-amber-200 bg-amber-50 p-4 text-center text-sm font-bold leading-6 text-amber-950">{EXAM_SCHEDULE_EMPTY_MESSAGE}</p>}
+            {schedule.data?.data.source_ready && scheduleRows.length > 0 && schedule.data.data.sources?.field === false && <p role="alert" className="mb-4 rounded-xl border border-sky-200 bg-sky-50 p-3 text-sm font-bold text-sky-900">ยังไม่มีข้อมูลสนามสอบในชุดข้อมูลปัจจุบัน ระบบจึงใช้ชื่ออำเภอแทนชื่อสนามสอบชั่วคราว</p>}
+            {schedule.data?.data.source_ready && scheduleRows.length > 0 && <DataTable data={scheduleRows} columns={scheduleColumns} minWidth="wide" />}
         </Panel>}
         <Panel title="ตัวอย่างไฟล์ PDF" description={pdfUrl ? 'ตัวอย่างนี้เป็นไฟล์เดียวกับที่ดาวน์โหลดและพิมพ์ ตำแหน่งจึงตรงกันทุกจุด' : autoGenerate ? 'ระบบกำลังสร้างตารางสอบของนักศึกษารายนี้' : 'เลือกขอบเขตแล้วกดสร้าง PDF เพื่อแสดงตัวอย่าง'}>
             {pdfLoading && <QuerySkeleton rows={8} />}
-            {pdfUrl ? <iframe src={pdfUrl} title="ตัวอย่างตารางสอบ PDF" className="h-[min(1120px,78vh)] min-h-[680px] w-full rounded-xl border border-slate-200 bg-slate-100" /> : !pdfLoading && <div className="grid min-h-72 place-items-center rounded-xl border border-dashed border-slate-300 bg-slate-50 text-center text-sm text-slate-500">ยังไม่ได้สร้างตัวอย่าง PDF</div>}
+            {pdfUrl ? <><MobileExamSchedulePreview document={scope === 'student' ? schedule.data?.data : undefined} pdfUrl={pdfUrl} pdfName={pdfName} /><iframe src={pdfUrl} title="ตัวอย่างตารางสอบ PDF" className="hidden h-[min(1120px,78vh)] min-h-[680px] w-full rounded-xl border border-slate-200 bg-slate-100 lg:block" /></> : !pdfLoading && <div className="grid min-h-72 place-items-center rounded-xl border border-dashed border-slate-300 bg-slate-50 text-center text-sm text-slate-500">ยังไม่ได้สร้างตัวอย่าง PDF</div>}
         </Panel>
     </div>;
 }

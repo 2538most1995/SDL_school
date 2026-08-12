@@ -77,6 +77,10 @@ async function readJsonResponse<T>(response: Response): Promise<T | null> {
 
 function responseError<T extends { message?: string; errors?: Record<string, string[]> }>(result: T | null, status: number): ApiError {
     const firstValidationError = result?.errors ? Object.values(result.errors).flat()[0] : undefined;
+    const responseMessage = result?.message?.trim();
+    const usefulResponseMessage = status >= 500 && responseMessage?.toLocaleLowerCase() === 'server error'
+        ? undefined
+        : responseMessage;
     const statusMessages: Record<number, string> = {
         413: 'ไฟล์มีขนาดเกินค่าที่เซิร์ฟเวอร์อนุญาต',
         419: 'เซสชันหมดอายุ กรุณารีเฟรชหน้าและเข้าสู่ระบบอีกครั้ง',
@@ -85,7 +89,7 @@ function responseError<T extends { message?: string; errors?: Record<string, str
         503: 'ระบบนำเข้าข้อมูลยังไม่พร้อมใช้งาน',
     };
 
-    return new ApiError(firstValidationError ?? result?.message ?? statusMessages[status] ?? `ไม่สามารถบันทึกข้อมูลได้ (HTTP ${status})`, status, result?.errors ?? {});
+    return new ApiError(firstValidationError ?? usefulResponseMessage ?? statusMessages[status] ?? `ไม่สามารถบันทึกข้อมูลได้ (HTTP ${status})`, status, result?.errors ?? {});
 }
 
 export async function sendFeatureData<T>(path: string, method: 'POST' | 'PUT' | 'PATCH' | 'DELETE', payload?: unknown): Promise<ApiResponse<T>> {

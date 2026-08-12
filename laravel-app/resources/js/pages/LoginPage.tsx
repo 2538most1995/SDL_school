@@ -129,9 +129,11 @@ export function LoginPage() {
 
                             {error && <MessageBar intent="error" role="alert"><MessageBarBody>{error}</MessageBarBody></MessageBar>}
 
-                            <Button type="submit" size="large" appearance="primary" disabled={submitDisabled} className="login-submit w-full" icon={!login.isPending ? <ArrowRight size={19} weight="bold" /> : undefined} iconPosition="after">
-                                {login.isPending ? 'กำลังตรวจสอบข้อมูล' : 'เข้าสู่ระบบ'}
-                            </Button>
+                            <div className="pt-3">
+                                <Button type="submit" size="large" appearance="primary" disabled={submitDisabled} className="login-submit w-full" icon={!login.isPending ? <ArrowRight size={19} weight="bold" /> : undefined} iconPosition="after">
+                                    {login.isPending ? 'กำลังตรวจสอบข้อมูล' : 'เข้าสู่ระบบ'}
+                                </Button>
+                            </div>
                         </form>
 
                         <p className="mt-6 text-center text-xs leading-5 text-slate-500">ระบบจะแสดงข้อมูลตามอำเภอ กลุ่ม และสิทธิ์ของบัญชีเท่านั้น</p>
