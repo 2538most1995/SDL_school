@@ -126,6 +126,30 @@ export async function sendFeatureData<T>(path: string, method: 'POST' | 'PUT' | 
     return result;
 }
 
+export async function getFeatureBlob(path: string): Promise<Blob> {
+    const districtId = window.localStorage.getItem('sena-district-id');
+    let response: Response;
+    try {
+        response = await fetch(withAppBasePath(path), {
+            method: 'GET',
+            credentials: 'same-origin',
+            headers: {
+                Accept: 'application/pdf,image/jpeg,image/png,image/webp',
+                ...(districtId ? { 'X-District-Id': districtId } : {}),
+            },
+        });
+    } catch {
+        throw new ApiError('ไม่สามารถเชื่อมต่อเพื่อเปิดไฟล์ได้ กรุณาตรวจอินเทอร์เน็ตแล้วลองใหม่', 0);
+    }
+
+    if (!response.ok) {
+        const result = await readJsonResponse<{ message?: string; errors?: Record<string, string[]> }>(response);
+        throw responseError(result, response.status);
+    }
+
+    return response.blob();
+}
+
 export function uploadFeatureData<T>(path: string, payload: FormData, onProgress: (percentage: number) => void): Promise<ApiResponse<T>> {
     return new Promise((resolve, reject) => {
         const request = new XMLHttpRequest();

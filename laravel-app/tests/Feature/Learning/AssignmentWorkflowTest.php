@@ -180,6 +180,64 @@ final class AssignmentWorkflowTest extends TestCase
         ])->assertNotFound();
     }
 
+    public function test_teacher_and_student_can_upload_and_open_private_images(): void
+    {
+        Storage::fake('local');
+        $teacher = $this->teacher(['SENA-M3-A']);
+        Sanctum::actingAs($teacher);
+
+        $created = $this->post('/api/v1/learning/assignments', [
+            'title' => 'ใบงานจากรูปภาพ',
+            'instructions' => 'ดูรูปคำสั่งงานแล้วส่งภาพผลงาน',
+            'subject_code' => 'พว31001',
+            'education_level' => 3,
+            'target_group' => 'SENA-M3-A',
+            'max_score' => 20,
+            'opens_at' => now()->subHour()->toDateTimeString(),
+            'due_at' => now()->addDay()->toDateTimeString(),
+            'status' => 'open',
+            'material_pdf' => UploadedFile::fake()->image('คำสั่งงาน.jpg', 900, 600),
+        ], ['Accept' => 'application/json'])->assertCreated()
+            ->assertJsonPath('data.id', fn ($id): bool => (int) $id > 0);
+        $assignmentId = (int) $created->json('data.id');
+
+        $this->getJson("/api/v1/learning/assignments?assignment_id={$assignmentId}")
+            ->assertOk()
+            ->assertJsonPath('data.selected_assignment.material_type', 'image')
+            ->assertJsonPath('data.selected_assignment.material_filename', 'คำสั่งงาน.jpg');
+        $this->get("/api/v1/learning/assignments/{$assignmentId}/material")
+            ->assertOk()
+            ->assertHeader('content-type', 'image/jpeg');
+
+        $student = $this->student('6650300005');
+        Sanctum::actingAs($student);
+        $this->get("/api/v1/learning/assignments/{$assignmentId}/material")
+            ->assertOk()
+            ->assertHeader('content-type', 'image/jpeg');
+        $this->post("/api/v1/learning/assignments/{$assignmentId}/submit", [
+            'submission_type' => 'image',
+            'file' => UploadedFile::fake()->create('ไม่ใช่รูปภาพ.pdf', 40, 'application/pdf'),
+        ], ['Accept' => 'application/json'])->assertUnprocessable();
+        $submitted = $this->post("/api/v1/learning/assignments/{$assignmentId}/submit", [
+            'submission_type' => 'image',
+            'file' => UploadedFile::fake()->image('ผลงาน.png', 800, 800),
+        ], ['Accept' => 'application/json'])->assertOk()
+            ->assertJsonPath('data.type', 'image');
+        $submissionId = (int) $submitted->json('data.id');
+        $this->get("/api/v1/learning/assignments/{$assignmentId}/submissions/{$submissionId}/file")
+            ->assertOk()
+            ->assertHeader('content-type', 'image/png');
+
+        Sanctum::actingAs($teacher);
+        $this->get("/api/v1/learning/assignments/{$assignmentId}/submissions/{$submissionId}/file")
+            ->assertOk()
+            ->assertHeader('content-type', 'image/png');
+
+        Sanctum::actingAs($this->student('6650300006'));
+        $this->get("/api/v1/learning/assignments/{$assignmentId}/material")->assertNotFound();
+        $this->get("/api/v1/learning/assignments/{$assignmentId}/submissions/{$submissionId}/file")->assertNotFound();
+    }
+
     public function test_assignment_save_succeeds_when_audit_storage_is_temporarily_unavailable(): void
     {
         if (DB::connection()->getDriverName() !== 'sqlite') {
@@ -261,7 +319,7 @@ final class AssignmentWorkflowTest extends TestCase
                 ->assertUnprocessable()
                 ->assertJsonPath(
                     'errors.material_pdf.0',
-                    'เซิร์ฟเวอร์ไม่สามารถจัดเก็บไฟล์ PDF ได้ กรุณาให้ผู้ดูแลตรวจสิทธิ์เขียนโฟลเดอร์ storage/app/private',
+                    'เซิร์ฟเวอร์ไม่สามารถจัดเก็บไฟล์ได้ กรุณาให้ผู้ดูแลตรวจสิทธิ์เขียนโฟลเดอร์ storage/app/private',
                 );
 
             $this->assertDatabaseMissing('learning_assignments', ['title' => 'ใบงานที่มีเอกสารจากครู']);

@@ -103,13 +103,27 @@ final class AssignmentWorkflowController extends Controller
     public function submit(Request $request, int $assignment, AssignmentWorkflowService $workflow): JsonResponse
     {
         $this->assertWriteEnabled();
+        $submissionType = $request->string('submission_type')->toString();
+        $fileRules = [
+            Rule::requiredIf($submissionType !== 'link'),
+            'nullable',
+            'file',
+            'max:20480',
+        ];
+        if ($submissionType === 'pdf') {
+            $fileRules[] = 'mimes:pdf';
+        } elseif ($submissionType === 'image') {
+            $fileRules[] = 'mimes:jpg,jpeg,png,webp';
+        }
         $values = $request->validate([
-            'submission_type' => ['required', Rule::in(['link', 'pdf'])],
-            'url' => [Rule::requiredIf($request->input('submission_type') === 'link'), 'nullable', 'url:http,https', 'max:2000'],
-            'file' => [Rule::requiredIf($request->input('submission_type') === 'pdf'), 'nullable', 'file', 'mimes:pdf', 'max:20480'],
+            'submission_type' => ['required', Rule::in(['link', 'pdf', 'image'])],
+            'url' => [Rule::requiredIf($submissionType === 'link'), 'nullable', 'url:http,https', 'max:2000'],
+            'file' => $fileRules,
         ], [
-            'file.mimes' => 'รองรับเฉพาะไฟล์ PDF เท่านั้น',
-            'file.max' => 'ไฟล์ PDF ต้องมีขนาดไม่เกิน 20 MB',
+            'file.mimes' => $submissionType === 'image'
+                ? 'รูปภาพรองรับเฉพาะ JPG, PNG และ WebP'
+                : 'เอกสารรองรับเฉพาะไฟล์ PDF',
+            'file.max' => 'ไฟล์ต้องมีขนาดไม่เกิน 20 MB',
         ]);
 
         return response()->json([
@@ -155,10 +169,9 @@ final class AssignmentWorkflowController extends Controller
             $submission,
         );
 
-        return Storage::disk('local')->download(
+        return $this->privateFileResponse(
             (string) $row->attachment_path,
             (string) ($row->original_filename ?: 'assignment.pdf'),
-            ['Content-Type' => 'application/pdf', 'X-Content-Type-Options' => 'nosniff'],
         );
     }
 
@@ -170,10 +183,9 @@ final class AssignmentWorkflowController extends Controller
             $assignment,
         );
 
-        return Storage::disk('local')->download(
+        return $this->privateFileResponse(
             (string) $row->material_path,
             (string) ($row->material_filename ?: 'assignment-material.pdf'),
-            ['Content-Type' => 'application/pdf', 'X-Content-Type-Options' => 'nosniff'],
         );
     }
 
@@ -191,14 +203,38 @@ final class AssignmentWorkflowController extends Controller
             'due_at' => ['required', 'date', 'after:opens_at'],
             'status' => ['required', Rule::in(['draft', 'open', 'closed'])],
             'material_url' => ['nullable', 'url:http,https', 'max:2000'],
-            'material_pdf' => ['nullable', 'file', 'mimes:pdf', 'max:20480'],
+            'material_pdf' => ['nullable', 'file', 'mimes:pdf,jpg,jpeg,png,webp', 'max:20480'],
             'remove_material_pdf' => ['sometimes', 'boolean'],
         ], [
             'due_at.after' => 'กำหนดส่งต้องอยู่หลังเวลาเปิดรับงาน',
             'material_url.url' => 'ลิงก์เอกสารงานต้องขึ้นต้นด้วย http:// หรือ https://',
-            'material_pdf.mimes' => 'เอกสารงานรองรับเฉพาะไฟล์ PDF เท่านั้น',
-            'material_pdf.max' => 'เอกสารงาน PDF ต้องมีขนาดไม่เกิน 20 MB',
+            'material_pdf.mimes' => 'ไฟล์ประกอบงานรองรับ PDF, JPG, PNG และ WebP',
+            'material_pdf.max' => 'ไฟล์ประกอบงานต้องมีขนาดไม่เกิน 20 MB',
         ]);
+    }
+
+    private function privateFileResponse(string $path, string $filename)
+    {
+        $disk = Storage::disk('local');
+        $mimeType = match (strtolower(pathinfo($path, PATHINFO_EXTENSION))) {
+            'pdf' => 'application/pdf',
+            'jpg', 'jpeg' => 'image/jpeg',
+            'png' => 'image/png',
+            'webp' => 'image/webp',
+            default => null,
+        };
+        abort_unless($mimeType !== null, 404);
+
+        return $disk->response(
+            $path,
+            $filename,
+            [
+                'Content-Type' => $mimeType,
+                'X-Content-Type-Options' => 'nosniff',
+                'Cache-Control' => 'private, no-store',
+            ],
+            'inline',
+        );
     }
 
     private function districtId(Request $request): int

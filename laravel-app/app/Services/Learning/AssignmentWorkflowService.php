@@ -199,7 +199,7 @@ final readonly class AssignmentWorkflowService
                 }
 
                 if ($materialFile !== null) {
-                    $path = $this->storePdf(
+                    $path = $this->storeAttachment(
                         $materialFile,
                         "learning/assignments/{$districtId}/{$savedId}",
                         'material_pdf',
@@ -291,8 +291,8 @@ final readonly class AssignmentWorkflowService
         $existing = $connection->table('learning_submissions')
             ->where('assignment_id', $assignmentId)->where('student_code', $studentCode)->first();
         $newPath = null;
-        if ($type === 'pdf' && $file !== null) {
-            $newPath = $this->storePdf(
+        if (in_array($type, ['pdf', 'image'], true) && $file !== null) {
+            $newPath = $this->storeAttachment(
                 $file,
                 "learning/submissions/{$districtId}/{$assignmentId}",
                 'file',
@@ -307,10 +307,10 @@ final readonly class AssignmentWorkflowService
             'student_id' => $studentId,
             'submission_type' => $type,
             'external_url' => $type === 'link' ? $url : null,
-            'attachment_disk' => $type === 'pdf' ? 'local' : null,
+            'attachment_disk' => $type !== 'link' ? 'local' : null,
             'attachment_path' => $newPath,
-            'original_filename' => $type === 'pdf' ? $file?->getClientOriginalName() : null,
-            'file_size' => $type === 'pdf' ? $file?->getSize() : null,
+            'original_filename' => $type !== 'link' ? $file?->getClientOriginalName() : null,
+            'file_size' => $type !== 'link' ? $file?->getSize() : null,
             'submitted_at' => now(),
             'status' => 'submitted',
             'score' => null,
@@ -393,7 +393,7 @@ final readonly class AssignmentWorkflowService
             ->where('submission.id', $submissionId)
             ->select('submission.*', 'assignment.created_by')
             ->first();
-        abort_unless($submission !== null && $submission->submission_type === 'pdf', 404);
+        abort_unless($submission !== null && in_array($submission->submission_type, ['pdf', 'image'], true), 404);
         if ($viewer->role === 'student') {
             abort_unless((string) $submission->student_code === trim((string) ($viewer->student_code ?: $viewer->username)), 404);
         } elseif ($viewer->role === 'teacher') {
@@ -485,6 +485,10 @@ final readonly class AssignmentWorkflowService
             'material_url' => (string) ($assignment->material_url ?? ''),
             'material_filename' => (string) ($assignment->material_filename ?? ''),
             'material_size' => $assignment->material_size === null ? null : (int) $assignment->material_size,
+            'material_type' => $this->attachmentType(
+                (string) ($assignment->material_filename ?? ''),
+                (string) ($assignment->material_path ?? ''),
+            ),
             'material_download_url' => trim((string) ($assignment->material_path ?? '')) !== ''
                 ? '/api/v1/learning/assignments/'.(int) $assignment->id.'/material'
                 : null,
@@ -511,7 +515,7 @@ final readonly class AssignmentWorkflowService
             'score' => $submission->score === null ? null : (float) $submission->score,
             'feedback' => (string) ($submission->feedback ?? ''),
             'reviewed_at' => $submission->reviewed_at,
-            'download_url' => $submission->submission_type === 'pdf'
+            'download_url' => in_array($submission->submission_type, ['pdf', 'image'], true)
                 ? '/api/v1/learning/assignments/'.(int) $submission->assignment_id.'/submissions/'.(int) $submission->id.'/file'
                 : null,
         ];
@@ -534,7 +538,7 @@ final readonly class AssignmentWorkflowService
     private function ownedSubmissionPath(int $districtId, int $assignmentId, string $path): bool
     {
         return preg_match(
-            '#^learning/submissions/'.preg_quote((string) $districtId, '#').'/'.preg_quote((string) $assignmentId, '#').'/[0-9a-f-]+\.pdf$#i',
+            '#^learning/submissions/'.preg_quote((string) $districtId, '#').'/'.preg_quote((string) $assignmentId, '#').'/[0-9a-f-]+\.(?:pdf|jpe?g|png|webp)$#i',
             $path,
         ) === 1;
     }
@@ -542,12 +546,12 @@ final readonly class AssignmentWorkflowService
     private function ownedMaterialPath(int $districtId, int $assignmentId, string $path): bool
     {
         return preg_match(
-            '#^learning/assignments/'.preg_quote((string) $districtId, '#').'/'.preg_quote((string) $assignmentId, '#').'/[0-9a-f-]+\.pdf$#i',
+            '#^learning/assignments/'.preg_quote((string) $districtId, '#').'/'.preg_quote((string) $assignmentId, '#').'/[0-9a-f-]+\.(?:pdf|jpe?g|png|webp)$#i',
             $path,
         ) === 1;
     }
 
-    private function storePdf(UploadedFile $file, string $directory, string $field): string
+    private function storeAttachment(UploadedFile $file, string $directory, string $field): string
     {
         try {
             $disk = Storage::disk('local');
@@ -555,9 +559,16 @@ final readonly class AssignmentWorkflowService
                 throw new \RuntimeException('Unable to create private storage directory.');
             }
 
-            $path = $file->storeAs($directory, Str::uuid().'.pdf', 'local');
+            $extension = match ($file->getMimeType()) {
+                'application/pdf' => 'pdf',
+                'image/jpeg' => 'jpg',
+                'image/png' => 'png',
+                'image/webp' => 'webp',
+                default => throw new \RuntimeException('Unsupported private attachment type.'),
+            };
+            $path = $file->storeAs($directory, Str::uuid().'.'.$extension, 'local');
             if (! is_string($path) || $path === '' || ! $disk->exists($path)) {
-                throw new \RuntimeException('Uploaded PDF was not persisted.');
+                throw new \RuntimeException('Uploaded attachment was not persisted.');
             }
 
             return $path;
@@ -565,9 +576,20 @@ final readonly class AssignmentWorkflowService
             report($exception);
 
             throw ValidationException::withMessages([
-                $field => 'เซิร์ฟเวอร์ไม่สามารถจัดเก็บไฟล์ PDF ได้ กรุณาให้ผู้ดูแลตรวจสิทธิ์เขียนโฟลเดอร์ storage/app/private',
+                $field => 'เซิร์ฟเวอร์ไม่สามารถจัดเก็บไฟล์ได้ กรุณาให้ผู้ดูแลตรวจสิทธิ์เขียนโฟลเดอร์ storage/app/private',
             ]);
         }
+    }
+
+    private function attachmentType(string $filename, string $path): ?string
+    {
+        $extension = strtolower(pathinfo($filename !== '' ? $filename : $path, PATHINFO_EXTENSION));
+
+        return match ($extension) {
+            'pdf' => 'pdf',
+            'jpg', 'jpeg', 'png', 'webp' => 'image',
+            default => null,
+        };
     }
 
     /** @param array<string, mixed> $context */
