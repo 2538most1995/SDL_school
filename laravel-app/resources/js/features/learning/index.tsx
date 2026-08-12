@@ -37,6 +37,7 @@ import { withAppBasePath } from '../../lib/urls';
 import { showSuccessAlert } from '../../lib/feedback';
 import { CalendarPage } from './CalendarPage';
 import { ScorebookPage } from './ScorebookPage';
+import { AssignmentWorkspacePage } from './AssignmentWorkspacePage';
 
 type LearningOverview = {
     studentName: string;
@@ -250,6 +251,7 @@ function learningTone(status: string): StatusTone {
 }
 
 export function LearningListPage({ kind }: { kind: LearningKind }) {
+    if (kind === 'assignments') return <AssignmentWorkspacePage />;
     if (kind === 'schedule') return <ExamSchedulePage />;
     if (kind === 'calendar') return <CalendarPage />;
     if (kind === 'scores') return <ScorebookPage />;

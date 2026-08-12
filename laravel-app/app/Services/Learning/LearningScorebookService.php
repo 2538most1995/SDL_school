@@ -202,6 +202,33 @@ final readonly class LearningScorebookService
     }
 
     /**
+     * Share the same current-term registration source with assignment flows.
+     * The returned rows are already district and teacher-group scoped. Student
+     * viewers are additionally reduced to their own imported student code.
+     *
+     * @return array{terms: list<string>, selected_term: ?string, subjects: list<array<string, mixed>>, registrations: list<array<string, mixed>>}
+     */
+    public function assignmentCatalog(User $viewer, int $districtId): array
+    {
+        $source = $this->registrationSource($viewer, $districtId, []);
+        $rows = $source['rows'];
+        if ($viewer->role === 'student') {
+            $studentCode = trim((string) ($viewer->student_code ?: $viewer->username));
+            $rows = array_values(array_filter(
+                $rows,
+                static fn (array $row): bool => (string) $row['student_code'] === $studentCode,
+            ));
+        }
+
+        return [
+            'terms' => $source['terms'],
+            'selected_term' => $source['selected_term'],
+            'subjects' => $this->subjects($rows),
+            'registrations' => $rows,
+        ];
+    }
+
+    /**
      * @param  array<string, mixed>  $values
      * @return array<string, mixed>
      */

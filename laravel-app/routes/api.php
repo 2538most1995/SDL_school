@@ -7,7 +7,7 @@ use App\Http\Controllers\Api\Admin\ImportSafetyController;
 use App\Http\Controllers\Api\Admin\UserController;
 use App\Http\Controllers\Api\Auth\DistrictOptionsController;
 use App\Http\Controllers\Api\Auth\PublicBrandingController;
-use App\Http\Controllers\Api\Learning\AssignmentController;
+use App\Http\Controllers\Api\Learning\AssignmentWorkflowController;
 use App\Http\Controllers\Api\Learning\CalendarController;
 use App\Http\Controllers\Api\Learning\ExamScheduleDocumentController;
 use App\Http\Controllers\Api\Learning\LearningContentController;
@@ -82,7 +82,9 @@ Route::prefix('v1')->group(function (): void {
     Route::middleware(['auth:sanctum', 'active', 'district'])->group(function (): void {
         Route::get('/portal', PortalController::class);
         Route::get('/learning', LearningOverviewController::class)->middleware('learning.schema');
-        Route::get('/learning/assignments', AssignmentController::class)->middleware('learning.schema');
+        Route::get('/learning/assignments', [AssignmentWorkflowController::class, 'index'])->middleware('learning.schema');
+        Route::post('/learning/assignments/{assignment}/submit', [AssignmentWorkflowController::class, 'submit'])->middleware('learning.schema')->whereNumber('assignment');
+        Route::get('/learning/assignments/{assignment}/submissions/{submission}/file', [AssignmentWorkflowController::class, 'file'])->middleware('learning.schema')->whereNumber(['assignment', 'submission']);
         Route::get('/learning/resources', ResourceController::class)->middleware('learning.schema');
         Route::get('/learning/resources/{resource}/file', ResourceFileController::class)->middleware('learning.schema')->whereNumber('resource');
         Route::get('/learning/lesson-plans', LessonPlanController::class)->middleware(['learning.schema', 'role:teacher,admin,super_admin']);
@@ -145,9 +147,13 @@ Route::prefix('v1')->group(function (): void {
 
     Route::middleware(['auth:sanctum', 'active', 'district', 'role:teacher,admin,super_admin'])
         ->group(function (): void {
-            Route::post('/learning/{kind}', [LearningContentController::class, 'store'])->middleware('learning.schema')->whereIn('kind', ['assignments', 'resources', 'lesson-plans', 'calendar']);
-            Route::patch('/learning/{kind}/{content}', [LearningContentController::class, 'update'])->middleware('learning.schema')->whereIn('kind', ['assignments', 'resources', 'lesson-plans', 'calendar'])->whereNumber('content');
-            Route::delete('/learning/{kind}/{content}', [LearningContentController::class, 'destroy'])->middleware('learning.schema')->whereIn('kind', ['assignments', 'resources', 'lesson-plans', 'calendar'])->whereNumber('content');
+            Route::post('/learning/assignments', [AssignmentWorkflowController::class, 'store'])->middleware('learning.schema');
+            Route::patch('/learning/assignments/{assignment}', [AssignmentWorkflowController::class, 'update'])->middleware('learning.schema')->whereNumber('assignment');
+            Route::delete('/learning/assignments/{assignment}', [AssignmentWorkflowController::class, 'destroy'])->middleware('learning.schema')->whereNumber('assignment');
+            Route::patch('/learning/assignments/{assignment}/submissions/{submission}', [AssignmentWorkflowController::class, 'review'])->middleware('learning.schema')->whereNumber(['assignment', 'submission']);
+            Route::post('/learning/{kind}', [LearningContentController::class, 'store'])->middleware('learning.schema')->whereIn('kind', ['resources', 'lesson-plans', 'calendar']);
+            Route::patch('/learning/{kind}/{content}', [LearningContentController::class, 'update'])->middleware('learning.schema')->whereIn('kind', ['resources', 'lesson-plans', 'calendar'])->whereNumber('content');
+            Route::delete('/learning/{kind}/{content}', [LearningContentController::class, 'destroy'])->middleware('learning.schema')->whereIn('kind', ['resources', 'lesson-plans', 'calendar'])->whereNumber('content');
             Route::post('/learning/scores/scorebooks', [ScoreController::class, 'store'])->middleware('learning.schema');
             Route::put('/learning/scores/scorebooks/{scorebook}/structure', [ScoreController::class, 'structure'])->middleware('learning.schema')->whereNumber('scorebook');
             Route::put('/learning/scores/scorebooks/{scorebook}/entries', [ScoreController::class, 'entries'])->middleware('learning.schema')->whereNumber('scorebook');

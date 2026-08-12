@@ -38,6 +38,7 @@ District scope is resolved by `ResolveDistrictContext`; role checks are enforced
 8. Student login derives district scope from one unique citizen-ID match across current-term rosters in active districts; client-supplied district values are ignored and ambiguous matches fail closed.
 9. Calendar activities, per-day schedules, external links and private images are visible only within the event district and `all`/assigned-group target; only teacher/admin/super-admin roles can create or change them, teacher writes remain creator/group scoped, and only admin/super-admin may choose the single district activity featured on the student dashboard.
 10. Authenticated learning routes run an idempotent additive readiness check so a Git-only shared-hosting deploy can repair missing learning/audit tables or columns before the first read/write; normal deployments still run migrations.
+11. งานที่มอบหมายเลือกได้เฉพาะรายวิชาลงทะเบียนในภาคเรียนปัจจุบันและขอบเขตกลุ่มของครู; การส่งงานใช้ `student_code` จากชุดข้อมูลผู้เรียนปัจจุบัน รองรับลิงก์หรือ PDF private storage และครูเห็น/ตรวจได้เฉพาะงานที่ตนสร้างภายในอำเภอ
 
 ## Request/data flow
 

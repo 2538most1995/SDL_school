@@ -15,8 +15,8 @@ final class LearningSchemaReadiness
     /** @var array<string, list<string>> */
     private const REQUIREMENTS = [
         'users' => ['name'],
-        'learning_assignments' => ['district_id', 'created_by', 'title', 'instructions', 'subject_code', 'target_type', 'target_value', 'max_score', 'opens_at', 'due_at', 'status', 'created_at', 'updated_at'],
-        'learning_submissions' => ['assignment_id', 'student_id', 'content', 'attachment_disk', 'attachment_path', 'original_filename', 'submitted_at', 'status', 'score', 'feedback', 'reviewed_by', 'reviewed_at', 'created_at', 'updated_at'],
+        'learning_assignments' => ['district_id', 'created_by', 'title', 'instructions', 'academic_term', 'subject_code', 'subject_name', 'education_level', 'target_type', 'target_value', 'max_score', 'opens_at', 'due_at', 'status', 'created_at', 'updated_at'],
+        'learning_submissions' => ['assignment_id', 'student_id', 'student_code', 'content', 'submission_type', 'external_url', 'attachment_disk', 'attachment_path', 'original_filename', 'file_size', 'submitted_at', 'status', 'score', 'feedback', 'reviewed_by', 'reviewed_at', 'created_at', 'updated_at'],
         'learning_resources' => ['district_id', 'uploaded_by', 'title', 'description', 'subject_code', 'education_level', 'resource_type', 'storage_disk', 'storage_path', 'external_url', 'visibility', 'target_group', 'created_at', 'updated_at'],
         'learning_lesson_plans' => ['district_id', 'teacher_id', 'subject_code', 'education_level', 'academic_term', 'title', 'objectives', 'activities', 'assessment', 'status', 'created_at', 'updated_at'],
         'learning_calendar_events' => ['district_id', 'created_by', 'title', 'description', 'event_type', 'starts_at', 'ends_at', 'location', 'target_type', 'target_value', 'image_path', 'image_updated_at', 'daily_schedule', 'external_url', 'featured_on_dashboard', 'created_at', 'updated_at'],
@@ -29,6 +29,7 @@ final class LearningSchemaReadiness
 
     /** @var array<string, list<string>> */
     private const INDEX_REQUIREMENTS = [
+        'learning_submissions' => ['learning_submissions_assignment_student_code_unique'],
         'learning_scorebooks' => ['learning_scorebooks_course_scope_unique', 'learning_scorebooks_course_scope_index'],
         'learning_score_components' => ['learning_score_components_scorebook_id_position_unique'],
         'learning_score_entries' => ['learning_score_entries_unique'],
@@ -142,7 +143,10 @@ final class LearningSchemaReadiness
                 $table->unsignedBigInteger('created_by')->nullable()->index();
                 $table->string('title', 220);
                 $table->text('instructions')->nullable();
+                $table->string('academic_term', 16)->nullable()->index();
                 $table->string('subject_code', 32)->nullable()->index();
+                $table->string('subject_name', 220)->nullable();
+                $table->unsignedTinyInteger('education_level')->nullable()->index();
                 $table->string('target_type', 24)->default('all')->index();
                 $table->string('target_value', 120)->nullable()->index();
                 $table->decimal('max_score', 7, 2)->default(0);
@@ -159,7 +163,10 @@ final class LearningSchemaReadiness
         $this->addMissingColumn($schema, 'learning_assignments', 'created_by', fn (Blueprint $table) => $table->unsignedBigInteger('created_by')->nullable());
         $this->addMissingColumn($schema, 'learning_assignments', 'title', fn (Blueprint $table) => $table->string('title', 220)->nullable());
         $this->addMissingColumn($schema, 'learning_assignments', 'instructions', fn (Blueprint $table) => $table->text('instructions')->nullable());
+        $this->addMissingColumn($schema, 'learning_assignments', 'academic_term', fn (Blueprint $table) => $table->string('academic_term', 16)->nullable());
         $this->addMissingColumn($schema, 'learning_assignments', 'subject_code', fn (Blueprint $table) => $table->string('subject_code', 32)->nullable());
+        $this->addMissingColumn($schema, 'learning_assignments', 'subject_name', fn (Blueprint $table) => $table->string('subject_name', 220)->nullable());
+        $this->addMissingColumn($schema, 'learning_assignments', 'education_level', fn (Blueprint $table) => $table->unsignedTinyInteger('education_level')->nullable());
         $this->addMissingColumn($schema, 'learning_assignments', 'target_type', fn (Blueprint $table) => $table->string('target_type', 24)->default('all'));
         $this->addMissingColumn($schema, 'learning_assignments', 'target_value', fn (Blueprint $table) => $table->string('target_value', 120)->nullable());
         $this->addMissingColumn($schema, 'learning_assignments', 'max_score', fn (Blueprint $table) => $table->decimal('max_score', 7, 2)->default(0));
@@ -175,11 +182,15 @@ final class LearningSchemaReadiness
             $schema->create('learning_submissions', function (Blueprint $table): void {
                 $table->id();
                 $table->unsignedBigInteger('assignment_id')->index();
-                $table->unsignedBigInteger('student_id')->index();
+                $table->unsignedBigInteger('student_id')->nullable()->index();
+                $table->string('student_code', 64)->nullable()->index();
                 $table->text('content')->nullable();
+                $table->string('submission_type', 16)->nullable()->index();
+                $table->string('external_url', 2000)->nullable();
                 $table->string('attachment_disk', 40)->nullable();
                 $table->string('attachment_path')->nullable();
                 $table->string('original_filename')->nullable();
+                $table->unsignedBigInteger('file_size')->nullable();
                 $table->timestamp('submitted_at')->nullable();
                 $table->string('status', 24)->default('draft')->index();
                 $table->decimal('score', 7, 2)->nullable();
@@ -188,6 +199,7 @@ final class LearningSchemaReadiness
                 $table->timestamp('reviewed_at')->nullable();
                 $table->timestamps();
                 $table->unique(['assignment_id', 'student_id']);
+                $table->unique(['assignment_id', 'student_code'], 'learning_submissions_assignment_student_code_unique');
             });
 
             return;
@@ -195,10 +207,14 @@ final class LearningSchemaReadiness
 
         $this->addMissingColumn($schema, 'learning_submissions', 'assignment_id', fn (Blueprint $table) => $table->unsignedBigInteger('assignment_id')->nullable());
         $this->addMissingColumn($schema, 'learning_submissions', 'student_id', fn (Blueprint $table) => $table->unsignedBigInteger('student_id')->nullable());
+        $this->addMissingColumn($schema, 'learning_submissions', 'student_code', fn (Blueprint $table) => $table->string('student_code', 64)->nullable());
         $this->addMissingColumn($schema, 'learning_submissions', 'content', fn (Blueprint $table) => $table->text('content')->nullable());
+        $this->addMissingColumn($schema, 'learning_submissions', 'submission_type', fn (Blueprint $table) => $table->string('submission_type', 16)->nullable());
+        $this->addMissingColumn($schema, 'learning_submissions', 'external_url', fn (Blueprint $table) => $table->string('external_url', 2000)->nullable());
         $this->addMissingColumn($schema, 'learning_submissions', 'attachment_disk', fn (Blueprint $table) => $table->string('attachment_disk', 40)->nullable());
         $this->addMissingColumn($schema, 'learning_submissions', 'attachment_path', fn (Blueprint $table) => $table->string('attachment_path')->nullable());
         $this->addMissingColumn($schema, 'learning_submissions', 'original_filename', fn (Blueprint $table) => $table->string('original_filename')->nullable());
+        $this->addMissingColumn($schema, 'learning_submissions', 'file_size', fn (Blueprint $table) => $table->unsignedBigInteger('file_size')->nullable());
         $this->addMissingColumn($schema, 'learning_submissions', 'submitted_at', fn (Blueprint $table) => $table->timestamp('submitted_at')->nullable());
         $this->addMissingColumn($schema, 'learning_submissions', 'status', fn (Blueprint $table) => $table->string('status', 24)->default('draft'));
         $this->addMissingColumn($schema, 'learning_submissions', 'score', fn (Blueprint $table) => $table->decimal('score', 7, 2)->nullable());
@@ -206,6 +222,11 @@ final class LearningSchemaReadiness
         $this->addMissingColumn($schema, 'learning_submissions', 'reviewed_by', fn (Blueprint $table) => $table->unsignedBigInteger('reviewed_by')->nullable());
         $this->addMissingColumn($schema, 'learning_submissions', 'reviewed_at', fn (Blueprint $table) => $table->timestamp('reviewed_at')->nullable());
         $this->addTimestamps($schema, 'learning_submissions');
+        if (! $schema->hasIndex('learning_submissions', 'learning_submissions_assignment_student_code_unique')) {
+            $schema->table('learning_submissions', function (Blueprint $table): void {
+                $table->unique(['assignment_id', 'student_code'], 'learning_submissions_assignment_student_code_unique');
+            });
+        }
     }
 
     private function ensureResources(Builder $schema): void
