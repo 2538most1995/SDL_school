@@ -63,6 +63,10 @@ type Assignment = {
     due_at: string;
     status: 'draft' | 'open' | 'closed';
     teacher_name: string;
+    material_url: string;
+    material_filename: string;
+    material_size: number | null;
+    material_download_url: string | null;
     student_count: number;
     submitted_count: number;
     can_edit: boolean;
@@ -97,6 +101,7 @@ type AssignmentDraft = {
     opens_at: string;
     due_at: string;
     status: Assignment['status'];
+    material_url: string;
 };
 
 const emptyWorkspace: AssignmentWorkspace = {
@@ -118,6 +123,7 @@ const emptyDraft: AssignmentDraft = {
     opens_at: '',
     due_at: '',
     status: 'open',
+    material_url: '',
 };
 
 function thaiDateTime(value: string | null): string {
@@ -260,6 +266,7 @@ export function AssignmentWorkspacePage() {
                             {canManage ? <div className="flex gap-2"><button type="button" onClick={() => setAssignmentEditor(selected)} className="inline-flex h-10 items-center gap-2 whitespace-nowrap rounded-xl border border-slate-200 px-3.5 text-sm font-bold text-slate-700 hover:text-brand-800"><PencilSimple size={17} /> แก้ไข</button><button type="button" onClick={() => { if (window.confirm(`ยืนยันลบงาน ${selected.title}? งานที่ผู้เรียนส่งไว้จะถูกลบด้วย`)) remove.mutate(selected); }} disabled={remove.isPending} className="inline-flex h-10 items-center gap-2 whitespace-nowrap rounded-xl border border-rose-200 px-3.5 text-sm font-bold text-rose-700 hover:bg-rose-50"><Trash size={17} /> ลบงาน</button></div> : selected.status === 'open' && <button type="button" onClick={() => setSubmissionEditor(selected)} className="inline-flex h-11 items-center justify-center gap-2 whitespace-nowrap rounded-xl bg-brand-700 px-5 text-sm font-bold text-white hover:bg-brand-800 active:scale-[0.98]"><UploadSimple size={18} /> {selected.submission ? 'ส่งงานอีกครั้ง' : 'ส่งงาน'}</button>}
                         </div>
                         {selected.instructions && <p className="mt-4 max-w-3xl whitespace-pre-wrap text-sm leading-6 text-slate-700">{selected.instructions}</p>}
+                        <AssignmentMaterials assignment={selected} canManage={canManage} />
                         <dl className="mt-4 grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
                             <div className="rounded-xl bg-slate-50 p-3"><dt className="flex items-center gap-2 text-xs font-bold text-slate-500"><CalendarBlank size={16} /> กำหนดส่ง</dt><dd className="mt-1 text-sm font-bold text-slate-900">{thaiDateTime(selected.due_at)}</dd></div>
                             <div className="rounded-xl bg-slate-50 p-3"><dt className="flex items-center gap-2 text-xs font-bold text-slate-500"><Users size={16} /> ผู้เรียน</dt><dd className="mt-1 text-sm font-bold text-slate-900">{selected.student_count} คน</dd></div>
@@ -293,6 +300,24 @@ function SubmissionLink({ assignment, submission }: { assignment: Assignment; su
     return <a href={href} target="_blank" rel="noopener noreferrer" className="inline-flex max-w-[240px] items-center gap-2 font-bold text-brand-800 hover:underline">{submission.type === 'pdf' ? <FilePdf size={18} /> : <LinkSimple size={18} />}<span className="truncate">{submission.type === 'pdf' ? submission.filename : submission.url}</span>{submission.type === 'pdf' && <span className="shrink-0 text-xs font-normal text-slate-500">{fileSize(submission.file_size)}</span>}<span className="sr-only">งาน {assignment.title}</span></a>;
 }
 
+function AssignmentMaterials({ assignment, canManage }: { assignment: Assignment; canManage: boolean }) {
+    const hasLink = assignment.material_url !== '';
+    const hasPdf = assignment.material_download_url !== null;
+    if (!hasLink && !hasPdf) {
+        return canManage
+            ? <p className="mt-4 rounded-xl border border-dashed border-slate-300 px-4 py-3 text-sm text-slate-500">ยังไม่ได้แนบเอกสารประกอบงาน นักศึกษาจะเห็นเฉพาะชื่อและคำชี้แจง</p>
+            : <p className="mt-4 rounded-xl bg-slate-50 px-4 py-3 text-sm text-slate-600">งานนี้ไม่มีเอกสารแนบเพิ่มเติม โปรดอ่านคำชี้แจงของครูด้านบน</p>;
+    }
+
+    return <section className="mt-4 rounded-xl border border-brand-200 bg-brand-50 p-4" aria-label="เอกสารประกอบงานจากครู">
+        <div className="flex items-center gap-2"><BookOpenText size={19} className="text-brand-800" /><h3 className="text-sm font-black text-brand-950">เอกสารประกอบงานจากครู</h3></div>
+        <div className="mt-3 flex flex-col gap-2 sm:flex-row sm:flex-wrap">
+            {hasLink && <a href={assignment.material_url} target="_blank" rel="noopener noreferrer" className="inline-flex min-h-11 items-center gap-2 rounded-xl border border-brand-200 bg-white px-4 py-2 text-sm font-bold text-brand-800 hover:border-brand-400"><LinkSimple size={18} /> เปิดลิงก์เอกสาร</a>}
+            {hasPdf && <a href={withAppBasePath(assignment.material_download_url ?? '')} target="_blank" rel="noopener noreferrer" className="inline-flex min-h-11 items-center gap-2 rounded-xl border border-brand-200 bg-white px-4 py-2 text-sm font-bold text-brand-800 hover:border-brand-400"><FilePdf size={19} /> <span className="max-w-[260px] truncate">{assignment.material_filename || 'เอกสารงาน.pdf'}</span>{assignment.material_size !== null && <span className="shrink-0 text-xs font-normal text-slate-500">{fileSize(assignment.material_size)}</span>}</a>}
+        </div>
+    </section>;
+}
+
 function SubmissionRow({ assignment, student, onReview }: { assignment: Assignment; student: AssignmentStudent; onReview: () => void }) {
     const state = submissionStatus(student.submission, assignment.due_at);
     return <tr className="border-b border-slate-100 last:border-b-0"><td className="px-4 py-3"><p className="font-bold text-slate-950">{student.full_name}</p><p className="mt-0.5 text-xs text-slate-500">รหัส {student.student_code} กลุ่ม {student.group_name}</p></td><td className="px-4 py-3"><StatusPill label={state.label} tone={state.tone} /></td><td className="px-4 py-3">{student.submission ? <SubmissionLink assignment={assignment} submission={student.submission} /> : <span className="text-slate-400">-</span>}</td><td className="px-4 py-3 text-slate-600">{student.submission ? thaiDateTime(student.submission.submitted_at) : '-'}</td><td className="px-4 py-3 text-center font-black text-slate-900">{student.submission?.score ?? '-'}<span className="font-normal text-slate-400">/{assignment.max_score}</span></td><td className="px-4 py-3 text-center">{student.submission ? <button type="button" onClick={onReview} className="inline-flex size-9 items-center justify-center rounded-xl border border-slate-200 text-slate-700 hover:text-brand-800" aria-label={`ตรวจงาน ${student.full_name}`}><ChatCircle size={18} /></button> : '-'}</td></tr>;
@@ -309,32 +334,114 @@ function StudentSubmissionDetail({ assignment, onSubmit }: { assignment: Assignm
     return <section className="p-4 md:p-5"><div className="flex items-center justify-between gap-3"><div><h3 className="font-black text-slate-950">การส่งงานของฉัน</h3><p className="mt-1 text-sm text-slate-500">ส่งได้ทั้งลิงก์และไฟล์ PDF ขนาดไม่เกิน 20 MB</p></div><StatusPill label={state.label} tone={state.tone} /></div>{submission ? <article className="mt-4 rounded-xl border border-slate-200 bg-slate-50 p-4"><SubmissionLink assignment={assignment} submission={submission} /><p className="mt-2 text-sm text-slate-600">ส่งเมื่อ {thaiDateTime(submission.submitted_at)}</p>{submission.status === 'reviewed' && <div className="mt-4 grid gap-3 rounded-xl bg-white p-4 sm:grid-cols-[140px_1fr]"><div><p className="text-xs font-bold text-slate-500">คะแนน</p><p className="mt-1 text-2xl font-black text-brand-800">{submission.score ?? '-'} <span className="text-sm text-slate-500">/ {assignment.max_score}</span></p></div><div><p className="text-xs font-bold text-slate-500">ข้อเสนอแนะจากครู</p><p className="mt-1 whitespace-pre-wrap text-sm leading-6 text-slate-700">{submission.feedback || 'ไม่มีข้อเสนอแนะเพิ่มเติม'}</p></div></div>}<button type="button" onClick={onSubmit} className="mt-4 inline-flex h-10 items-center gap-2 rounded-xl border border-brand-200 bg-white px-4 text-sm font-bold text-brand-800"><UploadSimple size={17} /> ส่งงานอีกครั้ง</button></article> : <div className="mt-4 rounded-xl border border-dashed border-slate-300 p-8 text-center"><UploadSimple size={36} className="mx-auto text-slate-400" /><p className="mt-3 font-bold text-slate-800">ยังไม่ได้ส่งงาน</p><button type="button" onClick={onSubmit} className="mt-4 inline-flex h-11 items-center gap-2 rounded-xl bg-brand-700 px-5 text-sm font-bold text-white"><UploadSimple size={18} /> ส่งงานตอนนี้</button></div>}</section>;
 }
 
-function ModalShell({ title, description, onClose, children }: { title: string; description?: string; onClose: () => void; children: ReactNode }) {
-    return <div className="fixed inset-0 z-[70] grid place-items-center overflow-y-auto bg-slate-950/55 p-3" role="dialog" aria-modal="true"><section className="my-auto w-full max-w-2xl overflow-hidden rounded-2xl bg-white shadow-2xl"><header className="flex items-start justify-between gap-4 border-b border-slate-100 p-5"><div><h2 className="text-xl font-black text-slate-950">{title}</h2>{description && <p className="mt-1 text-sm leading-6 text-slate-500">{description}</p>}</div><button type="button" onClick={onClose} className="grid size-9 shrink-0 place-items-center rounded-xl text-slate-600 hover:bg-slate-100" aria-label="ปิด"><X size={20} /></button></header>{children}</section></div>;
+function ModalShell({ title, description, onClose, children, wide = false }: { title: string; description?: string; onClose: () => void; children: ReactNode; wide?: boolean }) {
+    return <div className="fixed inset-0 z-[70] grid place-items-center overflow-y-auto bg-slate-950/55 p-3" role="dialog" aria-modal="true"><section className={`my-auto w-full overflow-hidden rounded-2xl bg-white shadow-2xl ${wide ? 'max-w-3xl' : 'max-w-2xl'}`}><header className="flex items-start justify-between gap-4 border-b border-slate-100 p-5"><div><h2 className="text-xl font-black text-slate-950">{title}</h2>{description && <p className="mt-1 text-sm leading-6 text-slate-500">{description}</p>}</div><button type="button" onClick={onClose} className="grid size-9 shrink-0 place-items-center rounded-xl text-slate-600 hover:bg-slate-100" aria-label="ปิด"><X size={20} /></button></header>{children}</section></div>;
 }
 
 function AssignmentEditor({ assignment, term, subjects, onClose, onSaved }: { assignment: Assignment | 'new'; term: string | null; subjects: AssignmentSubject[]; onClose: () => void; onSaved: (id: string) => void }) {
-    const initial = assignment === 'new' ? emptyDraft : {
-        title: assignment.title, instructions: assignment.instructions, subject_code: assignment.subject_code,
-        education_level: String(assignment.education_level ?? ''), target_group: assignment.target_group,
-        max_score: String(assignment.max_score), opens_at: localDateTime(assignment.opens_at), due_at: localDateTime(assignment.due_at), status: assignment.status,
+    const initial: AssignmentDraft = assignment === 'new' ? { ...emptyDraft } : {
+        title: assignment.title,
+        instructions: assignment.instructions,
+        subject_code: assignment.subject_code,
+        education_level: String(assignment.education_level ?? ''),
+        target_group: assignment.target_group,
+        max_score: String(assignment.max_score),
+        opens_at: localDateTime(assignment.opens_at),
+        due_at: localDateTime(assignment.due_at),
+        status: assignment.status,
+        material_url: assignment.material_url,
     };
     const [draft, setDraft] = useState<AssignmentDraft>(initial);
+    const [materialFile, setMaterialFile] = useState<File | null>(null);
+    const [removeMaterial, setRemoveMaterial] = useState(false);
+    const [progress, setProgress] = useState(0);
+    const [clientError, setClientError] = useState('');
     const selectedSubject = subjects.find((subject) => subject.code === draft.subject_code && String(subject.level) === draft.education_level);
     const save = useMutation({
-        mutationFn: () => sendFeatureData<{ id: string }>(`/api/v1/learning/assignments${assignment === 'new' ? '' : `/${assignment.id}`}`, assignment === 'new' ? 'POST' : 'PATCH', {
-            ...draft,
-            education_level: Number(draft.education_level),
-            max_score: Number(draft.max_score),
-            opens_at: draft.opens_at || null,
-        }),
+        mutationFn: () => {
+            const payload = new FormData();
+            payload.append('title', draft.title);
+            payload.append('instructions', draft.instructions);
+            payload.append('subject_code', draft.subject_code);
+            payload.append('education_level', draft.education_level);
+            payload.append('target_group', draft.target_group);
+            payload.append('max_score', draft.max_score);
+            payload.append('opens_at', draft.opens_at);
+            payload.append('due_at', draft.due_at);
+            payload.append('status', draft.status);
+            payload.append('material_url', draft.material_url);
+            payload.append('remove_material_pdf', removeMaterial ? '1' : '0');
+            if (materialFile) payload.append('material_pdf', materialFile);
+            if (assignment !== 'new') payload.append('_method', 'PATCH');
+
+            return uploadFeatureData<{ id: string }>(
+                `/api/v1/learning/assignments${assignment === 'new' ? '' : `/${assignment.id}`}`,
+                payload,
+                setProgress,
+            );
+        },
         onSuccess: (response) => { showSuccessAlert(assignment === 'new' ? 'เพิ่มงานเรียบร้อยแล้ว' : 'แก้ไขงานเรียบร้อยแล้ว'); onSaved(response.data.id); },
     });
     const chooseSubject = (value: string) => {
         const [level, code] = value.split('|');
         setDraft({ ...draft, subject_code: code ?? '', education_level: level ?? '', target_group: '' });
     };
-    return <ModalShell title={assignment === 'new' ? 'เพิ่มงานใหม่' : 'แก้ไขงาน'} description={`เลือกรายวิชาจากข้อมูลลงทะเบียนภาคเรียน ${term ?? 'ปัจจุบัน'}`} onClose={onClose}><form onSubmit={(event) => { event.preventDefault(); save.mutate(); }} className="grid max-h-[75vh] gap-4 overflow-y-auto p-5 sm:grid-cols-2"><label className="sm:col-span-2"><span className="mb-1.5 block text-sm font-bold text-slate-700">ชื่องาน *</span><input required maxLength={220} value={draft.title} onChange={(event) => setDraft({ ...draft, title: event.target.value })} className="h-11 w-full rounded-xl border border-slate-300 px-3 outline-none focus:border-brand-600 focus:ring-2 focus:ring-brand-100" /></label><label><span className="mb-1.5 block text-sm font-bold text-slate-700">รายวิชาที่ลงทะเบียน *</span><select required value={draft.education_level && draft.subject_code ? `${draft.education_level}|${draft.subject_code}` : ''} onChange={(event) => chooseSubject(event.target.value)} className="h-11 w-full rounded-xl border border-slate-300 bg-white px-3"><option value="">เลือกรายวิชา</option>{subjects.map((subject) => <option key={`${subject.level}|${subject.code}`} value={`${subject.level}|${subject.code}`}>{subject.code} {subject.name} ({subject.level_label})</option>)}</select></label><label><span className="mb-1.5 block text-sm font-bold text-slate-700">กลุ่มเป้าหมาย</span><select value={draft.target_group} onChange={(event) => setDraft({ ...draft, target_group: event.target.value })} className="h-11 w-full rounded-xl border border-slate-300 bg-white px-3"><option value="">ผู้เรียนทุกกลุ่มในรายวิชา</option>{selectedSubject?.groups.map((group) => <option key={group.code} value={group.code}>{group.name} ({group.code})</option>)}</select></label><label><span className="mb-1.5 block text-sm font-bold text-slate-700">เปิดรับงาน</span><input type="datetime-local" value={draft.opens_at} onChange={(event) => setDraft({ ...draft, opens_at: event.target.value })} className="h-11 w-full rounded-xl border border-slate-300 px-3" /></label><label><span className="mb-1.5 block text-sm font-bold text-slate-700">กำหนดส่ง *</span><input required type="datetime-local" value={draft.due_at} onChange={(event) => setDraft({ ...draft, due_at: event.target.value })} className="h-11 w-full rounded-xl border border-slate-300 px-3" /></label><label><span className="mb-1.5 block text-sm font-bold text-slate-700">คะแนนเต็ม *</span><input required type="number" min="0" max="100" step="0.01" value={draft.max_score} onChange={(event) => setDraft({ ...draft, max_score: event.target.value })} className="h-11 w-full rounded-xl border border-slate-300 px-3" /></label><label><span className="mb-1.5 block text-sm font-bold text-slate-700">สถานะ *</span><select value={draft.status} onChange={(event) => setDraft({ ...draft, status: event.target.value as Assignment['status'] })} className="h-11 w-full rounded-xl border border-slate-300 bg-white px-3"><option value="draft">ฉบับร่าง</option><option value="open">เปิดรับงาน</option><option value="closed">ปิดรับงาน</option></select></label><label className="sm:col-span-2"><span className="mb-1.5 block text-sm font-bold text-slate-700">คำชี้แจง</span><textarea rows={5} maxLength={10000} value={draft.instructions} onChange={(event) => setDraft({ ...draft, instructions: event.target.value })} className="w-full rounded-xl border border-slate-300 p-3 outline-none focus:border-brand-600 focus:ring-2 focus:ring-brand-100" /></label>{save.error && <p role="alert" className="rounded-xl bg-rose-50 p-3 text-sm font-bold text-rose-800 sm:col-span-2">{save.error.message}</p>}<div className="flex justify-end gap-2 sm:col-span-2"><button type="button" onClick={onClose} className="h-11 rounded-full border border-slate-200 px-5 text-sm font-bold text-slate-700">ยกเลิก</button><button type="submit" disabled={save.isPending} className="h-11 rounded-full bg-brand-700 px-5 text-sm font-bold text-white disabled:bg-slate-300">{save.isPending ? 'กำลังบันทึก' : 'บันทึกงาน'}</button></div></form></ModalShell>;
+    const chooseFile = (file: File | null) => {
+        setClientError('');
+        if (!file) {
+            setMaterialFile(null);
+            return;
+        }
+        if (file.size > 20 * 1024 * 1024) {
+            setClientError('ไฟล์ PDF ต้องมีขนาดไม่เกิน 20 MB');
+            setMaterialFile(null);
+            return;
+        }
+        if (file.type !== 'application/pdf' && !file.name.toLocaleLowerCase().endsWith('.pdf')) {
+            setClientError('รองรับเฉพาะไฟล์ PDF เท่านั้น');
+            setMaterialFile(null);
+            return;
+        }
+        setRemoveMaterial(false);
+        setMaterialFile(file);
+    };
+
+    return <ModalShell
+        title={assignment === 'new' ? 'เพิ่มงานใหม่' : 'แก้ไขงาน'}
+        description={`กำหนดรายละเอียดและแนบเอกสารให้นักศึกษา ภาคเรียน ${term ?? 'ปัจจุบัน'}`}
+        onClose={onClose}
+        wide
+    >
+        <form onSubmit={(event) => { event.preventDefault(); if (!clientError) save.mutate(); }} className="flex max-h-[78vh] flex-col">
+            <div className="space-y-5 overflow-y-auto p-5">
+                <section className="grid gap-4 sm:grid-cols-2" aria-labelledby="assignment-basic-heading">
+                    <div className="sm:col-span-2"><h3 id="assignment-basic-heading" className="font-black text-slate-950">รายละเอียดงาน</h3><p className="mt-1 text-sm text-slate-500">ชื่อและคำชี้แจงส่วนนี้จะแสดงให้นักศึกษาอ่านก่อนส่งงาน</p></div>
+                    <label className="sm:col-span-2"><span className="mb-1.5 block text-sm font-bold text-slate-700">ชื่องาน *</span><input required maxLength={220} value={draft.title} onChange={(event) => setDraft({ ...draft, title: event.target.value })} placeholder="เช่น สรุปบทเรียนหน่วยที่ 1" className="h-11 w-full rounded-xl border border-slate-300 px-3 text-slate-950 outline-none placeholder:text-slate-400 focus:border-brand-600 focus:ring-2 focus:ring-brand-100" /></label>
+                    <label><span className="mb-1.5 block text-sm font-bold text-slate-700">รายวิชาที่ลงทะเบียน *</span><select required value={draft.education_level && draft.subject_code ? `${draft.education_level}|${draft.subject_code}` : ''} onChange={(event) => chooseSubject(event.target.value)} className="h-11 w-full rounded-xl border border-slate-300 bg-white px-3 text-slate-950"><option value="">เลือกรายวิชา</option>{subjects.map((subject) => <option key={`${subject.level}|${subject.code}`} value={`${subject.level}|${subject.code}`}>{subject.code} {subject.name} ({subject.level_label})</option>)}</select></label>
+                    <label><span className="mb-1.5 block text-sm font-bold text-slate-700">กลุ่มเป้าหมาย</span><select value={draft.target_group} onChange={(event) => setDraft({ ...draft, target_group: event.target.value })} className="h-11 w-full rounded-xl border border-slate-300 bg-white px-3 text-slate-950"><option value="">ผู้เรียนทุกกลุ่มในรายวิชา</option>{selectedSubject?.groups.map((group) => <option key={group.code} value={group.code}>{group.name} ({group.code})</option>)}</select></label>
+                    <label className="sm:col-span-2"><span className="mb-1.5 block text-sm font-bold text-slate-700">คำชี้แจงและสิ่งที่ต้องส่ง</span><textarea rows={5} maxLength={10000} value={draft.instructions} onChange={(event) => setDraft({ ...draft, instructions: event.target.value })} placeholder="อธิบายขั้นตอน รูปแบบงาน และเกณฑ์ที่ต้องการให้นักศึกษาทำ" className="w-full rounded-xl border border-slate-300 p-3 text-slate-950 outline-none placeholder:text-slate-400 focus:border-brand-600 focus:ring-2 focus:ring-brand-100" /></label>
+                </section>
+
+                <section className="grid gap-4 border-t border-slate-200 pt-5 sm:grid-cols-2" aria-labelledby="assignment-material-heading">
+                    <div className="sm:col-span-2"><h3 id="assignment-material-heading" className="flex items-center gap-2 font-black text-slate-950"><FilePdf size={20} className="text-brand-700" /> เอกสารประกอบงานจากครู</h3><p className="mt-1 text-sm text-slate-500">แนบได้ทั้งลิงก์และ PDF พร้อมกัน นักศึกษาจะเปิดดูจากหน้ารายละเอียดงาน</p></div>
+                    <label><span className="mb-1.5 block text-sm font-bold text-slate-700">ลิงก์เอกสารหรือวิดีโอ</span><div className="relative"><LinkSimple size={18} className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" /><input type="url" maxLength={2000} value={draft.material_url} onChange={(event) => setDraft({ ...draft, material_url: event.target.value })} placeholder="https://drive.google.com/..." className="h-11 w-full rounded-xl border border-slate-300 pl-10 pr-3 text-slate-950 outline-none placeholder:text-slate-400 focus:border-brand-600 focus:ring-2 focus:ring-brand-100" /></div><span className="mt-1.5 block text-xs text-slate-500">รองรับลิงก์ http และ https</span></label>
+                    <div><label><span className="mb-1.5 block text-sm font-bold text-slate-700">ไฟล์คำสั่งงาน PDF</span><input type="file" accept="application/pdf,.pdf" onChange={(event) => chooseFile(event.target.files?.[0] ?? null)} className="block w-full rounded-xl border border-slate-300 p-2 text-sm text-slate-700 file:mr-3 file:rounded-lg file:border-0 file:bg-brand-50 file:px-3 file:py-2 file:font-bold file:text-brand-800" /></label>{materialFile && <p className="mt-2 flex items-center gap-2 text-xs font-bold text-slate-700"><FilePdf size={16} className="text-brand-700" /><span className="truncate">{materialFile.name}</span><span className="shrink-0 font-normal text-slate-500">{fileSize(materialFile.size)}</span></p>}{assignment !== 'new' && assignment.material_download_url && !materialFile && <div className="mt-2 flex items-center justify-between gap-3 rounded-xl bg-slate-50 px-3 py-2"><p className={`min-w-0 truncate text-xs font-bold ${removeMaterial ? 'text-slate-400 line-through' : 'text-slate-700'}`}>{assignment.material_filename || 'เอกสารงาน.pdf'}</p><button type="button" onClick={() => setRemoveMaterial(!removeMaterial)} className="shrink-0 text-xs font-bold text-rose-700 hover:underline">{removeMaterial ? 'ยกเลิกการลบ' : 'นำไฟล์เดิมออก'}</button></div>}</div>
+                </section>
+
+                <section className="grid gap-4 border-t border-slate-200 pt-5 sm:grid-cols-2" aria-labelledby="assignment-schedule-heading">
+                    <div className="sm:col-span-2"><h3 id="assignment-schedule-heading" className="font-black text-slate-950">ช่วงเวลารับงานและคะแนน</h3></div>
+                    <label><span className="mb-1.5 block text-sm font-bold text-slate-700">เปิดรับงาน</span><input type="datetime-local" value={draft.opens_at} onChange={(event) => setDraft({ ...draft, opens_at: event.target.value })} className="h-11 w-full rounded-xl border border-slate-300 px-3 text-slate-950" /></label>
+                    <label><span className="mb-1.5 block text-sm font-bold text-slate-700">กำหนดส่ง *</span><input required type="datetime-local" value={draft.due_at} onChange={(event) => setDraft({ ...draft, due_at: event.target.value })} className="h-11 w-full rounded-xl border border-slate-300 px-3 text-slate-950" /></label>
+                    <label><span className="mb-1.5 block text-sm font-bold text-slate-700">คะแนนเต็ม *</span><input required type="number" min="0" max="100" step="0.01" value={draft.max_score} onChange={(event) => setDraft({ ...draft, max_score: event.target.value })} className="h-11 w-full rounded-xl border border-slate-300 px-3 text-slate-950" /></label>
+                    <label><span className="mb-1.5 block text-sm font-bold text-slate-700">สถานะ *</span><select value={draft.status} onChange={(event) => setDraft({ ...draft, status: event.target.value as Assignment['status'] })} className="h-11 w-full rounded-xl border border-slate-300 bg-white px-3 text-slate-950"><option value="draft">ฉบับร่าง นักศึกษายังไม่เห็น</option><option value="open">เปิดรับงาน</option><option value="closed">ปิดรับงาน</option></select></label>
+                </section>
+
+                {save.isPending && materialFile && <div><div className="h-2 overflow-hidden rounded-full bg-slate-100"><div className="h-full rounded-full bg-brand-700 transition-[width]" style={{ width: `${progress}%` }} /></div><p className="mt-1 text-right text-xs font-bold text-slate-500">อัปโหลด {progress}%</p></div>}
+                {(clientError || save.error) && <p role="alert" className="rounded-xl border border-rose-200 bg-rose-50 p-3 text-sm font-bold text-rose-800">{clientError || save.error?.message}</p>}
+            </div>
+            <footer className="flex shrink-0 justify-end gap-2 border-t border-slate-200 bg-white p-4"><button type="button" onClick={onClose} className="h-11 rounded-full border border-slate-300 px-5 text-sm font-bold text-slate-700">ยกเลิก</button><button type="submit" disabled={save.isPending || clientError !== ''} className="h-11 rounded-full bg-brand-700 px-6 text-sm font-bold text-white hover:bg-brand-800 active:scale-[0.98] disabled:cursor-not-allowed disabled:bg-slate-300">{save.isPending ? 'กำลังบันทึก' : 'บันทึกงาน'}</button></footer>
+        </form>
+    </ModalShell>;
 }
 
 function SubmissionEditor({ assignment, onClose, onSaved }: { assignment: Assignment; onClose: () => void; onSaved: () => void }) {

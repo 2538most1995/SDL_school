@@ -15,7 +15,7 @@ final class LearningSchemaReadiness
     /** @var array<string, list<string>> */
     private const REQUIREMENTS = [
         'users' => ['name'],
-        'learning_assignments' => ['district_id', 'created_by', 'title', 'instructions', 'academic_term', 'subject_code', 'subject_name', 'education_level', 'target_type', 'target_value', 'max_score', 'opens_at', 'due_at', 'status', 'created_at', 'updated_at'],
+        'learning_assignments' => ['district_id', 'created_by', 'title', 'instructions', 'academic_term', 'subject_code', 'subject_name', 'education_level', 'target_type', 'target_value', 'max_score', 'opens_at', 'due_at', 'status', 'material_url', 'material_disk', 'material_path', 'material_filename', 'material_size', 'created_at', 'updated_at'],
         'learning_submissions' => ['assignment_id', 'student_id', 'student_code', 'content', 'submission_type', 'external_url', 'attachment_disk', 'attachment_path', 'original_filename', 'file_size', 'submitted_at', 'status', 'score', 'feedback', 'reviewed_by', 'reviewed_at', 'created_at', 'updated_at'],
         'learning_resources' => ['district_id', 'uploaded_by', 'title', 'description', 'subject_code', 'education_level', 'resource_type', 'storage_disk', 'storage_path', 'external_url', 'visibility', 'target_group', 'created_at', 'updated_at'],
         'learning_lesson_plans' => ['district_id', 'teacher_id', 'subject_code', 'education_level', 'academic_term', 'title', 'objectives', 'activities', 'assessment', 'status', 'created_at', 'updated_at'],
@@ -153,6 +153,11 @@ final class LearningSchemaReadiness
                 $table->timestamp('opens_at')->nullable();
                 $table->timestamp('due_at')->nullable()->index();
                 $table->string('status', 24)->default('draft')->index();
+                $table->string('material_url', 2000)->nullable();
+                $table->string('material_disk', 40)->nullable();
+                $table->string('material_path')->nullable();
+                $table->string('material_filename')->nullable();
+                $table->unsignedBigInteger('material_size')->nullable();
                 $table->timestamps();
             });
 
@@ -173,6 +178,11 @@ final class LearningSchemaReadiness
         $this->addMissingColumn($schema, 'learning_assignments', 'opens_at', fn (Blueprint $table) => $table->timestamp('opens_at')->nullable());
         $this->addMissingColumn($schema, 'learning_assignments', 'due_at', fn (Blueprint $table) => $table->timestamp('due_at')->nullable());
         $this->addMissingColumn($schema, 'learning_assignments', 'status', fn (Blueprint $table) => $table->string('status', 24)->default('draft'));
+        $this->addMissingColumn($schema, 'learning_assignments', 'material_url', fn (Blueprint $table) => $table->string('material_url', 2000)->nullable());
+        $this->addMissingColumn($schema, 'learning_assignments', 'material_disk', fn (Blueprint $table) => $table->string('material_disk', 40)->nullable());
+        $this->addMissingColumn($schema, 'learning_assignments', 'material_path', fn (Blueprint $table) => $table->string('material_path')->nullable());
+        $this->addMissingColumn($schema, 'learning_assignments', 'material_filename', fn (Blueprint $table) => $table->string('material_filename')->nullable());
+        $this->addMissingColumn($schema, 'learning_assignments', 'material_size', fn (Blueprint $table) => $table->unsignedBigInteger('material_size')->nullable());
         $this->addTimestamps($schema, 'learning_assignments');
     }
 

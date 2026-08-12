@@ -106,8 +106,14 @@ final readonly class AssignmentWorkflowService
     }
 
     /** @param array<string, mixed> $values @return array<string, mixed> */
-    public function saveAssignment(User $viewer, int $districtId, array $values, ?int $assignmentId, ?string $ipAddress): array
-    {
+    public function saveAssignment(
+        User $viewer,
+        int $districtId,
+        array $values,
+        ?UploadedFile $materialFile,
+        ?int $assignmentId,
+        ?string $ipAddress,
+    ): array {
         abort_unless(in_array($viewer->role, ['teacher', 'admin', 'super_admin'], true), 403);
         $catalog = $this->scorebooks->assignmentCatalog($viewer, $districtId);
         $term = (string) ($catalog['selected_term'] ?? '');
@@ -155,27 +161,88 @@ final readonly class AssignmentWorkflowService
             'opens_at' => $values['opens_at'] ?? null,
             'due_at' => $values['due_at'],
             'status' => $values['status'],
+            'material_url' => trim((string) ($values['material_url'] ?? '')) ?: null,
             'updated_at' => now(),
         ];
-        if ($assignmentId === null) {
-            $assignmentId = (int) $connection->table('learning_assignments')->insertGetId([
-                ...$stored,
-                'district_id' => $districtId,
-                'created_by' => (int) $viewer->id,
-                'created_at' => now(),
-            ]);
-            $event = 'learning.assignment.created';
-        } else {
-            $connection->table('learning_assignments')->where('id', $assignmentId)->update($stored);
-            $event = 'learning.assignment.updated';
+        $isNew = $assignmentId === null;
+        $removeMaterial = (bool) ($values['remove_material_pdf'] ?? false);
+        $oldMaterialPath = trim((string) ($before->material_path ?? ''));
+        $newMaterialPath = null;
+
+        try {
+            $assignmentId = $connection->transaction(function () use (
+                $connection,
+                $assignmentId,
+                $stored,
+                $districtId,
+                $viewer,
+                $materialFile,
+                $removeMaterial,
+                &$newMaterialPath,
+            ): int {
+                $savedId = $assignmentId;
+                if ($savedId === null) {
+                    $savedId = (int) $connection->table('learning_assignments')->insertGetId([
+                        ...$stored,
+                        'district_id' => $districtId,
+                        'created_by' => (int) $viewer->id,
+                        'created_at' => now(),
+                    ]);
+                } else {
+                    $connection->table('learning_assignments')->where('id', $savedId)->update($stored);
+                }
+
+                if ($materialFile !== null) {
+                    $path = $materialFile->storeAs(
+                        "learning/assignments/{$districtId}/{$savedId}",
+                        Str::uuid().'.pdf',
+                        'local',
+                    );
+                    if (! is_string($path) || $path === '') {
+                        throw new \RuntimeException('Unable to store assignment material.');
+                    }
+                    $newMaterialPath = $path;
+                    $connection->table('learning_assignments')->where('id', $savedId)->update([
+                        'material_disk' => 'local',
+                        'material_path' => $path,
+                        'material_filename' => Str::limit(basename($materialFile->getClientOriginalName()), 240, ''),
+                        'material_size' => $materialFile->getSize(),
+                        'updated_at' => now(),
+                    ]);
+                } elseif ($removeMaterial) {
+                    $connection->table('learning_assignments')->where('id', $savedId)->update([
+                        'material_disk' => null,
+                        'material_path' => null,
+                        'material_filename' => null,
+                        'material_size' => null,
+                        'updated_at' => now(),
+                    ]);
+                }
+
+                return $savedId;
+            });
+        } catch (\Throwable $exception) {
+            if ($newMaterialPath !== null) {
+                Storage::disk('local')->delete($newMaterialPath);
+            }
+            throw $exception;
         }
-        $this->audit($viewer, $districtId, $event, $assignmentId, $ipAddress, [
+
+        if ($oldMaterialPath !== ''
+            && ($newMaterialPath !== null || $removeMaterial)
+            && $this->ownedMaterialPath($districtId, $assignmentId, $oldMaterialPath)) {
+            Storage::disk('local')->delete($oldMaterialPath);
+        }
+
+        $this->safeAudit($viewer, $districtId, $isNew ? 'learning.assignment.created' : 'learning.assignment.updated', $assignmentId, $ipAddress, [
             'term' => $term,
             'subject_code' => $subject['code'],
             'education_level' => (int) $subject['level'],
             'target_group' => $group,
             'audience_count' => count(array_unique(array_column($audience, 'student_code'))),
             'previous_status' => $before?->status,
+            'has_material_url' => $stored['material_url'] !== null,
+            'has_material_pdf' => $newMaterialPath !== null || (! $removeMaterial && $oldMaterialPath !== ''),
         ]);
 
         return ['id' => (string) $assignmentId];
@@ -186,6 +253,7 @@ final readonly class AssignmentWorkflowService
         $assignment = $this->ownedAssignment($viewer, $districtId, $assignmentId);
         $paths = $this->database->connection()->table('learning_submissions')
             ->where('assignment_id', $assignmentId)->pluck('attachment_path')->filter()->all();
+        $materialPath = trim((string) ($assignment->material_path ?? ''));
         $this->database->connection()->transaction(function () use ($assignmentId): void {
             $this->database->connection()->table('learning_submissions')->where('assignment_id', $assignmentId)->delete();
             $this->database->connection()->table('learning_assignments')->where('id', $assignmentId)->delete();
@@ -195,7 +263,10 @@ final readonly class AssignmentWorkflowService
                 Storage::disk('local')->delete((string) $path);
             }
         }
-        $this->audit($viewer, $districtId, 'learning.assignment.deleted', $assignmentId, $ipAddress, [
+        if ($materialPath !== '' && $this->ownedMaterialPath($districtId, $assignmentId, $materialPath)) {
+            Storage::disk('local')->delete($materialPath);
+        }
+        $this->safeAudit($viewer, $districtId, 'learning.assignment.deleted', $assignmentId, $ipAddress, [
             'title' => (string) $assignment->title,
         ]);
     }
@@ -270,7 +341,7 @@ final readonly class AssignmentWorkflowService
         }
         $submission = $connection->table('learning_submissions')
             ->where('assignment_id', $assignmentId)->where('student_code', $studentCode)->firstOrFail();
-        $this->audit($viewer, $districtId, 'learning.assignment.submitted', $assignmentId, $ipAddress, [
+        $this->safeAudit($viewer, $districtId, 'learning.assignment.submitted', $assignmentId, $ipAddress, [
             'submission_id' => (int) $submission->id,
             'submission_type' => $type,
             'is_late' => Carbon::parse((string) $assignment['due_at'])->isPast(),
@@ -299,7 +370,7 @@ final readonly class AssignmentWorkflowService
             'reviewed_at' => now(),
             'updated_at' => now(),
         ]);
-        $this->audit($viewer, $districtId, 'learning.assignment.reviewed', $assignmentId, $ipAddress, [
+        $this->safeAudit($viewer, $districtId, 'learning.assignment.reviewed', $assignmentId, $ipAddress, [
             'submission_id' => $submissionId,
             'student_code' => (string) $submission->student_code,
             'score' => $score,
@@ -329,6 +400,33 @@ final readonly class AssignmentWorkflowService
         abort_unless($this->ownedSubmissionPath($districtId, $assignmentId, $path) && Storage::disk('local')->exists($path), 404);
 
         return $submission;
+    }
+
+    public function materialForDownload(User $viewer, int $districtId, int $assignmentId): object
+    {
+        $assignment = $this->database->connection()->table('learning_assignments')
+            ->where('id', $assignmentId)
+            ->where('district_id', $districtId)
+            ->first();
+        abort_unless($assignment !== null && trim((string) $assignment->material_path) !== '', 404);
+
+        if ($viewer->role === 'student') {
+            $workspace = $this->workspace($viewer, $districtId, $assignmentId);
+            abort_unless($workspace['selected_assignment'] !== null, 404);
+        } elseif ($viewer->role === 'teacher') {
+            abort_unless((int) $assignment->created_by === (int) $viewer->id, 404);
+        } else {
+            abort_unless(in_array($viewer->role, ['admin', 'super_admin'], true), 403);
+        }
+
+        $path = (string) $assignment->material_path;
+        abort_unless(
+            $this->ownedMaterialPath($districtId, $assignmentId, $path)
+            && Storage::disk('local')->exists($path),
+            404,
+        );
+
+        return $assignment;
     }
 
     /** @param list<array<string, mixed>> $registrations @return list<array<string, string|int>> */
@@ -381,6 +479,12 @@ final readonly class AssignmentWorkflowService
             'due_at' => $assignment->due_at,
             'status' => (string) $assignment->status,
             'teacher_name' => trim((string) ($assignment->teacher_name ?? '')) ?: 'ครูผู้สอน',
+            'material_url' => (string) ($assignment->material_url ?? ''),
+            'material_filename' => (string) ($assignment->material_filename ?? ''),
+            'material_size' => $assignment->material_size === null ? null : (int) $assignment->material_size,
+            'material_download_url' => trim((string) ($assignment->material_path ?? '')) !== ''
+                ? '/api/v1/learning/assignments/'.(int) $assignment->id.'/material'
+                : null,
             'student_count' => $studentCount,
             'submitted_count' => $submittedCount,
             'can_edit' => in_array($viewer->role, ['admin', 'super_admin'], true)
@@ -430,6 +534,24 @@ final readonly class AssignmentWorkflowService
             '#^learning/submissions/'.preg_quote((string) $districtId, '#').'/'.preg_quote((string) $assignmentId, '#').'/[0-9a-f-]+\.pdf$#i',
             $path,
         ) === 1;
+    }
+
+    private function ownedMaterialPath(int $districtId, int $assignmentId, string $path): bool
+    {
+        return preg_match(
+            '#^learning/assignments/'.preg_quote((string) $districtId, '#').'/'.preg_quote((string) $assignmentId, '#').'/[0-9a-f-]+\.pdf$#i',
+            $path,
+        ) === 1;
+    }
+
+    /** @param array<string, mixed> $context */
+    private function safeAudit(User $viewer, int $districtId, string $event, int $assignmentId, ?string $ipAddress, array $context): void
+    {
+        try {
+            $this->audit($viewer, $districtId, $event, $assignmentId, $ipAddress, $context);
+        } catch (\Throwable $exception) {
+            report($exception);
+        }
     }
 
     /** @param array<string, mixed> $context */

@@ -48,6 +48,7 @@ final class AssignmentWorkflowController extends Controller
                 $request->user(),
                 $this->districtId($request),
                 $values,
+                $request->file('material_pdf'),
                 null,
                 $request->ip(),
             ),
@@ -70,6 +71,7 @@ final class AssignmentWorkflowController extends Controller
                 $request->user(),
                 $this->districtId($request),
                 $this->assignmentValues($request),
+                $request->file('material_pdf'),
                 $assignment,
                 $request->ip(),
             ),
@@ -151,6 +153,21 @@ final class AssignmentWorkflowController extends Controller
         );
     }
 
+    public function material(Request $request, int $assignment, AssignmentWorkflowService $workflow)
+    {
+        $row = $workflow->materialForDownload(
+            $request->user(),
+            $this->districtId($request),
+            $assignment,
+        );
+
+        return Storage::disk('local')->download(
+            (string) $row->material_path,
+            (string) ($row->material_filename ?: 'assignment-material.pdf'),
+            ['Content-Type' => 'application/pdf', 'X-Content-Type-Options' => 'nosniff'],
+        );
+    }
+
     /** @return array<string, mixed> */
     private function assignmentValues(Request $request): array
     {
@@ -164,8 +181,14 @@ final class AssignmentWorkflowController extends Controller
             'opens_at' => ['nullable', 'date'],
             'due_at' => ['required', 'date', 'after:opens_at'],
             'status' => ['required', Rule::in(['draft', 'open', 'closed'])],
+            'material_url' => ['nullable', 'url:http,https', 'max:2000'],
+            'material_pdf' => ['nullable', 'file', 'mimes:pdf', 'max:20480'],
+            'remove_material_pdf' => ['sometimes', 'boolean'],
         ], [
             'due_at.after' => 'กำหนดส่งต้องอยู่หลังเวลาเปิดรับงาน',
+            'material_url.url' => 'ลิงก์เอกสารงานต้องขึ้นต้นด้วย http:// หรือ https://',
+            'material_pdf.mimes' => 'เอกสารงานรองรับเฉพาะไฟล์ PDF เท่านั้น',
+            'material_pdf.max' => 'เอกสารงาน PDF ต้องมีขนาดไม่เกิน 20 MB',
         ]);
     }
 

@@ -6,6 +6,7 @@ use App\Models\District;
 use App\Models\User;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Http\UploadedFile;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Storage;
 use Laravel\Sanctum\Sanctum;
 use Tests\TestCase;
@@ -105,8 +106,9 @@ final class AssignmentWorkflowTest extends TestCase
         Storage::fake('local');
         $teacher = $this->teacher(['SENA-M3-A']);
         Sanctum::actingAs($teacher);
-        $created = $this->postJson('/api/v1/learning/assignments', [
+        $created = $this->post('/api/v1/learning/assignments', [
             'title' => 'รายงานการทดลอง',
+            'instructions' => 'อ่านใบงานจากครูแล้วสรุปผลการทดลองเป็น PDF',
             'subject_code' => 'พว31001',
             'education_level' => 3,
             'target_group' => 'SENA-M3-A',
@@ -114,11 +116,42 @@ final class AssignmentWorkflowTest extends TestCase
             'opens_at' => now()->subHour()->toDateTimeString(),
             'due_at' => now()->addDay()->toDateTimeString(),
             'status' => 'open',
-        ])->assertCreated();
+            'material_url' => 'https://example.test/experiment-video',
+            'material_pdf' => UploadedFile::fake()->create('ใบงานการทดลอง.pdf', 180, 'application/pdf'),
+        ], ['Accept' => 'application/json'])->assertCreated();
         $assignmentId = (int) $created->json('data.id');
+        $materialPath = (string) $this->app['db']->table('learning_assignments')
+            ->where('id', $assignmentId)->value('material_path');
+        Storage::disk('local')->assertExists($materialPath);
+        $this->get("/api/v1/learning/assignments/{$assignmentId}/material")->assertOk();
+        $this->post("/api/v1/learning/assignments/{$assignmentId}", [
+            '_method' => 'PATCH',
+            'title' => 'รายงานการทดลอง',
+            'instructions' => 'อ่านใบงานจากครูแล้วสรุปผลการทดลองเป็น PDF',
+            'subject_code' => 'พว31001',
+            'education_level' => 3,
+            'target_group' => 'SENA-M3-A',
+            'max_score' => 20,
+            'opens_at' => now()->subHour()->toDateTimeString(),
+            'due_at' => now()->addDay()->toDateTimeString(),
+            'status' => 'open',
+            'material_url' => 'https://example.test/experiment-video',
+            'remove_material_pdf' => '0',
+        ], ['Accept' => 'application/json'])->assertOk();
+        $this->assertSame(
+            $materialPath,
+            (string) $this->app['db']->table('learning_assignments')->where('id', $assignmentId)->value('material_path'),
+        );
 
         $student = $this->student('6650300005');
         Sanctum::actingAs($student);
+        $this->getJson("/api/v1/learning/assignments?assignment_id={$assignmentId}")
+            ->assertOk()
+            ->assertJsonPath('data.selected_assignment.instructions', 'อ่านใบงานจากครูแล้วสรุปผลการทดลองเป็น PDF')
+            ->assertJsonPath('data.selected_assignment.material_url', 'https://example.test/experiment-video')
+            ->assertJsonPath('data.selected_assignment.material_filename', 'ใบงานการทดลอง.pdf')
+            ->assertJsonPath('data.selected_assignment.material_download_url', "/api/v1/learning/assignments/{$assignmentId}/material");
+        $this->get("/api/v1/learning/assignments/{$assignmentId}/material")->assertOk();
         $submitted = $this->post("/api/v1/learning/assignments/{$assignmentId}/submit", [
             'submission_type' => 'pdf',
             'file' => UploadedFile::fake()->create('mindmap.pdf', 120, 'application/pdf'),
@@ -130,6 +163,7 @@ final class AssignmentWorkflowTest extends TestCase
 
         Sanctum::actingAs($this->student('6650300006'));
         $this->getJson('/api/v1/learning/assignments')->assertJsonCount(0, 'data.assignments');
+        $this->get("/api/v1/learning/assignments/{$assignmentId}/material")->assertNotFound();
         $this->get("/api/v1/learning/assignments/{$assignmentId}/submissions/{$submissionId}/file")->assertNotFound();
         $this->postJson("/api/v1/learning/assignments/{$assignmentId}/submit", [
             'submission_type' => 'link',
@@ -138,9 +172,42 @@ final class AssignmentWorkflowTest extends TestCase
 
         Sanctum::actingAs($this->teacher(['SENA-M2-A']));
         $this->getJson("/api/v1/learning/assignments?assignment_id={$assignmentId}")->assertNotFound();
+        $this->get("/api/v1/learning/assignments/{$assignmentId}/material")->assertNotFound();
         $this->patchJson("/api/v1/learning/assignments/{$assignmentId}/submissions/{$submissionId}", [
             'score' => 10,
         ])->assertNotFound();
+    }
+
+    public function test_assignment_save_succeeds_when_audit_storage_is_temporarily_unavailable(): void
+    {
+        if (DB::connection()->getDriverName() !== 'sqlite') {
+            $this->markTestSkipped('Failure trigger is specific to the SQLite test connection.');
+        }
+
+        DB::unprepared(<<<'SQL'
+            CREATE TRIGGER reject_assignment_audit
+            BEFORE INSERT ON audit_logs
+            WHEN NEW.event = 'learning.assignment.created'
+            BEGIN
+                SELECT RAISE(FAIL, 'audit unavailable');
+            END
+        SQL);
+
+        Sanctum::actingAs($this->teacher(['SENA-M3-A']));
+        $created = $this->postJson('/api/v1/learning/assignments', [
+            'title' => 'งานที่ต้องบันทึกแม้ระบบตรวจสอบเหตุการณ์ขัดข้อง',
+            'subject_code' => 'พว31001',
+            'education_level' => 3,
+            'target_group' => 'SENA-M3-A',
+            'max_score' => 10,
+            'due_at' => now()->addDay()->toDateTimeString(),
+            'status' => 'open',
+        ])->assertCreated();
+
+        $this->assertDatabaseHas('learning_assignments', [
+            'id' => (int) $created->json('data.id'),
+            'title' => 'งานที่ต้องบันทึกแม้ระบบตรวจสอบเหตุการณ์ขัดข้อง',
+        ]);
     }
 
     /** @param list<string> $groups */
