@@ -35,12 +35,7 @@ return new class extends Migration
             }
         });
 
-        // Imported student rosters are dynamic DBF tables, so a submission is
-        // linked canonically by student_code. student_id remains available for
-        // deployments that also populate the local students table.
-        Schema::table('learning_submissions', function (Blueprint $table): void {
-            $table->unsignedBigInteger('student_id')->nullable()->change();
-        });
+        $this->makeStudentIdNullable();
 
         if (! Schema::hasIndex('learning_submissions', 'learning_submissions_assignment_student_code_unique')) {
             Schema::table('learning_submissions', function (Blueprint $table): void {
@@ -56,5 +51,65 @@ return new class extends Migration
     {
         // Additive workflow migration. Keep submitted work and assignment
         // metadata intact during rollback.
+    }
+
+    private function makeStudentIdNullable(): void
+    {
+        if (! Schema::hasColumn('learning_submissions', 'student_id')) {
+            return;
+        }
+
+        // MySQL refuses to alter a column while a foreign key uses it. Keep the
+        // original constraints so a failed, partially applied migration can be
+        // rerun safely without weakening referential integrity.
+        $requiresForeignKeyRelease = Schema::getConnection()->getDriverName() === 'mysql';
+        $foreignKeys = $requiresForeignKeyRelease
+            ? collect(Schema::getForeignKeys('learning_submissions'))
+                ->filter(static fn (array $foreignKey): bool => ($foreignKey['columns'] ?? []) === ['student_id'])
+                ->values()
+                ->all()
+            : [];
+
+        foreach ($foreignKeys as $foreignKey) {
+            Schema::table('learning_submissions', function (Blueprint $table) use ($foreignKey): void {
+                $table->dropForeign($foreignKey['name']);
+            });
+        }
+
+        try {
+            // Imported student rosters are dynamic DBF tables, so a submission
+            // is linked canonically by student_code. student_id remains for
+            // deployments that also populate the local students table.
+            $this->changeStudentIdToNullable();
+        } finally {
+            foreach ($foreignKeys as $foreignKey) {
+                Schema::table('learning_submissions', function (Blueprint $table) use ($foreignKey): void {
+                    $constraint = $table->foreign('student_id', $foreignKey['name'])
+                        ->references(($foreignKey['foreign_columns'] ?? ['id'])[0])
+                        ->on($foreignKey['foreign_table']);
+
+                    if (! empty($foreignKey['on_update'])) {
+                        $constraint->onUpdate(strtolower($foreignKey['on_update']));
+                    }
+                    if (! empty($foreignKey['on_delete'])) {
+                        $constraint->onDelete(strtolower($foreignKey['on_delete']));
+                    }
+                });
+            }
+        }
+    }
+
+    private function changeStudentIdToNullable(): void
+    {
+        $type = strtolower(Schema::getColumnType('learning_submissions', 'student_id', true));
+
+        Schema::table('learning_submissions', function (Blueprint $table) use ($type): void {
+            $unsigned = str_contains($type, 'unsigned');
+            $column = str_contains($type, 'bigint')
+                ? ($unsigned ? $table->unsignedBigInteger('student_id') : $table->bigInteger('student_id'))
+                : ($unsigned ? $table->unsignedInteger('student_id') : $table->integer('student_id'));
+
+            $column->nullable()->change();
+        });
     }
 };
