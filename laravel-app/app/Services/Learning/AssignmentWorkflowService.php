@@ -164,6 +164,12 @@ final readonly class AssignmentWorkflowService
             'material_url' => trim((string) ($values['material_url'] ?? '')) ?: null,
             'updated_at' => now(),
         ];
+        // Older production installations used a required `subject` column.
+        // Keep it populated while the normalized subject_code/subject_name
+        // columns remain the source of truth for the current workflow.
+        if ($connection->getSchemaBuilder()->hasColumn('learning_assignments', 'subject')) {
+            $stored['subject'] = $subject['name'];
+        }
         $isNew = $assignmentId === null;
         $removeMaterial = (bool) ($values['remove_material_pdf'] ?? false);
         $oldMaterialPath = trim((string) ($before->material_path ?? ''));

@@ -4,9 +4,11 @@ namespace Tests\Feature\Learning;
 
 use App\Models\District;
 use App\Models\User;
+use Illuminate\Database\Schema\Blueprint;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Http\UploadedFile;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Schema;
 use Illuminate\Support\Facades\Storage;
 use Laravel\Sanctum\Sanctum;
 use Tests\TestCase;
@@ -207,6 +209,30 @@ final class AssignmentWorkflowTest extends TestCase
         $this->assertDatabaseHas('learning_assignments', [
             'id' => (int) $created->json('data.id'),
             'title' => 'งานที่ต้องบันทึกแม้ระบบตรวจสอบเหตุการณ์ขัดข้อง',
+        ]);
+    }
+
+    public function test_teacher_creation_populates_required_legacy_subject_column(): void
+    {
+        Schema::table('learning_assignments', function (Blueprint $table): void {
+            $table->string('subject', 220);
+        });
+
+        Sanctum::actingAs($this->teacher(['SENA-M3-A']));
+        $created = $this->postJson('/api/v1/learning/assignments', [
+            'title' => 'งานสำหรับฐานข้อมูลเดิม',
+            'subject_code' => 'พว31001',
+            'education_level' => 3,
+            'target_group' => 'SENA-M3-A',
+            'max_score' => 10,
+            'due_at' => now()->addDay()->toDateTimeString(),
+            'status' => 'open',
+        ])->assertCreated();
+
+        $this->assertDatabaseHas('learning_assignments', [
+            'id' => (int) $created->json('data.id'),
+            'subject' => 'วิทยาศาสตร์',
+            'subject_name' => 'วิทยาศาสตร์',
         ]);
     }
 
