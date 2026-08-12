@@ -85,6 +85,7 @@ Route::prefix('v1')->group(function (): void {
         Route::get('/learning/assignments', [AssignmentWorkflowController::class, 'index'])->middleware('learning.schema');
         Route::post('/learning/assignments/{assignment}/submit', [AssignmentWorkflowController::class, 'submit'])->middleware('learning.schema')->whereNumber('assignment');
         Route::get('/learning/assignments/{assignment}/submissions/{submission}/file', [AssignmentWorkflowController::class, 'file'])->middleware('learning.schema')->whereNumber(['assignment', 'submission']);
+        Route::get('/learning/assignments/{assignment}/submissions/{submission}/files/{attachment}', [AssignmentWorkflowController::class, 'attachment'])->middleware('learning.schema')->whereNumber(['assignment', 'submission', 'attachment']);
         Route::get('/learning/assignments/{assignment}/material', [AssignmentWorkflowController::class, 'material'])->middleware('learning.schema')->whereNumber('assignment');
         Route::get('/learning/resources', ResourceController::class)->middleware('learning.schema');
         Route::get('/learning/resources/{resource}/file', ResourceFileController::class)->middleware('learning.schema')->whereNumber('resource');

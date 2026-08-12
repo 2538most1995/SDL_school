@@ -220,11 +220,27 @@ final class AssignmentWorkflowTest extends TestCase
         ], ['Accept' => 'application/json'])->assertUnprocessable();
         $submitted = $this->post("/api/v1/learning/assignments/{$assignmentId}/submit", [
             'submission_type' => 'image',
-            'file' => UploadedFile::fake()->image('ผลงาน.png', 800, 800),
+            'files' => [
+                UploadedFile::fake()->image('ผลงานหน้าแรก.png', 800, 800),
+                UploadedFile::fake()->image('ผลงานหน้าที่สอง.jpg', 900, 700),
+                UploadedFile::fake()->image('ผลงานหน้าที่สาม.png', 700, 900),
+            ],
         ], ['Accept' => 'application/json'])->assertOk()
-            ->assertJsonPath('data.type', 'image');
+            ->assertJsonPath('data.type', 'image')
+            ->assertJsonCount(3, 'data.attachments')
+            ->assertJsonPath('data.attachments.0.filename', 'ผลงานหน้าแรก.png')
+            ->assertJsonPath('data.attachments.1.filename', 'ผลงานหน้าที่สอง.jpg')
+            ->assertJsonPath('data.attachments.2.filename', 'ผลงานหน้าที่สาม.png');
         $submissionId = (int) $submitted->json('data.id');
+        $attachmentIds = array_map('intval', array_column($submitted->json('data.attachments'), 'id'));
+        $this->assertDatabaseCount('learning_submission_attachments', 3);
         $this->get("/api/v1/learning/assignments/{$assignmentId}/submissions/{$submissionId}/file")
+            ->assertOk()
+            ->assertHeader('content-type', 'image/png');
+        $this->get("/api/v1/learning/assignments/{$assignmentId}/submissions/{$submissionId}/files/{$attachmentIds[1]}")
+            ->assertOk()
+            ->assertHeader('content-type', 'image/jpeg');
+        $this->get("/api/v1/learning/assignments/{$assignmentId}/submissions/{$submissionId}/files/{$attachmentIds[2]}")
             ->assertOk()
             ->assertHeader('content-type', 'image/png');
 
@@ -232,10 +248,44 @@ final class AssignmentWorkflowTest extends TestCase
         $this->get("/api/v1/learning/assignments/{$assignmentId}/submissions/{$submissionId}/file")
             ->assertOk()
             ->assertHeader('content-type', 'image/png');
+        $this->getJson("/api/v1/learning/assignments?assignment_id={$assignmentId}")
+            ->assertOk()
+            ->assertJsonCount(3, 'data.students.0.submission.attachments');
 
         Sanctum::actingAs($this->student('6650300006'));
         $this->get("/api/v1/learning/assignments/{$assignmentId}/material")->assertNotFound();
         $this->get("/api/v1/learning/assignments/{$assignmentId}/submissions/{$submissionId}/file")->assertNotFound();
+        $this->get("/api/v1/learning/assignments/{$assignmentId}/submissions/{$submissionId}/files/{$attachmentIds[0]}")->assertNotFound();
+    }
+
+    public function test_student_submission_skips_incompatible_legacy_students_table(): void
+    {
+        Storage::fake('local');
+        $teacher = $this->teacher(['SENA-M3-A']);
+        Sanctum::actingAs($teacher);
+        $created = $this->postJson('/api/v1/learning/assignments', [
+            'title' => 'งานสำหรับตารางผู้เรียนแบบเดิม',
+            'subject_code' => 'พว31001',
+            'education_level' => 3,
+            'target_group' => 'SENA-M3-A',
+            'max_score' => 10,
+            'due_at' => now()->addDay()->toDateTimeString(),
+            'status' => 'open',
+        ])->assertCreated();
+
+        Schema::rename('students', 'canonical_students');
+        Schema::create('students', function (Blueprint $table): void {
+            $table->id();
+            $table->string('student_code')->nullable();
+        });
+
+        Sanctum::actingAs($this->student('6650300005'));
+        $this->post("/api/v1/learning/assignments/{$created->json('data.id')}/submit", [
+            'submission_type' => 'image',
+            'files' => [UploadedFile::fake()->image('คำตอบ.jpg', 600, 600)],
+        ], ['Accept' => 'application/json'])
+            ->assertOk()
+            ->assertJsonPath('data.type', 'image');
     }
 
     public function test_assignment_save_succeeds_when_audit_storage_is_temporarily_unavailable(): void

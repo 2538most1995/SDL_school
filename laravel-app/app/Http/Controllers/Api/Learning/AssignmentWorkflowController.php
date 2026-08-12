@@ -9,6 +9,7 @@ use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Storage;
 use Illuminate\Validation\Rule;
+use Illuminate\Validation\ValidationException;
 
 final class AssignmentWorkflowController extends Controller
 {
@@ -104,27 +105,43 @@ final class AssignmentWorkflowController extends Controller
     {
         $this->assertWriteEnabled();
         $submissionType = $request->string('submission_type')->toString();
-        $fileRules = [
-            Rule::requiredIf($submissionType !== 'link'),
-            'nullable',
-            'file',
-            'max:20480',
-        ];
-        if ($submissionType === 'pdf') {
-            $fileRules[] = 'mimes:pdf';
-        } elseif ($submissionType === 'image') {
-            $fileRules[] = 'mimes:jpg,jpeg,png,webp';
-        }
-        $values = $request->validate([
+        $rules = [
             'submission_type' => ['required', Rule::in(['link', 'pdf', 'image'])],
             'url' => [Rule::requiredIf($submissionType === 'link'), 'nullable', 'url:http,https', 'max:2000'],
-            'file' => $fileRules,
-        ], [
-            'file.mimes' => $submissionType === 'image'
-                ? 'รูปภาพรองรับเฉพาะ JPG, PNG และ WebP'
-                : 'เอกสารรองรับเฉพาะไฟล์ PDF',
+        ];
+        if ($submissionType === 'pdf') {
+            $rules['file'] = ['required', 'file', 'mimes:pdf', 'max:20480'];
+        } elseif ($submissionType === 'image') {
+            $rules['files'] = [Rule::requiredIf(! $request->hasFile('file')), 'nullable', 'array', 'min:1', 'max:10'];
+            $rules['files.*'] = ['file', 'mimes:jpg,jpeg,png,webp', 'max:20480'];
+            // Keep accepting the single-file field used by the previous UI.
+            $rules['file'] = [Rule::requiredIf(! $request->hasFile('files')), 'nullable', 'file', 'mimes:jpg,jpeg,png,webp', 'max:20480'];
+        }
+        $values = $request->validate($rules, [
+            'file.mimes' => $submissionType === 'image' ? 'รูปภาพรองรับเฉพาะ JPG, PNG และ WebP' : 'เอกสารรองรับเฉพาะไฟล์ PDF',
             'file.max' => 'ไฟล์ต้องมีขนาดไม่เกิน 20 MB',
+            'files.required' => 'กรุณาเลือกรูปภาพอย่างน้อย 1 รูป',
+            'files.max' => 'ส่งรูปภาพได้ไม่เกิน 10 รูปต่อครั้ง',
+            'files.*.mimes' => 'รูปภาพรองรับเฉพาะ JPG, PNG และ WebP',
+            'files.*.max' => 'รูปภาพแต่ละไฟล์ต้องมีขนาดไม่เกิน 20 MB',
         ]);
+
+        $files = [];
+        if ($submissionType === 'pdf' && $request->hasFile('file')) {
+            $files[] = $request->file('file');
+        } elseif ($submissionType === 'image') {
+            $multipleFiles = $request->file('files', []);
+            $files = is_array($multipleFiles) ? array_values(array_filter($multipleFiles)) : [];
+            if ($files === [] && $request->hasFile('file')) {
+                $files[] = $request->file('file');
+            }
+            $totalBytes = array_sum(array_map(static fn ($file): int => (int) $file->getSize(), $files));
+            if ($totalBytes > 50 * 1024 * 1024) {
+                throw ValidationException::withMessages([
+                    'files' => 'รูปภาพรวมกันต้องมีขนาดไม่เกิน 50 MB',
+                ]);
+            }
+        }
 
         return response()->json([
             'data' => $workflow->submit(
@@ -133,7 +150,7 @@ final class AssignmentWorkflowController extends Controller
                 $assignment,
                 (string) $values['submission_type'],
                 isset($values['url']) ? (string) $values['url'] : null,
-                $request->file('file'),
+                $files,
                 $request->ip(),
             ),
         ]);
@@ -172,6 +189,22 @@ final class AssignmentWorkflowController extends Controller
         return $this->privateFileResponse(
             (string) $row->attachment_path,
             (string) ($row->original_filename ?: 'assignment.pdf'),
+        );
+    }
+
+    public function attachment(Request $request, int $assignment, int $submission, int $attachment, AssignmentWorkflowService $workflow)
+    {
+        $row = $workflow->submissionAttachmentForDownload(
+            $request->user(),
+            $this->districtId($request),
+            $assignment,
+            $submission,
+            $attachment,
+        );
+
+        return $this->privateFileResponse(
+            (string) $row->storage_path,
+            (string) ($row->original_filename ?: 'assignment-image.jpg'),
         );
     }
 

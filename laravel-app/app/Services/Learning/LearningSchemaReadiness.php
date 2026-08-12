@@ -17,6 +17,7 @@ final class LearningSchemaReadiness
         'users' => ['name'],
         'learning_assignments' => ['district_id', 'created_by', 'title', 'instructions', 'academic_term', 'subject_code', 'subject_name', 'education_level', 'target_type', 'target_value', 'max_score', 'opens_at', 'due_at', 'status', 'material_url', 'material_disk', 'material_path', 'material_filename', 'material_size', 'created_at', 'updated_at'],
         'learning_submissions' => ['assignment_id', 'student_id', 'student_code', 'content', 'submission_type', 'external_url', 'attachment_disk', 'attachment_path', 'original_filename', 'file_size', 'submitted_at', 'status', 'score', 'feedback', 'reviewed_by', 'reviewed_at', 'created_at', 'updated_at'],
+        'learning_submission_attachments' => ['submission_id', 'storage_disk', 'storage_path', 'original_filename', 'mime_type', 'file_size', 'position', 'created_at', 'updated_at'],
         'learning_resources' => ['district_id', 'uploaded_by', 'title', 'description', 'subject_code', 'education_level', 'resource_type', 'storage_disk', 'storage_path', 'external_url', 'visibility', 'target_group', 'created_at', 'updated_at'],
         'learning_lesson_plans' => ['district_id', 'teacher_id', 'subject_code', 'education_level', 'academic_term', 'title', 'objectives', 'activities', 'assessment', 'status', 'created_at', 'updated_at'],
         'learning_calendar_events' => ['district_id', 'created_by', 'title', 'description', 'event_type', 'starts_at', 'ends_at', 'location', 'target_type', 'target_value', 'image_path', 'image_updated_at', 'daily_schedule', 'external_url', 'featured_on_dashboard', 'created_at', 'updated_at'],
@@ -30,6 +31,7 @@ final class LearningSchemaReadiness
     /** @var array<string, list<string>> */
     private const INDEX_REQUIREMENTS = [
         'learning_submissions' => ['learning_submissions_assignment_student_code_unique'],
+        'learning_submission_attachments' => ['learning_submission_attachments_submission_position_unique'],
         'learning_scorebooks' => ['learning_scorebooks_course_scope_unique', 'learning_scorebooks_course_scope_index'],
         'learning_score_components' => ['learning_score_components_scorebook_id_position_unique'],
         'learning_score_entries' => ['learning_score_entries_unique'],
@@ -120,6 +122,7 @@ final class LearningSchemaReadiness
         $this->ensureUserName($schema);
         $this->ensureAssignments($schema);
         $this->ensureSubmissions($schema);
+        $this->ensureSubmissionAttachments($schema);
         $this->ensureResources($schema);
         $this->ensureLessonPlans($schema);
         $this->ensureCalendar($schema);
@@ -235,6 +238,46 @@ final class LearningSchemaReadiness
         if (! $schema->hasIndex('learning_submissions', 'learning_submissions_assignment_student_code_unique')) {
             $schema->table('learning_submissions', function (Blueprint $table): void {
                 $table->unique(['assignment_id', 'student_code'], 'learning_submissions_assignment_student_code_unique');
+            });
+        }
+    }
+
+    private function ensureSubmissionAttachments(Builder $schema): void
+    {
+        if (! $schema->hasTable('learning_submission_attachments')) {
+            $schema->create('learning_submission_attachments', function (Blueprint $table): void {
+                $table->id();
+                $table->unsignedBigInteger('submission_id')->index();
+                $table->string('storage_disk', 40)->default('local');
+                $table->string('storage_path');
+                $table->string('original_filename');
+                $table->string('mime_type', 100);
+                $table->unsignedBigInteger('file_size');
+                $table->unsignedSmallInteger('position')->default(0);
+                $table->timestamps();
+                $table->unique(
+                    ['submission_id', 'position'],
+                    'learning_submission_attachments_submission_position_unique',
+                );
+            });
+
+            return;
+        }
+
+        $this->addMissingColumn($schema, 'learning_submission_attachments', 'submission_id', fn (Blueprint $table) => $table->unsignedBigInteger('submission_id')->nullable());
+        $this->addMissingColumn($schema, 'learning_submission_attachments', 'storage_disk', fn (Blueprint $table) => $table->string('storage_disk', 40)->default('local'));
+        $this->addMissingColumn($schema, 'learning_submission_attachments', 'storage_path', fn (Blueprint $table) => $table->string('storage_path')->nullable());
+        $this->addMissingColumn($schema, 'learning_submission_attachments', 'original_filename', fn (Blueprint $table) => $table->string('original_filename')->nullable());
+        $this->addMissingColumn($schema, 'learning_submission_attachments', 'mime_type', fn (Blueprint $table) => $table->string('mime_type', 100)->nullable());
+        $this->addMissingColumn($schema, 'learning_submission_attachments', 'file_size', fn (Blueprint $table) => $table->unsignedBigInteger('file_size')->nullable());
+        $this->addMissingColumn($schema, 'learning_submission_attachments', 'position', fn (Blueprint $table) => $table->unsignedSmallInteger('position')->default(0));
+        $this->addTimestamps($schema, 'learning_submission_attachments');
+        if (! $schema->hasIndex('learning_submission_attachments', 'learning_submission_attachments_submission_position_unique')) {
+            $schema->table('learning_submission_attachments', function (Blueprint $table): void {
+                $table->unique(
+                    ['submission_id', 'position'],
+                    'learning_submission_attachments_submission_position_unique',
+                );
             });
         }
     }

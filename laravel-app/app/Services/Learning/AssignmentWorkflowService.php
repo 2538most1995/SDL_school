@@ -6,6 +6,7 @@ use App\Models\User;
 use Illuminate\Database\DatabaseManager;
 use Illuminate\Http\UploadedFile;
 use Illuminate\Support\Carbon;
+use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\Storage;
 use Illuminate\Support\Str;
 use Illuminate\Validation\ValidationException;
@@ -42,6 +43,18 @@ final readonly class AssignmentWorkflowService
                 ->whereIn('assignment_id', $assignmentIds)
                 ->get()
                 ->groupBy('assignment_id');
+        $submissionIds = $submissions->flatten(1)
+            ->pluck('id')
+            ->map(static fn ($id): int => (int) $id)
+            ->all();
+        $submissionAttachments = $submissionIds === []
+            ? collect()
+            : $this->database->connection()->table('learning_submission_attachments')
+                ->whereIn('submission_id', $submissionIds)
+                ->orderBy('position')
+                ->orderBy('id')
+                ->get()
+                ->groupBy('submission_id');
 
         $ownStudentCode = $viewer->role === 'student'
             ? trim((string) ($viewer->student_code ?: $viewer->username))
@@ -66,6 +79,7 @@ final readonly class AssignmentWorkflowService
                 count($audience),
                 $assignmentSubmissions->whereIn('status', ['submitted', 'reviewed'])->count(),
                 $ownSubmission,
+                $submissionAttachments,
             );
         }
 
@@ -90,7 +104,10 @@ final readonly class AssignmentWorkflowService
                 $submission = $submissionMap->get($student['student_code']);
                 $students[] = [
                     ...$student,
-                    'submission' => $submission === null ? null : $this->submissionPayload($submission),
+                    'submission' => $submission === null ? null : $this->submissionPayload(
+                        $submission,
+                        $submissionAttachments->get((int) $submission->id, collect()),
+                    ),
                 ];
             }
         }
@@ -254,12 +271,28 @@ final readonly class AssignmentWorkflowService
     public function deleteAssignment(User $viewer, int $districtId, int $assignmentId, ?string $ipAddress): void
     {
         $assignment = $this->ownedAssignment($viewer, $districtId, $assignmentId);
-        $paths = $this->database->connection()->table('learning_submissions')
+        $connection = $this->database->connection();
+        $submissionIds = $connection->table('learning_submissions')
+            ->where('assignment_id', $assignmentId)->pluck('id')->all();
+        $paths = $connection->table('learning_submissions')
             ->where('assignment_id', $assignmentId)->pluck('attachment_path')->filter()->all();
+        if ($submissionIds !== []) {
+            $paths = array_values(array_unique([
+                ...$paths,
+                ...$connection->table('learning_submission_attachments')
+                    ->whereIn('submission_id', $submissionIds)
+                    ->pluck('storage_path')
+                    ->filter()
+                    ->all(),
+            ]));
+        }
         $materialPath = trim((string) ($assignment->material_path ?? ''));
-        $this->database->connection()->transaction(function () use ($assignmentId): void {
-            $this->database->connection()->table('learning_submissions')->where('assignment_id', $assignmentId)->delete();
-            $this->database->connection()->table('learning_assignments')->where('id', $assignmentId)->delete();
+        $connection->transaction(function () use ($connection, $assignmentId, $submissionIds): void {
+            if ($submissionIds !== []) {
+                $connection->table('learning_submission_attachments')->whereIn('submission_id', $submissionIds)->delete();
+            }
+            $connection->table('learning_submissions')->where('assignment_id', $assignmentId)->delete();
+            $connection->table('learning_assignments')->where('id', $assignmentId)->delete();
         });
         foreach ($paths as $path) {
             if ($this->ownedSubmissionPath($districtId, $assignmentId, (string) $path)) {
@@ -274,8 +307,8 @@ final readonly class AssignmentWorkflowService
         ]);
     }
 
-    /** @return array<string, mixed> */
-    public function submit(User $viewer, int $districtId, int $assignmentId, string $type, ?string $url, ?UploadedFile $file, ?string $ipAddress): array
+    /** @param list<UploadedFile> $files @return array<string, mixed> */
+    public function submit(User $viewer, int $districtId, int $assignmentId, string $type, ?string $url, array $files, ?string $ipAddress): array
     {
         abort_unless($viewer->role === 'student', 403);
         $workspace = $this->workspace($viewer, $districtId, $assignmentId);
@@ -290,16 +323,41 @@ final readonly class AssignmentWorkflowService
         $connection = $this->database->connection();
         $existing = $connection->table('learning_submissions')
             ->where('assignment_id', $assignmentId)->where('student_code', $studentCode)->first();
-        $newPath = null;
-        if (in_array($type, ['pdf', 'image'], true) && $file !== null) {
-            $newPath = $this->storeAttachment(
-                $file,
-                "learning/submissions/{$districtId}/{$assignmentId}",
-                'file',
-            );
+        $existingAttachmentPaths = $existing === null
+            ? []
+            : $connection->table('learning_submission_attachments')
+                ->where('submission_id', (int) $existing->id)
+                ->pluck('storage_path')
+                ->filter()
+                ->all();
+        $newAttachments = [];
+        try {
+            foreach ($files as $position => $file) {
+                $path = $this->storeAttachment(
+                    $file,
+                    "learning/submissions/{$districtId}/{$assignmentId}",
+                    $type === 'image' ? 'files.'.(int) $position : 'file',
+                );
+                $newAttachments[] = [
+                    'storage_disk' => 'local',
+                    'storage_path' => $path,
+                    'original_filename' => Str::limit(basename($file->getClientOriginalName()), 240, ''),
+                    'mime_type' => (string) $file->getMimeType(),
+                    'file_size' => (int) $file->getSize(),
+                    'position' => (int) $position,
+                ];
+            }
+        } catch (\Throwable $exception) {
+            Storage::disk('local')->delete(array_column($newAttachments, 'storage_path'));
+            throw $exception;
         }
+        $firstAttachment = $newAttachments[0] ?? null;
         $studentId = null;
-        if ($connection->getSchemaBuilder()->hasTable('students')) {
+        $studentSchema = $connection->getSchemaBuilder();
+        if ($studentSchema->hasTable('students')
+            && $studentSchema->hasColumn('students', 'id')
+            && $studentSchema->hasColumn('students', 'district_id')
+            && $studentSchema->hasColumn('students', 'student_code')) {
             $studentId = $connection->table('students')
                 ->where('district_id', $districtId)->where('student_code', $studentCode)->value('id');
         }
@@ -307,10 +365,10 @@ final readonly class AssignmentWorkflowService
             'student_id' => $studentId,
             'submission_type' => $type,
             'external_url' => $type === 'link' ? $url : null,
-            'attachment_disk' => $type !== 'link' ? 'local' : null,
-            'attachment_path' => $newPath,
-            'original_filename' => $type !== 'link' ? $file?->getClientOriginalName() : null,
-            'file_size' => $type !== 'link' ? $file?->getSize() : null,
+            'attachment_disk' => $firstAttachment === null ? null : 'local',
+            'attachment_path' => $firstAttachment['storage_path'] ?? null,
+            'original_filename' => $firstAttachment['original_filename'] ?? null,
+            'file_size' => $firstAttachment['file_size'] ?? null,
             'submitted_at' => now(),
             'status' => 'submitted',
             'score' => null,
@@ -320,33 +378,57 @@ final readonly class AssignmentWorkflowService
             'updated_at' => now(),
         ];
         try {
-            $connection->transaction(function () use ($connection, $assignmentId, $studentCode, $values): void {
+            $submissionId = $connection->transaction(function () use ($connection, $assignmentId, $studentCode, $values, $newAttachments): int {
                 $query = $connection->table('learning_submissions')
                     ->where('assignment_id', $assignmentId)->where('student_code', $studentCode);
-                $query->exists()
-                    ? $query->update($values)
-                    : $connection->table('learning_submissions')->insert([
+                $existingId = $query->value('id');
+                if ($existingId !== null) {
+                    $query->update($values);
+                    $submissionId = (int) $existingId;
+                } else {
+                    $submissionId = (int) $connection->table('learning_submissions')->insertGetId([
                         ...$values,
                         'assignment_id' => $assignmentId,
                         'student_code' => $studentCode,
                         'created_at' => now(),
                     ]);
+                }
+                $connection->table('learning_submission_attachments')->where('submission_id', $submissionId)->delete();
+                if ($newAttachments !== []) {
+                    $now = now();
+                    $connection->table('learning_submission_attachments')->insert(array_map(
+                        static fn (array $attachment): array => [
+                            ...$attachment,
+                            'submission_id' => $submissionId,
+                            'created_at' => $now,
+                            'updated_at' => $now,
+                        ],
+                        $newAttachments,
+                    ));
+                }
+
+                return $submissionId;
             });
         } catch (\Throwable $exception) {
-            if ($newPath !== null) {
-                Storage::disk('local')->delete($newPath);
-            }
+            Storage::disk('local')->delete(array_column($newAttachments, 'storage_path'));
             throw $exception;
         }
-        $oldPath = (string) ($existing->attachment_path ?? '');
-        if ($oldPath !== '' && $oldPath !== $newPath && $this->ownedSubmissionPath($districtId, $assignmentId, $oldPath)) {
-            Storage::disk('local')->delete($oldPath);
+        $oldPaths = array_values(array_unique([
+            (string) ($existing->attachment_path ?? ''),
+            ...$existingAttachmentPaths,
+        ]));
+        $newPaths = array_column($newAttachments, 'storage_path');
+        foreach ($oldPaths as $oldPath) {
+            if ($oldPath !== '' && ! in_array($oldPath, $newPaths, true) && $this->ownedSubmissionPath($districtId, $assignmentId, $oldPath)) {
+                Storage::disk('local')->delete($oldPath);
+            }
         }
         $submission = $connection->table('learning_submissions')
-            ->where('assignment_id', $assignmentId)->where('student_code', $studentCode)->firstOrFail();
+            ->where('id', $submissionId)->firstOrFail();
         $this->safeAudit($viewer, $districtId, 'learning.assignment.submitted', $assignmentId, $ipAddress, [
             'submission_id' => (int) $submission->id,
             'submission_type' => $type,
+            'attachment_count' => count($newAttachments),
             'is_late' => Carbon::parse((string) $assignment['due_at'])->isPast(),
         ]);
 
@@ -399,10 +481,49 @@ final readonly class AssignmentWorkflowService
         } elseif ($viewer->role === 'teacher') {
             abort_unless((int) $submission->created_by === (int) $viewer->id, 404);
         }
+        $attachment = $this->database->connection()->table('learning_submission_attachments')
+            ->where('submission_id', $submissionId)
+            ->orderBy('position')
+            ->orderBy('id')
+            ->first();
+        if ($attachment !== null) {
+            $submission->attachment_path = $attachment->storage_path;
+            $submission->original_filename = $attachment->original_filename;
+        }
         $path = (string) $submission->attachment_path;
         abort_unless($this->ownedSubmissionPath($districtId, $assignmentId, $path) && Storage::disk('local')->exists($path), 404);
 
         return $submission;
+    }
+
+    public function submissionAttachmentForDownload(
+        User $viewer,
+        int $districtId,
+        int $assignmentId,
+        int $submissionId,
+        int $attachmentId,
+    ): object {
+        $attachment = $this->database->connection()->table('learning_submission_attachments as attachment')
+            ->join('learning_submissions as submission', 'submission.id', '=', 'attachment.submission_id')
+            ->join('learning_assignments as assignment', 'assignment.id', '=', 'submission.assignment_id')
+            ->where('assignment.id', $assignmentId)
+            ->where('assignment.district_id', $districtId)
+            ->where('submission.id', $submissionId)
+            ->where('attachment.id', $attachmentId)
+            ->select('attachment.*', 'submission.student_code', 'assignment.created_by')
+            ->first();
+        abort_unless($attachment !== null, 404);
+        if ($viewer->role === 'student') {
+            abort_unless((string) $attachment->student_code === trim((string) ($viewer->student_code ?: $viewer->username)), 404);
+        } elseif ($viewer->role === 'teacher') {
+            abort_unless((int) $attachment->created_by === (int) $viewer->id, 404);
+        } else {
+            abort_unless(in_array($viewer->role, ['admin', 'super_admin'], true), 403);
+        }
+        $path = (string) $attachment->storage_path;
+        abort_unless($this->ownedSubmissionPath($districtId, $assignmentId, $path) && Storage::disk('local')->exists($path), 404);
+
+        return $attachment;
     }
 
     public function materialForDownload(User $viewer, int $districtId, int $assignmentId): object
@@ -466,8 +587,14 @@ final readonly class AssignmentWorkflowService
     }
 
     /** @return array<string, mixed> */
-    private function assignmentPayload(User $viewer, object $assignment, int $studentCount, int $submittedCount, ?object $ownSubmission): array
-    {
+    private function assignmentPayload(
+        User $viewer,
+        object $assignment,
+        int $studentCount,
+        int $submittedCount,
+        ?object $ownSubmission,
+        Collection $submissionAttachments,
+    ): array {
         return [
             'id' => (string) $assignment->id,
             'title' => (string) $assignment->title,
@@ -496,28 +623,53 @@ final readonly class AssignmentWorkflowService
             'submitted_count' => $submittedCount,
             'can_edit' => in_array($viewer->role, ['admin', 'super_admin'], true)
                 || ($viewer->role === 'teacher' && (int) $assignment->created_by === (int) $viewer->id),
-            'submission' => $ownSubmission === null ? null : $this->submissionPayload($ownSubmission),
+            'submission' => $ownSubmission === null ? null : $this->submissionPayload(
+                $ownSubmission,
+                $submissionAttachments->get((int) $ownSubmission->id, collect()),
+            ),
         ];
     }
 
     /** @return array<string, mixed> */
-    private function submissionPayload(object $submission): array
+    private function submissionPayload(object $submission, ?Collection $attachmentRows = null): array
     {
+        $attachmentRows ??= $this->database->connection()->table('learning_submission_attachments')
+            ->where('submission_id', (int) $submission->id)
+            ->orderBy('position')
+            ->orderBy('id')
+            ->get();
+        $attachments = $attachmentRows->map(function (object $attachment) use ($submission): array {
+            $filename = (string) ($attachment->original_filename ?? '');
+
+            return [
+                'id' => (string) $attachment->id,
+                'filename' => $filename,
+                'file_size' => $attachment->file_size === null ? null : (int) $attachment->file_size,
+                'type' => $this->attachmentType($filename, (string) ($attachment->storage_path ?? '')),
+                'download_url' => '/api/v1/learning/assignments/'.(int) $submission->assignment_id
+                    .'/submissions/'.(int) $submission->id.'/files/'.(int) $attachment->id,
+            ];
+        })->values()->all();
+        $firstAttachment = $attachments[0] ?? null;
+        $legacyDownloadUrl = in_array($submission->submission_type, ['pdf', 'image'], true)
+            && trim((string) ($submission->attachment_path ?? '')) !== ''
+                ? '/api/v1/learning/assignments/'.(int) $submission->assignment_id.'/submissions/'.(int) $submission->id.'/file'
+                : null;
+
         return [
             'id' => (string) $submission->id,
             'student_code' => (string) ($submission->student_code ?? ''),
             'type' => (string) ($submission->submission_type ?? ''),
             'url' => (string) ($submission->external_url ?? ''),
-            'filename' => (string) ($submission->original_filename ?? ''),
-            'file_size' => $submission->file_size === null ? null : (int) $submission->file_size,
+            'filename' => (string) ($firstAttachment['filename'] ?? $submission->original_filename ?? ''),
+            'file_size' => isset($firstAttachment) ? $firstAttachment['file_size'] : ($submission->file_size === null ? null : (int) $submission->file_size),
             'submitted_at' => $submission->submitted_at,
             'status' => (string) $submission->status,
             'score' => $submission->score === null ? null : (float) $submission->score,
             'feedback' => (string) ($submission->feedback ?? ''),
             'reviewed_at' => $submission->reviewed_at,
-            'download_url' => in_array($submission->submission_type, ['pdf', 'image'], true)
-                ? '/api/v1/learning/assignments/'.(int) $submission->assignment_id.'/submissions/'.(int) $submission->id.'/file'
-                : null,
+            'download_url' => (string) ($firstAttachment['download_url'] ?? $legacyDownloadUrl ?? '') ?: null,
+            'attachments' => $attachments,
         ];
     }
 

@@ -49,6 +49,13 @@ type Submission = {
     feedback: string;
     reviewed_at: string | null;
     download_url: string | null;
+    attachments?: Array<{
+        id: string;
+        filename: string;
+        file_size: number | null;
+        type: AttachmentKind;
+        download_url: string;
+    }>;
 };
 
 type Assignment = {
@@ -380,6 +387,20 @@ function SubmissionLink({ assignment, submission }: { assignment: Assignment; su
         return <a href={submission.url} target="_blank" rel="noopener noreferrer" className="inline-flex max-w-[240px] items-center gap-2 font-bold text-brand-800 hover:underline"><LinkSimple size={18} /><span className="truncate">{submission.url}</span><span className="sr-only">งาน {assignment.title}</span></a>;
     }
 
+    const attachments = submission.attachments ?? [];
+    if (attachments.length > 0) {
+        return <div className="grid min-w-0 gap-2">
+            {attachments.map((attachment, index) => <AuthenticatedAttachment
+                key={attachment.id}
+                url={attachment.download_url}
+                filename={attachment.filename || `รูปภาพงาน ${index + 1}`}
+                kind={attachment.type ?? attachmentKind(attachment.filename, submission.type === 'image' ? 'image' : 'pdf')}
+                size={attachment.file_size}
+                compact
+            />)}
+        </div>;
+    }
+
     return <AuthenticatedAttachment
         url={submission.download_url ?? ''}
         filename={submission.filename || (submission.type === 'image' ? 'รูปภาพงาน' : 'เอกสารงาน.pdf')}
@@ -425,7 +446,7 @@ function SubmissionCard({ assignment, student, onReview }: { assignment: Assignm
 function StudentSubmissionDetail({ assignment, onSubmit }: { assignment: Assignment; onSubmit: () => void }) {
     const submission = assignment.submission;
     const state = submissionStatus(submission, assignment.due_at);
-    return <section className="p-4 md:p-5"><div className="flex items-center justify-between gap-3"><div><h3 className="font-black text-slate-950">การส่งงานของฉัน</h3><p className="mt-1 text-sm text-slate-500">ส่งได้ทั้งลิงก์ PDF และรูปภาพ ขนาดไม่เกิน 20 MB</p></div><StatusPill label={state.label} tone={state.tone} /></div>{submission ? <article className="mt-4 rounded-xl border border-slate-200 bg-slate-50 p-4"><SubmissionLink assignment={assignment} submission={submission} /><p className="mt-2 text-sm text-slate-600">ส่งเมื่อ {thaiDateTime(submission.submitted_at)}</p>{submission.status === 'reviewed' && <div className="mt-4 grid gap-3 rounded-xl bg-white p-4 sm:grid-cols-[140px_1fr]"><div><p className="text-xs font-bold text-slate-500">คะแนน</p><p className="mt-1 text-2xl font-black text-brand-800">{submission.score ?? '-'} <span className="text-sm text-slate-500">/ {assignment.max_score}</span></p></div><div><p className="text-xs font-bold text-slate-500">ข้อเสนอแนะจากครู</p><p className="mt-1 whitespace-pre-wrap text-sm leading-6 text-slate-700">{submission.feedback || 'ไม่มีข้อเสนอแนะเพิ่มเติม'}</p></div></div>}<button type="button" onClick={onSubmit} className="mt-4 inline-flex h-10 items-center gap-2 rounded-xl border border-brand-200 bg-white px-4 text-sm font-bold text-brand-800"><UploadSimple size={17} /> ส่งงานอีกครั้ง</button></article> : <div className="mt-4 rounded-xl border border-dashed border-slate-300 p-8 text-center"><UploadSimple size={36} className="mx-auto text-slate-400" /><p className="mt-3 font-bold text-slate-800">ยังไม่ได้ส่งงาน</p><button type="button" onClick={onSubmit} className="mt-4 inline-flex h-11 items-center gap-2 rounded-xl bg-brand-700 px-5 text-sm font-bold text-white"><UploadSimple size={18} /> ส่งงานตอนนี้</button></div>}</section>;
+    return <section className="p-4 md:p-5"><div className="flex items-center justify-between gap-3"><div><h3 className="font-black text-slate-950">การส่งงานของฉัน</h3><p className="mt-1 text-sm text-slate-500">ส่งได้ทั้งลิงก์ PDF หรือรูปภาพสูงสุด 10 รูป</p></div><StatusPill label={state.label} tone={state.tone} /></div>{submission ? <article className="mt-4 rounded-xl border border-slate-200 bg-slate-50 p-4"><SubmissionLink assignment={assignment} submission={submission} /><p className="mt-2 text-sm text-slate-600">ส่งเมื่อ {thaiDateTime(submission.submitted_at)}</p>{submission.status === 'reviewed' && <div className="mt-4 grid gap-3 rounded-xl bg-white p-4 sm:grid-cols-[140px_1fr]"><div><p className="text-xs font-bold text-slate-500">คะแนน</p><p className="mt-1 text-2xl font-black text-brand-800">{submission.score ?? '-'} <span className="text-sm text-slate-500">/ {assignment.max_score}</span></p></div><div><p className="text-xs font-bold text-slate-500">ข้อเสนอแนะจากครู</p><p className="mt-1 whitespace-pre-wrap text-sm leading-6 text-slate-700">{submission.feedback || 'ไม่มีข้อเสนอแนะเพิ่มเติม'}</p></div></div>}<button type="button" onClick={onSubmit} className="mt-4 inline-flex h-10 items-center gap-2 rounded-xl border border-brand-200 bg-white px-4 text-sm font-bold text-brand-800"><UploadSimple size={17} /> ส่งงานอีกครั้ง</button></article> : <div className="mt-4 rounded-xl border border-dashed border-slate-300 p-8 text-center"><UploadSimple size={36} className="mx-auto text-slate-400" /><p className="mt-3 font-bold text-slate-800">ยังไม่ได้ส่งงาน</p><button type="button" onClick={onSubmit} className="mt-4 inline-flex h-11 items-center gap-2 rounded-xl bg-brand-700 px-5 text-sm font-bold text-white"><UploadSimple size={18} /> ส่งงานตอนนี้</button></div>}</section>;
 }
 
 function ModalShell({ title, description, onClose, children, wide = false }: { title: string; description?: string; onClose: () => void; children: ReactNode; wide?: boolean }) {
@@ -543,7 +564,7 @@ function AssignmentEditor({ assignment, term, subjects, onClose, onSaved }: { as
 function SubmissionEditor({ assignment, onClose, onSaved }: { assignment: Assignment; onClose: () => void; onSaved: () => void }) {
     const [type, setType] = useState<'link' | 'pdf' | 'image'>(assignment.submission?.type ?? 'link');
     const [url, setUrl] = useState(assignment.submission?.type === 'link' ? assignment.submission.url : '');
-    const [file, setFile] = useState<File | null>(null);
+    const [files, setFiles] = useState<File[]>([]);
     const [progress, setProgress] = useState(0);
     const [clientError, setClientError] = useState('');
     const save = useMutation({
@@ -551,49 +572,64 @@ function SubmissionEditor({ assignment, onClose, onSaved }: { assignment: Assign
             const payload = new FormData();
             payload.append('submission_type', type);
             if (type === 'link') payload.append('url', url);
-            if (type !== 'link' && file) payload.append('file', file);
+            if (type === 'pdf' && files[0]) payload.append('file', files[0]);
+            if (type === 'image') files.forEach((file) => payload.append('files[]', file));
             return uploadFeatureData(`/api/v1/learning/assignments/${assignment.id}/submit`, payload, setProgress);
         },
         onSuccess: () => { showSuccessAlert('ส่งงานเรียบร้อยแล้ว'); onSaved(); },
     });
-    const chooseSubmissionFile = (selected: File | null) => {
+    const chooseSubmissionFiles = (selectedFiles: File[]) => {
         setClientError('');
-        setFile(null);
-        if (!selected) return;
-        if (selected.size > 20 * 1024 * 1024) {
-            setClientError('ไฟล์ต้องมีขนาดไม่เกิน 20 MB');
+        setFiles([]);
+        if (selectedFiles.length === 0) return;
+        if (type === 'image' && selectedFiles.length > 10) {
+            setClientError('ส่งรูปภาพได้ไม่เกิน 10 รูปต่อครั้ง');
             return;
         }
-        const valid = type === 'pdf'
-            ? selected.type === 'application/pdf' || /\.pdf$/i.test(selected.name)
-            : ['image/jpeg', 'image/png', 'image/webp'].includes(selected.type) || /\.(?:jpe?g|png|webp)$/i.test(selected.name);
-        if (!valid) {
-            setClientError(type === 'pdf' ? 'กรุณาเลือกไฟล์ PDF' : 'กรุณาเลือกรูปภาพ JPG, PNG หรือ WebP');
+        const oversized = selectedFiles.find((file) => file.size > 20 * 1024 * 1024);
+        if (oversized) {
+            setClientError(`${oversized.name} มีขนาดเกิน 20 MB`);
             return;
         }
-        setFile(selected);
+        const invalid = selectedFiles.find((file) => type === 'pdf'
+            ? !(file.type === 'application/pdf' || /\.pdf$/i.test(file.name))
+            : !(['image/jpeg', 'image/png', 'image/webp'].includes(file.type) || /\.(?:jpe?g|png|webp)$/i.test(file.name)));
+        if (invalid) {
+            setClientError(type === 'pdf' ? 'กรุณาเลือกไฟล์ PDF' : `${invalid.name} ไม่ใช่รูปภาพ JPG, PNG หรือ WebP`);
+            return;
+        }
+        const totalSize = selectedFiles.reduce((sum, file) => sum + file.size, 0);
+        if (type === 'image' && totalSize > 50 * 1024 * 1024) {
+            setClientError('รูปภาพรวมกันต้องมีขนาดไม่เกิน 50 MB');
+            return;
+        }
+        setFiles(selectedFiles);
+    };
+    const removeSelectedFile = (index: number) => {
+        setFiles((current) => current.filter((_, fileIndex) => fileIndex !== index));
+        setClientError('');
     };
     const selectType = (nextType: 'link' | 'pdf' | 'image') => {
         setType(nextType);
-        setFile(null);
+        setFiles([]);
         setClientError('');
     };
     return <ModalShell title="ส่งงาน" description={assignment.title} onClose={onClose}>
-        <form onSubmit={(event) => { event.preventDefault(); if (!clientError) save.mutate(); }} className="space-y-4 p-5">
+        <form onSubmit={(event) => { event.preventDefault(); if (!clientError && (type === 'link' || files.length > 0)) save.mutate(); }} className="space-y-4 p-5">
             <fieldset>
                 <legend className="mb-2 text-sm font-bold text-slate-700">รูปแบบการส่ง *</legend>
                 <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
                     <label className={`cursor-pointer rounded-xl border p-4 ${type === 'link' ? 'border-brand-600 bg-brand-50 text-brand-900' : 'border-slate-200 text-slate-700'}`}><input type="radio" name="submission_type" value="link" checked={type === 'link'} onChange={() => selectType('link')} className="sr-only" /><LinkSimple size={24} /><span className="mt-2 block font-bold">ลิงก์งาน</span><span className="mt-1 block text-xs">Drive, OneDrive หรือเว็บไซต์</span></label>
                     <label className={`cursor-pointer rounded-xl border p-4 ${type === 'pdf' ? 'border-brand-600 bg-brand-50 text-brand-900' : 'border-slate-200 text-slate-700'}`}><input type="radio" name="submission_type" value="pdf" checked={type === 'pdf'} onChange={() => selectType('pdf')} className="sr-only" /><FilePdf size={24} /><span className="mt-2 block font-bold">ไฟล์ PDF</span><span className="mt-1 block text-xs">เอกสารไม่เกิน 20 MB</span></label>
-                    <label className={`cursor-pointer rounded-xl border p-4 ${type === 'image' ? 'border-brand-600 bg-brand-50 text-brand-900' : 'border-slate-200 text-slate-700'}`}><input type="radio" name="submission_type" value="image" checked={type === 'image'} onChange={() => selectType('image')} className="sr-only" /><FileImage size={24} /><span className="mt-2 block font-bold">รูปภาพ</span><span className="mt-1 block text-xs">JPG, PNG หรือ WebP</span></label>
+                    <label className={`cursor-pointer rounded-xl border p-4 ${type === 'image' ? 'border-brand-600 bg-brand-50 text-brand-900' : 'border-slate-200 text-slate-700'}`}><input type="radio" name="submission_type" value="image" checked={type === 'image'} onChange={() => selectType('image')} className="sr-only" /><FileImage size={24} /><span className="mt-2 block font-bold">รูปภาพ</span><span className="mt-1 block text-xs">เลือกพร้อมกันได้สูงสุด 10 รูป</span></label>
                 </div>
             </fieldset>
             {type === 'link'
                 ? <label className="block"><span className="mb-1.5 block text-sm font-bold text-slate-700">ลิงก์ http/https *</span><input required type="url" value={url} onChange={(event) => setUrl(event.target.value)} placeholder="https://drive.google.com/..." className="h-11 w-full rounded-xl border border-slate-300 px-3 outline-none placeholder:text-slate-400 focus:border-brand-600 focus:ring-2 focus:ring-brand-100" /></label>
-                : <label className="block"><span className="mb-1.5 block text-sm font-bold text-slate-700">{type === 'image' ? 'เลือกรูปภาพ' : 'เลือกไฟล์ PDF'} *</span><input required type="file" accept={type === 'image' ? 'image/jpeg,image/png,image/webp,.jpg,.jpeg,.png,.webp' : 'application/pdf,.pdf'} onChange={(event) => chooseSubmissionFile(event.target.files?.[0] ?? null)} className="block w-full rounded-xl border border-slate-300 p-2.5 text-sm text-slate-700 file:mr-3 file:rounded-lg file:border-0 file:bg-brand-50 file:px-3 file:py-2 file:font-bold file:text-brand-800" />{file && <p className="mt-2 flex items-center gap-2 text-xs font-bold text-slate-600">{attachmentIcon(type)}<span className="truncate">{file.name}</span><span className="shrink-0 font-normal">{fileSize(file.size)}</span></p>}</label>}
+                : <div><label className="block"><span className="mb-1.5 block text-sm font-bold text-slate-700">{type === 'image' ? 'เลือกรูปภาพ' : 'เลือกไฟล์ PDF'} *</span><input required type="file" multiple={type === 'image'} accept={type === 'image' ? 'image/jpeg,image/png,image/webp,.jpg,.jpeg,.png,.webp' : 'application/pdf,.pdf'} onChange={(event) => chooseSubmissionFiles(Array.from(event.target.files ?? []))} className="block w-full rounded-xl border border-slate-300 p-2.5 text-sm text-slate-700 file:mr-3 file:rounded-lg file:border-0 file:bg-brand-50 file:px-3 file:py-2 file:font-bold file:text-brand-800" /></label><p className="mt-1.5 text-xs leading-5 text-slate-500">{type === 'image' ? 'เลือกได้สูงสุด 10 รูป รูปละไม่เกิน 20 MB และรวมไม่เกิน 50 MB' : 'ไฟล์ PDF ขนาดไม่เกิน 20 MB'}</p>{files.length > 0 && <div className="mt-3 grid gap-2" aria-label={`ไฟล์ที่เลือก ${files.length} รายการ`}>{files.map((selectedFile, index) => <div key={`${selectedFile.name}-${selectedFile.lastModified}-${index}`} className="flex min-w-0 items-center gap-3 rounded-xl border border-slate-200 bg-slate-50 px-3 py-2"><span className="grid size-9 shrink-0 place-items-center rounded-lg bg-white text-brand-800">{attachmentIcon(type, 19)}</span><div className="min-w-0 flex-1"><p className="truncate text-sm font-bold text-slate-800">{selectedFile.name}</p><p className="text-xs text-slate-500">{fileSize(selectedFile.size)}</p></div><button type="button" onClick={() => removeSelectedFile(index)} className="grid size-10 shrink-0 place-items-center rounded-xl text-rose-700 hover:bg-rose-50" aria-label={`นำ ${selectedFile.name} ออก`}><Trash size={18} /></button></div>)}</div>}</div>}
             {save.isPending && <div><div className="h-2 overflow-hidden rounded-full bg-slate-100"><div className="h-full rounded-full bg-brand-700 transition-[width]" style={{ width: `${progress}%` }} /></div><p className="mt-1 text-right text-xs font-bold text-slate-500">อัปโหลด {progress}%</p></div>}
             {(clientError || save.error) && <p role="alert" className="rounded-xl border border-rose-200 bg-rose-50 p-3 text-sm font-bold text-rose-800">{clientError || save.error?.message}</p>}
-            <div className="flex justify-end gap-2"><button type="button" onClick={onClose} className="h-11 rounded-full border border-slate-300 px-5 text-sm font-bold text-slate-700">ยกเลิก</button><button type="submit" disabled={save.isPending || clientError !== ''} className="h-11 rounded-full bg-brand-700 px-5 text-sm font-bold text-white active:scale-[0.98] disabled:bg-slate-300">{save.isPending ? 'กำลังส่งงาน' : 'ยืนยันส่งงาน'}</button></div>
+            <div className="flex justify-end gap-2"><button type="button" onClick={onClose} className="h-11 rounded-full border border-slate-300 px-5 text-sm font-bold text-slate-700">ยกเลิก</button><button type="submit" disabled={save.isPending || clientError !== '' || (type !== 'link' && files.length === 0)} className="h-11 rounded-full bg-brand-700 px-5 text-sm font-bold text-white active:scale-[0.98] disabled:cursor-not-allowed disabled:bg-slate-300">{save.isPending ? 'กำลังส่งงาน' : type === 'image' && files.length > 1 ? `ยืนยันส่ง ${files.length} รูป` : 'ยืนยันส่งงาน'}</button></div>
         </form>
     </ModalShell>;
 }
