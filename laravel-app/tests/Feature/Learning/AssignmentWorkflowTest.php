@@ -210,6 +210,43 @@ final class AssignmentWorkflowTest extends TestCase
         ]);
     }
 
+    public function test_teacher_gets_actionable_error_when_private_pdf_storage_is_not_writable(): void
+    {
+        $blockedRoot = storage_path('framework/testing/assignment-storage-blocked');
+        if (is_dir($blockedRoot)) {
+            rmdir($blockedRoot);
+        }
+        file_put_contents($blockedRoot, 'not-a-directory');
+        config(['filesystems.disks.local.root' => $blockedRoot]);
+        Storage::forgetDisk('local');
+
+        try {
+            Sanctum::actingAs($this->teacher(['SENA-M3-A']));
+            $this->post('/api/v1/learning/assignments', [
+                'title' => 'ใบงานที่มีเอกสารจากครู',
+                'subject_code' => 'พว31001',
+                'education_level' => 3,
+                'target_group' => 'SENA-M3-A',
+                'max_score' => 10,
+                'due_at' => now()->addDay()->toDateTimeString(),
+                'status' => 'open',
+                'material_pdf' => UploadedFile::fake()->create('ใบงาน.pdf', 90, 'application/pdf'),
+            ], ['Accept' => 'application/json'])
+                ->assertUnprocessable()
+                ->assertJsonPath(
+                    'errors.material_pdf.0',
+                    'เซิร์ฟเวอร์ไม่สามารถจัดเก็บไฟล์ PDF ได้ กรุณาให้ผู้ดูแลตรวจสิทธิ์เขียนโฟลเดอร์ storage/app/private',
+                );
+
+            $this->assertDatabaseMissing('learning_assignments', ['title' => 'ใบงานที่มีเอกสารจากครู']);
+        } finally {
+            Storage::forgetDisk('local');
+            if (is_file($blockedRoot)) {
+                unlink($blockedRoot);
+            }
+        }
+    }
+
     /** @param list<string> $groups */
     private function teacher(array $groups): User
     {

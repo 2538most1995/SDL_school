@@ -193,14 +193,11 @@ final readonly class AssignmentWorkflowService
                 }
 
                 if ($materialFile !== null) {
-                    $path = $materialFile->storeAs(
+                    $path = $this->storePdf(
+                        $materialFile,
                         "learning/assignments/{$districtId}/{$savedId}",
-                        Str::uuid().'.pdf',
-                        'local',
+                        'material_pdf',
                     );
-                    if (! is_string($path) || $path === '') {
-                        throw new \RuntimeException('Unable to store assignment material.');
-                    }
                     $newMaterialPath = $path;
                     $connection->table('learning_assignments')->where('id', $savedId)->update([
                         'material_disk' => 'local',
@@ -289,10 +286,10 @@ final readonly class AssignmentWorkflowService
             ->where('assignment_id', $assignmentId)->where('student_code', $studentCode)->first();
         $newPath = null;
         if ($type === 'pdf' && $file !== null) {
-            $newPath = $file->storeAs(
+            $newPath = $this->storePdf(
+                $file,
                 "learning/submissions/{$districtId}/{$assignmentId}",
-                Str::uuid().'.pdf',
-                'local',
+                'file',
             );
         }
         $studentId = null;
@@ -542,6 +539,29 @@ final readonly class AssignmentWorkflowService
             '#^learning/assignments/'.preg_quote((string) $districtId, '#').'/'.preg_quote((string) $assignmentId, '#').'/[0-9a-f-]+\.pdf$#i',
             $path,
         ) === 1;
+    }
+
+    private function storePdf(UploadedFile $file, string $directory, string $field): string
+    {
+        try {
+            $disk = Storage::disk('local');
+            if (! $disk->exists($directory) && ! $disk->makeDirectory($directory)) {
+                throw new \RuntimeException('Unable to create private storage directory.');
+            }
+
+            $path = $file->storeAs($directory, Str::uuid().'.pdf', 'local');
+            if (! is_string($path) || $path === '' || ! $disk->exists($path)) {
+                throw new \RuntimeException('Uploaded PDF was not persisted.');
+            }
+
+            return $path;
+        } catch (\Throwable $exception) {
+            report($exception);
+
+            throw ValidationException::withMessages([
+                $field => 'เซิร์ฟเวอร์ไม่สามารถจัดเก็บไฟล์ PDF ได้ กรุณาให้ผู้ดูแลตรวจสิทธิ์เขียนโฟลเดอร์ storage/app/private',
+            ]);
+        }
     }
 
     /** @param array<string, mixed> $context */

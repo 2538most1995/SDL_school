@@ -4,6 +4,7 @@ namespace App\Http\Controllers\Api\Learning;
 
 use App\Http\Controllers\Controller;
 use App\Services\Learning\AssignmentWorkflowService;
+use Illuminate\Database\QueryException;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Storage;
@@ -43,16 +44,20 @@ final class AssignmentWorkflowController extends Controller
         $this->assertWriteEnabled();
         $values = $this->assignmentValues($request);
 
-        return response()->json([
-            'data' => $workflow->saveAssignment(
+        try {
+            $saved = $workflow->saveAssignment(
                 $request->user(),
                 $this->districtId($request),
                 $values,
                 $request->file('material_pdf'),
                 null,
                 $request->ip(),
-            ),
-        ], 201);
+            );
+        } catch (QueryException $exception) {
+            return $this->databaseNotReady($exception);
+        }
+
+        return response()->json(['data' => $saved], 201);
     }
 
     public function update(
@@ -66,16 +71,20 @@ final class AssignmentWorkflowController extends Controller
         }
         $this->assertWriteEnabled();
 
-        return response()->json([
-            'data' => $workflow->saveAssignment(
+        try {
+            $saved = $workflow->saveAssignment(
                 $request->user(),
                 $this->districtId($request),
                 $this->assignmentValues($request),
                 $request->file('material_pdf'),
                 $assignment,
                 $request->ip(),
-            ),
-        ]);
+            );
+        } catch (QueryException $exception) {
+            return $this->databaseNotReady($exception);
+        }
+
+        return response()->json(['data' => $saved]);
     }
 
     public function destroy(Request $request, int $assignment, AssignmentWorkflowService $workflow): JsonResponse
@@ -200,5 +209,14 @@ final class AssignmentWorkflowController extends Controller
     private function assertWriteEnabled(): void
     {
         abort_unless((bool) config('system_data.write_enabled'), 503, 'ระบบเขียนข้อมูลยังไม่เปิดใช้งาน');
+    }
+
+    private function databaseNotReady(QueryException $exception): JsonResponse
+    {
+        report($exception);
+
+        return response()->json([
+            'message' => 'ฐานข้อมูลสำหรับงานและเอกสารยังไม่พร้อม กรุณาให้ผู้ดูแลรัน php artisan migrate --force และ php artisan optimize:clear',
+        ], 503);
     }
 }
