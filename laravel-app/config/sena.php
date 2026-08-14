@@ -56,6 +56,7 @@ return [
             'label' => 'จัดการระบบ',
             'color' => 'amber',
             'items' => [
+                ['key' => 'districts', 'label' => 'ทะเบียนอำเภอ', 'description' => 'เพิ่มพื้นที่ใหม่ก่อนสร้างผู้ดูแลและนำเข้าข้อมูล', 'route' => '/super-admin/districts', 'icon' => 'buildings', 'roles' => ['super_admin']],
                 ['key' => 'users', 'label' => 'ผู้ใช้งาน', 'description' => 'สิทธิ์ ครู ผู้ดูแล และขอบเขตกลุ่ม', 'route' => '/admin/users', 'icon' => 'users-three', 'roles' => ['admin', 'super_admin']],
                 ['key' => 'exam-rooms', 'label' => 'ห้องสอบ', 'description' => 'จัดห้องสอบและตรวจสอบรายชื่อ', 'route' => '/admin/exam-rooms', 'icon' => 'door', 'roles' => ['admin', 'super_admin']],
                 ['key' => 'imports', 'label' => 'นำเข้าข้อมูล', 'description' => 'ZIP, DBF, batch และผล validation', 'route' => '/admin/imports', 'icon' => 'upload', 'roles' => ['admin', 'super_admin']],

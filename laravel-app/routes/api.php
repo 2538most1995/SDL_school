@@ -1,6 +1,7 @@
 <?php
 
 use App\Http\Controllers\Api\Admin\BrandingController;
+use App\Http\Controllers\Api\Admin\DistrictController;
 use App\Http\Controllers\Api\Admin\ExamRoomController;
 use App\Http\Controllers\Api\Admin\ImportController;
 use App\Http\Controllers\Api\Admin\ImportSafetyController;
@@ -78,6 +79,13 @@ Route::prefix('v1')->group(function (): void {
         Route::delete('/settings/profile/avatar', [ProfileController::class, 'destroyAvatar']);
         Route::get('/learning/calendar/{event}/image', [CalendarController::class, 'image'])->middleware('learning.schema')->whereNumber('event');
     });
+
+    Route::middleware(['auth:sanctum', 'active', 'role:super_admin'])
+        ->prefix('super-admin')
+        ->group(function (): void {
+            Route::get('/districts', [DistrictController::class, 'index']);
+            Route::post('/districts', [DistrictController::class, 'store']);
+        });
 
     Route::middleware(['auth:sanctum', 'active', 'district'])->group(function (): void {
         Route::get('/portal', PortalController::class);

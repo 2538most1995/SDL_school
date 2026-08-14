@@ -16,6 +16,7 @@ const AdminUsersPage = lazyWithReload(async () => ({ default: (await import('./a
 const AdminExamRoomsPage = lazyWithReload(async () => ({ default: (await import('./admin')).AdminExamRoomsPage }));
 const AdminImportsPage = lazyWithReload(async () => ({ default: (await import('./admin')).AdminImportsPage }));
 const AdminDataMaintenancePage = lazyWithReload(async () => ({ default: (await import('./admin')).AdminDataMaintenancePage }));
+const SuperAdminDistrictsPage = lazyWithReload(async () => ({ default: (await import('./admin')).SuperAdminDistrictsPage }));
 const SuperAdminBrandingPage = lazyWithReload(async () => ({ default: (await import('./admin')).SuperAdminBrandingPage }));
 const ProfileSettingsPage = lazyWithReload(async () => ({ default: (await import('./settings')).ProfileSettingsPage }));
 const AppearanceSettingsPage = lazyWithReload(async () => ({ default: (await import('./settings')).AppearanceSettingsPage }));
@@ -58,6 +59,7 @@ export const featureRouteCatalog: FeatureRoute[] = [
     { path: '/admin/imports', label: 'นำเข้าข้อมูล', roles: ['admin', 'super_admin'], element: <AdminImportsPage /> },
     { path: '/admin/data-maintenance', label: 'ดูแลข้อมูล', roles: ['admin', 'super_admin'], element: <AdminDataMaintenancePage /> },
     { path: '/admin/branding', label: 'แบรนด์และหน้าเข้าสู่ระบบ', roles: ['admin', 'super_admin'], element: <SuperAdminBrandingPage /> },
+    { path: '/super-admin/districts', label: 'ทะเบียนอำเภอ', roles: ['super_admin'], element: <SuperAdminDistrictsPage /> },
     { path: '/super-admin/branding', label: 'แบรนด์และหน้าเข้าสู่ระบบ', roles: ['super_admin'], element: <SuperAdminBrandingPage /> },
 
     { path: '/settings/profile', label: 'โปรไฟล์', roles: ['student', 'teacher', 'admin', 'super_admin'], element: <ProfileSettingsPage /> },

@@ -83,6 +83,70 @@ type UserDraft = { username: string; password: string; first_name: string; last_
 const roleLabels: Record<AdminRole, string> = { student: 'นักศึกษา', teacher: 'ครู', admin: 'ผู้ดูแลอำเภอ', super_admin: 'ผู้ดูแลสูงสุด' };
 const blankUser: UserDraft = { username: '', password: '', first_name: '', last_name: '', role: 'teacher', assigned_groups: [] };
 
+type DistrictRegistryItem = {
+    id: number;
+    name: string;
+    code: string;
+    is_active: boolean;
+    users_count: number;
+    created_at: string | null;
+};
+type DistrictDraft = { name: string; code: string };
+const blankDistrict: DistrictDraft = { name: '', code: '' };
+
+export function SuperAdminDistrictsPage() {
+    const queryClient = useQueryClient();
+    const [creating, setCreating] = useState(false);
+    const [draft, setDraft] = useState<DistrictDraft>(blankDistrict);
+    const districts = useQuery({
+        queryKey: ['super-admin', 'districts'],
+        queryFn: ({ signal }) => getFeatureData<DistrictRegistryItem[]>('/api/v1/super-admin/districts', signal),
+    });
+    const save = useMutation({
+        meta: { notification: { success: 'เพิ่มอำเภอใหม่เรียบร้อยแล้ว' } },
+        mutationFn: () => sendFeatureData<DistrictRegistryItem>('/api/v1/super-admin/districts', 'POST', draft),
+        onSuccess: async () => {
+            setCreating(false);
+            setDraft(blankDistrict);
+            await Promise.all([
+                queryClient.invalidateQueries({ queryKey: ['super-admin', 'districts'] }),
+                queryClient.invalidateQueries({ queryKey: ['auth', 'me'] }),
+                queryClient.invalidateQueries({ queryKey: ['auth', 'districts'] }),
+            ]);
+        },
+    });
+    const columns = useMemo<ColumnDef<DistrictRegistryItem>[]>(() => [
+        { accessorKey: 'name', header: 'ชื่อพื้นที่', size: 260, meta: { compactSize: 145 }, cell: ({ row }) => <div><p className="font-bold text-slate-950">{row.original.name}</p><p className="mt-0.5 text-xs text-slate-500">รหัส {row.original.code}</p></div> },
+        { accessorKey: 'users_count', header: 'ผู้ใช้งาน', size: 120, meta: { compactSize: 70, compactTextAlign: 'center' }, cell: ({ getValue }) => Number(getValue()).toLocaleString('th-TH') },
+        { accessorKey: 'is_active', header: 'สถานะ', size: 120, meta: { compactSize: 72, compactTextAlign: 'center' }, cell: ({ getValue }) => <StatusBadge tone={getValue<boolean>() ? 'success' : 'neutral'}>{getValue<boolean>() ? 'เปิดใช้งาน' : 'ปิดใช้งาน'}</StatusBadge> },
+        { accessorKey: 'created_at', header: 'วันที่เพิ่ม', size: 150, meta: { compactSize: 90 }, cell: ({ getValue }) => { const value = getValue<string | null>(); return value ? new Intl.DateTimeFormat('th-TH', { dateStyle: 'medium' }).format(new Date(value)) : '-'; } },
+    ], []);
+    const readOnly = districts.data?.meta.read_only === true;
+
+    return (
+        <div>
+            <PageHeader category="จัดการพื้นที่" title="ทะเบียนอำเภอ" description="เพิ่มอำเภอใหม่เพื่อแยกผู้ใช้งาน การนำเข้า และข้อมูลนักศึกษาออกจากกันอย่างชัดเจน" icon={Buildings} actions={<button type="button" onClick={() => { setDraft(blankDistrict); save.reset(); setCreating(true); }} disabled={readOnly} className={primaryButton}><Plus size={17} weight="bold" /> เพิ่มอำเภอ</button>} />
+            <div className="mb-5 grid gap-3 sm:grid-cols-3">
+                <StatTile label="อำเภอทั้งหมด" value={districts.data?.data.length ?? 0} detail="ในทะเบียนระบบ" icon={Buildings} tone="sky" />
+                <StatTile label="เปิดใช้งาน" value={districts.data?.data.filter((district) => district.is_active).length ?? 0} detail="เลือกใช้งานได้จากเมนูด้านบน" icon={CheckCircle} />
+                <StatTile label="ขั้นตอนถัดไป" value="2 ขั้นตอน" detail="สร้างผู้ดูแล แล้วนำเข้า ZIP/DBF" icon={UploadSimple} tone="amber" />
+            </div>
+            <Panel title="พื้นที่ที่เปิดให้บริการ" description="หลังเพิ่มอำเภอ ให้เลือกอำเภอจากเมนูด้านบน จากนั้นเพิ่มผู้ดูแลประจำอำเภอและนำเข้าข้อมูลของพื้นที่นั้น">
+                {districts.isPending && <QuerySkeleton />}
+                {districts.isError && <QueryError onRetry={() => districts.refetch()} />}
+                {districts.data && <DataTable data={districts.data.data} columns={columns} />}
+            </Panel>
+            {creating && <Modal title="เพิ่มอำเภอใหม่" description="ระบบจะสร้างพื้นที่ว่างที่ยังไม่มีข้อมูลนักศึกษา การนำเข้าครั้งแรกจะผูกกับอำเภอนี้เท่านั้น" onClose={() => setCreating(false)}><form onSubmit={(event) => { event.preventDefault(); save.mutate(); }} className="grid gap-4 sm:grid-cols-2">
+                <Field label="ชื่ออำเภอ" hint="ตัวอย่าง: อำเภอบางปะอิน"><input required maxLength={255} value={draft.name} onChange={(event) => setDraft({ ...draft, name: event.target.value })} className={inputClass} placeholder="อำเภอบางปะอิน" /></Field>
+                <Field label="รหัสอำเภอ" hint="ใช้ a-z, 0-9, - หรือ _ เช่น bang-pa-in"><input required minLength={2} maxLength={40} pattern="[a-z0-9]+(?:[-_][a-z0-9]+)*" value={draft.code} onChange={(event) => setDraft({ ...draft, code: event.target.value.toLocaleLowerCase('en-US') })} className={inputClass} placeholder="bang-pa-in" /></Field>
+                <div className="rounded-2xl border border-sky-200 bg-sky-50 p-4 text-sm leading-6 text-sky-950 sm:col-span-2"><strong className="block">หลังบันทึก</strong>เลือกอำเภอใหม่นี้จากเมนูด้านบน → ไปที่ “ผู้ใช้งาน” เพื่อสร้าง admin ประจำอำเภอ → ไปที่ “นำเข้าข้อมูล” เพื่ออัปโหลด ZIP/DBF</div>
+                <div className="sm:col-span-2"><MutationError error={save.error} /></div>
+                <div className="flex justify-end gap-2 sm:col-span-2"><button type="button" onClick={() => setCreating(false)} className={secondaryButton}>ยกเลิก</button><button type="submit" disabled={save.isPending} className={primaryButton}><FloppyDisk size={17} weight="bold" />{save.isPending ? 'กำลังเพิ่มอำเภอ' : 'บันทึกอำเภอ'}</button></div>
+            </form></Modal>}
+        </div>
+    );
+}
+
 export function AdminUsersPage() {
     const queryClient = useQueryClient();
     const [role, setRole] = useState('all');

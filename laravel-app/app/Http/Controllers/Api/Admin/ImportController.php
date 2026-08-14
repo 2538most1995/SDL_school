@@ -134,7 +134,7 @@ final class ImportController extends Controller
         } catch (Throwable $e) {
             Log::error('Import store error: '.$e->getMessage(), ['exception' => $e]);
 
-            return response()->json(['message' => 'เกิดข้อผิดพลาดในการนำเข้า: '.$e->getMessage()], 500);
+            return response()->json(['message' => 'เกิดข้อผิดพลาดระหว่างเตรียมนำเข้าข้อมูล กรุณาลองใหม่หรือติดต่อผู้ดูแลระบบ'], 500);
         }
     }
 

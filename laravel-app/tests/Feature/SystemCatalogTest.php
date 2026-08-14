@@ -43,6 +43,18 @@ class SystemCatalogTest extends TestCase
 
         $this->assertTrue($items->contains('key', 'users'));
         $this->assertTrue($items->contains('key', 'branding'));
+        $this->assertFalse($items->contains('key', 'districts'));
+    }
+
+    public function test_super_admin_catalog_includes_district_registry(): void
+    {
+        Sanctum::actingAs(User::factory()->create(['role' => 'super_admin', 'district_id' => null]));
+
+        $response = $this->getJson('/api/v1/system/catalog')->assertOk();
+        $items = collect($response->json('data.groups'))->flatMap(fn (array $group) => $group['items']);
+
+        $this->assertTrue($items->contains('key', 'districts'));
+        $this->assertTrue($items->contains('route', '/super-admin/districts'));
     }
 
     public function test_query_string_cannot_escalate_catalog_role(): void

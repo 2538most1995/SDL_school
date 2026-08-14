@@ -22,6 +22,7 @@ District scope is resolved by `ResolveDistrictContext`; role checks are enforced
 - Student reports: overview, new students, graduates, transfers, registrations, grade threshold and attendance
 - Learning: assignments, resources, calendar activities with private images, schedules, lesson plans, scores and content writes
 - Admin: users, import status/safety, ZIP/DBF imports, exam rooms and branding
+- Super admin: district registry for adding a new active district before assigning its administrators and importing its first ZIP/DBF batch
 - Legacy compatibility redirects for old `.php` paths
 
 ## Business rules
@@ -32,13 +33,14 @@ District scope is resolved by `ResolveDistrictContext`; role checks are enforced
 4. Dynamic import-table identifiers must be resolved from a validated batch and identifier whitelist; bound parameters are required for values.
 5. Student PII is masked by default and unmasked only for an allowed scope/resource.
 6. Import creates and validates a new batch before replacing old district batches; writes are disabled by default.
-7. Learning writes require teacher/admin/super-admin role and teacher ownership/district checks.
-8. คะแนนเก็บใช้รายวิชาลงทะเบียนจากชุด import ล่าสุดใน district และจำกัดนักศึกษาตามกลุ่มที่ครูรับผิดชอบ; นักศึกษาอ่านได้เฉพาะคะแนนของตนเอง
-9. คลังสื่อแบบไฟล์เก็บใน private storage และต้องดาวน์โหลดผ่าน endpoint ที่ตรวจ district, กลุ่ม และระดับการศึกษา
-8. Student login derives district scope from one unique citizen-ID match across current-term rosters in active districts; client-supplied district values are ignored and ambiguous matches fail closed.
-9. Calendar activities, per-day schedules, external links and private images are visible only within the event district and `all`/assigned-group target; only teacher/admin/super-admin roles can create or change them, teacher writes remain creator/group scoped, and only admin/super-admin may choose the single district activity featured on the student dashboard.
-10. Authenticated learning routes run an idempotent additive readiness check so a Git-only shared-hosting deploy can repair missing learning/audit tables or columns before the first read/write; normal deployments still run migrations.
-11. งานที่มอบหมายเลือกได้เฉพาะรายวิชาลงทะเบียนในภาคเรียนปัจจุบันและขอบเขตกลุ่มของครู; ครูแนบลิงก์ PDF หรือรูปภาพ private storage เป็นเอกสารประกอบงานได้ นักศึกษาในกลุ่มจึงเห็นชื่อ คำชี้แจง และเอกสารก่อนส่งงาน; การส่งงานใช้ `student_code` จากชุดข้อมูลผู้เรียนปัจจุบัน รองรับลิงก์ PDF หรือรูปภาพหลายไฟล์ และครูเห็น/ตรวจได้เฉพาะงานที่ตนสร้างภายในอำเภอ
+7. Only `super_admin` can register a district. A new district becomes an explicit selectable scope, and its users/imports remain isolated by `district_id`.
+8. Learning writes require teacher/admin/super-admin role and teacher ownership/district checks.
+9. คะแนนเก็บใช้รายวิชาลงทะเบียนจากชุด import ล่าสุดใน district และจำกัดนักศึกษาตามกลุ่มที่ครูรับผิดชอบ; นักศึกษาอ่านได้เฉพาะคะแนนของตนเอง
+10. คลังสื่อแบบไฟล์เก็บใน private storage และต้องดาวน์โหลดผ่าน endpoint ที่ตรวจ district, กลุ่ม และระดับการศึกษา
+11. Student login derives district scope from one unique citizen-ID match across current-term rosters in active districts; client-supplied district values are ignored and ambiguous matches fail closed.
+12. Calendar activities, per-day schedules, external links and private images are visible only within the event district and `all`/assigned-group target; only teacher/admin/super-admin roles can create or change them, teacher writes remain creator/group scoped, and only admin/super-admin may choose the single district activity featured on the student dashboard.
+13. Authenticated learning routes run an idempotent additive readiness check so a Git-only shared-hosting deploy can repair missing learning/audit tables or columns before the first read/write; normal deployments still run migrations.
+14. งานที่มอบหมายเลือกได้เฉพาะรายวิชาลงทะเบียนในภาคเรียนปัจจุบันและขอบเขตกลุ่มของครู; ครูแนบลิงก์ PDF หรือรูปภาพ private storage เป็นเอกสารประกอบงานได้ นักศึกษาในกลุ่มจึงเห็นชื่อ คำชี้แจง และเอกสารก่อนส่งงาน; การส่งงานใช้ `student_code` จากชุดข้อมูลผู้เรียนปัจจุบัน รองรับลิงก์ PDF หรือรูปภาพหลายไฟล์ และครูเห็น/ตรวจได้เฉพาะงานที่ตนสร้างภายในอำเภอ
 
 ## Request/data flow
 
