@@ -23,6 +23,10 @@ export function publicBrandingPath(districtId?: string | null): string {
     return districtId ? `/api/v1/auth/branding?district_id=${encodeURIComponent(districtId)}` : '/api/v1/auth/branding';
 }
 
+export function publicBrandingHeroPath(districtId: number): string {
+    return `/api/v1/auth/branding/hero?district_id=${encodeURIComponent(String(districtId))}`;
+}
+
 export function publicAssetUrl(path?: string | null): string | null {
     return path ? withAppBasePath(path) : null;
 }

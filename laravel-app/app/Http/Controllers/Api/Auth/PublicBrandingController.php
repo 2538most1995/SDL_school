@@ -8,6 +8,7 @@ use App\Support\DistrictBranding;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Storage;
+use Symfony\Component\HttpFoundation\BinaryFileResponse;
 use Symfony\Component\HttpFoundation\StreamedResponse;
 
 final class PublicBrandingController extends Controller
@@ -30,17 +31,22 @@ final class PublicBrandingController extends Controller
         ]);
     }
 
-    public function hero(Request $request): StreamedResponse
+    public function hero(Request $request): StreamedResponse|BinaryFileResponse
     {
         $district = $this->district($request);
         $path = (string) $district->login_hero_path;
 
-        abort_unless(
-            $this->branding->isOwnedHeroPath($district->id, $path) && Storage::disk('local')->exists($path),
-            404,
-        );
+        if ($this->branding->isOwnedHeroPath($district->id, $path) && Storage::disk('local')->exists($path)) {
+            return Storage::disk('local')->response($path, null, [
+                'Cache-Control' => 'public, max-age=86400',
+                'X-Content-Type-Options' => 'nosniff',
+            ]);
+        }
 
-        return Storage::disk('local')->response($path, null, [
+        $defaultPath = public_path(ltrim(DistrictBranding::DEFAULT_HERO_URL, '/'));
+        abort_unless(is_file($defaultPath), 404);
+
+        return response()->file($defaultPath, [
             'Cache-Control' => 'public, max-age=86400',
             'X-Content-Type-Options' => 'nosniff',
         ]);

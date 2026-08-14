@@ -720,15 +720,15 @@ textarea {
     background-color: var(--ui-surface-muted);
 }
 
-[data-ui-mode='dark'] :where(.text-slate-950, .text-slate-900, .text-slate-800, .text-gray-900, .text-gray-800) {
+[data-ui-mode='dark'] .portal-shell :where(.text-slate-950, .text-slate-900, .text-slate-800, .text-gray-900, .text-gray-800) {
     color: #f8fafc;
 }
 
-[data-ui-mode='dark'] :where(.text-slate-700, .text-slate-600, .text-slate-500, .text-gray-700, .text-gray-600, .text-gray-500) {
+[data-ui-mode='dark'] .portal-shell :where(.text-slate-700, .text-slate-600, .text-slate-500, .text-gray-700, .text-gray-600, .text-gray-500) {
     color: #cbd5e1;
 }
 
-[data-ui-mode='dark'] :where(.text-slate-400, .text-slate-300, .text-gray-400) {
+[data-ui-mode='dark'] .portal-shell :where(.text-slate-400, .text-slate-300, .text-gray-400) {
     color: #94a3b8;
 }
 

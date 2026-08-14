@@ -67,6 +67,15 @@ class LoginTest extends TestCase
             ->assertJsonPath('data.loginMode', 'student_credentials');
     }
 
+    public function test_public_branding_hero_serves_the_default_image_when_no_custom_image_exists(): void
+    {
+        $district = District::create(['name' => 'อำเภอเสนา', 'code' => 'sena']);
+
+        $this->get("/api/v1/auth/branding/hero?district_id={$district->id}")
+            ->assertOk()
+            ->assertHeader('Content-Type', 'image/png');
+    }
+
     public function test_student_can_log_in_with_citizen_id_only_from_system_database(): void
     {
         config(['system_data.student_enabled' => true]);

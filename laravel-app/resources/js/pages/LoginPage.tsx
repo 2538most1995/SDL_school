@@ -16,8 +16,9 @@ import {
 import { Link } from 'react-router-dom';
 import type { DemoRole } from '../context/DemoRoleContext';
 import { ApiError, apiGet, apiPost } from '../lib/api';
-import { DEFAULT_HERO_IMAGE, publicAssetUrl, publicBrandingCssVariables, publicBrandingPath, type PublicBranding } from '../lib/publicBranding';
+import { publicAssetUrl, publicBrandingCssVariables, publicBrandingPath, type PublicBranding } from '../lib/publicBranding';
 import { withAppBasePath } from '../lib/urls';
+import { PublicHeroImage } from '../components/PublicHeroImage';
 
 type LoginType = 'staff' | 'student';
 
@@ -85,7 +86,7 @@ export function LoginPage() {
         <main style={publicBrandingCssVariables(branding.data?.primaryColor)} className="public-page min-h-[100dvh] p-3 sm:p-5 lg:p-6">
             <div className="public-auth-shell mx-auto grid min-h-[calc(100dvh-24px)] max-w-[1480px] overflow-hidden border border-slate-200 bg-white sm:min-h-[calc(100dvh-40px)] lg:min-h-[calc(100dvh-48px)] lg:grid-cols-[0.92fr_1.08fr]">
                 <section className="relative hidden overflow-hidden bg-brand-950 lg:block" aria-label="พื้นที่ต้อนรับนักศึกษา">
-                    <img src={publicAssetUrl(branding.data?.heroImageUrl) ?? DEFAULT_HERO_IMAGE} alt="ภาพต้อนรับนักศึกษาและครู" className="absolute inset-0 size-full object-cover object-[58%_center] opacity-90" />
+                    <PublicHeroImage branding={branding.data} alt="ภาพต้อนรับนักศึกษาและครู" className="absolute inset-0 size-full object-cover object-[58%_center] opacity-90" />
                     <div className="absolute inset-0 bg-gradient-to-t from-brand-950 via-brand-950/25 to-transparent" aria-hidden="true" />
                     <div className="absolute inset-x-0 bottom-0 p-12 text-white">
                         <p className="text-sm font-bold text-brand-200">{branding.data?.portalName ?? 'SDL SCHOOL'}</p>

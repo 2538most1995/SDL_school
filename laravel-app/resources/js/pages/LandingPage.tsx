@@ -2,7 +2,8 @@ import { ArrowRight, BookOpenText, ChartLineUp, GraduationCap, Sparkle } from '@
 import { Link } from 'react-router-dom';
 import { useQuery } from '@tanstack/react-query';
 import { apiGet } from '../lib/api';
-import { DEFAULT_HERO_IMAGE, publicAssetUrl, publicBrandingCssVariables, publicBrandingPath, type PublicBranding } from '../lib/publicBranding';
+import { publicAssetUrl, publicBrandingCssVariables, publicBrandingPath, type PublicBranding } from '../lib/publicBranding';
+import { PublicHeroImage } from '../components/PublicHeroImage';
 
 const highlights = [
     { label: 'งานและบทเรียน', icon: BookOpenText },
@@ -35,8 +36,8 @@ export function LandingPage() {
     return (
         <main style={publicBrandingCssVariables(branding.data?.primaryColor)} className="public-page min-h-[100dvh] p-3 sm:p-5 lg:p-6">
             <section className="public-hero relative mx-auto min-h-[calc(100dvh-24px)] max-w-[1500px] overflow-hidden bg-brand-950 sm:min-h-[calc(100dvh-40px)] lg:min-h-[calc(100dvh-48px)]">
-                <img
-                    src={publicAssetUrl(branding.data?.heroImageUrl) ?? DEFAULT_HERO_IMAGE}
+                <PublicHeroImage
+                    branding={branding.data}
                     alt="ภาพต้อนรับนักศึกษาและครู"
                     className="absolute inset-0 size-full object-cover object-[66%_center]"
                 />
