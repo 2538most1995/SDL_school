@@ -5,28 +5,22 @@ namespace App\Services\Legacy;
 use App\Domain\Students\Models\Student;
 use App\Domain\Students\Repositories\StudentRepository;
 use App\Domain\Students\Support\AcademicTerm;
-use App\Support\ThaiAdministrativeAreaLookup;
-use Illuminate\Database\DatabaseManager;
 
 final class ExamRoomScopeService
 {
     /** @var array<int, array<string, mixed>> */
     private array $scopesByDistrict = [];
 
-    public function __construct(
-        private readonly DatabaseManager $database,
-        private readonly StudentRepository $students,
-        private readonly ThaiAdministrativeAreaLookup $areaLookup,
-    ) {}
+    public function __construct(private readonly StudentRepository $students) {}
 
     /**
      * @return array{
      *     term: string|null,
-     *     student_targets: list<array{values: list<string>, education_level: int, subdistrict: string|null}>,
-     *     group_targets: list<array{values: list<string>, education_level: int, subdistrict: string|null}>,
-     *     student_index: array<string, array{education_levels: list<int>, subdistricts: list<string>}>,
-     *     group_index: array<string, array{education_levels: list<int>, subdistricts: list<string>}>,
-     *     subdistricts: list<string>,
+     *     student_targets: list<array{values: list<string>, education_level: int, group: string|null}>,
+     *     group_targets: list<array{values: list<string>, education_level: int, group: string|null}>,
+     *     student_index: array<string, array{education_levels: list<int>, groups: list<string>}>,
+     *     group_index: array<string, array{education_levels: list<int>, groups: list<string>}>,
+     *     groups: list<array{value: string, label: string}>,
      *     education_levels: list<array{value: int, label: string}>
      * }
      */
@@ -45,10 +39,7 @@ final class ExamRoomScopeService
             $students,
             static fn (Student $student): bool => AcademicTerm::normalize($student->currentTerm) === $currentTerm,
         ));
-        $districtName = $students[0]->districtName ?? (string) $this->database->connection()
-            ->table('districts')->where('id', $districtId)->value('name');
-        $subdistrictNames = $this->areaLookup->subdistrictsForDistrict($districtName);
-        $subdistricts = [];
+        $groups = [];
         $levels = [];
         $studentTargets = [];
         $groupTargets = [];
@@ -56,24 +47,27 @@ final class ExamRoomScopeService
             if (in_array($student->level, [1, 2, 3], true)) {
                 $levels[$student->level] = $student->levelLabel;
             }
-            $subdistrict = $this->studentSubdistrict($student, $subdistrictNames);
-            if ($subdistrict !== null) {
-                $subdistricts[$subdistrict] = true;
+            $group = $this->studentGroup($student);
+            if ($group !== null) {
+                $groups[$this->targetKey($group['value'])] ??= $group;
             }
             $studentTargets[] = [
                 'values' => [$student->code],
                 'education_level' => $student->level,
-                'subdistrict' => $subdistrict,
+                'group' => $group['value'] ?? null,
             ];
-            $groupKey = implode("\0", [$student->groupCode, $student->groupName, (string) $student->level, $subdistrict ?? '']);
+            $groupKey = implode("\0", [$student->groupCode, $student->groupName, (string) $student->level]);
             $groupTargets[$groupKey] = [
                 'values' => array_values(array_filter([$student->groupCode, $student->groupName])),
                 'education_level' => $student->level,
-                'subdistrict' => $subdistrict,
+                'group' => $group['value'] ?? null,
             ];
         }
-        $subdistricts = array_keys($subdistricts);
-        sort($subdistricts, SORT_NATURAL | SORT_FLAG_CASE);
+        $groupOptions = array_values($groups);
+        usort($groupOptions, static fn (array $left, array $right): int => strnatcasecmp(
+            $left['label'].' '.$left['value'],
+            $right['label'].' '.$right['value'],
+        ));
         ksort($levels);
 
         return $this->scopesByDistrict[$districtId] = [
@@ -82,7 +76,7 @@ final class ExamRoomScopeService
             'group_targets' => array_values($groupTargets),
             'student_index' => $this->targetIndex($studentTargets),
             'group_index' => $this->targetIndex(array_values($groupTargets)),
-            'subdistricts' => $subdistricts,
+            'groups' => $groupOptions,
             'education_levels' => array_map(
                 static fn (int $value, string $label): array => ['value' => $value, 'label' => $label],
                 array_keys($levels),
@@ -93,7 +87,7 @@ final class ExamRoomScopeService
 
     /**
      * @param  array<string, mixed>  $districtScope
-     * @return array{education_levels: list<int>, subdistricts: list<string>}
+     * @return array{education_levels: list<int>, groups: list<string>}
      */
     public function forRoom(object $room, array $districtScope): array
     {
@@ -110,7 +104,7 @@ final class ExamRoomScopeService
         }
 
         $levels = [];
-        $subdistricts = [];
+        $groups = [];
         foreach ($targets as $target) {
             $matches = array_filter($target['values'], fn (string $value): bool => $this->matchValue(
                 $value,
@@ -123,16 +117,16 @@ final class ExamRoomScopeService
             if (in_array($target['education_level'], [1, 2, 3], true)) {
                 $levels[$target['education_level']] = true;
             }
-            if ($target['subdistrict'] !== null) {
-                $subdistricts[$target['subdistrict']] = true;
+            if ($target['group'] !== null) {
+                $groups[$this->targetKey($target['group'])] = $target['group'];
             }
         }
         $levelValues = array_map('intval', array_keys($levels));
         sort($levelValues);
-        $subdistrictValues = array_keys($subdistricts);
-        sort($subdistrictValues, SORT_NATURAL | SORT_FLAG_CASE);
+        $groupValues = array_values($groups);
+        sort($groupValues, SORT_NATURAL | SORT_FLAG_CASE);
 
-        return ['education_levels' => $levelValues, 'subdistricts' => $subdistrictValues];
+        return ['education_levels' => $levelValues, 'groups' => $groupValues];
     }
 
     public function rangeCapacity(string $start, string $end): ?int
@@ -172,8 +166,8 @@ final class ExamRoomScopeService
     }
 
     /**
-     * @param  list<array{values: list<string>, education_level: int, subdistrict: string|null}>  $targets
-     * @return array<string, array{education_levels: list<int>, subdistricts: list<string>}>
+     * @param  list<array{values: list<string>, education_level: int, group: string|null}>  $targets
+     * @return array<string, array{education_levels: list<int>, groups: list<string>}>
      */
     private function targetIndex(array $targets): array
     {
@@ -184,12 +178,12 @@ final class ExamRoomScopeService
                 if ($key === '') {
                     continue;
                 }
-                $index[$key] ??= ['education_levels' => [], 'subdistricts' => []];
+                $index[$key] ??= ['education_levels' => [], 'groups' => []];
                 if (in_array($target['education_level'], [1, 2, 3], true)) {
                     $index[$key]['education_levels'][$target['education_level']] = true;
                 }
-                if ($target['subdistrict'] !== null) {
-                    $index[$key]['subdistricts'][$target['subdistrict']] = true;
+                if ($target['group'] !== null) {
+                    $index[$key]['groups'][$this->targetKey($target['group'])] = $target['group'];
                 }
             }
         }
@@ -197,39 +191,24 @@ final class ExamRoomScopeService
         return array_map(static function (array $scope): array {
             $levels = array_map('intval', array_keys($scope['education_levels']));
             sort($levels);
-            $subdistricts = array_keys($scope['subdistricts']);
-            sort($subdistricts, SORT_NATURAL | SORT_FLAG_CASE);
+            $groups = array_values($scope['groups']);
+            sort($groups, SORT_NATURAL | SORT_FLAG_CASE);
 
-            return ['education_levels' => $levels, 'subdistricts' => $subdistricts];
+            return ['education_levels' => $levels, 'groups' => $groups];
         }, $index);
     }
 
-    /** @param list<string> $subdistrictNames */
-    private function studentSubdistrict(Student $student, array $subdistrictNames): ?string
+    /** @return array{value: string, label: string}|null */
+    private function studentGroup(Student $student): ?array
     {
-        $groupDigits = preg_replace('/\D+/', '', $student->groupCode) ?? '';
-        foreach (array_unique(array_filter([$groupDigits, substr($groupDigits, 0, 6)])) as $code) {
-            $area = $this->areaLookup->resolve($code);
-            if ($area !== null && in_array($area['subdistrict'], $subdistrictNames, true)) {
-                return $area['subdistrict'];
-            }
+        $code = trim($student->groupCode);
+        $name = trim($student->groupName);
+        $value = $code !== '' ? $code : $name;
+        if ($value === '') {
+            return null;
         }
 
-        $groupName = preg_replace('/\s+/u', '', $student->groupName) ?? $student->groupName;
-        foreach ($subdistrictNames as $subdistrict) {
-            $compact = preg_replace('/\s+/u', '', $subdistrict) ?? $subdistrict;
-            if (str_contains($groupName, 'ตำบล'.$compact)) {
-                return $subdistrict;
-            }
-        }
-        foreach ($subdistrictNames as $subdistrict) {
-            $compact = preg_replace('/\s+/u', '', $subdistrict) ?? $subdistrict;
-            if ($compact !== '' && str_contains($groupName, $compact)) {
-                return $subdistrict;
-            }
-        }
-
-        return null;
+        return ['value' => $value, 'label' => $name !== '' ? $name : $value];
     }
 
     private function matchValue(string $value, string $start, string $end): bool

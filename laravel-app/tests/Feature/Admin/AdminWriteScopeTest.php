@@ -162,7 +162,7 @@ final class AdminWriteScopeTest extends TestCase
             ->assertJsonPath('data.deleted', true);
     }
 
-    public function test_exam_room_page_uses_only_current_term_and_exposes_subdistrict_and_level_scopes(): void
+    public function test_exam_room_page_uses_only_current_term_and_exposes_group_and_level_scopes(): void
     {
         $this->bindStudents([
             $this->studentForTerm($this->sena, '6650100001', 2, '15', 'กศน.ตำบลเสนา', '1/2569'),
@@ -199,8 +199,9 @@ final class AdminWriteScopeTest extends TestCase
             ->assertJsonCount(1, 'data')
             ->assertJsonPath('data.0.id', $currentRoom)
             ->assertJsonPath('data.0.education_levels.0', 2)
-            ->assertJsonPath('data.0.subdistricts.0', 'เสนา')
-            ->assertJsonFragment(['บ้านแพน'])
+            ->assertJsonPath('data.0.groups.0', '15')
+            ->assertJsonFragment(['value' => '15', 'label' => 'กศน.ตำบลเสนา'])
+            ->assertJsonFragment(['value' => '40', 'label' => 'กศน.ตำบลบ้านแพน'])
             ->assertJsonMissing(['room_name' => 'ห้องย้อนหลัง']);
 
         $payload = [
@@ -358,7 +359,7 @@ final class AdminWriteScopeTest extends TestCase
                 'subject_code' => 'ทช21001',
                 'capacity' => 1,
                 'education_levels' => [2],
-                'subdistricts' => ['เสนา'],
+                'groups' => ['15'],
             ])
             ->assertJsonPath('meta.schedule_sync.available', false);
         $this->postJson('/api/v1/admin/exam-rooms/carry-forward')->assertConflict();
@@ -396,7 +397,7 @@ final class AdminWriteScopeTest extends TestCase
             ->assertJsonCount(2250, 'data')
             ->assertJsonPath('data.0.capacity', 1)
             ->assertJsonPath('data.0.education_levels.0', 2)
-            ->assertJsonPath('data.0.subdistricts.0', 'เสนา');
+            ->assertJsonPath('data.0.groups.0', '15');
     }
 
     public function test_super_admin_can_manage_the_explicitly_selected_district(): void

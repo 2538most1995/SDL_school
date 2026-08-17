@@ -32,7 +32,11 @@ final class ExamRoomController extends Controller
     {
         if (! (bool) config('system_data.enabled')) {
             $filters = $request->validate(['date' => ['nullable', 'date_format:Y-m-d']]);
-            $items = $demo->examRooms($filters['date'] ?? null);
+            $items = array_map(static fn (array $item): array => [
+                ...$item,
+                'education_levels' => $item['education_levels'] ?? [],
+                'groups' => $item['groups'] ?? [],
+            ], $demo->examRooms($filters['date'] ?? null));
 
             return response()->json(['data' => $items, 'meta' => [
                 ...DemoResponseMeta::collection(count($items), $filters),
@@ -40,7 +44,7 @@ final class ExamRoomController extends Controller
                 'sync_enabled' => false,
                 'read_only' => true,
                 'current_term' => null,
-                'subdistricts' => [],
+                'groups' => [],
                 'education_levels' => [],
             ]]);
         }
@@ -63,7 +67,7 @@ final class ExamRoomController extends Controller
             'read_only' => ! (bool) config('system_data.write_enabled'),
             'district_id' => $districtId,
             'current_term' => $scope['term'],
-            'subdistricts' => $scope['subdistricts'],
+            'groups' => $scope['groups'],
             'education_levels' => $scope['education_levels'],
             'schedule_sync' => $scheduleSync,
             // Keep one deployment window compatible with the previous frontend.
@@ -213,7 +217,7 @@ final class ExamRoomController extends Controller
     }
 
     /** @return array<string, mixed> */
-    private function payload(object $row, array $scopes = ['education_levels' => [], 'subdistricts' => []]): array
+    private function payload(object $row, array $scopes = ['education_levels' => [], 'groups' => []]): array
     {
         return [
             'id' => (int) $row->id,
@@ -227,7 +231,7 @@ final class ExamRoomController extends Controller
             'capacity' => $this->scope->rangeCapacity((string) $row->start_val, (string) $row->end_val),
             'status' => 'ready',
             'education_levels' => $scopes['education_levels'],
-            'subdistricts' => $scopes['subdistricts'],
+            'groups' => $scopes['groups'],
         ];
     }
 

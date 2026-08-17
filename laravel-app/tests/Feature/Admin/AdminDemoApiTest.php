@@ -78,6 +78,8 @@ final class AdminDemoApiTest extends TestCase
             ->assertJsonPath('data.0.end_val', '6650100054')
             ->assertJsonPath('data.0.room_name', 'ห้องประชุมใหญ่')
             ->assertJsonPath('data.0.capacity', 24)
+            ->assertJsonPath('data.0.education_levels', [])
+            ->assertJsonPath('data.0.groups', [])
             ->assertJsonPath('meta.source_batch', 'demo-only')
             ->assertJsonPath('meta.sync_enabled', false);
 

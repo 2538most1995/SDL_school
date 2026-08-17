@@ -39,10 +39,10 @@ const primaryButton = 'inline-flex items-center justify-center gap-2 whitespace-
 const secondaryButton = 'inline-flex items-center justify-center gap-2 whitespace-nowrap rounded-full border border-slate-200 bg-white px-4 py-2.5 text-sm font-bold text-slate-700 transition hover:border-brand-300 hover:text-brand-800 disabled:opacity-50 active:scale-[0.98]';
 const inputClass = 'h-10 w-full rounded-xl border border-slate-300 bg-white px-3 text-sm text-slate-900 outline-none transition focus:border-brand-600 focus:ring-2 focus:ring-brand-100 disabled:bg-slate-100';
 
-function Modal({ title, description, children, onClose }: { title: string; description?: string; children: ReactNode; onClose: () => void }) {
+function Modal({ title, description, children, onClose, wide = false }: { title: string; description?: string; children: ReactNode; onClose: () => void; wide?: boolean }) {
     return (
         <div className="fixed inset-0 z-50 grid place-items-center overflow-y-auto bg-slate-950/50 p-3 backdrop-blur-sm" role="dialog" aria-modal="true" aria-label={title} onMouseDown={(event) => { if (event.target === event.currentTarget) onClose(); }}>
-            <section className="my-auto w-full max-w-2xl overflow-hidden rounded-2xl border border-white/70 bg-white shadow-2xl">
+            <section className={`my-auto w-full ${wide ? 'max-w-6xl' : 'max-w-2xl'} overflow-hidden rounded-2xl border border-white/70 bg-white shadow-2xl`}>
                 <header className="flex items-start justify-between gap-4 border-b border-slate-100 bg-gradient-to-r from-brand-50 to-sky-50 px-5 py-4 sm:px-6">
                     <div><h2 className="text-xl font-bold text-slate-950">{title}</h2>{description && <p className="mt-1 text-sm leading-6 text-slate-500">{description}</p>}</div>
                     <button type="button" onClick={onClose} className="grid size-9 shrink-0 place-items-center rounded-full bg-white text-slate-500 shadow-sm hover:text-slate-950" aria-label="ปิด"><X size={18} weight="bold" /></button>
@@ -374,11 +374,12 @@ export function AdminImportsPage() {
     );
 }
 
-type ExamRoom = { id: number; district_id: number; term: string; subject_code: string; assignment_type: 'group_range' | 'student_range'; start_val: string; end_val: string; room_name: string; capacity: number | null; status: string; education_levels: number[]; subdistricts: string[] };
+type ExamRoom = { id: number; district_id: number; term: string; subject_code: string; assignment_type: 'group_range' | 'student_range'; start_val: string; end_val: string; room_name: string; capacity: number | null; status: string; education_levels: number[]; groups: string[] };
+type ExamSubject = { subject_code: string; rooms: ExamRoom[]; room_names: string[]; groups: string[]; education_levels: number[]; candidate_count: number };
 type RoomDraft = Pick<ExamRoom, 'term' | 'subject_code' | 'assignment_type' | 'start_val' | 'end_val' | 'room_name'>;
 type ExamRoomMeta = {
     current_term?: string | null;
-    subdistricts?: string[];
+    groups?: Array<{ value: string; label: string }>;
     education_levels?: Array<{ value: number; label: string }>;
     schedule_sync?: { available: boolean; term: string | null; count: number };
 };
@@ -387,18 +388,41 @@ const blankRoom: RoomDraft = { term: '', subject_code: '', assignment_type: 'gro
 export function AdminExamRoomsPage() {
     const queryClient = useQueryClient();
     const [editing, setEditing] = useState<ExamRoom | 'new' | null>(null);
+    const [selectedSubject, setSelectedSubject] = useState<string | null>(null);
     const [draft, setDraft] = useState<RoomDraft>(blankRoom);
-    const [subdistrict, setSubdistrict] = useState('');
+    const [group, setGroup] = useState('');
     const [educationLevel, setEducationLevel] = useState('');
     const rooms = useQuery({ queryKey: ['admin', 'exam-rooms'], queryFn: ({ signal }) => getFeatureData<ExamRoom[]>('/api/v1/admin/exam-rooms', signal) });
     const roomMeta = (rooms.data?.meta ?? {}) as ExamRoomMeta;
     const currentTerm = roomMeta.current_term ?? null;
     const scheduleSyncOption = roomMeta.schedule_sync;
     const filteredRooms = useMemo(() => (rooms.data?.data ?? []).filter((room) => {
-        const matchesSubdistrict = subdistrict === '' || room.subdistricts.includes(subdistrict);
+        const matchesGroup = group === '' || room.groups.includes(group);
         const matchesLevel = educationLevel === '' || room.education_levels.includes(Number(educationLevel));
-        return matchesSubdistrict && matchesLevel;
-    }), [educationLevel, rooms.data?.data, subdistrict]);
+        return matchesGroup && matchesLevel;
+    }), [educationLevel, group, rooms.data?.data]);
+    const subjectRows = useMemo<ExamSubject[]>(() => {
+        const subjects = new Map<string, ExamRoom[]>();
+        filteredRooms.forEach((room) => {
+            const subjectRooms = subjects.get(room.subject_code);
+            if (subjectRooms) subjectRooms.push(room);
+            else subjects.set(room.subject_code, [room]);
+        });
+        return Array.from(subjects, ([subject_code, subjectRooms]) => {
+            const exactStudentCodes = new Set(subjectRooms.filter((room) => room.assignment_type === 'student_range' && room.start_val === room.end_val).map((room) => room.start_val));
+            const rangedCapacity = subjectRooms.filter((room) => room.assignment_type !== 'student_range' || room.start_val !== room.end_val).reduce((sum, room) => sum + (room.capacity ?? 0), 0);
+            return {
+                subject_code,
+                rooms: subjectRooms,
+                room_names: Array.from(new Set(subjectRooms.map((room) => room.room_name))).sort((left, right) => left.localeCompare(right, 'th')),
+                groups: Array.from(new Set(subjectRooms.flatMap((room) => room.groups))).sort((left, right) => left.localeCompare(right, 'th', { numeric: true })),
+                education_levels: Array.from(new Set(subjectRooms.flatMap((room) => room.education_levels))).sort((left, right) => left - right),
+                candidate_count: exactStudentCodes.size + rangedCapacity,
+            };
+        }).sort((left, right) => left.subject_code.localeCompare(right.subject_code, 'th', { numeric: true }));
+    }, [filteredRooms]);
+    const selectedSubjectSummary = subjectRows.find((subject) => subject.subject_code === selectedSubject);
+    const selectedSubjectRooms = selectedSubjectSummary?.rooms ?? [];
     const save = useMutation({
         meta: { notification: { success: editing === 'new' ? 'เพิ่มห้องสอบสำเร็จ' : 'บันทึกห้องสอบสำเร็จ' } },
         mutationFn: () => editing === 'new' ? sendFeatureData<ExamRoom>('/api/v1/admin/exam-rooms', 'POST', draft) : sendFeatureData<ExamRoom>(`/api/v1/admin/exam-rooms/${editing?.id}`, 'PATCH', draft),
@@ -420,34 +444,40 @@ export function AdminExamRoomsPage() {
         save.reset();
         setEditing('new');
     }
-    function openEdit(room: ExamRoom) { setDraft({ term: room.term, subject_code: room.subject_code, assignment_type: room.assignment_type, start_val: room.start_val, end_val: room.end_val, room_name: room.room_name }); save.reset(); setEditing(room); }
+    function openEdit(room: ExamRoom) { setSelectedSubject(null); setDraft({ term: room.term, subject_code: room.subject_code, assignment_type: room.assignment_type, start_val: room.start_val, end_val: room.end_val, room_name: room.room_name }); save.reset(); setEditing(room); }
     function confirmDelete(room: ExamRoom) { if (window.confirm(`ยืนยันลบห้องสอบ “${room.room_name}” เฉพาะอำเภอนี้หรือไม่`)) remove.mutate(room.id); }
     function confirmScheduleSync() {
         if (!scheduleSyncOption?.available || !currentTerm) return;
-        const confirmed = window.confirm(`ยืนยันนำค่าห้องสอบ ${scheduleSyncOption.count.toLocaleString('th-TH')} รายการ จากตารางสอบภาคเรียน ${currentTerm} มาใช้หรือไม่\n\nหลังนำเข้าแล้วสามารถแก้ไขชื่อห้องเป็นรายตำบลและระดับชั้นได้`);
+        const confirmed = window.confirm(`ยืนยันนำค่าห้องสอบ ${scheduleSyncOption.count.toLocaleString('th-TH')} รายการ จากตารางสอบภาคเรียน ${currentTerm} มาใช้หรือไม่\n\nหลังนำเข้าแล้วสามารถแก้ไขชื่อห้องเป็นรายกลุ่มเรียนและระดับชั้นได้`);
         if (confirmed) scheduleSync.mutate();
     }
-    const columns = useMemo<ColumnDef<ExamRoom>[]>(() => [
-        { accessorKey: 'subject_code', header: 'รหัสวิชา', size: 110, meta: { compactSize: 74 }, cell: ({ getValue }) => <span className="font-bold text-slate-950">{getValue<string>()}</span> },
-        { accessorKey: 'assignment_type', header: 'จัดตาม', size: 135, meta: { compactSize: 82, compactTextAlign: 'center' }, cell: ({ getValue }) => getValue<string>() === 'group_range' ? 'ช่วงกลุ่มเรียน' : 'ช่วงรหัสนักศึกษา' },
-        { id: 'range', header: 'ช่วง', size: 150, meta: { compactSize: 94, compactTextAlign: 'center' }, accessorFn: (row) => `${row.start_val} - ${row.end_val}` },
-        { id: 'scope', header: 'ตำบล / ระดับชั้น', size: 185, meta: { compactSize: 120 }, accessorFn: (row) => `${row.subdistricts.join(', ')} ${row.education_levels.join(', ')}`, cell: ({ row }) => <div className="text-sm"><p className="font-bold text-slate-950">{row.original.subdistricts.length > 0 ? row.original.subdistricts.map((item) => `ตำบล${item}`).join(', ') : 'ยังระบุตำบลไม่ได้'}</p><p className="mt-0.5 text-xs text-slate-500">{row.original.education_levels.map((level) => roomMeta.education_levels?.find((item) => item.value === level)?.label ?? `ระดับ ${level}`).join(', ') || 'ยังระบุระดับไม่ได้'}</p></div> },
-        { accessorKey: 'room_name', header: 'ห้องสอบ', size: 155, meta: { compactSize: 110 }, cell: ({ getValue }) => <span className="font-bold text-slate-950">{getValue<string>()}</span> },
-        { accessorKey: 'capacity', header: 'จำนวน', size: 105, meta: { compactSize: 62, compactTextAlign: 'center' }, cell: ({ getValue }) => getValue<number | null>() === null ? '-' : `${getValue<number>()?.toLocaleString('th-TH')} คน` },
+    const columns = useMemo<ColumnDef<ExamSubject>[]>(() => [
+        { accessorKey: 'subject_code', header: 'รหัสวิชา', size: 150, meta: { compactSize: 92 }, cell: ({ row }) => <button type="button" onClick={() => setSelectedSubject(row.original.subject_code)} className="font-black text-brand-800 underline decoration-brand-200 underline-offset-4 transition hover:text-brand-950 hover:decoration-brand-600" aria-label={`ดูรายชื่อผู้เข้าสอบวิชา ${row.original.subject_code}`}>{row.original.subject_code}</button> },
+        { id: 'scope', header: 'กลุ่มเรียน / ระดับชั้น', size: 245, meta: { compactSize: 152 }, accessorFn: (row) => `${row.groups.join(', ')} ${row.education_levels.join(', ')}`, cell: ({ row }) => { const groupLabels = row.original.groups.map((value) => roomMeta.groups?.find((item) => item.value === value)?.label ?? value); return <div className="text-sm"><p className="font-bold text-slate-950">{groupLabels.slice(0, 3).join(', ') || 'ยังระบุกลุ่มเรียนไม่ได้'}</p>{groupLabels.length > 3 && <p className="mt-0.5 text-xs text-slate-500">และอีก {(groupLabels.length - 3).toLocaleString('th-TH')} กลุ่ม</p>}<p className="mt-0.5 text-xs text-slate-500">{row.original.education_levels.map((level) => roomMeta.education_levels?.find((item) => item.value === level)?.label ?? `ระดับ ${level}`).join(', ') || 'ยังระบุระดับไม่ได้'}</p></div>; } },
+        { id: 'room_names', header: 'ห้องสอบ', size: 210, meta: { compactSize: 130 }, accessorFn: (row) => row.room_names.join(', '), cell: ({ row }) => <div><p className="font-bold text-slate-950">{row.original.room_names.slice(0, 3).join(', ')}</p>{row.original.room_names.length > 3 && <p className="mt-0.5 text-xs text-slate-500">และอีก {(row.original.room_names.length - 3).toLocaleString('th-TH')} ห้อง</p>}</div> },
+        { accessorKey: 'candidate_count', header: 'ผู้เข้าสอบ', size: 120, meta: { compactSize: 72, compactTextAlign: 'center' }, cell: ({ getValue }) => `${getValue<number>().toLocaleString('th-TH')} คน` },
+        { id: 'actions', header: 'จัดการ', size: 145, meta: { compactSize: 90, compactTextAlign: 'center' }, enableSorting: false, cell: ({ row }) => <button type="button" onClick={() => setSelectedSubject(row.original.subject_code)} className={`${secondaryButton} responsive-table-action`} aria-label={`ดูรายชื่อผู้เข้าสอบวิชา ${row.original.subject_code}`}><UsersThree size={16} /> <span>ดูรายชื่อ</span></button> },
+    ], [remove.isPending, roomMeta.education_levels, roomMeta.groups]);
+    const candidateColumns = useMemo<ColumnDef<ExamRoom>[]>(() => [
+        { id: 'range', header: 'รหัสนักศึกษา / ช่วง', size: 210, meta: { compactSize: 132 }, accessorFn: (row) => row.start_val === row.end_val ? row.start_val : `${row.start_val} - ${row.end_val}`, cell: ({ row }) => <span className="font-bold text-slate-950">{row.original.start_val === row.original.end_val ? row.original.start_val : `${row.original.start_val} - ${row.original.end_val}`}</span> },
+        { id: 'scope', header: 'กลุ่มเรียน / ระดับชั้น', size: 245, meta: { compactSize: 152 }, accessorFn: (row) => `${row.groups.join(', ')} ${row.education_levels.join(', ')}`, cell: ({ row }) => <div className="text-sm"><p className="font-bold text-slate-950">{row.original.groups.map((value) => roomMeta.groups?.find((item) => item.value === value)?.label ?? value).join(', ') || 'ยังระบุกลุ่มเรียนไม่ได้'}</p><p className="mt-0.5 text-xs text-slate-500">{row.original.education_levels.map((level) => roomMeta.education_levels?.find((item) => item.value === level)?.label ?? `ระดับ ${level}`).join(', ') || 'ยังระบุระดับไม่ได้'}</p></div> },
+        { accessorKey: 'room_name', header: 'ห้องสอบ', size: 160, meta: { compactSize: 108 }, cell: ({ getValue }) => <span className="font-bold text-slate-950">{getValue<string>()}</span> },
+        { accessorKey: 'capacity', header: 'จำนวน', size: 95, meta: { compactSize: 60, compactTextAlign: 'center' }, cell: ({ getValue }) => getValue<number | null>() === null ? '-' : `${getValue<number>()?.toLocaleString('th-TH')} คน` },
         { id: 'actions', header: 'จัดการ', size: 130, meta: { compactSize: 86, compactTextAlign: 'center' }, enableSorting: false, cell: ({ row }) => <div className="flex justify-center gap-1.5"><button type="button" onClick={() => openEdit(row.original)} className={`${secondaryButton} responsive-table-action`} aria-label={`แก้ไขห้องสอบ ${row.original.room_name}`}><PencilSimple size={15} /> <span>แก้ไข</span></button><button type="button" onClick={() => confirmDelete(row.original)} disabled={remove.isPending} className="responsive-table-action grid size-10 place-items-center rounded-full border border-rose-200 bg-white text-rose-700 hover:bg-rose-50" aria-label="ลบห้องสอบ"><Trash size={16} weight="bold" /></button></div> },
-    ], [remove.isPending, roomMeta.education_levels]);
+    ], [remove.isPending, roomMeta.education_levels, roomMeta.groups]);
     return (
         <div>
-            <PageHeader category="จัดการการสอบ" title="ห้องสอบและช่วงผู้เข้าสอบ" description="แสดงและแก้ไขเฉพาะภาคเรียนปัจจุบัน พร้อมเลือกดูเป็นรายตำบลและระดับชั้น" icon={DoorOpen} actions={<button type="button" onClick={openCreate} disabled={rooms.data?.meta.read_only === true || !currentTerm} className={primaryButton}><Plus size={17} weight="bold" /> เพิ่มห้องสอบ</button>} />
-            <div className="mb-5 grid gap-3 sm:grid-cols-3"><StatTile label="รายการห้องสอบ" value={filteredRooms.length} detail={subdistrict || educationLevel ? 'ตามตัวกรองที่เลือก' : 'ภาคเรียนปัจจุบัน'} icon={DoorOpen} tone="sky" /><StatTile label="จำนวนรวม" value={filteredRooms.reduce((sum, room) => sum + (room.capacity ?? 0), 0)} detail="คำนวณจากช่วงตัวเลข" icon={Buildings} /><StatTile label="ภาคเรียนปัจจุบัน" value={currentTerm ?? '-'} detail="อ้างอิงจากข้อมูลนักศึกษา" icon={Archive} tone="amber" /></div>
+            <PageHeader category="จัดการการสอบ" title="ห้องสอบและช่วงผู้เข้าสอบ" description="แสดงและแก้ไขเฉพาะภาคเรียนปัจจุบัน พร้อมเลือกดูเป็นรายกลุ่มเรียนและระดับชั้น" icon={DoorOpen} actions={<button type="button" onClick={openCreate} disabled={rooms.data?.meta.read_only === true || !currentTerm} className={primaryButton}><Plus size={17} weight="bold" /> เพิ่มห้องสอบ</button>} />
+            <div className="mb-5 grid gap-3 sm:grid-cols-3"><StatTile label="รายวิชาที่จัดห้อง" value={subjectRows.length} detail={group || educationLevel ? 'ตามตัวกรองที่เลือก' : 'ภาคเรียนปัจจุบัน'} icon={DoorOpen} tone="sky" /><StatTile label="ผู้เข้าสอบรวม" value={subjectRows.reduce((sum, subject) => sum + subject.candidate_count, 0)} detail="คลิกรายวิชาเพื่อดูรายชื่อ" icon={Buildings} /><StatTile label="ภาคเรียนปัจจุบัน" value={currentTerm ?? '-'} detail="อ้างอิงจากข้อมูลนักศึกษา" icon={Archive} tone="amber" /></div>
             {!rooms.isPending && rooms.data && !currentTerm && <div role="alert" className="mb-4 rounded-2xl border border-amber-200 bg-amber-50 p-4 text-sm leading-6 text-amber-950"><p className="font-black">ยังไม่พบภาคเรียนปัจจุบัน</p><p>กรุณานำเข้าข้อมูลนักศึกษาภาคเรียนปัจจุบันก่อนเพิ่มหรือแก้ไขห้องสอบ</p></div>}
             {rooms.data && rooms.data.data.length === 0 && scheduleSyncOption?.available && <div role="status" className="mb-4 flex flex-col gap-4 rounded-2xl border border-amber-200 bg-amber-50 p-4 text-amber-950 sm:flex-row sm:items-center sm:justify-between"><div><p className="font-black">พบค่าห้องจากตารางสอบภาคเรียน {scheduleSyncOption.term}</p><p className="mt-1 text-sm leading-6">นำค่าห้องสอบ {scheduleSyncOption.count.toLocaleString('th-TH')} รายการจากตารางสอบมาใช้ เพื่อให้ทั้งสองเมนูแสดงข้อมูลตรงกัน</p></div><button type="button" onClick={confirmScheduleSync} disabled={rooms.data.meta.read_only === true || scheduleSync.isPending} className={`${primaryButton} shrink-0`}><Archive size={17} weight="bold" />{scheduleSync.isPending ? 'กำลังนำข้อมูลมาใช้' : 'ใช้ค่าจากตารางสอบ'}</button></div>}
             {scheduleSync.isError && <div className="mb-4"><MutationError error={scheduleSync.error} /></div>}
             {remove.isError && <div className="mb-4"><MutationError error={remove.error} /></div>}
-            <Panel title="รายการจัดห้องสอบ" description="เลือกตำบลและระดับชั้น แล้วกดแก้ไขในรายการที่ต้องการ">
-                {rooms.data && currentTerm && <div className="mb-5 grid gap-3 rounded-2xl border border-brand-100 bg-brand-50/60 p-4 sm:grid-cols-2"><Field label="ตำบล"><select value={subdistrict} onChange={(event) => setSubdistrict(event.target.value)} className={inputClass}><option value="">ทุกตำบล</option>{(roomMeta.subdistricts ?? []).map((item) => <option key={item} value={item}>ตำบล{item}</option>)}</select></Field><Field label="ระดับชั้น"><select value={educationLevel} onChange={(event) => setEducationLevel(event.target.value)} className={inputClass}><option value="">ทุกระดับชั้น</option>{(roomMeta.education_levels ?? []).map((item) => <option key={item.value} value={item.value}>{item.label}</option>)}</select></Field></div>}
-                {rooms.isPending && <QuerySkeleton />}{rooms.isError && <QueryError onRetry={() => rooms.refetch()} />}{rooms.data && <DataTable data={filteredRooms} columns={columns} minWidth="wide" emptyTitle={rooms.data.data.length === 0 ? 'ยังไม่มีห้องสอบในภาคเรียนปัจจุบัน' : 'ไม่พบห้องสอบตามตัวกรอง'} emptyDescription={rooms.data.data.length === 0 ? 'นำค่าห้องจากตารางสอบภาคเรียนปัจจุบันมาใช้ หรือเพิ่มห้องสอบใหม่' : 'ลองเปลี่ยนตำบลหรือระดับชั้นที่เลือก'} />}
+            <Panel title="รายการจัดห้องสอบ" description="เลือกกลุ่มเรียนและระดับชั้น แล้วคลิกรายวิชาเพื่อดูและแก้ไขรายชื่อผู้เข้าสอบ">
+                {rooms.data && currentTerm && <div className="mb-5 grid gap-3 rounded-2xl border border-brand-100 bg-brand-50/60 p-4 sm:grid-cols-2"><Field label="กลุ่มเรียน"><select value={group} onChange={(event) => setGroup(event.target.value)} className={inputClass}><option value="">ทุกกลุ่มเรียน</option>{(roomMeta.groups ?? []).map((item) => <option key={item.value} value={item.value}>{item.label}{item.label !== item.value ? ` · รหัส ${item.value}` : ''}</option>)}</select></Field><Field label="ระดับชั้น"><select value={educationLevel} onChange={(event) => setEducationLevel(event.target.value)} className={inputClass}><option value="">ทุกระดับชั้น</option>{(roomMeta.education_levels ?? []).map((item) => <option key={item.value} value={item.value}>{item.label}</option>)}</select></Field></div>}
+                {rooms.isPending && <QuerySkeleton />}{rooms.isError && <QueryError onRetry={() => rooms.refetch()} />}{rooms.data && <DataTable data={subjectRows} columns={columns} minWidth="wide" emptyTitle={rooms.data.data.length === 0 ? 'ยังไม่มีห้องสอบในภาคเรียนปัจจุบัน' : 'ไม่พบรายวิชาตามตัวกรอง'} emptyDescription={rooms.data.data.length === 0 ? 'นำค่าห้องจากตารางสอบภาคเรียนปัจจุบันมาใช้ หรือเพิ่มห้องสอบใหม่' : 'ลองเปลี่ยนกลุ่มเรียนหรือระดับชั้นที่เลือก'} />}
             </Panel>
+            {selectedSubject && <Modal wide title={`รายชื่อผู้เข้าสอบ วิชา ${selectedSubject}`} description={`${(selectedSubjectSummary?.candidate_count ?? 0).toLocaleString('th-TH')} คน · ${selectedSubjectRooms.length.toLocaleString('th-TH')} รายการ · แก้ไขห้องสอบได้เป็นรายคนหรือรายช่วง`} onClose={() => setSelectedSubject(null)}><DataTable data={selectedSubjectRooms} columns={candidateColumns} pageSize={50} minWidth="wide" emptyTitle="ไม่พบผู้เข้าสอบ" emptyDescription="ไม่พบผู้เข้าสอบตามกลุ่มเรียนและระดับชั้นที่เลือก" /></Modal>}
             {editing && <Modal title={editing === 'new' ? 'เพิ่มห้องสอบ' : 'แก้ไขห้องสอบ'} description="ข้อมูลจะถูกบันทึกเฉพาะอำเภอที่เลือก" onClose={() => setEditing(null)}><form onSubmit={(event) => { event.preventDefault(); save.mutate(); }} className="grid gap-4 sm:grid-cols-2">
                 <Field label="ภาคเรียน" hint="ระบบกำหนดจากชุดข้อมูลนักศึกษาปัจจุบัน"><input required readOnly value={draft.term} className={inputClass} /></Field>
                 <Field label="รหัสวิชา"><input required maxLength={100} value={draft.subject_code} onChange={(event) => setDraft({ ...draft, subject_code: event.target.value })} className={inputClass} /></Field>
