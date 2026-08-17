@@ -6,6 +6,7 @@ use App\Domain\Learning\DemoLearningPortal;
 use App\Domain\Learning\DemoResponseMeta;
 use App\Domain\Students\Support\AcademicTerm;
 use App\Http\Controllers\Controller;
+use App\Services\Legacy\ExamRoomScheduleSourceService;
 use App\Services\Legacy\ExamRoomScopeService;
 use Illuminate\Database\DatabaseManager;
 use Illuminate\Http\JsonResponse;
@@ -19,6 +20,7 @@ final class ExamRoomController extends Controller
     public function __construct(
         private readonly DatabaseManager $database,
         private readonly ExamRoomScopeService $scope,
+        private readonly ExamRoomScheduleSourceService $scheduleSource,
     ) {}
 
     public function __invoke(Request $request, DemoLearningPortal $demo): JsonResponse
@@ -52,9 +54,9 @@ final class ExamRoomController extends Controller
                 $row,
                 $this->scope->forRoom($row, $scope),
             ))->all();
-        $carryForward = $scope['term'] === null || $items !== []
-            ? ['available' => false, 'source_term' => null, 'count' => 0]
-            : $this->carryForwardAvailability($districtId, $scope['term']);
+        $scheduleSync = $scope['term'] === null || $items !== []
+            ? ['available' => false, 'term' => $scope['term'], 'count' => 0]
+            : $this->scheduleSyncAvailability($districtId, $scope['term']);
 
         return response()->json(['data' => $items, 'meta' => [
             'source' => 'system_database',
@@ -63,11 +65,17 @@ final class ExamRoomController extends Controller
             'current_term' => $scope['term'],
             'subdistricts' => $scope['subdistricts'],
             'education_levels' => $scope['education_levels'],
-            'carry_forward' => $carryForward,
+            'schedule_sync' => $scheduleSync,
+            // Keep one deployment window compatible with the previous frontend.
+            'carry_forward' => [
+                'available' => $scheduleSync['available'],
+                'source_term' => $scheduleSync['term'],
+                'count' => $scheduleSync['count'],
+            ],
         ]]);
     }
 
-    public function carryForward(Request $request): JsonResponse
+    public function syncFromSchedule(Request $request): JsonResponse
     {
         $this->assertWriteEnabled();
         $districtId = $this->districtId($request);
@@ -81,37 +89,24 @@ final class ExamRoomController extends Controller
                 ->exists();
             abort_if($alreadyExists, 409, "ภาคเรียน {$currentTerm} มีรายการห้องสอบแล้ว ระบบจึงไม่คัดลอกซ้ำ");
 
-            $availability = $this->carryForwardAvailability($districtId, $currentTerm);
-            abort_unless($availability['available'], 422, 'ไม่พบชุดห้องสอบจากภาคเรียนก่อนหน้าสำหรับนำมาใช้');
-            $sourceTerm = (string) $availability['source_term'];
-            $sourceRows = $this->read()->table('exam_rooms')
-                ->where('district_id', $districtId)
-                ->whereIn('term', AcademicTerm::variants($sourceTerm))
-                ->orderBy('id')
-                ->get(['subject_code', 'assignment_type', 'start_val', 'end_val', 'room_name']);
+            $sourceRows = $this->scheduleSource->rowsForDistrict($districtId, $currentTerm);
+            abort_if($sourceRows === [], 422, "ไม่พบค่าห้องสอบจากตารางสอบภาคเรียน {$currentTerm}");
             $now = now();
-            foreach ($sourceRows->chunk(500) as $chunk) {
-                $this->write()->table('exam_rooms')->insert($chunk->map(static function (object $row) use ($districtId, $currentTerm, $now): array {
-                    $start = (string) $row->start_val;
-                    $end = trim((string) $row->end_val);
-
-                    return [
+            foreach (array_chunk($sourceRows, 500) as $chunk) {
+                $this->write()->table('exam_rooms')->insert(array_map(
+                    static fn (array $row): array => [
                         'district_id' => $districtId,
-                        'term' => $currentTerm,
-                        'subject_code' => (string) $row->subject_code,
-                        'assignment_type' => (string) $row->assignment_type,
-                        'start_val' => $start,
-                        'end_val' => $end === '' ? $start : $end,
-                        'room_name' => (string) $row->room_name,
+                        ...$row,
                         'created_at' => $now,
                         'updated_at' => $now,
-                    ];
-                })->all());
+                    ],
+                    $chunk,
+                ));
             }
 
             return [
-                'copied' => $sourceRows->count(),
-                'source_term' => $sourceTerm,
+                'synced' => count($sourceRows),
+                'source' => 'current_exam_schedule',
                 'current_term' => $currentTerm,
                 'first_id' => (int) $this->write()->table('exam_rooms')
                     ->where('district_id', $districtId)
@@ -119,10 +114,10 @@ final class ExamRoomController extends Controller
                     ->min('id'),
             ];
         });
-        $this->audit($request, 'admin.exam_rooms.carried_forward', $result['first_id'], null, [
-            'source_term' => $result['source_term'],
+        $this->audit($request, 'admin.exam_rooms.synced_from_schedule', $result['first_id'], null, [
+            'source' => $result['source'],
             'current_term' => $result['current_term'],
-            'copied' => $result['copied'],
+            'synced' => $result['synced'],
         ]);
         unset($result['first_id']);
 
@@ -243,29 +238,15 @@ final class ExamRoomController extends Controller
         return $term;
     }
 
-    /** @return array{available: bool, source_term: string|null, count: int} */
-    private function carryForwardAvailability(int $districtId, string $currentTerm): array
+    /** @return array{available: bool, term: string, count: int} */
+    private function scheduleSyncAvailability(int $districtId, string $currentTerm): array
     {
-        $terms = $this->read()->table('exam_rooms')
-            ->where('district_id', $districtId)
-            ->distinct()
-            ->pluck('term')
-            ->map(static fn (mixed $term): ?string => AcademicTerm::normalize((string) $term))
-            ->filter(static fn (?string $term): bool => $term !== null && AcademicTerm::compare($term, $currentTerm) < 0)
-            ->values()
-            ->all();
-        $sourceTerm = AcademicTerm::latest($terms);
-        if ($sourceTerm === null) {
-            return ['available' => false, 'source_term' => null, 'count' => 0];
-        }
+        $rows = $this->scheduleSource->rowsForDistrict($districtId, $currentTerm);
 
         return [
-            'available' => true,
-            'source_term' => $sourceTerm,
-            'count' => (int) $this->read()->table('exam_rooms')
-                ->where('district_id', $districtId)
-                ->whereIn('term', AcademicTerm::variants($sourceTerm))
-                ->count(),
+            'available' => $rows !== [],
+            'term' => $currentTerm,
+            'count' => count($rows),
         ];
     }
 

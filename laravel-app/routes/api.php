@@ -145,7 +145,8 @@ Route::prefix('v1')->group(function (): void {
             Route::get('/admin/imports/safety', ImportSafetyController::class);
             Route::get('/admin/exam-rooms', [ExamRoomController::class, 'index']);
             Route::post('/admin/exam-rooms', [ExamRoomController::class, 'store']);
-            Route::post('/admin/exam-rooms/carry-forward', [ExamRoomController::class, 'carryForward']);
+            Route::post('/admin/exam-rooms/sync-from-schedule', [ExamRoomController::class, 'syncFromSchedule']);
+            Route::post('/admin/exam-rooms/carry-forward', [ExamRoomController::class, 'syncFromSchedule']);
             Route::patch('/admin/exam-rooms/{examRoom}', [ExamRoomController::class, 'update'])->whereNumber('examRoom');
             Route::delete('/admin/exam-rooms/{examRoom}', [ExamRoomController::class, 'destroy'])->whereNumber('examRoom');
             Route::get('/admin/branding', [BrandingController::class, 'show']);

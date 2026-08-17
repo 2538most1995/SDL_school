@@ -66,7 +66,7 @@ Successful ZIP/DBF imports create physical names such as `db_import_{timestamp}_
 - District scope is mandatory for admin/teacher reads and writes.
 - Latest student data is resolved from the latest successful registered batch for the same district; cross-district fallback is not allowed.
 - Student repository batches grade/activity/moral aggregates by table set and student codes; it does not query one grade/activity record per student.
-- `exam_rooms` lookup uses district + term and matches exact/wildcard subject plus group/student ranges. หน้า admin จำกัดรายการและการเขียนไว้ที่ภาคเรียนปัจจุบันจาก roster ล่าสุด พร้อมคำนวณขอบเขตตำบล/ระดับชั้นจากช่วงเดิมโดยไม่เพิ่มคอลัมน์ซ้ำในตาราง เมื่อภาคเรียนปัจจุบันว่าง การ carry forward จะคัดลอกแถวของภาคเรียนก่อนหน้าล่าสุดภายใน transaction เดียว เปลี่ยน `term` เป็นปัจจุบัน รักษาแถวต้นฉบับ และล็อก district ก่อนตรวจซ้ำ; คำสั่ง insert ละ `import_batch_id` ไว้เพื่อรองรับฐาน production รุ่นเดิมที่ยังไม่มีคอลัมน์นี้ (ฐานรุ่นใหม่จะใช้ค่า `null` โดยปริยาย)
+- `exam_rooms` lookup uses district + term and matches exact/wildcard subject plus group/student ranges. หน้า admin จำกัดรายการและการเขียนไว้ที่ภาคเรียนปัจจุบันจาก roster ล่าสุด พร้อมคำนวณขอบเขตตำบล/ระดับชั้นจากช่วงเดิมโดยไม่เพิ่มคอลัมน์ซ้ำในตาราง เมื่อภาคเรียนปัจจุบันว่าง ระบบสร้างรายการแบบ exact student assignment จาก `roomno` ใน grade ของ active batch เฉพาะนักศึกษา/วิชา/ตารางสอบภาคเรียนเดียวกัน แล้ว fallback ไปห้องใน schedule หรือ `ห้อง 1`; การ sync ทำใน transaction ที่ล็อก district, ไม่อ่านข้อมูลห้องย้อนหลัง และไม่ระบุ `import_batch_id` เพื่อรองรับฐาน production รุ่นเดิม
 - `import_batches.import_history_id` must remain aligned with both district and batch key.
 
 ## Index notes

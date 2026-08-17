@@ -224,26 +224,73 @@ final class AdminWriteScopeTest extends TestCase
         ])->assertCreated()->assertJsonPath('data.capacity', 28);
     }
 
-    public function test_exam_rooms_can_be_carried_forward_to_an_empty_current_term_without_changing_history(): void
+    public function test_exam_rooms_can_be_synced_from_the_current_exam_schedule_instead_of_history(): void
     {
+        $studentCode = '12141200006950100001';
         $this->bindStudents([
-            $this->studentForTerm($this->sena, '6950100001', 2, '15', 'กศน.ตำบลเสนา', '1/2569'),
+            $this->studentForTerm($this->sena, $studentCode, 2, '15', 'กศน.ตำบลเสนา', '1/2569'),
         ]);
-        foreach ([
-            ['term' => '1/2568', 'subject_code' => 'เก่า10001', 'room_name' => 'ห้องเก่ากว่า'],
-            ['term' => '68/2', 'subject_code' => 'ทช21001', 'room_name' => 'ห้อง 101', 'assignment_type' => 'student_range', 'start_val' => '6950100001', 'end_val' => null],
-            ['term' => '2/2568', 'subject_code' => 'คณ21001', 'room_name' => 'ห้อง 102'],
-        ] as $room) {
-            DB::table('exam_rooms')->insert([
-                ...$room,
-                'district_id' => $this->sena->id,
-                'assignment_type' => $room['assignment_type'] ?? 'group_range',
-                'start_val' => $room['start_val'] ?? '1',
-                'end_val' => array_key_exists('end_val', $room) ? $room['end_val'] : '30',
-                'created_at' => now(),
-                'updated_at' => now(),
-            ]);
-        }
+        $batch = 'import_1700000300_sync';
+        $historyId = DB::table('import_history')->insertGetId([
+            'file_name' => 'current.zip',
+            'saved_file_name' => 'current.zip',
+            'batch_key' => $batch,
+            'file_size_kb' => 1,
+            'level' => 'ทุกระดับ',
+            'file_count' => 2,
+            'district_id' => $this->sena->id,
+            'status' => 'success',
+            'created_at' => now(),
+        ]);
+        DB::table('import_batches')->insert([
+            'batch_key' => $batch,
+            'district_id' => $this->sena->id,
+            'import_history_id' => $historyId,
+            'status' => 'active',
+            'created_at' => now(),
+            'updated_at' => now(),
+        ]);
+        $scheduleTable = 'db_'.$batch.'_2_schedule';
+        Schema::create($scheduleTable, function (Blueprint $table): void {
+            $table->id();
+            $table->string('sub_code');
+            $table->string('semestry');
+            $table->string('_perf_sub')->index();
+            $table->string('_perf_semestry')->index();
+        });
+        DB::table($scheduleTable)->insert([
+            ['sub_code' => 'ทช21001', 'semestry' => '69/1', '_perf_sub' => 'ทช21001', '_perf_semestry' => '69/1'],
+            ['sub_code' => 'คณ21001', 'semestry' => '1/2569', '_perf_sub' => 'คณ21001', '_perf_semestry' => '1/2569'],
+            ['sub_code' => 'เก่า10001', 'semestry' => '68/2', '_perf_sub' => 'เก่า10001', '_perf_semestry' => '68/2'],
+        ]);
+        $gradeTable = 'db_'.$batch.'_2_grade';
+        Schema::create($gradeTable, function (Blueprint $table): void {
+            $table->id();
+            $table->string('std_code');
+            $table->string('sub_code');
+            $table->string('semestry');
+            $table->string('roomno')->nullable();
+            $table->string('_perf_std10')->index();
+            $table->string('_perf_sub')->index();
+            $table->string('_perf_semestry')->index();
+        });
+        DB::table($gradeTable)->insert([
+            ['std_code' => '6950100001', 'sub_code' => 'ทช21001', 'semestry' => '69/1', 'roomno' => '008', '_perf_std10' => '6950100001', '_perf_sub' => 'ทช21001', '_perf_semestry' => '69/1'],
+            ['std_code' => '6950100001', 'sub_code' => 'คณ21001', 'semestry' => '69/1', 'roomno' => null, '_perf_std10' => '6950100001', '_perf_sub' => 'คณ21001', '_perf_semestry' => '69/1'],
+            ['std_code' => '6950100001', 'sub_code' => 'เก่า10001', 'semestry' => '68/2', 'roomno' => '099', '_perf_std10' => '6950100001', '_perf_sub' => 'เก่า10001', '_perf_semestry' => '68/2'],
+            ['std_code' => '6950199999', 'sub_code' => 'ทช21001', 'semestry' => '69/1', 'roomno' => '077', '_perf_std10' => '6950199999', '_perf_sub' => 'ทช21001', '_perf_semestry' => '69/1'],
+        ]);
+        DB::table('exam_rooms')->insert([
+            'district_id' => $this->sena->id,
+            'term' => '2/2568',
+            'subject_code' => 'ทช21001',
+            'assignment_type' => 'student_range',
+            'start_val' => $studentCode,
+            'end_val' => $studentCode,
+            'room_name' => 'ห้องเก่าที่ห้ามนำมาใช้',
+            'created_at' => now(),
+            'updated_at' => now(),
+        ]);
         DB::table('exam_rooms')->insert([
             'district_id' => $this->other->id,
             'term' => '2/2568',
@@ -261,40 +308,41 @@ final class AdminWriteScopeTest extends TestCase
             ->assertOk()
             ->assertJsonCount(0, 'data')
             ->assertJsonPath('meta.current_term', '1/2569')
-            ->assertJsonPath('meta.carry_forward.available', true)
-            ->assertJsonPath('meta.carry_forward.source_term', '2/2568')
-            ->assertJsonPath('meta.carry_forward.count', 2);
+            ->assertJsonPath('meta.schedule_sync.available', true)
+            ->assertJsonPath('meta.schedule_sync.term', '1/2569')
+            ->assertJsonPath('meta.schedule_sync.count', 2);
 
-        $this->postJson('/api/v1/admin/exam-rooms/carry-forward')
+        $this->postJson('/api/v1/admin/exam-rooms/sync-from-schedule')
             ->assertCreated()
-            ->assertJsonPath('data.copied', 2)
-            ->assertJsonPath('data.source_term', '2/2568')
+            ->assertJsonPath('data.synced', 2)
+            ->assertJsonPath('data.source', 'current_exam_schedule')
             ->assertJsonPath('data.current_term', '1/2569');
 
-        $this->assertDatabaseCount('exam_rooms', 6);
+        $this->assertDatabaseCount('exam_rooms', 4);
         $this->assertDatabaseHas('exam_rooms', [
             'district_id' => $this->sena->id,
             'term' => '1/2569',
             'subject_code' => 'ทช21001',
-            'room_name' => 'ห้อง 101',
-            'end_val' => '6950100001',
+            'start_val' => $studentCode,
+            'end_val' => $studentCode,
+            'room_name' => 'ห้อง 8',
             'import_batch_id' => null,
         ]);
         $this->assertDatabaseHas('exam_rooms', [
             'district_id' => $this->sena->id,
-            'term' => '68/2',
-            'subject_code' => 'ทช21001',
-            'room_name' => 'ห้อง 101',
+            'term' => '1/2569',
+            'subject_code' => 'คณ21001',
+            'room_name' => 'ห้อง 1',
         ]);
         $this->assertDatabaseMissing('exam_rooms', [
             'district_id' => $this->sena->id,
             'term' => '1/2569',
-            'subject_code' => 'ห้ามข้ามอำเภอ',
+            'room_name' => 'ห้องเก่าที่ห้ามนำมาใช้',
         ]);
         $this->assertDatabaseHas('audit_logs', [
             'user_id' => $this->senaAdmin->id,
             'district_id' => $this->sena->id,
-            'event' => 'admin.exam_rooms.carried_forward',
+            'event' => 'admin.exam_rooms.synced_from_schedule',
             'auditable_type' => 'system_exam_room',
         ]);
         $this->getJson('/api/v1/admin/exam-rooms')
@@ -306,9 +354,9 @@ final class AdminWriteScopeTest extends TestCase
                 'education_levels' => [2],
                 'subdistricts' => ['เสนา'],
             ])
-            ->assertJsonPath('meta.carry_forward.available', false);
+            ->assertJsonPath('meta.schedule_sync.available', false);
         $this->postJson('/api/v1/admin/exam-rooms/carry-forward')->assertConflict();
-        $this->assertDatabaseCount('exam_rooms', 6);
+        $this->assertDatabaseCount('exam_rooms', 4);
     }
 
     public function test_exam_room_page_handles_more_than_two_thousand_exact_current_term_assignments(): void
