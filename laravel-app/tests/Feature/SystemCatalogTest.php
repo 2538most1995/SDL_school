@@ -46,6 +46,18 @@ class SystemCatalogTest extends TestCase
         $this->assertFalse($items->contains('key', 'districts'));
     }
 
+    public function test_teacher_catalog_includes_only_assigned_exam_room_management(): void
+    {
+        Sanctum::actingAs(User::factory()->create(['role' => 'teacher']));
+
+        $response = $this->getJson('/api/v1/system/catalog')->assertOk();
+        $administration = collect($response->json('data.groups'))->firstWhere('key', 'administration');
+
+        $this->assertNotNull($administration);
+        $this->assertSame(['exam-rooms'], collect($administration['items'])->pluck('key')->values()->all());
+        $this->assertSame('/admin/exam-rooms', $administration['items'][0]['route']);
+    }
+
     public function test_super_admin_catalog_includes_district_registry(): void
     {
         Sanctum::actingAs(User::factory()->create(['role' => 'super_admin', 'district_id' => null]));

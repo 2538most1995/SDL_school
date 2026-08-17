@@ -400,6 +400,102 @@ final class AdminWriteScopeTest extends TestCase
             ->assertJsonPath('data.0.groups.0', '15');
     }
 
+    public function test_teacher_can_update_only_exam_room_names_for_assigned_students(): void
+    {
+        $ownStudent = '6911000001';
+        $otherStudent = '6911000002';
+        $this->bindStudents([
+            $this->studentForTerm($this->sena, $ownStudent, 2, '15', 'กลุ่มเรียนเสนา 15', '1/2569'),
+            $this->studentForTerm($this->sena, $otherStudent, 3, '40', 'กลุ่มเรียนบ้านแพน 40', '1/2569'),
+        ]);
+        $teacher = User::factory()->create([
+            'role' => 'teacher',
+            'district_id' => $this->sena->id,
+            'assigned_groups' => ['15'],
+        ]);
+        $ownRoom = DB::table('exam_rooms')->insertGetId([
+            'district_id' => $this->sena->id,
+            'term' => '1/2569',
+            'subject_code' => 'ทช21001',
+            'assignment_type' => 'student_range',
+            'start_val' => $ownStudent,
+            'end_val' => $ownStudent,
+            'room_name' => 'ห้องเดิมของครู',
+            'created_at' => now(),
+            'updated_at' => now(),
+        ]);
+        $otherRoom = DB::table('exam_rooms')->insertGetId([
+            'district_id' => $this->sena->id,
+            'term' => '1/2569',
+            'subject_code' => 'พว31001',
+            'assignment_type' => 'student_range',
+            'start_val' => $otherStudent,
+            'end_val' => $otherStudent,
+            'room_name' => 'ห้องของกลุ่มอื่น',
+            'created_at' => now(),
+            'updated_at' => now(),
+        ]);
+        $sharedRoom = DB::table('exam_rooms')->insertGetId([
+            'district_id' => $this->sena->id,
+            'term' => '1/2569',
+            'subject_code' => 'สค21001',
+            'assignment_type' => 'group_range',
+            'start_val' => '1',
+            'end_val' => '99',
+            'room_name' => 'ห้องรวมหลายกลุ่ม',
+            'created_at' => now(),
+            'updated_at' => now(),
+        ]);
+
+        Sanctum::actingAs($teacher);
+        $this->getJson('/api/v1/admin/exam-rooms')
+            ->assertOk()
+            ->assertJsonCount(1, 'data')
+            ->assertJsonPath('data.0.id', $ownRoom)
+            ->assertJsonPath('data.0.groups.0', '15')
+            ->assertJsonPath('meta.groups.0.value', '15')
+            ->assertJsonPath('meta.teacher_scoped', true)
+            ->assertJsonPath('meta.permissions.can_create', false)
+            ->assertJsonPath('meta.permissions.can_update', true)
+            ->assertJsonPath('meta.permissions.can_delete', false)
+            ->assertJsonPath('meta.permissions.can_sync', false);
+
+        $attemptedChanges = [
+            'term' => '1/2569',
+            'subject_code' => 'เปลี่ยนไม่ได้',
+            'assignment_type' => 'group_range',
+            'start_val' => '1',
+            'end_val' => '999',
+            'room_name' => 'ห้องที่ครูแก้ไข',
+        ];
+        $this->patchJson("/api/v1/admin/exam-rooms/{$ownRoom}", $attemptedChanges)
+            ->assertOk()
+            ->assertJsonPath('data.room_name', 'ห้องที่ครูแก้ไข')
+            ->assertJsonPath('data.subject_code', 'ทช21001')
+            ->assertJsonPath('data.assignment_type', 'student_range')
+            ->assertJsonPath('data.start_val', $ownStudent)
+            ->assertJsonPath('data.end_val', $ownStudent);
+        $this->assertDatabaseHas('exam_rooms', [
+            'id' => $ownRoom,
+            'subject_code' => 'ทช21001',
+            'assignment_type' => 'student_range',
+            'start_val' => $ownStudent,
+            'end_val' => $ownStudent,
+            'room_name' => 'ห้องที่ครูแก้ไข',
+        ]);
+        $this->patchJson("/api/v1/admin/exam-rooms/{$otherRoom}", $attemptedChanges)->assertForbidden();
+        $this->patchJson("/api/v1/admin/exam-rooms/{$sharedRoom}", $attemptedChanges)->assertForbidden();
+        $this->postJson('/api/v1/admin/exam-rooms', $attemptedChanges)->assertForbidden();
+        $this->postJson('/api/v1/admin/exam-rooms/sync-from-schedule')->assertForbidden();
+        $this->deleteJson("/api/v1/admin/exam-rooms/{$ownRoom}")->assertForbidden();
+        $this->assertDatabaseHas('exam_rooms', ['id' => $otherRoom, 'room_name' => 'ห้องของกลุ่มอื่น']);
+        $this->assertDatabaseHas('audit_logs', [
+            'user_id' => $teacher->id,
+            'event' => 'admin.exam_room.updated',
+            'auditable_id' => $ownRoom,
+        ]);
+    }
+
     public function test_super_admin_can_manage_the_explicitly_selected_district(): void
     {
         Sanctum::actingAs(User::factory()->create(['role' => 'super_admin', 'district_id' => null]));

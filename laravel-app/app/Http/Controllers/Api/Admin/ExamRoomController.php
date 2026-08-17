@@ -46,10 +46,18 @@ final class ExamRoomController extends Controller
                 'current_term' => null,
                 'groups' => [],
                 'education_levels' => [],
+                'teacher_scoped' => false,
+                'permissions' => [
+                    'can_create' => false,
+                    'can_update' => false,
+                    'can_delete' => false,
+                    'can_sync' => false,
+                ],
             ]]);
         }
         $districtId = $this->districtId($request);
         $scope = $this->scope->forDistrict($districtId);
+        $viewerGroups = $this->viewerGroupValues($request, $scope);
         $items = $scope['term'] === null ? [] : $this->read()->table('exam_rooms')
             ->where('district_id', $districtId)
             ->whereIn('term', AcademicTerm::variants($scope['term']))
@@ -58,17 +66,32 @@ final class ExamRoomController extends Controller
                 $row,
                 $this->scope->forRoom($row, $scope),
             ))->all();
-        $scheduleSync = $scope['term'] === null || $items !== []
+        if ($viewerGroups !== null) {
+            $items = array_values(array_filter(
+                $items,
+                fn (array $item): bool => $this->scopeBelongsToViewer($item['groups'], $viewerGroups),
+            ));
+        }
+        $administrator = $this->isAdministrator($request);
+        $writeEnabled = (bool) config('system_data.write_enabled');
+        $scheduleSync = ! $administrator || $scope['term'] === null || $items !== []
             ? ['available' => false, 'term' => $scope['term'], 'count' => 0]
             : $this->scheduleSyncAvailability($districtId, $scope['term']);
 
         return response()->json(['data' => $items, 'meta' => [
             'source' => 'system_database',
-            'read_only' => ! (bool) config('system_data.write_enabled'),
+            'read_only' => ! $writeEnabled,
             'district_id' => $districtId,
             'current_term' => $scope['term'],
-            'groups' => $scope['groups'],
-            'education_levels' => $scope['education_levels'],
+            'groups' => $this->visibleGroups($scope, $viewerGroups),
+            'education_levels' => $this->visibleEducationLevels($scope, $viewerGroups),
+            'teacher_scoped' => $viewerGroups !== null,
+            'permissions' => [
+                'can_create' => $administrator && $writeEnabled,
+                'can_update' => $writeEnabled && ($viewerGroups === null || $viewerGroups !== []),
+                'can_delete' => $administrator && $writeEnabled,
+                'can_sync' => $administrator && $writeEnabled,
+            ],
             'schedule_sync' => $scheduleSync,
             // Keep one deployment window compatible with the previous frontend.
             'carry_forward' => [
@@ -81,6 +104,7 @@ final class ExamRoomController extends Controller
 
     public function syncFromSchedule(Request $request): JsonResponse
     {
+        $this->assertAdministrator($request);
         $this->assertWriteEnabled();
         $districtId = $this->districtId($request);
         $currentTerm = $this->requireCurrentTerm($request);
@@ -135,6 +159,7 @@ final class ExamRoomController extends Controller
 
     public function store(Request $request): JsonResponse
     {
+        $this->assertAdministrator($request);
         $this->assertWriteEnabled();
         $currentTerm = $this->requireCurrentTerm($request);
         $validated = $this->validated($request, $currentTerm);
@@ -154,19 +179,29 @@ final class ExamRoomController extends Controller
         $this->assertWriteEnabled();
         $currentTerm = $this->requireCurrentTerm($request);
         $before = $this->room($request, $examRoom, $currentTerm);
+        $districtScope = $this->scope->forDistrict($this->districtId($request));
+        $beforeScope = $this->scope->forRoom($before, $districtScope);
+        $viewerGroups = $this->viewerGroupValues($request, $districtScope);
+        if ($viewerGroups !== null) {
+            abort_unless($this->scopeBelongsToViewer($beforeScope['groups'], $viewerGroups), 403, 'แก้ไขได้เฉพาะผู้เรียนในกลุ่มที่รับผิดชอบ');
+        }
+        $validated = $this->validated($request, $currentTerm);
+        $changes = $viewerGroups === null ? $validated : ['room_name' => $validated['room_name']];
         $this->write()->table('exam_rooms')
             ->where('id', $examRoom)
             ->where('district_id', $this->districtId($request))
             ->whereIn('term', AcademicTerm::variants($currentTerm))
-            ->update($this->validated($request, $currentTerm));
+            ->update($changes);
         $after = $this->room($request, $examRoom, $currentTerm);
-        $this->audit($request, 'admin.exam_room.updated', $examRoom, $this->payload($before), $this->payload($after));
+        $afterScope = $this->scope->forRoom($after, $districtScope);
+        $this->audit($request, 'admin.exam_room.updated', $examRoom, $this->payload($before, $beforeScope), $this->payload($after, $afterScope));
 
-        return response()->json(['data' => $this->payload($after)]);
+        return response()->json(['data' => $this->payload($after, $afterScope)]);
     }
 
     public function destroy(Request $request, int $examRoom): JsonResponse
     {
+        $this->assertAdministrator($request);
         $this->assertWriteEnabled();
         $currentTerm = $this->requireCurrentTerm($request);
         $before = $this->room($request, $examRoom, $currentTerm);
@@ -257,6 +292,89 @@ final class ExamRoomController extends Controller
             'term' => $currentTerm,
             'count' => count($rows),
         ];
+    }
+
+    /**
+     * @param  array<string, mixed>  $districtScope
+     * @return list<string>|null
+     */
+    private function viewerGroupValues(Request $request, array $districtScope): ?array
+    {
+        if ((string) $request->user()->role !== 'teacher') {
+            return null;
+        }
+        $assigned = array_values(array_filter(array_map(
+            static fn (mixed $value): string => trim((string) $value),
+            is_array($request->user()->assigned_groups) ? $request->user()->assigned_groups : [],
+        )));
+
+        return array_values(array_map(
+            static fn (array $group): string => (string) $group['value'],
+            array_filter(
+                $districtScope['groups'],
+                static fn (array $group): bool => in_array((string) $group['value'], $assigned, true)
+                    || in_array((string) $group['label'], $assigned, true),
+            ),
+        ));
+    }
+
+    /**
+     * @param  array<string, mixed>  $districtScope
+     * @param  list<string>|null  $viewerGroups
+     * @return list<array{value: string, label: string}>
+     */
+    private function visibleGroups(array $districtScope, ?array $viewerGroups): array
+    {
+        if ($viewerGroups === null) {
+            return $districtScope['groups'];
+        }
+
+        return array_values(array_filter(
+            $districtScope['groups'],
+            static fn (array $group): bool => in_array((string) $group['value'], $viewerGroups, true),
+        ));
+    }
+
+    /**
+     * @param  array<string, mixed>  $districtScope
+     * @param  list<string>|null  $viewerGroups
+     * @return list<array{value: int, label: string}>
+     */
+    private function visibleEducationLevels(array $districtScope, ?array $viewerGroups): array
+    {
+        if ($viewerGroups === null) {
+            return $districtScope['education_levels'];
+        }
+        $levels = [];
+        foreach ($districtScope['student_targets'] as $target) {
+            if ($target['group'] !== null && in_array($target['group'], $viewerGroups, true)) {
+                $levels[(int) $target['education_level']] = true;
+            }
+        }
+
+        return array_values(array_filter(
+            $districtScope['education_levels'],
+            static fn (array $level): bool => isset($levels[(int) $level['value']]),
+        ));
+    }
+
+    /**
+     * @param  list<string>  $roomGroups
+     * @param  list<string>  $viewerGroups
+     */
+    private function scopeBelongsToViewer(array $roomGroups, array $viewerGroups): bool
+    {
+        return $roomGroups !== [] && array_diff($roomGroups, $viewerGroups) === [];
+    }
+
+    private function isAdministrator(Request $request): bool
+    {
+        return in_array((string) $request->user()->role, ['admin', 'super_admin'], true);
+    }
+
+    private function assertAdministrator(Request $request): void
+    {
+        abort_unless($this->isAdministrator($request), 403, 'สิทธิ์นี้สำหรับผู้ดูแลระบบเท่านั้น');
     }
 
     private function audit(Request $request, string $event, int $id, ?array $before, ?array $after): void

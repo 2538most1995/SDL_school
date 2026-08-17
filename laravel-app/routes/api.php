@@ -143,11 +143,9 @@ Route::prefix('v1')->group(function (): void {
             Route::delete('/admin/imports/{batch}', [ImportController::class, 'destroy'])
                 ->where('batch', 'import_\\d{10}_[A-Za-z0-9]+');
             Route::get('/admin/imports/safety', ImportSafetyController::class);
-            Route::get('/admin/exam-rooms', [ExamRoomController::class, 'index']);
             Route::post('/admin/exam-rooms', [ExamRoomController::class, 'store']);
             Route::post('/admin/exam-rooms/sync-from-schedule', [ExamRoomController::class, 'syncFromSchedule']);
             Route::post('/admin/exam-rooms/carry-forward', [ExamRoomController::class, 'syncFromSchedule']);
-            Route::patch('/admin/exam-rooms/{examRoom}', [ExamRoomController::class, 'update'])->whereNumber('examRoom');
             Route::delete('/admin/exam-rooms/{examRoom}', [ExamRoomController::class, 'destroy'])->whereNumber('examRoom');
             Route::get('/admin/branding', [BrandingController::class, 'show']);
             Route::patch('/admin/branding', [BrandingController::class, 'update']);
@@ -159,6 +157,8 @@ Route::prefix('v1')->group(function (): void {
 
     Route::middleware(['auth:sanctum', 'active', 'district', 'role:teacher,admin,super_admin'])
         ->group(function (): void {
+            Route::get('/admin/exam-rooms', [ExamRoomController::class, 'index']);
+            Route::patch('/admin/exam-rooms/{examRoom}', [ExamRoomController::class, 'update'])->whereNumber('examRoom');
             Route::post('/learning/assignments', [AssignmentWorkflowController::class, 'store'])->middleware('learning.schema');
             Route::patch('/learning/assignments/{assignment}', [AssignmentWorkflowController::class, 'update'])->middleware('learning.schema')->whereNumber('assignment');
             Route::delete('/learning/assignments/{assignment}', [AssignmentWorkflowController::class, 'destroy'])->middleware('learning.schema')->whereNumber('assignment');
