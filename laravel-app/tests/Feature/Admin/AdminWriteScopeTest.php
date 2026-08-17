@@ -224,6 +224,86 @@ final class AdminWriteScopeTest extends TestCase
         ])->assertCreated()->assertJsonPath('data.capacity', 28);
     }
 
+    public function test_exam_rooms_can_be_carried_forward_to_an_empty_current_term_without_changing_history(): void
+    {
+        $this->bindStudents([
+            $this->studentForTerm($this->sena, '6950100001', 2, '15', 'กศน.ตำบลเสนา', '1/2569'),
+        ]);
+        foreach ([
+            ['term' => '1/2568', 'subject_code' => 'เก่า10001', 'room_name' => 'ห้องเก่ากว่า'],
+            ['term' => '68/2', 'subject_code' => 'ทช21001', 'room_name' => 'ห้อง 101'],
+            ['term' => '2/2568', 'subject_code' => 'คณ21001', 'room_name' => 'ห้อง 102'],
+        ] as $room) {
+            DB::table('exam_rooms')->insert([
+                ...$room,
+                'district_id' => $this->sena->id,
+                'assignment_type' => 'group_range',
+                'start_val' => '1',
+                'end_val' => '30',
+                'created_at' => now(),
+                'updated_at' => now(),
+            ]);
+        }
+        DB::table('exam_rooms')->insert([
+            'district_id' => $this->other->id,
+            'term' => '2/2568',
+            'subject_code' => 'ห้ามข้ามอำเภอ',
+            'assignment_type' => 'group_range',
+            'start_val' => '1',
+            'end_val' => '30',
+            'room_name' => 'ห้องอำเภออื่น',
+            'created_at' => now(),
+            'updated_at' => now(),
+        ]);
+
+        Sanctum::actingAs($this->senaAdmin);
+        $this->getJson('/api/v1/admin/exam-rooms')
+            ->assertOk()
+            ->assertJsonCount(0, 'data')
+            ->assertJsonPath('meta.current_term', '1/2569')
+            ->assertJsonPath('meta.carry_forward.available', true)
+            ->assertJsonPath('meta.carry_forward.source_term', '2/2568')
+            ->assertJsonPath('meta.carry_forward.count', 2);
+
+        $this->postJson('/api/v1/admin/exam-rooms/carry-forward')
+            ->assertCreated()
+            ->assertJsonPath('data.copied', 2)
+            ->assertJsonPath('data.source_term', '2/2568')
+            ->assertJsonPath('data.current_term', '1/2569');
+
+        $this->assertDatabaseCount('exam_rooms', 6);
+        $this->assertDatabaseHas('exam_rooms', [
+            'district_id' => $this->sena->id,
+            'term' => '1/2569',
+            'subject_code' => 'ทช21001',
+            'room_name' => 'ห้อง 101',
+            'import_batch_id' => null,
+        ]);
+        $this->assertDatabaseHas('exam_rooms', [
+            'district_id' => $this->sena->id,
+            'term' => '68/2',
+            'subject_code' => 'ทช21001',
+            'room_name' => 'ห้อง 101',
+        ]);
+        $this->assertDatabaseMissing('exam_rooms', [
+            'district_id' => $this->sena->id,
+            'term' => '1/2569',
+            'subject_code' => 'ห้ามข้ามอำเภอ',
+        ]);
+        $this->assertDatabaseHas('audit_logs', [
+            'user_id' => $this->senaAdmin->id,
+            'district_id' => $this->sena->id,
+            'event' => 'admin.exam_rooms.carried_forward',
+            'auditable_type' => 'system_exam_room',
+        ]);
+        $this->getJson('/api/v1/admin/exam-rooms')
+            ->assertOk()
+            ->assertJsonCount(2, 'data')
+            ->assertJsonPath('meta.carry_forward.available', false);
+        $this->postJson('/api/v1/admin/exam-rooms/carry-forward')->assertConflict();
+        $this->assertDatabaseCount('exam_rooms', 6);
+    }
+
     public function test_super_admin_can_manage_the_explicitly_selected_district(): void
     {
         Sanctum::actingAs(User::factory()->create(['role' => 'super_admin', 'district_id' => null]));

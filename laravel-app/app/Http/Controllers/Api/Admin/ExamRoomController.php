@@ -52,6 +52,9 @@ final class ExamRoomController extends Controller
                 $row,
                 $this->scope->forRoom($row, $scope),
             ))->all();
+        $carryForward = $scope['term'] === null || $items !== []
+            ? ['available' => false, 'source_term' => null, 'count' => 0]
+            : $this->carryForwardAvailability($districtId, $scope['term']);
 
         return response()->json(['data' => $items, 'meta' => [
             'source' => 'system_database',
@@ -60,7 +63,66 @@ final class ExamRoomController extends Controller
             'current_term' => $scope['term'],
             'subdistricts' => $scope['subdistricts'],
             'education_levels' => $scope['education_levels'],
+            'carry_forward' => $carryForward,
         ]]);
+    }
+
+    public function carryForward(Request $request): JsonResponse
+    {
+        $this->assertWriteEnabled();
+        $districtId = $this->districtId($request);
+        $currentTerm = $this->requireCurrentTerm($request);
+
+        $result = $this->write()->transaction(function () use ($districtId, $currentTerm): array {
+            $this->write()->table('districts')->where('id', $districtId)->lockForUpdate()->first();
+            $alreadyExists = $this->write()->table('exam_rooms')
+                ->where('district_id', $districtId)
+                ->whereIn('term', AcademicTerm::variants($currentTerm))
+                ->exists();
+            abort_if($alreadyExists, 409, "ภาคเรียน {$currentTerm} มีรายการห้องสอบแล้ว ระบบจึงไม่คัดลอกซ้ำ");
+
+            $availability = $this->carryForwardAvailability($districtId, $currentTerm);
+            abort_unless($availability['available'], 422, 'ไม่พบชุดห้องสอบจากภาคเรียนก่อนหน้าสำหรับนำมาใช้');
+            $sourceTerm = (string) $availability['source_term'];
+            $sourceRows = $this->read()->table('exam_rooms')
+                ->where('district_id', $districtId)
+                ->whereIn('term', AcademicTerm::variants($sourceTerm))
+                ->orderBy('id')
+                ->get(['subject_code', 'assignment_type', 'start_val', 'end_val', 'room_name']);
+            $now = now();
+            foreach ($sourceRows->chunk(500) as $chunk) {
+                $this->write()->table('exam_rooms')->insert($chunk->map(static fn (object $row): array => [
+                    'district_id' => $districtId,
+                    'import_batch_id' => null,
+                    'term' => $currentTerm,
+                    'subject_code' => (string) $row->subject_code,
+                    'assignment_type' => (string) $row->assignment_type,
+                    'start_val' => (string) $row->start_val,
+                    'end_val' => (string) $row->end_val,
+                    'room_name' => (string) $row->room_name,
+                    'created_at' => $now,
+                    'updated_at' => $now,
+                ])->all());
+            }
+
+            return [
+                'copied' => $sourceRows->count(),
+                'source_term' => $sourceTerm,
+                'current_term' => $currentTerm,
+                'first_id' => (int) $this->write()->table('exam_rooms')
+                    ->where('district_id', $districtId)
+                    ->whereIn('term', AcademicTerm::variants($currentTerm))
+                    ->min('id'),
+            ];
+        });
+        $this->audit($request, 'admin.exam_rooms.carried_forward', $result['first_id'], null, [
+            'source_term' => $result['source_term'],
+            'current_term' => $result['current_term'],
+            'copied' => $result['copied'],
+        ]);
+        unset($result['first_id']);
+
+        return response()->json(['data' => $result], 201);
     }
 
     public function store(Request $request): JsonResponse
@@ -175,6 +237,32 @@ final class ExamRoomController extends Controller
         }
 
         return $term;
+    }
+
+    /** @return array{available: bool, source_term: string|null, count: int} */
+    private function carryForwardAvailability(int $districtId, string $currentTerm): array
+    {
+        $terms = $this->read()->table('exam_rooms')
+            ->where('district_id', $districtId)
+            ->distinct()
+            ->pluck('term')
+            ->map(static fn (mixed $term): ?string => AcademicTerm::normalize((string) $term))
+            ->filter(static fn (?string $term): bool => $term !== null && AcademicTerm::compare($term, $currentTerm) < 0)
+            ->values()
+            ->all();
+        $sourceTerm = AcademicTerm::latest($terms);
+        if ($sourceTerm === null) {
+            return ['available' => false, 'source_term' => null, 'count' => 0];
+        }
+
+        return [
+            'available' => true,
+            'source_term' => $sourceTerm,
+            'count' => (int) $this->read()->table('exam_rooms')
+                ->where('district_id', $districtId)
+                ->whereIn('term', AcademicTerm::variants($sourceTerm))
+                ->count(),
+        ];
     }
 
     private function audit(Request $request, string $event, int $id, ?array $before, ?array $after): void

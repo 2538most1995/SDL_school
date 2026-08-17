@@ -376,7 +376,12 @@ export function AdminImportsPage() {
 
 type ExamRoom = { id: number; district_id: number; term: string; subject_code: string; assignment_type: 'group_range' | 'student_range'; start_val: string; end_val: string; room_name: string; capacity: number | null; status: string; education_levels: number[]; subdistricts: string[] };
 type RoomDraft = Pick<ExamRoom, 'term' | 'subject_code' | 'assignment_type' | 'start_val' | 'end_val' | 'room_name'>;
-type ExamRoomMeta = { current_term?: string | null; subdistricts?: string[]; education_levels?: Array<{ value: number; label: string }> };
+type ExamRoomMeta = {
+    current_term?: string | null;
+    subdistricts?: string[];
+    education_levels?: Array<{ value: number; label: string }>;
+    carry_forward?: { available: boolean; source_term: string | null; count: number };
+};
 const blankRoom: RoomDraft = { term: '', subject_code: '', assignment_type: 'group_range', start_val: '', end_val: '', room_name: '' };
 
 export function AdminExamRoomsPage() {
@@ -388,6 +393,7 @@ export function AdminExamRoomsPage() {
     const rooms = useQuery({ queryKey: ['admin', 'exam-rooms'], queryFn: ({ signal }) => getFeatureData<ExamRoom[]>('/api/v1/admin/exam-rooms', signal) });
     const roomMeta = (rooms.data?.meta ?? {}) as ExamRoomMeta;
     const currentTerm = roomMeta.current_term ?? null;
+    const carryForwardOption = roomMeta.carry_forward;
     const filteredRooms = useMemo(() => (rooms.data?.data ?? []).filter((room) => {
         const matchesSubdistrict = subdistrict === '' || room.subdistricts.includes(subdistrict);
         const matchesLevel = educationLevel === '' || room.education_levels.includes(Number(educationLevel));
@@ -403,6 +409,11 @@ export function AdminExamRoomsPage() {
         mutationFn: (id: number) => sendFeatureData<{ deleted: boolean; id: number }>(`/api/v1/admin/exam-rooms/${id}`, 'DELETE'),
         onSuccess: () => void queryClient.invalidateQueries({ queryKey: ['admin', 'exam-rooms'] }),
     });
+    const carryForward = useMutation({
+        meta: { notification: { success: 'นำชุดห้องสอบมาใช้กับภาคเรียนปัจจุบันแล้ว' } },
+        mutationFn: () => sendFeatureData<{ copied: number; source_term: string; current_term: string }>('/api/v1/admin/exam-rooms/carry-forward', 'POST'),
+        onSuccess: () => void queryClient.invalidateQueries({ queryKey: ['admin', 'exam-rooms'] }),
+    });
     function openCreate() {
         if (!currentTerm) return;
         setDraft({ ...blankRoom, term: currentTerm });
@@ -411,6 +422,11 @@ export function AdminExamRoomsPage() {
     }
     function openEdit(room: ExamRoom) { setDraft({ term: room.term, subject_code: room.subject_code, assignment_type: room.assignment_type, start_val: room.start_val, end_val: room.end_val, room_name: room.room_name }); save.reset(); setEditing(room); }
     function confirmDelete(room: ExamRoom) { if (window.confirm(`ยืนยันลบห้องสอบ “${room.room_name}” เฉพาะอำเภอนี้หรือไม่`)) remove.mutate(room.id); }
+    function confirmCarryForward() {
+        if (!carryForwardOption?.source_term || !currentTerm) return;
+        const confirmed = window.confirm(`ยืนยันคัดลอกห้องสอบ ${carryForwardOption.count.toLocaleString('th-TH')} รายการ จากภาคเรียน ${carryForwardOption.source_term} มาใช้ในภาคเรียน ${currentTerm} หรือไม่\n\nข้อมูลภาคเรียนเดิมจะไม่ถูกแก้ไข`);
+        if (confirmed) carryForward.mutate();
+    }
     const columns = useMemo<ColumnDef<ExamRoom>[]>(() => [
         { accessorKey: 'subject_code', header: 'รหัสวิชา', size: 110, meta: { compactSize: 74 }, cell: ({ getValue }) => <span className="font-bold text-slate-950">{getValue<string>()}</span> },
         { accessorKey: 'assignment_type', header: 'จัดตาม', size: 135, meta: { compactSize: 82, compactTextAlign: 'center' }, cell: ({ getValue }) => getValue<string>() === 'group_range' ? 'ช่วงกลุ่มเรียน' : 'ช่วงรหัสนักศึกษา' },
@@ -425,10 +441,12 @@ export function AdminExamRoomsPage() {
             <PageHeader category="จัดการการสอบ" title="ห้องสอบและช่วงผู้เข้าสอบ" description="แสดงและแก้ไขเฉพาะภาคเรียนปัจจุบัน พร้อมเลือกดูเป็นรายตำบลและระดับชั้น" icon={DoorOpen} actions={<button type="button" onClick={openCreate} disabled={rooms.data?.meta.read_only === true || !currentTerm} className={primaryButton}><Plus size={17} weight="bold" /> เพิ่มห้องสอบ</button>} />
             <div className="mb-5 grid gap-3 sm:grid-cols-3"><StatTile label="รายการห้องสอบ" value={filteredRooms.length} detail={subdistrict || educationLevel ? 'ตามตัวกรองที่เลือก' : 'ภาคเรียนปัจจุบัน'} icon={DoorOpen} tone="sky" /><StatTile label="จำนวนรวม" value={filteredRooms.reduce((sum, room) => sum + (room.capacity ?? 0), 0)} detail="คำนวณจากช่วงตัวเลข" icon={Buildings} /><StatTile label="ภาคเรียนปัจจุบัน" value={currentTerm ?? '-'} detail="อ้างอิงจากข้อมูลนักศึกษา" icon={Archive} tone="amber" /></div>
             {!rooms.isPending && rooms.data && !currentTerm && <div role="alert" className="mb-4 rounded-2xl border border-amber-200 bg-amber-50 p-4 text-sm leading-6 text-amber-950"><p className="font-black">ยังไม่พบภาคเรียนปัจจุบัน</p><p>กรุณานำเข้าข้อมูลนักศึกษาภาคเรียนปัจจุบันก่อนเพิ่มหรือแก้ไขห้องสอบ</p></div>}
+            {rooms.data && rooms.data.data.length === 0 && carryForwardOption?.available && <div role="status" className="mb-4 flex flex-col gap-4 rounded-2xl border border-amber-200 bg-amber-50 p-4 text-amber-950 sm:flex-row sm:items-center sm:justify-between"><div><p className="font-black">พบชุดห้องสอบจากภาคเรียน {carryForwardOption.source_term}</p><p className="mt-1 text-sm leading-6">คัดลอก {carryForwardOption.count.toLocaleString('th-TH')} รายการมาใช้กับภาคเรียน {currentTerm} ได้ โดยข้อมูลเดิมยังคงอยู่ครบถ้วน</p></div><button type="button" onClick={confirmCarryForward} disabled={rooms.data.meta.read_only === true || carryForward.isPending} className={`${primaryButton} shrink-0`}><Archive size={17} weight="bold" />{carryForward.isPending ? 'กำลังคัดลอก' : 'นำมาใช้ในภาคเรียนนี้'}</button></div>}
+            {carryForward.isError && <div className="mb-4"><MutationError error={carryForward.error} /></div>}
             {remove.isError && <div className="mb-4"><MutationError error={remove.error} /></div>}
             <Panel title="รายการจัดห้องสอบ" description="เลือกตำบลและระดับชั้น แล้วกดแก้ไขในรายการที่ต้องการ">
                 {rooms.data && currentTerm && <div className="mb-5 grid gap-3 rounded-2xl border border-brand-100 bg-brand-50/60 p-4 sm:grid-cols-2"><Field label="ตำบล"><select value={subdistrict} onChange={(event) => setSubdistrict(event.target.value)} className={inputClass}><option value="">ทุกตำบล</option>{(roomMeta.subdistricts ?? []).map((item) => <option key={item} value={item}>ตำบล{item}</option>)}</select></Field><Field label="ระดับชั้น"><select value={educationLevel} onChange={(event) => setEducationLevel(event.target.value)} className={inputClass}><option value="">ทุกระดับชั้น</option>{(roomMeta.education_levels ?? []).map((item) => <option key={item.value} value={item.value}>{item.label}</option>)}</select></Field></div>}
-                {rooms.isPending && <QuerySkeleton />}{rooms.isError && <QueryError onRetry={() => rooms.refetch()} />}{rooms.data && <DataTable data={filteredRooms} columns={columns} minWidth="wide" emptyTitle="ไม่พบห้องสอบตามตัวกรอง" emptyDescription="ลองเปลี่ยนตำบลหรือระดับชั้นที่เลือก" />}
+                {rooms.isPending && <QuerySkeleton />}{rooms.isError && <QueryError onRetry={() => rooms.refetch()} />}{rooms.data && <DataTable data={filteredRooms} columns={columns} minWidth="wide" emptyTitle={rooms.data.data.length === 0 ? 'ยังไม่มีห้องสอบในภาคเรียนปัจจุบัน' : 'ไม่พบห้องสอบตามตัวกรอง'} emptyDescription={rooms.data.data.length === 0 ? 'นำชุดห้องสอบจากภาคเรียนก่อนหน้ามาใช้ หรือเพิ่มห้องสอบใหม่' : 'ลองเปลี่ยนตำบลหรือระดับชั้นที่เลือก'} />}
             </Panel>
             {editing && <Modal title={editing === 'new' ? 'เพิ่มห้องสอบ' : 'แก้ไขห้องสอบ'} description="ข้อมูลจะถูกบันทึกเฉพาะอำเภอที่เลือก" onClose={() => setEditing(null)}><form onSubmit={(event) => { event.preventDefault(); save.mutate(); }} className="grid gap-4 sm:grid-cols-2">
                 <Field label="ภาคเรียน" hint="ระบบกำหนดจากชุดข้อมูลนักศึกษาปัจจุบัน"><input required readOnly value={draft.term} className={inputClass} /></Field>
