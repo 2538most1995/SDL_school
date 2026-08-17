@@ -496,6 +496,79 @@ final class AdminWriteScopeTest extends TestCase
         ]);
     }
 
+    public function test_exam_rooms_can_be_bulk_assigned_only_within_the_viewers_scope(): void
+    {
+        $ownStudents = ['6911000011', '6911000012'];
+        $otherStudent = '6911000099';
+        $this->bindStudents([
+            $this->studentForTerm($this->sena, $ownStudents[0], 2, '15', 'กลุ่มเรียนเสนา 15', '1/2569'),
+            $this->studentForTerm($this->sena, $ownStudents[1], 2, '15', 'กลุ่มเรียนเสนา 15', '1/2569'),
+            $this->studentForTerm($this->sena, $otherStudent, 3, '40', 'กลุ่มเรียนบ้านแพน 40', '1/2569'),
+        ]);
+        $teacher = User::factory()->create([
+            'role' => 'teacher',
+            'district_id' => $this->sena->id,
+            'assigned_groups' => ['15'],
+        ]);
+        $roomIds = [];
+        foreach ($ownStudents as $studentCode) {
+            $roomIds[] = DB::table('exam_rooms')->insertGetId([
+                'district_id' => $this->sena->id,
+                'term' => '1/2569',
+                'subject_code' => 'ทช21001',
+                'assignment_type' => 'student_range',
+                'start_val' => $studentCode,
+                'end_val' => $studentCode,
+                'room_name' => 'ห้องเดิม',
+                'created_at' => now(),
+                'updated_at' => now(),
+            ]);
+        }
+        $otherRoom = DB::table('exam_rooms')->insertGetId([
+            'district_id' => $this->sena->id,
+            'term' => '1/2569',
+            'subject_code' => 'ทช21001',
+            'assignment_type' => 'student_range',
+            'start_val' => $otherStudent,
+            'end_val' => $otherStudent,
+            'room_name' => 'ห้องกลุ่มอื่น',
+            'created_at' => now(),
+            'updated_at' => now(),
+        ]);
+
+        Sanctum::actingAs($teacher);
+        $this->patchJson('/api/v1/admin/exam-rooms/bulk-update', [
+            'room_ids' => $roomIds,
+            'room_name' => 'ห้อง 5',
+        ])->assertOk()
+            ->assertJsonPath('data.selected', 2)
+            ->assertJsonPath('data.updated', 2)
+            ->assertJsonPath('data.room_name', 'ห้อง 5');
+        foreach ($roomIds as $roomId) {
+            $this->assertDatabaseHas('exam_rooms', ['id' => $roomId, 'room_name' => 'ห้อง 5']);
+        }
+        $this->assertDatabaseHas('audit_logs', [
+            'user_id' => $teacher->id,
+            'event' => 'admin.exam_rooms.bulk_updated',
+            'auditable_id' => $roomIds[0],
+        ]);
+
+        $this->patchJson('/api/v1/admin/exam-rooms/bulk-update', [
+            'room_ids' => [$roomIds[0], $otherRoom],
+            'room_name' => 'ห้องที่ไม่ควรแก้',
+        ])->assertForbidden();
+        $this->assertDatabaseHas('exam_rooms', ['id' => $roomIds[0], 'room_name' => 'ห้อง 5']);
+        $this->assertDatabaseHas('exam_rooms', ['id' => $otherRoom, 'room_name' => 'ห้องกลุ่มอื่น']);
+
+        Sanctum::actingAs($this->senaAdmin);
+        $this->patchJson('/api/v1/admin/exam-rooms/bulk-update', [
+            'room_ids' => [$roomIds[0], $otherRoom],
+            'room_name' => 'ห้องผู้ดูแล',
+        ])->assertOk()->assertJsonPath('data.selected', 2);
+        $this->assertDatabaseHas('exam_rooms', ['id' => $roomIds[0], 'room_name' => 'ห้องผู้ดูแล']);
+        $this->assertDatabaseHas('exam_rooms', ['id' => $otherRoom, 'room_name' => 'ห้องผู้ดูแล']);
+    }
+
     public function test_super_admin_can_manage_the_explicitly_selected_district(): void
     {
         Sanctum::actingAs(User::factory()->create(['role' => 'super_admin', 'district_id' => null]));

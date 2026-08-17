@@ -158,6 +158,7 @@ Route::prefix('v1')->group(function (): void {
     Route::middleware(['auth:sanctum', 'active', 'district', 'role:teacher,admin,super_admin'])
         ->group(function (): void {
             Route::get('/admin/exam-rooms', [ExamRoomController::class, 'index']);
+            Route::patch('/admin/exam-rooms/bulk-update', [ExamRoomController::class, 'bulkUpdate']);
             Route::patch('/admin/exam-rooms/{examRoom}', [ExamRoomController::class, 'update'])->whereNumber('examRoom');
             Route::post('/learning/assignments', [AssignmentWorkflowController::class, 'store'])->middleware('learning.schema');
             Route::patch('/learning/assignments/{assignment}', [AssignmentWorkflowController::class, 'update'])->middleware('learning.schema')->whereNumber('assignment');

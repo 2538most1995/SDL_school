@@ -199,6 +199,64 @@ final class ExamRoomController extends Controller
         return response()->json(['data' => $this->payload($after, $afterScope)]);
     }
 
+    public function bulkUpdate(Request $request): JsonResponse
+    {
+        $this->assertWriteEnabled();
+        $currentTerm = $this->requireCurrentTerm($request);
+        $validated = $request->validate([
+            'room_ids' => ['required', 'array', 'min:1', 'max:5000'],
+            'room_ids.*' => ['required', 'integer', 'distinct', 'min:1'],
+            'room_name' => ['required', 'string', 'max:100'],
+        ]);
+        $roomIds = array_values(array_map('intval', $validated['room_ids']));
+        $districtId = $this->districtId($request);
+        $rooms = $this->read()->table('exam_rooms')
+            ->where('district_id', $districtId)
+            ->whereIn('term', AcademicTerm::variants($currentTerm))
+            ->whereIn('id', $roomIds)
+            ->get()
+            ->keyBy('id');
+        abort_unless($rooms->count() === count($roomIds), 404, 'ไม่พบรายการห้องสอบที่เลือกในภาคเรียนปัจจุบัน');
+
+        $districtScope = $this->scope->forDistrict($districtId);
+        $viewerGroups = $this->viewerGroupValues($request, $districtScope);
+        if ($viewerGroups !== null) {
+            foreach ($rooms as $room) {
+                $roomScope = $this->scope->forRoom($room, $districtScope);
+                abort_unless(
+                    $this->scopeBelongsToViewer($roomScope['groups'], $viewerGroups),
+                    403,
+                    'แก้ไขได้เฉพาะผู้เรียนในกลุ่มที่รับผิดชอบ',
+                );
+            }
+        }
+
+        $before = $rooms->map(static fn (object $room): array => [
+            'id' => (int) $room->id,
+            'room_name' => (string) $room->room_name,
+        ])->values()->all();
+        $updated = $this->write()->table('exam_rooms')
+            ->where('district_id', $districtId)
+            ->whereIn('term', AcademicTerm::variants($currentTerm))
+            ->whereIn('id', $roomIds)
+            ->update(['room_name' => trim((string) $validated['room_name'])]);
+        $this->audit($request, 'admin.exam_rooms.bulk_updated', $roomIds[0], [
+            'count' => count($roomIds),
+            'rooms' => $before,
+        ], [
+            'count' => count($roomIds),
+            'room_ids' => $roomIds,
+            'room_name' => trim((string) $validated['room_name']),
+        ]);
+
+        return response()->json(['data' => [
+            'updated' => $updated,
+            'selected' => count($roomIds),
+            'room_ids' => $roomIds,
+            'room_name' => trim((string) $validated['room_name']),
+        ]]);
+    }
+
     public function destroy(Request $request, int $examRoom): JsonResponse
     {
         $this->assertAdministrator($request);

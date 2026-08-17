@@ -392,6 +392,8 @@ export function AdminExamRoomsPage() {
     const [editing, setEditing] = useState<ExamRoom | 'new' | null>(null);
     const [selectedSubject, setSelectedSubject] = useState<string | null>(null);
     const [draft, setDraft] = useState<RoomDraft>(blankRoom);
+    const [selectedRoomIds, setSelectedRoomIds] = useState<Set<number>>(new Set());
+    const [bulkRoomName, setBulkRoomName] = useState('');
     const [group, setGroup] = useState('');
     const [educationLevel, setEducationLevel] = useState('');
     const rooms = useQuery({ queryKey: ['admin', 'exam-rooms'], queryFn: ({ signal }) => getFeatureData<ExamRoom[]>('/api/v1/admin/exam-rooms', signal) });
@@ -427,6 +429,9 @@ export function AdminExamRoomsPage() {
     }, [filteredRooms]);
     const selectedSubjectSummary = subjectRows.find((subject) => subject.subject_code === selectedSubject);
     const selectedSubjectRooms = selectedSubjectSummary?.rooms ?? [];
+    const selectedCandidateCount = selectedSubjectRooms
+        .filter((room) => selectedRoomIds.has(room.id))
+        .reduce((sum, room) => sum + (room.capacity ?? 0), 0);
     const save = useMutation({
         meta: { notification: { success: editing === 'new' ? 'เพิ่มห้องสอบสำเร็จ' : 'บันทึกห้องสอบสำเร็จ' } },
         mutationFn: () => editing === 'new' ? sendFeatureData<ExamRoom>('/api/v1/admin/exam-rooms', 'POST', draft) : sendFeatureData<ExamRoom>(`/api/v1/admin/exam-rooms/${editing?.id}`, 'PATCH', draft),
@@ -442,13 +447,29 @@ export function AdminExamRoomsPage() {
         mutationFn: () => sendFeatureData<{ synced: number; source: string; current_term: string }>('/api/v1/admin/exam-rooms/sync-from-schedule', 'POST'),
         onSuccess: () => void queryClient.invalidateQueries({ queryKey: ['admin', 'exam-rooms'] }),
     });
+    const bulkSave = useMutation({
+        meta: { notification: { success: 'กำหนดห้องสอบให้รายการที่เลือกเรียบร้อยแล้ว' } },
+        mutationFn: () => sendFeatureData<{ updated: number; selected: number; room_ids: number[]; room_name: string }>('/api/v1/admin/exam-rooms/bulk-update', 'PATCH', {
+            room_ids: Array.from(selectedRoomIds),
+            room_name: bulkRoomName,
+        }),
+        onSuccess: () => {
+            setSelectedRoomIds(new Set());
+            setBulkRoomName('');
+            void queryClient.invalidateQueries({ queryKey: ['admin', 'exam-rooms'] });
+        },
+    });
     function openCreate() {
         if (!currentTerm) return;
         setDraft({ ...blankRoom, term: currentTerm });
         save.reset();
         setEditing('new');
     }
-    function openEdit(room: ExamRoom) { setSelectedSubject(null); setDraft({ term: room.term, subject_code: room.subject_code, assignment_type: room.assignment_type, start_val: room.start_val, end_val: room.end_val, room_name: room.room_name }); save.reset(); setEditing(room); }
+    function openSubject(subjectCode: string) { setSelectedRoomIds(new Set()); setBulkRoomName(''); bulkSave.reset(); setSelectedSubject(subjectCode); }
+    function closeSubject() { setSelectedSubject(null); setSelectedRoomIds(new Set()); setBulkRoomName(''); bulkSave.reset(); }
+    function openEdit(room: ExamRoom) { closeSubject(); setDraft({ term: room.term, subject_code: room.subject_code, assignment_type: room.assignment_type, start_val: room.start_val, end_val: room.end_val, room_name: room.room_name }); save.reset(); setEditing(room); }
+    function toggleRoom(roomId: number) { setSelectedRoomIds((current) => { const next = new Set(current); if (next.has(roomId)) next.delete(roomId); else next.add(roomId); return next; }); }
+    function toggleAllRooms() { setSelectedRoomIds((current) => current.size === selectedSubjectRooms.length ? new Set() : new Set(selectedSubjectRooms.map((room) => room.id))); }
     function confirmDelete(room: ExamRoom) { if (window.confirm(`ยืนยันลบห้องสอบ “${room.room_name}” เฉพาะอำเภอนี้หรือไม่`)) remove.mutate(room.id); }
     function confirmScheduleSync() {
         if (!scheduleSyncOption?.available || !currentTerm) return;
@@ -456,19 +477,20 @@ export function AdminExamRoomsPage() {
         if (confirmed) scheduleSync.mutate();
     }
     const columns = useMemo<ColumnDef<ExamSubject>[]>(() => [
-        { accessorKey: 'subject_code', header: 'รหัสวิชา', size: 150, meta: { compactSize: 92 }, cell: ({ row }) => <button type="button" onClick={() => setSelectedSubject(row.original.subject_code)} className="font-black text-brand-800 underline decoration-brand-200 underline-offset-4 transition hover:text-brand-950 hover:decoration-brand-600" aria-label={`ดูรายชื่อผู้เข้าสอบวิชา ${row.original.subject_code}`}>{row.original.subject_code}</button> },
+        { accessorKey: 'subject_code', header: 'รหัสวิชา', size: 150, meta: { compactSize: 92 }, cell: ({ row }) => <button type="button" onClick={() => openSubject(row.original.subject_code)} className="font-black text-brand-800 underline decoration-brand-200 underline-offset-4 transition hover:text-brand-950 hover:decoration-brand-600" aria-label={`ดูรายชื่อผู้เข้าสอบวิชา ${row.original.subject_code}`}>{row.original.subject_code}</button> },
         { id: 'scope', header: 'กลุ่มเรียน / ระดับชั้น', size: 245, meta: { compactSize: 152 }, accessorFn: (row) => `${row.groups.join(', ')} ${row.education_levels.join(', ')}`, cell: ({ row }) => { const groupLabels = row.original.groups.map((value) => roomMeta.groups?.find((item) => item.value === value)?.label ?? value); return <div className="text-sm"><p className="font-bold text-slate-950">{groupLabels.slice(0, 3).join(', ') || 'ยังระบุกลุ่มเรียนไม่ได้'}</p>{groupLabels.length > 3 && <p className="mt-0.5 text-xs text-slate-500">และอีก {(groupLabels.length - 3).toLocaleString('th-TH')} กลุ่ม</p>}<p className="mt-0.5 text-xs text-slate-500">{row.original.education_levels.map((level) => roomMeta.education_levels?.find((item) => item.value === level)?.label ?? `ระดับ ${level}`).join(', ') || 'ยังระบุระดับไม่ได้'}</p></div>; } },
         { id: 'room_names', header: 'ห้องสอบ', size: 210, meta: { compactSize: 130 }, accessorFn: (row) => row.room_names.join(', '), cell: ({ row }) => <div><p className="font-bold text-slate-950">{row.original.room_names.slice(0, 3).join(', ')}</p>{row.original.room_names.length > 3 && <p className="mt-0.5 text-xs text-slate-500">และอีก {(row.original.room_names.length - 3).toLocaleString('th-TH')} ห้อง</p>}</div> },
         { accessorKey: 'candidate_count', header: 'ผู้เข้าสอบ', size: 120, meta: { compactSize: 72, compactTextAlign: 'center' }, cell: ({ getValue }) => `${getValue<number>().toLocaleString('th-TH')} คน` },
-        { id: 'actions', header: 'จัดการ', size: 145, meta: { compactSize: 90, compactTextAlign: 'center' }, enableSorting: false, cell: ({ row }) => <button type="button" onClick={() => setSelectedSubject(row.original.subject_code)} className={`${secondaryButton} responsive-table-action`} aria-label={`ดูรายชื่อผู้เข้าสอบวิชา ${row.original.subject_code}`}><UsersThree size={16} /> <span>ดูรายชื่อ</span></button> },
-    ], [remove.isPending, roomMeta.education_levels, roomMeta.groups]);
+        { id: 'actions', header: 'จัดการ', size: 145, meta: { compactSize: 90, compactTextAlign: 'center' }, enableSorting: false, cell: ({ row }) => <button type="button" onClick={() => openSubject(row.original.subject_code)} className={`${secondaryButton} responsive-table-action`} aria-label={`ดูรายชื่อผู้เข้าสอบวิชา ${row.original.subject_code}`}><UsersThree size={16} /> <span>ดูรายชื่อ</span></button> },
+    ], [roomMeta.education_levels, roomMeta.groups]);
     const candidateColumns = useMemo<ColumnDef<ExamRoom>[]>(() => [
+        ...(permissions.can_update ? [{ id: 'select', header: () => <label className="inline-flex cursor-pointer items-center gap-2 whitespace-nowrap text-sm font-bold"><input type="checkbox" checked={selectedSubjectRooms.length > 0 && selectedRoomIds.size === selectedSubjectRooms.length} onChange={toggleAllRooms} className="size-4 rounded border-slate-300 accent-brand-700" aria-label="เลือกผู้เข้าสอบทั้งหมด" /><span>เลือกทั้งหมด</span></label>, size: 105, meta: { compactSize: 76, compactTextAlign: 'center' as const }, enableSorting: false, cell: ({ row }: { row: { original: ExamRoom } }) => <input type="checkbox" checked={selectedRoomIds.has(row.original.id)} onChange={() => toggleRoom(row.original.id)} className="size-5 rounded border-slate-300 accent-brand-700" aria-label={`เลือก ${row.original.start_val === row.original.end_val ? `รหัสนักศึกษา ${row.original.start_val}` : `ช่วง ${row.original.start_val} ถึง ${row.original.end_val}`}`} /> }] : []),
         { id: 'range', header: 'รหัสนักศึกษา / ช่วง', size: 210, meta: { compactSize: 132 }, accessorFn: (row) => row.start_val === row.end_val ? row.start_val : `${row.start_val} - ${row.end_val}`, cell: ({ row }) => <span className="font-bold text-slate-950">{row.original.start_val === row.original.end_val ? row.original.start_val : `${row.original.start_val} - ${row.original.end_val}`}</span> },
         { id: 'scope', header: 'กลุ่มเรียน / ระดับชั้น', size: 245, meta: { compactSize: 152 }, accessorFn: (row) => `${row.groups.join(', ')} ${row.education_levels.join(', ')}`, cell: ({ row }) => <div className="text-sm"><p className="font-bold text-slate-950">{row.original.groups.map((value) => roomMeta.groups?.find((item) => item.value === value)?.label ?? value).join(', ') || 'ยังระบุกลุ่มเรียนไม่ได้'}</p><p className="mt-0.5 text-xs text-slate-500">{row.original.education_levels.map((level) => roomMeta.education_levels?.find((item) => item.value === level)?.label ?? `ระดับ ${level}`).join(', ') || 'ยังระบุระดับไม่ได้'}</p></div> },
         { accessorKey: 'room_name', header: 'ห้องสอบ', size: 160, meta: { compactSize: 108 }, cell: ({ getValue }) => <span className="font-bold text-slate-950">{getValue<string>()}</span> },
         { accessorKey: 'capacity', header: 'จำนวน', size: 95, meta: { compactSize: 60, compactTextAlign: 'center' }, cell: ({ getValue }) => getValue<number | null>() === null ? '-' : `${getValue<number>()?.toLocaleString('th-TH')} คน` },
         { id: 'actions', header: 'จัดการ', size: 130, meta: { compactSize: 86, compactTextAlign: 'center' }, enableSorting: false, cell: ({ row }) => <div className="flex justify-center gap-1.5">{permissions.can_update && <button type="button" onClick={() => openEdit(row.original)} className={`${secondaryButton} responsive-table-action`} aria-label={`แก้ไขห้องสอบ ${row.original.room_name}`}><PencilSimple size={15} /> <span>แก้ไข</span></button>}{permissions.can_delete && <button type="button" onClick={() => confirmDelete(row.original)} disabled={remove.isPending} className="responsive-table-action grid size-10 place-items-center rounded-full border border-rose-200 bg-white text-rose-700 hover:bg-rose-50" aria-label="ลบห้องสอบ"><Trash size={16} weight="bold" /></button>}{!permissions.can_update && !permissions.can_delete && <span className="text-xs font-bold text-slate-500">อ่านอย่างเดียว</span>}</div> },
-    ], [permissions.can_delete, permissions.can_update, remove.isPending, roomMeta.education_levels, roomMeta.groups]);
+    ], [permissions.can_delete, permissions.can_update, remove.isPending, roomMeta.education_levels, roomMeta.groups, selectedRoomIds, selectedSubjectRooms]);
     return (
         <div>
             <PageHeader category="จัดการการสอบ" title="ห้องสอบและช่วงผู้เข้าสอบ" description={teacherScoped ? 'แสดงและแก้ไขห้องสอบเฉพาะผู้เรียนในกลุ่มที่รับผิดชอบ' : 'แสดงและแก้ไขเฉพาะภาคเรียนปัจจุบัน พร้อมเลือกดูเป็นรายกลุ่มเรียนและระดับชั้น'} icon={DoorOpen} actions={permissions.can_create ? <button type="button" onClick={openCreate} disabled={!currentTerm} className={primaryButton}><Plus size={17} weight="bold" /> เพิ่มห้องสอบ</button> : teacherScoped ? <StatusBadge tone="info">เฉพาะกลุ่มที่รับผิดชอบ</StatusBadge> : undefined} />
@@ -482,7 +504,7 @@ export function AdminExamRoomsPage() {
                 {rooms.data && currentTerm && <div className="mb-5 grid gap-3 rounded-2xl border border-brand-100 bg-brand-50/60 p-4 sm:grid-cols-2"><Field label="กลุ่มเรียน"><select value={group} onChange={(event) => setGroup(event.target.value)} className={inputClass}><option value="">ทุกกลุ่มเรียน</option>{(roomMeta.groups ?? []).map((item) => <option key={item.value} value={item.value}>{item.label}{item.label !== item.value ? ` · รหัส ${item.value}` : ''}</option>)}</select></Field><Field label="ระดับชั้น"><select value={educationLevel} onChange={(event) => setEducationLevel(event.target.value)} className={inputClass}><option value="">ทุกระดับชั้น</option>{(roomMeta.education_levels ?? []).map((item) => <option key={item.value} value={item.value}>{item.label}</option>)}</select></Field></div>}
                 {rooms.isPending && <QuerySkeleton />}{rooms.isError && <QueryError onRetry={() => rooms.refetch()} />}{rooms.data && <DataTable data={subjectRows} columns={columns} minWidth="wide" emptyTitle={rooms.data.data.length === 0 ? 'ยังไม่มีห้องสอบในภาคเรียนปัจจุบัน' : 'ไม่พบรายวิชาตามตัวกรอง'} emptyDescription={rooms.data.data.length === 0 ? 'นำค่าห้องจากตารางสอบภาคเรียนปัจจุบันมาใช้ หรือเพิ่มห้องสอบใหม่' : 'ลองเปลี่ยนกลุ่มเรียนหรือระดับชั้นที่เลือก'} />}
             </Panel>
-            {selectedSubject && <Modal wide title={`รายชื่อผู้เข้าสอบ วิชา ${selectedSubject}`} description={`${(selectedSubjectSummary?.candidate_count ?? 0).toLocaleString('th-TH')} คน · ${selectedSubjectRooms.length.toLocaleString('th-TH')} รายการ · แก้ไขห้องสอบได้เป็นรายคนหรือรายช่วง`} onClose={() => setSelectedSubject(null)}><DataTable data={selectedSubjectRooms} columns={candidateColumns} pageSize={50} minWidth="wide" emptyTitle="ไม่พบผู้เข้าสอบ" emptyDescription="ไม่พบผู้เข้าสอบตามกลุ่มเรียนและระดับชั้นที่เลือก" /></Modal>}
+            {selectedSubject && <Modal wide title={`รายชื่อผู้เข้าสอบ วิชา ${selectedSubject}`} description={`${(selectedSubjectSummary?.candidate_count ?? 0).toLocaleString('th-TH')} คน · ${selectedSubjectRooms.length.toLocaleString('th-TH')} รายการ · ติ๊กเลือกเพื่อกำหนดห้องพร้อมกัน`} onClose={closeSubject}>{permissions.can_update && <form onSubmit={(event) => { event.preventDefault(); bulkSave.mutate(); }} className="mb-5 rounded-2xl border border-brand-200 bg-brand-50 p-4"><div className="flex flex-col gap-3 lg:flex-row lg:items-end"><div className="min-w-0 flex-1"><p className="text-sm font-black text-brand-950">สร้าง/แก้ไขห้องให้ผู้เรียนที่เลือก</p><p className="mt-1 text-xs leading-5 text-brand-800">เลือกแล้ว {selectedRoomIds.size.toLocaleString('th-TH')} รายการ · รวม {selectedCandidateCount.toLocaleString('th-TH')} คน</p></div><Field label="ชื่อห้องสอบ"><input required disabled={selectedRoomIds.size === 0 || bulkSave.isPending} maxLength={100} value={bulkRoomName} onChange={(event) => setBulkRoomName(event.target.value)} placeholder="เช่น ห้อง 5" className={`${inputClass} lg:w-64`} /></Field><button type="submit" disabled={selectedRoomIds.size === 0 || bulkRoomName.trim() === '' || bulkSave.isPending} className={primaryButton}><FloppyDisk size={17} weight="bold" />{bulkSave.isPending ? 'กำลังบันทึก' : `บันทึก ${selectedRoomIds.size.toLocaleString('th-TH')} รายการ`}</button></div><div className="mt-3"><MutationError error={bulkSave.error} /></div></form>}<DataTable data={selectedSubjectRooms} columns={candidateColumns} pageSize={50} minWidth="wide" emptyTitle="ไม่พบผู้เข้าสอบ" emptyDescription="ไม่พบผู้เข้าสอบตามกลุ่มเรียนและระดับชั้นที่เลือก" /></Modal>}
             {editing && <Modal title={editing === 'new' ? 'เพิ่มห้องสอบ' : 'แก้ไขห้องสอบ'} description="ข้อมูลจะถูกบันทึกเฉพาะอำเภอที่เลือก" onClose={() => setEditing(null)}><form onSubmit={(event) => { event.preventDefault(); save.mutate(); }} className="grid gap-4 sm:grid-cols-2">
                 <Field label="ภาคเรียน" hint="ระบบกำหนดจากชุดข้อมูลนักศึกษาปัจจุบัน"><input required readOnly value={draft.term} className={inputClass} /></Field>
                 <Field label="รหัสวิชา"><input required readOnly={teacherScoped} maxLength={100} value={draft.subject_code} onChange={(event) => setDraft({ ...draft, subject_code: event.target.value })} className={inputClass} /></Field>
