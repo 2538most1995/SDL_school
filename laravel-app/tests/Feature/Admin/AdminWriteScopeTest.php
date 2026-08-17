@@ -303,6 +303,12 @@ final class AdminWriteScopeTest extends TestCase
             'updated_at' => now(),
         ]);
 
+        // Production can contain an adopted legacy exam_rooms table without
+        // Laravel timestamp columns. Schedule sync must remain compatible.
+        Schema::table('exam_rooms', function (Blueprint $table): void {
+            $table->dropColumn(['created_at', 'updated_at']);
+        });
+
         Sanctum::actingAs($this->senaAdmin);
         $this->getJson('/api/v1/admin/exam-rooms')
             ->assertOk()

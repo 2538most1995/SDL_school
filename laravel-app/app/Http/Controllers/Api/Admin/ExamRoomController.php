@@ -80,8 +80,17 @@ final class ExamRoomController extends Controller
         $this->assertWriteEnabled();
         $districtId = $this->districtId($request);
         $currentTerm = $this->requireCurrentTerm($request);
+        $sourceRows = $this->scheduleSource->rowsForDistrict($districtId, $currentTerm);
+        abort_if($sourceRows === [], 422, "ไม่พบค่าห้องสอบจากตารางสอบภาคเรียน {$currentTerm}");
 
-        $result = $this->write()->transaction(function () use ($districtId, $currentTerm): array {
+        $schema = $this->write()->getSchemaBuilder();
+        $now = now();
+        $timestamps = [
+            ...($schema->hasColumn('exam_rooms', 'created_at') ? ['created_at' => $now] : []),
+            ...($schema->hasColumn('exam_rooms', 'updated_at') ? ['updated_at' => $now] : []),
+        ];
+
+        $result = $this->write()->transaction(function () use ($districtId, $currentTerm, $sourceRows, $timestamps): array {
             $this->write()->table('districts')->where('id', $districtId)->lockForUpdate()->first();
             $alreadyExists = $this->write()->table('exam_rooms')
                 ->where('district_id', $districtId)
@@ -89,16 +98,12 @@ final class ExamRoomController extends Controller
                 ->exists();
             abort_if($alreadyExists, 409, "ภาคเรียน {$currentTerm} มีรายการห้องสอบแล้ว ระบบจึงไม่คัดลอกซ้ำ");
 
-            $sourceRows = $this->scheduleSource->rowsForDistrict($districtId, $currentTerm);
-            abort_if($sourceRows === [], 422, "ไม่พบค่าห้องสอบจากตารางสอบภาคเรียน {$currentTerm}");
-            $now = now();
-            foreach (array_chunk($sourceRows, 500) as $chunk) {
+            foreach (array_chunk($sourceRows, 250) as $chunk) {
                 $this->write()->table('exam_rooms')->insert(array_map(
                     static fn (array $row): array => [
                         'district_id' => $districtId,
                         ...$row,
-                        'created_at' => $now,
-                        'updated_at' => $now,
+                        ...$timestamps,
                     ],
                     $chunk,
                 ));
