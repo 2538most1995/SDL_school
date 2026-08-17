@@ -279,11 +279,14 @@ final class LegacyExamScheduleService
         }
 
         if (ctype_digit($val) && ctype_digit($start) && ctype_digit($end)) {
-            $numVal = (float) $val;
-            $numStart = (float) $start;
-            $numEnd = (float) $end;
+            $numVal = ltrim($val, '0') ?: '0';
+            $numStart = ltrim($start, '0') ?: '0';
+            $numEnd = ltrim($end, '0') ?: '0';
+            $compareNumbers = static fn (string $left, string $right): int => strlen($left) <=> strlen($right)
+                ?: strcmp($left, $right);
 
-            return $numVal >= $numStart && $numVal <= $numEnd;
+            return $compareNumbers($numVal, $numStart) >= 0
+                && $compareNumbers($numVal, $numEnd) <= 0;
         }
 
         if (strcasecmp($val, $start) === 0 || strcasecmp($val, $end) === 0) {

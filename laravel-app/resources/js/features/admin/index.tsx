@@ -374,15 +374,25 @@ export function AdminImportsPage() {
     );
 }
 
-type ExamRoom = { id: number; district_id: number; term: string; subject_code: string; assignment_type: 'group_range' | 'student_range'; start_val: string; end_val: string; room_name: string; capacity: number | null; status: string };
+type ExamRoom = { id: number; district_id: number; term: string; subject_code: string; assignment_type: 'group_range' | 'student_range'; start_val: string; end_val: string; room_name: string; capacity: number | null; status: string; education_levels: number[]; subdistricts: string[] };
 type RoomDraft = Pick<ExamRoom, 'term' | 'subject_code' | 'assignment_type' | 'start_val' | 'end_val' | 'room_name'>;
-const blankRoom: RoomDraft = { term: '1/2569', subject_code: '', assignment_type: 'group_range', start_val: '', end_val: '', room_name: '' };
+type ExamRoomMeta = { current_term?: string | null; subdistricts?: string[]; education_levels?: Array<{ value: number; label: string }> };
+const blankRoom: RoomDraft = { term: '', subject_code: '', assignment_type: 'group_range', start_val: '', end_val: '', room_name: '' };
 
 export function AdminExamRoomsPage() {
     const queryClient = useQueryClient();
     const [editing, setEditing] = useState<ExamRoom | 'new' | null>(null);
     const [draft, setDraft] = useState<RoomDraft>(blankRoom);
+    const [subdistrict, setSubdistrict] = useState('');
+    const [educationLevel, setEducationLevel] = useState('');
     const rooms = useQuery({ queryKey: ['admin', 'exam-rooms'], queryFn: ({ signal }) => getFeatureData<ExamRoom[]>('/api/v1/admin/exam-rooms', signal) });
+    const roomMeta = (rooms.data?.meta ?? {}) as ExamRoomMeta;
+    const currentTerm = roomMeta.current_term ?? null;
+    const filteredRooms = useMemo(() => (rooms.data?.data ?? []).filter((room) => {
+        const matchesSubdistrict = subdistrict === '' || room.subdistricts.includes(subdistrict);
+        const matchesLevel = educationLevel === '' || room.education_levels.includes(Number(educationLevel));
+        return matchesSubdistrict && matchesLevel;
+    }), [educationLevel, rooms.data?.data, subdistrict]);
     const save = useMutation({
         meta: { notification: { success: editing === 'new' ? 'เพิ่มห้องสอบสำเร็จ' : 'บันทึกห้องสอบสำเร็จ' } },
         mutationFn: () => editing === 'new' ? sendFeatureData<ExamRoom>('/api/v1/admin/exam-rooms', 'POST', draft) : sendFeatureData<ExamRoom>(`/api/v1/admin/exam-rooms/${editing?.id}`, 'PATCH', draft),
@@ -393,26 +403,35 @@ export function AdminExamRoomsPage() {
         mutationFn: (id: number) => sendFeatureData<{ deleted: boolean; id: number }>(`/api/v1/admin/exam-rooms/${id}`, 'DELETE'),
         onSuccess: () => void queryClient.invalidateQueries({ queryKey: ['admin', 'exam-rooms'] }),
     });
-    function openCreate() { setDraft(blankRoom); save.reset(); setEditing('new'); }
+    function openCreate() {
+        if (!currentTerm) return;
+        setDraft({ ...blankRoom, term: currentTerm });
+        save.reset();
+        setEditing('new');
+    }
     function openEdit(room: ExamRoom) { setDraft({ term: room.term, subject_code: room.subject_code, assignment_type: room.assignment_type, start_val: room.start_val, end_val: room.end_val, room_name: room.room_name }); save.reset(); setEditing(room); }
     function confirmDelete(room: ExamRoom) { if (window.confirm(`ยืนยันลบห้องสอบ “${room.room_name}” เฉพาะอำเภอนี้หรือไม่`)) remove.mutate(room.id); }
     const columns = useMemo<ColumnDef<ExamRoom>[]>(() => [
-        { accessorKey: 'term', header: 'ภาคเรียน', size: 105, meta: { compactSize: 62, compactTextAlign: 'center' } },
-        { accessorKey: 'subject_code', header: 'รหัสวิชา', size: 120, meta: { compactSize: 74 }, cell: ({ getValue }) => <span className="font-bold text-slate-950">{getValue<string>()}</span> },
-        { accessorKey: 'assignment_type', header: 'จัดตาม', size: 150, meta: { compactSize: 82, compactTextAlign: 'center' }, cell: ({ getValue }) => getValue<string>() === 'group_range' ? 'ช่วงกลุ่มเรียน' : 'ช่วงรหัสนักศึกษา' },
-        { id: 'range', header: 'ช่วง', size: 170, meta: { compactSize: 94, compactTextAlign: 'center' }, accessorFn: (row) => `${row.start_val} - ${row.end_val}` },
-        { accessorKey: 'room_name', header: 'ห้องสอบ', size: 180, meta: { compactSize: 110 }, cell: ({ getValue }) => <span className="font-bold text-slate-950">{getValue<string>()}</span> },
+        { accessorKey: 'subject_code', header: 'รหัสวิชา', size: 110, meta: { compactSize: 74 }, cell: ({ getValue }) => <span className="font-bold text-slate-950">{getValue<string>()}</span> },
+        { accessorKey: 'assignment_type', header: 'จัดตาม', size: 135, meta: { compactSize: 82, compactTextAlign: 'center' }, cell: ({ getValue }) => getValue<string>() === 'group_range' ? 'ช่วงกลุ่มเรียน' : 'ช่วงรหัสนักศึกษา' },
+        { id: 'range', header: 'ช่วง', size: 150, meta: { compactSize: 94, compactTextAlign: 'center' }, accessorFn: (row) => `${row.start_val} - ${row.end_val}` },
+        { id: 'scope', header: 'ตำบล / ระดับชั้น', size: 185, meta: { compactSize: 120 }, accessorFn: (row) => `${row.subdistricts.join(', ')} ${row.education_levels.join(', ')}`, cell: ({ row }) => <div className="text-sm"><p className="font-bold text-slate-950">{row.original.subdistricts.length > 0 ? row.original.subdistricts.map((item) => `ตำบล${item}`).join(', ') : 'ยังระบุตำบลไม่ได้'}</p><p className="mt-0.5 text-xs text-slate-500">{row.original.education_levels.map((level) => roomMeta.education_levels?.find((item) => item.value === level)?.label ?? `ระดับ ${level}`).join(', ') || 'ยังระบุระดับไม่ได้'}</p></div> },
+        { accessorKey: 'room_name', header: 'ห้องสอบ', size: 155, meta: { compactSize: 110 }, cell: ({ getValue }) => <span className="font-bold text-slate-950">{getValue<string>()}</span> },
         { accessorKey: 'capacity', header: 'จำนวน', size: 105, meta: { compactSize: 62, compactTextAlign: 'center' }, cell: ({ getValue }) => getValue<number | null>() === null ? '-' : `${getValue<number>()?.toLocaleString('th-TH')} คน` },
-        { id: 'actions', header: 'จัดการ', size: 145, meta: { compactSize: 86, compactTextAlign: 'center' }, enableSorting: false, cell: ({ row }) => <div className="flex justify-center gap-1.5"><button type="button" onClick={() => openEdit(row.original)} className={`${secondaryButton} responsive-table-action`} aria-label={`แก้ไขห้องสอบ ${row.original.room_name}`}><PencilSimple size={15} /> <span>แก้ไข</span></button><button type="button" onClick={() => confirmDelete(row.original)} disabled={remove.isPending} className="responsive-table-action grid size-10 place-items-center rounded-full border border-rose-200 bg-white text-rose-700 hover:bg-rose-50" aria-label="ลบห้องสอบ"><Trash size={16} weight="bold" /></button></div> },
-    ], [remove.isPending]);
+        { id: 'actions', header: 'จัดการ', size: 130, meta: { compactSize: 86, compactTextAlign: 'center' }, enableSorting: false, cell: ({ row }) => <div className="flex justify-center gap-1.5"><button type="button" onClick={() => openEdit(row.original)} className={`${secondaryButton} responsive-table-action`} aria-label={`แก้ไขห้องสอบ ${row.original.room_name}`}><PencilSimple size={15} /> <span>แก้ไข</span></button><button type="button" onClick={() => confirmDelete(row.original)} disabled={remove.isPending} className="responsive-table-action grid size-10 place-items-center rounded-full border border-rose-200 bg-white text-rose-700 hover:bg-rose-50" aria-label="ลบห้องสอบ"><Trash size={16} weight="bold" /></button></div> },
+    ], [remove.isPending, roomMeta.education_levels]);
     return (
         <div>
-            <PageHeader category="จัดการการสอบ" title="ห้องสอบและช่วงผู้เข้าสอบ" description="เพิ่มและแก้ไขการจัดห้องตามช่วงกลุ่มเรียนหรือช่วงรหัสนักศึกษา โดยจำกัดเฉพาะอำเภอที่เลือก" icon={DoorOpen} actions={<button type="button" onClick={openCreate} disabled={rooms.data?.meta.read_only === true} className={primaryButton}><Plus size={17} weight="bold" /> เพิ่มห้องสอบ</button>} />
-            <div className="mb-5 grid gap-3 sm:grid-cols-3"><StatTile label="รายการห้องสอบ" value={rooms.data?.data.length ?? 0} detail="ในอำเภอที่เลือก" icon={DoorOpen} tone="sky" /><StatTile label="จำนวนรวม" value={(rooms.data?.data ?? []).reduce((sum, room) => sum + (room.capacity ?? 0), 0)} detail="คำนวณจากช่วงตัวเลข" icon={Buildings} /><StatTile label="ภาคเรียน" value={rooms.data?.data[0]?.term ?? '-'} detail="รายการล่าสุด" icon={Archive} tone="amber" /></div>
+            <PageHeader category="จัดการการสอบ" title="ห้องสอบและช่วงผู้เข้าสอบ" description="แสดงและแก้ไขเฉพาะภาคเรียนปัจจุบัน พร้อมเลือกดูเป็นรายตำบลและระดับชั้น" icon={DoorOpen} actions={<button type="button" onClick={openCreate} disabled={rooms.data?.meta.read_only === true || !currentTerm} className={primaryButton}><Plus size={17} weight="bold" /> เพิ่มห้องสอบ</button>} />
+            <div className="mb-5 grid gap-3 sm:grid-cols-3"><StatTile label="รายการห้องสอบ" value={filteredRooms.length} detail={subdistrict || educationLevel ? 'ตามตัวกรองที่เลือก' : 'ภาคเรียนปัจจุบัน'} icon={DoorOpen} tone="sky" /><StatTile label="จำนวนรวม" value={filteredRooms.reduce((sum, room) => sum + (room.capacity ?? 0), 0)} detail="คำนวณจากช่วงตัวเลข" icon={Buildings} /><StatTile label="ภาคเรียนปัจจุบัน" value={currentTerm ?? '-'} detail="อ้างอิงจากข้อมูลนักศึกษา" icon={Archive} tone="amber" /></div>
+            {!rooms.isPending && rooms.data && !currentTerm && <div role="alert" className="mb-4 rounded-2xl border border-amber-200 bg-amber-50 p-4 text-sm leading-6 text-amber-950"><p className="font-black">ยังไม่พบภาคเรียนปัจจุบัน</p><p>กรุณานำเข้าข้อมูลนักศึกษาภาคเรียนปัจจุบันก่อนเพิ่มหรือแก้ไขห้องสอบ</p></div>}
             {remove.isError && <div className="mb-4"><MutationError error={remove.error} /></div>}
-            <Panel title="รายการจัดห้องสอบ" description="การลบต้องยืนยันก่อนและบันทึก audit log">{rooms.isPending && <QuerySkeleton />}{rooms.isError && <QueryError onRetry={() => rooms.refetch()} />}{rooms.data && <DataTable data={rooms.data.data} columns={columns} minWidth="wide" />}</Panel>
+            <Panel title="รายการจัดห้องสอบ" description="เลือกตำบลและระดับชั้น แล้วกดแก้ไขในรายการที่ต้องการ">
+                {rooms.data && currentTerm && <div className="mb-5 grid gap-3 rounded-2xl border border-brand-100 bg-brand-50/60 p-4 sm:grid-cols-2"><Field label="ตำบล"><select value={subdistrict} onChange={(event) => setSubdistrict(event.target.value)} className={inputClass}><option value="">ทุกตำบล</option>{(roomMeta.subdistricts ?? []).map((item) => <option key={item} value={item}>ตำบล{item}</option>)}</select></Field><Field label="ระดับชั้น"><select value={educationLevel} onChange={(event) => setEducationLevel(event.target.value)} className={inputClass}><option value="">ทุกระดับชั้น</option>{(roomMeta.education_levels ?? []).map((item) => <option key={item.value} value={item.value}>{item.label}</option>)}</select></Field></div>}
+                {rooms.isPending && <QuerySkeleton />}{rooms.isError && <QueryError onRetry={() => rooms.refetch()} />}{rooms.data && <DataTable data={filteredRooms} columns={columns} minWidth="wide" emptyTitle="ไม่พบห้องสอบตามตัวกรอง" emptyDescription="ลองเปลี่ยนตำบลหรือระดับชั้นที่เลือก" />}
+            </Panel>
             {editing && <Modal title={editing === 'new' ? 'เพิ่มห้องสอบ' : 'แก้ไขห้องสอบ'} description="ข้อมูลจะถูกบันทึกเฉพาะอำเภอที่เลือก" onClose={() => setEditing(null)}><form onSubmit={(event) => { event.preventDefault(); save.mutate(); }} className="grid gap-4 sm:grid-cols-2">
-                <Field label="ภาคเรียน"><input required pattern="(?:[12]/(?:25)?[0-9]{2}|(?:25)?[0-9]{2}/[12])" value={draft.term} onChange={(event) => setDraft({ ...draft, term: event.target.value })} className={inputClass} placeholder="1/2569" /></Field>
+                <Field label="ภาคเรียน" hint="ระบบกำหนดจากชุดข้อมูลนักศึกษาปัจจุบัน"><input required readOnly value={draft.term} className={inputClass} /></Field>
                 <Field label="รหัสวิชา"><input required maxLength={100} value={draft.subject_code} onChange={(event) => setDraft({ ...draft, subject_code: event.target.value })} className={inputClass} /></Field>
                 <Field label="วิธีจัดช่วง"><select value={draft.assignment_type} onChange={(event) => setDraft({ ...draft, assignment_type: event.target.value as RoomDraft['assignment_type'] })} className={inputClass}><option value="group_range">ช่วงกลุ่มเรียน</option><option value="student_range">ช่วงรหัสนักศึกษา</option></select></Field>
                 <Field label="ชื่อห้องสอบ"><input required maxLength={100} value={draft.room_name} onChange={(event) => setDraft({ ...draft, room_name: event.target.value })} className={inputClass} /></Field>

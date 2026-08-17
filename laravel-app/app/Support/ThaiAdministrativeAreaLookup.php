@@ -12,6 +12,9 @@ final class ThaiAdministrativeAreaLookup
     /** @var array<string, array{subdistrict: string, district: string, province: string}>|null */
     private ?array $loadedAreas = null;
 
+    /** @var array<string, list<string>> */
+    private array $subdistrictsByDistrict = [];
+
     /** @return array{subdistrict: string, district: string, province: string}|null */
     public function resolve(?string $code): ?array
     {
@@ -21,6 +24,34 @@ final class ThaiAdministrativeAreaLookup
         }
 
         return $this->areas()[$digits] ?? null;
+    }
+
+    /** @return list<string> */
+    public function subdistrictsForDistrict(?string $district): array
+    {
+        $districtName = $this->normalizeDistrictName($district);
+        if ($districtName === '') {
+            return [];
+        }
+        if (array_key_exists($districtName, $this->subdistrictsByDistrict)) {
+            return $this->subdistrictsByDistrict[$districtName];
+        }
+
+        $subdistricts = [];
+        foreach ($this->areas() as $area) {
+            if ($this->normalizeDistrictName($area['district']) !== $districtName) {
+                continue;
+            }
+            $name = trim($area['subdistrict']);
+            if ($name !== '') {
+                $subdistricts[$name] = true;
+            }
+        }
+        $names = array_keys($subdistricts);
+        usort($names, static fn (string $left, string $right): int => mb_strlen($right) <=> mb_strlen($left)
+            ?: strnatcasecmp($left, $right));
+
+        return $this->subdistrictsByDistrict[$districtName] = $names;
     }
 
     /** @return array<string, array{subdistrict: string, district: string, province: string}> */
@@ -71,5 +102,13 @@ final class ThaiAdministrativeAreaLookup
         }
 
         return $areas;
+    }
+
+    private function normalizeDistrictName(?string $district): string
+    {
+        $value = trim((string) $district);
+        $value = preg_replace('/^(?:อำเภอ|เขต)\s*/u', '', $value) ?? $value;
+
+        return preg_replace('/\s+/u', '', $value) ?? $value;
     }
 }

@@ -2,6 +2,8 @@
 
 namespace Tests\Feature\Admin;
 
+use App\Domain\Students\Models\Student;
+use App\Domain\Students\Repositories\StudentRepository;
 use App\Models\District;
 use App\Models\User;
 use Illuminate\Database\Schema\Blueprint;
@@ -126,6 +128,9 @@ final class AdminWriteScopeTest extends TestCase
 
     public function test_exam_room_writes_are_scoped_and_audited_in_system_database(): void
     {
+        $this->bindStudents([
+            $this->studentForTerm($this->sena, '6650100001', 2, '15', 'กศน.ตำบลเสนา', '1/2569'),
+        ]);
         Sanctum::actingAs($this->senaAdmin);
         $created = $this->postJson('/api/v1/admin/exam-rooms', [
             'term' => '1/2569',
@@ -143,9 +148,80 @@ final class AdminWriteScopeTest extends TestCase
             'auditable_type' => 'system_exam_room',
         ]);
 
+        $this->patchJson("/api/v1/admin/exam-rooms/{$roomId}", [
+            'term' => '1/2569',
+            'subject_code' => 'ทช21001',
+            'assignment_type' => 'group_range',
+            'start_val' => '1',
+            'end_val' => '30',
+            'room_name' => 'ห้อง 102',
+        ])->assertOk()->assertJsonPath('data.room_name', 'ห้อง 102');
+
         $this->deleteJson("/api/v1/admin/exam-rooms/{$roomId}")
             ->assertOk()
             ->assertJsonPath('data.deleted', true);
+    }
+
+    public function test_exam_room_page_uses_only_current_term_and_exposes_subdistrict_and_level_scopes(): void
+    {
+        $this->bindStudents([
+            $this->studentForTerm($this->sena, '6650100001', 2, '15', 'กศน.ตำบลเสนา', '1/2569'),
+            $this->studentForTerm($this->sena, '6750100002', 3, '40', 'กศน.ตำบลบ้านแพน', '1/2569'),
+            $this->studentForTerm($this->sena, '6550100003', 1, '60', 'กศน.ตำบลเจ้าเจ็ด', '2/2568'),
+        ]);
+        $currentRoom = DB::table('exam_rooms')->insertGetId([
+            'district_id' => $this->sena->id,
+            'term' => '69/1',
+            'subject_code' => 'ทช21001',
+            'assignment_type' => 'group_range',
+            'start_val' => '1',
+            'end_val' => '30',
+            'room_name' => 'ห้องปัจจุบัน',
+            'created_at' => now(),
+            'updated_at' => now(),
+        ]);
+        $historicalRoom = DB::table('exam_rooms')->insertGetId([
+            'district_id' => $this->sena->id,
+            'term' => '2/2568',
+            'subject_code' => 'ทช21001',
+            'assignment_type' => 'group_range',
+            'start_val' => '1',
+            'end_val' => '30',
+            'room_name' => 'ห้องย้อนหลัง',
+            'created_at' => now(),
+            'updated_at' => now(),
+        ]);
+
+        Sanctum::actingAs($this->senaAdmin);
+        $this->getJson('/api/v1/admin/exam-rooms')
+            ->assertOk()
+            ->assertJsonPath('meta.current_term', '1/2569')
+            ->assertJsonCount(1, 'data')
+            ->assertJsonPath('data.0.id', $currentRoom)
+            ->assertJsonPath('data.0.education_levels.0', 2)
+            ->assertJsonPath('data.0.subdistricts.0', 'เสนา')
+            ->assertJsonFragment(['บ้านแพน'])
+            ->assertJsonMissing(['room_name' => 'ห้องย้อนหลัง']);
+
+        $payload = [
+            'term' => '1/2569',
+            'subject_code' => 'ทช21001',
+            'assignment_type' => 'group_range',
+            'start_val' => '1',
+            'end_val' => '30',
+            'room_name' => 'ห้ามแก้ย้อนหลัง',
+        ];
+        $this->patchJson("/api/v1/admin/exam-rooms/{$historicalRoom}", $payload)->assertNotFound();
+        $this->postJson('/api/v1/admin/exam-rooms', [...$payload, 'term' => '2/2568'])
+            ->assertUnprocessable()
+            ->assertJsonValidationErrors('term');
+        $this->postJson('/api/v1/admin/exam-rooms', [
+            ...$payload,
+            'assignment_type' => 'student_range',
+            'start_val' => '12141200006821000068',
+            'end_val' => '12141200006821000095',
+            'room_name' => 'ห้องรหัสยาว',
+        ])->assertCreated()->assertJsonPath('data.capacity', 28);
     }
 
     public function test_super_admin_can_manage_the_explicitly_selected_district(): void
@@ -166,6 +242,49 @@ final class AdminWriteScopeTest extends TestCase
             ->assertOk()
             ->assertJsonFragment(['username' => 'other.teacher'])
             ->assertJsonMissing(['username' => 'sena.admin']);
+    }
+
+    /** @param list<Student> $students */
+    private function bindStudents(array $students): void
+    {
+        $repository = $this->createMock(StudentRepository::class);
+        $repository->method('students')->willReturn($students);
+        $this->app->instance(StudentRepository::class, $repository);
+    }
+
+    private function studentForTerm(
+        District $district,
+        string $code,
+        int $level,
+        string $groupCode,
+        string $groupName,
+        string $term,
+    ): Student {
+        return new Student(
+            code: $code,
+            districtId: (int) $district->id,
+            districtName: (string) $district->name,
+            prefix: 'นาย',
+            firstName: 'ผู้เรียน',
+            lastName: $code,
+            level: $level,
+            levelLabel: match ($level) {
+                1 => 'ประถมศึกษา',
+                2 => 'มัธยมศึกษาตอนต้น',
+                default => 'มัธยมศึกษาตอนปลาย',
+            },
+            groupCode: $groupCode,
+            groupName: $groupName,
+            enrollmentTerm: $term,
+            currentTerm: $term,
+            status: 'active',
+            statusLabel: 'กำลังศึกษา',
+            gpax: 0,
+            creditsEarned: 0,
+            creditsRequired: 0,
+            kpchHours: 0,
+            moralResult: '',
+        );
     }
 
     public function test_admin_can_delete_only_import_batch_from_own_system_database_scope(): void

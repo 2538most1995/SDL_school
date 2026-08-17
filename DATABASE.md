@@ -66,7 +66,7 @@ Successful ZIP/DBF imports create physical names such as `db_import_{timestamp}_
 - District scope is mandatory for admin/teacher reads and writes.
 - Latest student data is resolved from the latest successful registered batch for the same district; cross-district fallback is not allowed.
 - Student repository batches grade/activity/moral aggregates by table set and student codes; it does not query one grade/activity record per student.
-- `exam_rooms` lookup uses district + term and matches exact/wildcard subject plus group/student ranges.
+- `exam_rooms` lookup uses district + term and matches exact/wildcard subject plus group/student ranges. หน้า admin จำกัดรายการและการเขียนไว้ที่ภาคเรียนปัจจุบันจาก roster ล่าสุด พร้อมคำนวณขอบเขตตำบล/ระดับชั้นจากช่วงเดิมโดยไม่เพิ่มคอลัมน์ซ้ำในตาราง
 - `import_batches.import_history_id` must remain aligned with both district and batch key.
 
 ## Index notes
