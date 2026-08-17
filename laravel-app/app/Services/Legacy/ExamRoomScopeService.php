@@ -24,6 +24,8 @@ final class ExamRoomScopeService
      *     term: string|null,
      *     student_targets: list<array{values: list<string>, education_level: int, subdistrict: string|null}>,
      *     group_targets: list<array{values: list<string>, education_level: int, subdistrict: string|null}>,
+     *     student_index: array<string, array{education_levels: list<int>, subdistricts: list<string>}>,
+     *     group_index: array<string, array{education_levels: list<int>, subdistricts: list<string>}>,
      *     subdistricts: list<string>,
      *     education_levels: list<array{value: int, label: string}>
      * }
@@ -78,6 +80,8 @@ final class ExamRoomScopeService
             'term' => $currentTerm,
             'student_targets' => $studentTargets,
             'group_targets' => array_values($groupTargets),
+            'student_index' => $this->targetIndex($studentTargets),
+            'group_index' => $this->targetIndex(array_values($groupTargets)),
             'subdistricts' => $subdistricts,
             'education_levels' => array_map(
                 static fn (int $value, string $label): array => ['value' => $value, 'label' => $label],
@@ -93,16 +97,25 @@ final class ExamRoomScopeService
      */
     public function forRoom(object $room, array $districtScope): array
     {
-        $targets = (string) $room->assignment_type === 'group_range'
-            ? $districtScope['group_targets']
-            : $districtScope['student_targets'];
+        $groupRange = (string) $room->assignment_type === 'group_range';
+        $targets = $groupRange ? $districtScope['group_targets'] : $districtScope['student_targets'];
+        $index = $groupRange ? $districtScope['group_index'] : $districtScope['student_index'];
+        $start = trim((string) $room->start_val);
+        $end = trim((string) $room->end_val);
+        $effectiveEnd = $end === '' ? $start : $end;
+        if (! $this->isWildcard($start) && ! $this->isWildcard($effectiveEnd)
+            && $this->targetKey($start) === $this->targetKey($effectiveEnd)
+            && isset($index[$this->targetKey($start)])) {
+            return $index[$this->targetKey($start)];
+        }
+
         $levels = [];
         $subdistricts = [];
         foreach ($targets as $target) {
             $matches = array_filter($target['values'], fn (string $value): bool => $this->matchValue(
                 $value,
-                (string) $room->start_val,
-                (string) $room->end_val,
+                $start,
+                $effectiveEnd,
             ));
             if ($matches === []) {
                 continue;
@@ -124,6 +137,9 @@ final class ExamRoomScopeService
 
     public function rangeCapacity(string $start, string $end): ?int
     {
+        if (trim($end) === '') {
+            $end = $start;
+        }
         $start = ltrim(trim($start), '0') ?: '0';
         $end = ltrim(trim($end), '0') ?: '0';
         if (! ctype_digit($start) || ! ctype_digit($end)
@@ -153,6 +169,39 @@ final class ExamRoomScopeService
         }
 
         return (int) $difference + 1;
+    }
+
+    /**
+     * @param  list<array{values: list<string>, education_level: int, subdistrict: string|null}>  $targets
+     * @return array<string, array{education_levels: list<int>, subdistricts: list<string>}>
+     */
+    private function targetIndex(array $targets): array
+    {
+        $index = [];
+        foreach ($targets as $target) {
+            foreach ($target['values'] as $value) {
+                $key = $this->targetKey($value);
+                if ($key === '') {
+                    continue;
+                }
+                $index[$key] ??= ['education_levels' => [], 'subdistricts' => []];
+                if (in_array($target['education_level'], [1, 2, 3], true)) {
+                    $index[$key]['education_levels'][$target['education_level']] = true;
+                }
+                if ($target['subdistrict'] !== null) {
+                    $index[$key]['subdistricts'][$target['subdistrict']] = true;
+                }
+            }
+        }
+
+        return array_map(static function (array $scope): array {
+            $levels = array_map('intval', array_keys($scope['education_levels']));
+            sort($levels);
+            $subdistricts = array_keys($scope['subdistricts']);
+            sort($subdistricts, SORT_NATURAL | SORT_FLAG_CASE);
+
+            return ['education_levels' => $levels, 'subdistricts' => $subdistricts];
+        }, $index);
     }
 
     /** @param list<string> $subdistrictNames */
@@ -213,5 +262,22 @@ final class ExamRoomScopeService
         }
 
         return strnatcasecmp($value, $start) >= 0 && strnatcasecmp($value, $end) <= 0;
+    }
+
+    private function isWildcard(string $value): bool
+    {
+        return $value === '' || $value === '*' || strtolower($value) === 'all';
+    }
+
+    private function targetKey(string $value): string
+    {
+        $value = trim($value);
+        if ($value === '') {
+            return '';
+        }
+
+        return ctype_digit($value)
+            ? 'number:'.(ltrim($value, '0') ?: '0')
+            : 'text:'.mb_strtolower($value, 'UTF-8');
     }
 }

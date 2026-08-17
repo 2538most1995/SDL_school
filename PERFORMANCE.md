@@ -95,7 +95,7 @@
 | User directory query count | `1 + N` | `1` | static review + `LegacyPortalReadPerformanceTest` (1 user) |
 | Overview duplicate assignment query | duplicated in same request | one load/reuse | source review; Not benchmarked |
 | Exam-room queries | per unique subject (+ fallback) | one per district + term | source review; Not benchmarked |
-| Admin exam-room scope | ทุกภาคเรียนสูงสุด 500 รายการและไม่มีขอบเขตตำบล/ระดับ | เฉพาะภาคเรียนปัจจุบันสูงสุด 2,000 รายการ; จัดกลุ่ม candidate ของกลุ่มเรียนก่อนเทียบช่วง; query ภาคเรียนย้อนหลังเฉพาะเมื่อรายการปัจจุบันว่าง และ insert carry-forward ทีละ 500 แถว | feature test; live workload Not benchmarked |
+| Admin exam-room scope | ทุกภาคเรียนสูงสุด 500 รายการและไม่มีขอบเขตตำบล/ระดับ | เฉพาะภาคเรียนปัจจุบันสูงสุด 5,000 รายการ; exact student/group assignment ใช้ index ในหน่วยความจำแทนการวนทุก candidate; query ภาคเรียนย้อนหลังเฉพาะเมื่อรายการปัจจุบันว่าง และ insert carry-forward ทีละ 500 แถว | feature test; live workload Not benchmarked |
 | Database time | Not benchmarked | Not benchmarked | live MySQL unavailable |
 | Response time | Not benchmarked | Not benchmarked | live workload unavailable |
 | Memory usage | Not benchmarked | Not benchmarked | live workload unavailable |

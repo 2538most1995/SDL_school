@@ -48,7 +48,7 @@ final class ExamRoomController extends Controller
             ->where('district_id', $districtId)
             ->whereIn('term', AcademicTerm::variants($scope['term']))
             ->orderBy('subject_code')->orderBy('room_name')
-            ->limit(2000)->get()->map(fn (object $row): array => $this->payload(
+            ->limit(5000)->get()->map(fn (object $row): array => $this->payload(
                 $row,
                 $this->scope->forRoom($row, $scope),
             ))->all();
@@ -91,18 +91,22 @@ final class ExamRoomController extends Controller
                 ->get(['subject_code', 'assignment_type', 'start_val', 'end_val', 'room_name']);
             $now = now();
             foreach ($sourceRows->chunk(500) as $chunk) {
-                $this->write()->table('exam_rooms')->insert($chunk->map(static fn (object $row): array => [
-                    'district_id' => $districtId,
-                    'import_batch_id' => null,
-                    'term' => $currentTerm,
-                    'subject_code' => (string) $row->subject_code,
-                    'assignment_type' => (string) $row->assignment_type,
-                    'start_val' => (string) $row->start_val,
-                    'end_val' => (string) $row->end_val,
-                    'room_name' => (string) $row->room_name,
-                    'created_at' => $now,
-                    'updated_at' => $now,
-                ])->all());
+                $this->write()->table('exam_rooms')->insert($chunk->map(static function (object $row) use ($districtId, $currentTerm, $now): array {
+                    $start = (string) $row->start_val;
+                    $end = trim((string) $row->end_val);
+
+                    return [
+                        'district_id' => $districtId,
+                        'term' => $currentTerm,
+                        'subject_code' => (string) $row->subject_code,
+                        'assignment_type' => (string) $row->assignment_type,
+                        'start_val' => $start,
+                        'end_val' => $end === '' ? $start : $end,
+                        'room_name' => (string) $row->room_name,
+                        'created_at' => $now,
+                        'updated_at' => $now,
+                    ];
+                })->all());
             }
 
             return [

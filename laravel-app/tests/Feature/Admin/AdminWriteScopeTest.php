@@ -231,15 +231,15 @@ final class AdminWriteScopeTest extends TestCase
         ]);
         foreach ([
             ['term' => '1/2568', 'subject_code' => 'เก่า10001', 'room_name' => 'ห้องเก่ากว่า'],
-            ['term' => '68/2', 'subject_code' => 'ทช21001', 'room_name' => 'ห้อง 101'],
+            ['term' => '68/2', 'subject_code' => 'ทช21001', 'room_name' => 'ห้อง 101', 'assignment_type' => 'student_range', 'start_val' => '6950100001', 'end_val' => null],
             ['term' => '2/2568', 'subject_code' => 'คณ21001', 'room_name' => 'ห้อง 102'],
         ] as $room) {
             DB::table('exam_rooms')->insert([
                 ...$room,
                 'district_id' => $this->sena->id,
-                'assignment_type' => 'group_range',
-                'start_val' => '1',
-                'end_val' => '30',
+                'assignment_type' => $room['assignment_type'] ?? 'group_range',
+                'start_val' => $room['start_val'] ?? '1',
+                'end_val' => array_key_exists('end_val', $room) ? $room['end_val'] : '30',
                 'created_at' => now(),
                 'updated_at' => now(),
             ]);
@@ -277,6 +277,7 @@ final class AdminWriteScopeTest extends TestCase
             'term' => '1/2569',
             'subject_code' => 'ทช21001',
             'room_name' => 'ห้อง 101',
+            'end_val' => '6950100001',
             'import_batch_id' => null,
         ]);
         $this->assertDatabaseHas('exam_rooms', [
@@ -299,9 +300,49 @@ final class AdminWriteScopeTest extends TestCase
         $this->getJson('/api/v1/admin/exam-rooms')
             ->assertOk()
             ->assertJsonCount(2, 'data')
+            ->assertJsonFragment([
+                'subject_code' => 'ทช21001',
+                'capacity' => 1,
+                'education_levels' => [2],
+                'subdistricts' => ['เสนา'],
+            ])
             ->assertJsonPath('meta.carry_forward.available', false);
         $this->postJson('/api/v1/admin/exam-rooms/carry-forward')->assertConflict();
         $this->assertDatabaseCount('exam_rooms', 6);
+    }
+
+    public function test_exam_room_page_handles_more_than_two_thousand_exact_current_term_assignments(): void
+    {
+        $students = [];
+        $rooms = [];
+        $now = now();
+        foreach (range(1, 2250) as $index) {
+            $studentCode = sprintf('69501%08d', $index);
+            $students[] = $this->studentForTerm($this->sena, $studentCode, 2, '15', 'กศน.ตำบลเสนา', '1/2569');
+            $rooms[] = [
+                'district_id' => $this->sena->id,
+                'term' => '1/2569',
+                'subject_code' => 'ทช21001',
+                'assignment_type' => 'student_range',
+                'start_val' => $studentCode,
+                'end_val' => $studentCode,
+                'room_name' => 'ห้อง '.str_pad((string) $index, 4, '0', STR_PAD_LEFT),
+                'created_at' => $now,
+                'updated_at' => $now,
+            ];
+        }
+        $this->bindStudents($students);
+        foreach (array_chunk($rooms, 500) as $chunk) {
+            DB::table('exam_rooms')->insert($chunk);
+        }
+
+        Sanctum::actingAs($this->senaAdmin);
+        $this->getJson('/api/v1/admin/exam-rooms')
+            ->assertOk()
+            ->assertJsonCount(2250, 'data')
+            ->assertJsonPath('data.0.capacity', 1)
+            ->assertJsonPath('data.0.education_levels.0', 2)
+            ->assertJsonPath('data.0.subdistricts.0', 'เสนา');
     }
 
     public function test_super_admin_can_manage_the_explicitly_selected_district(): void
