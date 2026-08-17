@@ -264,6 +264,16 @@ final class AdminWriteScopeTest extends TestCase
             ['sub_code' => 'คณ21001', 'semestry' => '1/2569', '_perf_sub' => 'คณ21001', '_perf_semestry' => '1/2569'],
             ['sub_code' => 'เก่า10001', 'semestry' => '68/2', '_perf_sub' => 'เก่า10001', '_perf_semestry' => '68/2'],
         ]);
+        $subjectTable = 'db_'.$batch.'_2_subject';
+        Schema::create($subjectTable, function (Blueprint $table): void {
+            $table->id();
+            $table->string('_perf_sub')->index();
+            $table->string('sub_name');
+        });
+        DB::table($subjectTable)->insert([
+            ['_perf_sub' => 'ทช21001', 'sub_name' => 'เศรษฐกิจพอเพียง'],
+            ['_perf_sub' => 'คณ21001', 'sub_name' => 'คณิตศาสตร์'],
+        ]);
         $gradeTable = 'db_'.$batch.'_2_grade';
         Schema::create($gradeTable, function (Blueprint $table): void {
             $table->id();
@@ -357,6 +367,7 @@ final class AdminWriteScopeTest extends TestCase
             ->assertJsonCount(2, 'data')
             ->assertJsonFragment([
                 'subject_code' => 'ทช21001',
+                'subject_name' => 'เศรษฐกิจพอเพียง',
                 'capacity' => 1,
                 'education_levels' => [2],
                 'groups' => ['15'],

@@ -34,6 +34,7 @@ final class ExamRoomController extends Controller
             $filters = $request->validate(['date' => ['nullable', 'date_format:Y-m-d']]);
             $items = array_map(static fn (array $item): array => [
                 ...$item,
+                'subject_name' => (string) ($item['subject_name'] ?? $item['subject_code'] ?? ''),
                 'education_levels' => $item['education_levels'] ?? [],
                 'groups' => $item['groups'] ?? [],
             ], $demo->examRooms($filters['date'] ?? null));
@@ -58,6 +59,7 @@ final class ExamRoomController extends Controller
         $districtId = $this->districtId($request);
         $scope = $this->scope->forDistrict($districtId);
         $viewerGroups = $this->viewerGroupValues($request, $scope);
+        $subjectNames = $this->scheduleSource->subjectNamesForDistrict($districtId);
         $items = $scope['term'] === null ? [] : $this->read()->table('exam_rooms')
             ->where('district_id', $districtId)
             ->whereIn('term', AcademicTerm::variants($scope['term']))
@@ -65,6 +67,7 @@ final class ExamRoomController extends Controller
             ->limit(5000)->get()->map(fn (object $row): array => $this->payload(
                 $row,
                 $this->scope->forRoom($row, $scope),
+                $subjectNames[(string) $row->subject_code] ?? null,
             ))->all();
         if ($viewerGroups !== null) {
             $items = array_values(array_filter(
@@ -310,13 +313,14 @@ final class ExamRoomController extends Controller
     }
 
     /** @return array<string, mixed> */
-    private function payload(object $row, array $scopes = ['education_levels' => [], 'groups' => []]): array
+    private function payload(object $row, array $scopes = ['education_levels' => [], 'groups' => []], ?string $subjectName = null): array
     {
         return [
             'id' => (int) $row->id,
             'district_id' => (int) $row->district_id,
             'term' => (string) $row->term,
             'subject_code' => (string) $row->subject_code,
+            'subject_name' => trim((string) $subjectName) ?: (string) $row->subject_code,
             'assignment_type' => (string) $row->assignment_type,
             'start_val' => (string) $row->start_val,
             'end_val' => (string) $row->end_val,

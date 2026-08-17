@@ -20,6 +20,7 @@ import {
     useReactTable,
     type Column,
     type ColumnDef,
+    type Header,
     type PaginationState,
     type RowData,
     type SortingState,
@@ -74,6 +75,85 @@ function getCompactColumnSize<T>(column: Column<T, unknown>): number {
     if (/นักศึกษา|ชื่อผู้ใช้งาน|รายวิชา|รายการ|กิจกรรม|กลุ่ม|พื้นที่|ห้องสอบ/.test(key)) return 136;
 
     return Math.max(58, Math.min(column.getSize(), 128));
+}
+
+function TableHeaderLabel<T>({ header, compactTable }: { header: Header<T, unknown>; compactTable: boolean }) {
+    const content = (
+        <>
+            <Box
+                component="span"
+                sx={{
+                    display: compactTable && isActionColumn(header.column) ? 'none' : 'block',
+                    minWidth: compactTable ? 0 : 'max-content',
+                    overflow: compactTable ? 'hidden' : 'visible',
+                    overflowWrap: 'normal',
+                    textOverflow: 'clip',
+                    whiteSpace: compactTable ? 'normal' : 'nowrap',
+                    textAlign: compactTable ? 'center' : 'start',
+                    ...(compactTable ? {
+                        '@media (min-width:1024px)': {
+                            display: 'block',
+                            minWidth: 'max-content',
+                            overflow: 'visible',
+                            whiteSpace: 'nowrap',
+                            textAlign: 'start',
+                        },
+                    } : {}),
+                }}
+            >
+                {compactTable && header.column.columnDef.meta?.compactHeader ? (
+                    <>
+                        <Box component="span" sx={{ display: 'block', '@media (min-width:1024px)': { display: 'none' } }}>
+                            {header.column.columnDef.meta.compactHeader}
+                        </Box>
+                        <Box component="span" sx={{ display: 'none', '@media (min-width:1024px)': { display: 'block' } }}>
+                            {flexRender(header.column.columnDef.header, header.getContext())}
+                        </Box>
+                    </>
+                ) : flexRender(header.column.columnDef.header, header.getContext())}
+            </Box>
+            {header.column.getCanSort() && (
+                <Box component="span" sx={{ display: compactTable ? 'none' : 'inline-flex', ml: 0.5, flexShrink: 0, '@media (min-width:1024px)': { display: 'inline-flex' } }}>
+                    {header.column.getIsSorted() === 'asc'
+                        ? <CaretUp size={13} />
+                        : header.column.getIsSorted() === 'desc'
+                            ? <CaretDown size={13} />
+                            : <CaretUpDown size={13} />}
+                </Box>
+            )}
+        </>
+    );
+    const sx = {
+        display: 'inline-flex',
+        alignItems: 'center',
+        width: compactTable ? '100%' : 'max-content',
+        minWidth: compactTable ? 0 : 'max-content',
+        justifyContent: compactTable ? 'center' : 'flex-start',
+        px: 0,
+        overflow: compactTable ? 'hidden' : 'visible',
+        color: 'inherit',
+        fontWeight: 700,
+        fontSize: compactTable ? '0.58rem' : '0.875rem',
+        lineHeight: compactTable ? 1.3 : 1.5,
+        whiteSpace: compactTable ? 'normal' : 'nowrap',
+        letterSpacing: 0,
+        ...(compactTable ? {
+            '@media (min-width:640px)': { fontSize: '0.66rem' },
+            '@media (min-width:1024px)': {
+                width: 'max-content',
+                minWidth: 'max-content',
+                justifyContent: 'flex-start',
+                overflow: 'visible',
+                fontSize: '0.875rem',
+                lineHeight: 1.5,
+                whiteSpace: 'nowrap',
+            },
+        } : {}),
+    };
+
+    return header.column.getCanSort()
+        ? <Button variant="text" size="small" onClick={header.column.getToggleSortingHandler()} sx={sx}>{content}</Button>
+        : <Box sx={sx}>{content}</Box>;
 }
 
 export function DataTable<T>({
@@ -208,92 +288,7 @@ export function DataTable<T>({
                                         }}
                                     >
                                         {header.isPlaceholder ? null : (
-                                            <Button
-                                                variant="text"
-                                                size="small"
-                                                disabled={!header.column.getCanSort()}
-                                                onClick={header.column.getToggleSortingHandler()}
-                                                sx={{
-                                                    width: compactTable ? '100%' : 'max-content',
-                                                    minWidth: compactTable ? 0 : 'max-content',
-                                                    justifyContent: compactTable ? 'center' : 'flex-start',
-                                                    px: 0,
-                                                    overflow: compactTable ? 'hidden' : 'visible',
-                                                    color: 'inherit',
-                                                    fontWeight: 700,
-                                                    fontSize: compactTable ? '0.58rem' : '0.875rem',
-                                                    lineHeight: compactTable ? 1.3 : 1.5,
-                                                    whiteSpace: compactTable ? 'normal' : 'nowrap',
-                                                    letterSpacing: 0,
-                                                    '&.Mui-disabled': {
-                                                        color: 'inherit',
-                                                        opacity: 1,
-                                                    },
-                                                    ...(compactTable ? {
-                                                        '@media (min-width:640px)': { fontSize: '0.66rem' },
-                                                        '@media (min-width:1024px)': {
-                                                            width: 'max-content',
-                                                            minWidth: 'max-content',
-                                                            justifyContent: 'flex-start',
-                                                            overflow: 'visible',
-                                                            fontSize: '0.875rem',
-                                                            lineHeight: 1.5,
-                                                            whiteSpace: 'nowrap',
-                                                        },
-                                                    } : {}),
-                                                }}
-                                            >
-                                                <Box
-                                                    component="span"
-                                                    sx={{
-                                                        display: compactTable && isActionColumn(header.column) ? 'none' : 'block',
-                                                        minWidth: compactTable ? 0 : 'max-content',
-                                                        overflow: compactTable ? 'hidden' : 'visible',
-                                                        overflowWrap: compactTable ? 'normal' : 'normal',
-                                                        textOverflow: 'clip',
-                                                        whiteSpace: compactTable ? 'normal' : 'nowrap',
-                                                        textAlign: compactTable ? 'center' : 'start',
-                                                        ...(compactTable ? {
-                                                            '@media (min-width:1024px)': {
-                                                                display: 'block',
-                                                                minWidth: 'max-content',
-                                                                overflow: 'visible',
-                                                                overflowWrap: 'normal',
-                                                                whiteSpace: 'nowrap',
-                                                                textAlign: 'start',
-                                                            },
-                                                        } : {}),
-                                                    }}
-                                                >
-                                                    {compactTable && header.column.columnDef.meta?.compactHeader ? (
-                                                        <>
-                                                            <Box component="span" sx={{ display: 'block', '@media (min-width:1024px)': { display: 'none' } }}>
-                                                                {header.column.columnDef.meta.compactHeader}
-                                                            </Box>
-                                                            <Box component="span" sx={{ display: 'none', '@media (min-width:1024px)': { display: 'block' } }}>
-                                                                {flexRender(header.column.columnDef.header, header.getContext())}
-                                                            </Box>
-                                                        </>
-                                                    ) : flexRender(header.column.columnDef.header, header.getContext())}
-                                                </Box>
-                                                {header.column.getCanSort() && (
-                                                    <Box
-                                                        component="span"
-                                                        sx={{
-                                                            display: compactTable ? 'none' : 'inline-flex',
-                                                            ml: 0.5,
-                                                            flexShrink: 0,
-                                                            '@media (min-width:1024px)': { display: 'inline-flex' },
-                                                        }}
-                                                    >
-                                                        {header.column.getIsSorted() === 'asc'
-                                                            ? <CaretUp size={13} />
-                                                            : header.column.getIsSorted() === 'desc'
-                                                                ? <CaretDown size={13} />
-                                                                : <CaretUpDown size={13} />}
-                                                    </Box>
-                                                )}
-                                            </Button>
+                                            <TableHeaderLabel header={header} compactTable={compactTable} />
                                         )}
                                     </TableCell>
                                 ))}

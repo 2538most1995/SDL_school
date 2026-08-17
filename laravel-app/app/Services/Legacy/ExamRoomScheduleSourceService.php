@@ -89,6 +89,38 @@ final class ExamRoomScheduleSourceService
         return $rows;
     }
 
+    /** @return array<string, string> */
+    public function subjectNamesForDistrict(int $districtId): array
+    {
+        $batchKey = $this->activeBatchKey($districtId);
+        if ($batchKey === null) {
+            return [];
+        }
+        $connection = $this->database->connection();
+        $schema = $connection->getSchemaBuilder();
+        $subjects = [];
+        foreach ([1, 2, 3] as $level) {
+            $table = $this->tableFor($batchKey, $level, 'subject');
+            if ($table === null) {
+                continue;
+            }
+            $codeColumn = $schema->hasColumn($table, '_perf_sub') ? '_perf_sub' : ($schema->hasColumn($table, 'sub_code') ? 'sub_code' : null);
+            $nameColumn = $schema->hasColumn($table, 'sub_name') ? 'sub_name' : ($schema->hasColumn($table, 'subject_name') ? 'subject_name' : null);
+            if ($codeColumn === null || $nameColumn === null) {
+                continue;
+            }
+            foreach ($connection->table($table)->get([$codeColumn, $nameColumn]) as $record) {
+                $code = trim((string) $record->{$codeColumn});
+                $name = trim((string) $record->{$nameColumn});
+                if ($code !== '' && $name !== '') {
+                    $subjects[$code] ??= $name;
+                }
+            }
+        }
+
+        return $subjects;
+    }
+
     /** @return array<int, array<string, list<string>>> */
     private function currentStudentCodes(int $districtId, string $currentTerm): array
     {
@@ -189,7 +221,7 @@ final class ExamRoomScheduleSourceService
 
     private function tableFor(string $batchKey, int $level, string $type): ?string
     {
-        if (! in_array($level, [1, 2, 3], true) || ! in_array($type, ['grade', 'schedule'], true)) {
+        if (! in_array($level, [1, 2, 3], true) || ! in_array($type, ['grade', 'schedule', 'subject'], true)) {
             return null;
         }
         $expected = 'db_'.$batchKey.'_'.$level.'_'.$type;
