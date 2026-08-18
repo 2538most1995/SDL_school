@@ -17,8 +17,9 @@
         .exam-table th, .exam-table td { border: 0.3mm solid #1e293b; padding: 2.2mm 1.3mm; text-align: center; vertical-align: middle; }
         .exam-table th { background: #f8fafc; font-weight: bold; font-size: 16pt; }
         .exam-table td.subject { text-align: left; }
+        .exam-table td.time-cell { white-space: nowrap; }
         .exam-table .empty { height: 38mm; color: #64748b; font-size: 16pt; text-align: center; }
-        .w-no { width: 8mm; } .w-term { width: 18mm; } .w-subject { width: 48mm; } .w-date { width: 31mm; } .w-time { width: 25mm; } .w-place { width: 28mm; } .w-room { width: 22mm; }
+        .w-no { width: 7mm; } .w-term { width: 14mm; } .w-subject { width: 47mm; } .w-date { width: 29mm; } .w-time { width: 31mm; } .w-place { width: 32mm; } .w-room { width: 20mm; }
         .footer { margin-top: 4mm; text-align: right; color: #64748b; font-size: 11pt; }
     </style>
 </head>
@@ -50,7 +51,7 @@
             <tbody>
             @forelse ($document['rows'] as $index => $row)
                 <tr>
-                    <td>{{ $index + 1 }}</td><td>{!! $pdfText($row['term']) !!}</td><td class="subject"><strong>{!! $pdfText($row['subject_code']) !!}</strong> {!! $pdfText($row['subject_name']) !!}</td><td>{!! $pdfText($row['exam_date_display']) !!}</td><td>{!! $pdfText($row['start_time']) !!}-{!! $pdfText($row['end_time']) !!} น.</td><td>{!! $pdfText($row['location']) !!}</td><td>{!! $pdfText($row['room']) !!}</td>
+                    <td>{{ $index + 1 }}</td><td>{!! $pdfText($row['term']) !!}</td><td class="subject"><strong>{!! $pdfText($row['subject_code']) !!}</strong> {!! $pdfText($row['subject_name']) !!}</td><td>{!! $pdfText($row['exam_date_display']) !!}</td><td class="time-cell">{!! $pdfText($row['start_time']) !!}-{!! $pdfText($row['end_time']) !!} น.</td><td>{!! $pdfText($row['location']) !!}</td><td>{!! $pdfText($row['room']) !!}</td>
                 </tr>
             @empty
                 <tr><td colspan="7" class="empty">ยังไม่พบตารางสอบในภาคเรียนปัจจุบัน รอเจ้าหน้าที่อัปเดตข้อมูล</td></tr>
