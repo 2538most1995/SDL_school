@@ -378,27 +378,48 @@ export function DataTable<T>({
                         role="article"
                         key={row.id}
                         sx={{
-                            p: 2.25,
+                            p: 2,
                             borderColor: 'divider',
                             borderRadius: '16px',
                             bgcolor: 'color-mix(in srgb, var(--ui-surface-muted) 84%, var(--ui-surface))',
-                            boxShadow: '0 8px 20px rgb(var(--ui-shadow) / 0.055)',
+                            boxShadow: '0 4px 12px rgb(var(--ui-shadow) / 0.05)',
                         }}
                     >
-                        <Box component="dl" sx={{ display: 'grid', gap: 2, m: 0 }}>
+                        <Box component="dl" sx={{ display: 'grid', gap: 1.5, m: 0 }}>
                             {row.getVisibleCells().map((cell) => {
                                 const header = cell.column.columnDef.header;
+                                const isAction = isActionColumn(cell.column);
+
+                                if (isAction) {
+                                    return (
+                                        <Box
+                                            key={cell.id}
+                                            sx={{
+                                                gridColumn: '1 / -1',
+                                                borderTop: '1px solid',
+                                                borderColor: 'divider',
+                                                pt: 1.5,
+                                                mt: 0.5,
+                                            }}
+                                        >
+                                            <Box component="dd" sx={{ minWidth: 0, m: 0, overflow: 'visible', color: 'text.primary' }}>
+                                                {flexRender(cell.column.columnDef.cell, cell.getContext())}
+                                            </Box>
+                                        </Box>
+                                    );
+                                }
+
                                 return (
                                     <Box
                                         key={cell.id}
                                         sx={{
                                             display: 'grid',
-                                            gridTemplateColumns: 'minmax(0, .8fr) minmax(0, 1.2fr)',
-                                            gap: 2,
+                                            gridTemplateColumns: 'minmax(0, .75fr) minmax(0, 1.25fr)',
+                                            gap: 1.5,
                                             alignItems: 'start',
                                         }}
                                     >
-                                        <Typography component="dt" variant="caption" color="text.secondary" sx={{ fontWeight: 700 }}>
+                                        <Typography component="dt" variant="caption" color="text.secondary" sx={{ fontWeight: 700, fontSize: '0.8125rem' }}>
                                             {typeof header === 'string' ? header : ''}
                                         </Typography>
                                         <Box component="dd" sx={{ minWidth: 0, m: 0, overflow: 'hidden', color: 'text.primary', fontSize: '0.875rem', lineHeight: 1.5 }}>

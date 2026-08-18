@@ -402,7 +402,7 @@ export function StudentsPage() {
             meta: { compactSize: 180, compactTextAlign: 'center' },
             enableSorting: false,
             cell: ({ row }) => (
-                <div className="flex flex-nowrap items-center justify-center gap-1.5 whitespace-nowrap">
+                <div className="flex flex-wrap items-center justify-start sm:justify-center gap-1.5">
                     <Link
                         to={`/students/${encodeURIComponent(String(row.original.id))}`}
                         className="responsive-table-action inline-flex shrink-0 items-center gap-1.5 whitespace-nowrap rounded-lg border border-brand-200 bg-brand-50 px-2.5 py-1.5 text-xs font-bold text-brand-800 hover:bg-brand-100 active:scale-[0.98]"
@@ -494,7 +494,7 @@ export function StudentsPage() {
             <Panel title="รายชื่อนักศึกษา" description={pagination ? `แสดง ${pagination.from ?? 0}-${pagination.to ?? 0} จากทั้งหมด ${pagination.total} คน · แสดงข้อมูลตามสิทธิ์และกลุ่มที่รับผิดชอบ` : 'ข้อมูลส่วนบุคคลละเอียดจะแสดงตามสิทธิ์ของผู้ใช้งาน'}>
                 <div className={`mb-5 grid gap-3 md:grid-cols-2 ${canFilterGroups ? 'xl:grid-cols-[minmax(300px,1.5fr)_minmax(200px,0.8fr)_minmax(240px,1fr)]' : 'xl:grid-cols-[minmax(300px,1.5fr)_minmax(200px,0.8fr)]'}`}>
                     <Field label="ค้นหา">
-                        <Input value={search} onChange={(_, data) => setSearch(data.value)} contentBefore={<MagnifyingGlass size={18} aria-hidden="true" />} placeholder="ชื่อ รหัส เลขบัตร หรือกลุ่ม" size="large" />
+                        <Input value={search} onChange={(_, data) => setSearch(data.value)} contentBefore={<MagnifyingGlass size={18} aria-hidden="true" />} placeholder="ชื่อ รหัส หรือกลุ่ม" size="large" />
                     </Field>
                     <Field label="ระดับการศึกษา">
                         <Select value={level} onChange={(_, data) => setLevel(data.value)} size="large">
@@ -514,7 +514,7 @@ export function StudentsPage() {
                 {(search || level || group) && <Button type="button" appearance="subtle" onClick={resetFilters} className="mb-4">ล้างตัวกรองทั้งหมด</Button>}
                 {students.isPending && <QuerySkeleton />}
                 {students.isError && <QueryError onRetry={() => students.refetch()} />}
-                {students.data && <DataTable data={rows} columns={columns} pageSize={perPage} showPagination={false} minWidth="wide" emptyTitle="ไม่พบนักศึกษา" emptyDescription="ลองเปลี่ยนคำค้น ระดับ หรือกลุ่มเรียน" />}
+                {students.data && <DataTable data={rows} columns={columns} pageSize={perPage} showPagination={false} minWidth="wide" responsiveMode="cards" emptyTitle="ไม่พบนักศึกษา" emptyDescription="ลองเปลี่ยนคำค้น ระดับ หรือกลุ่มเรียน" />}
                 {pagination && <Pagination currentPage={pagination.current_page} totalPages={pagination.last_page} totalItems={pagination.total} pageSize={perPage} itemLabel="คน" disabled={students.isFetching} onPageChange={setPage} onPageSizeChange={(nextPageSize) => { setPerPage(nextPageSize); setPage(1); }} />}
             </Panel>
             {editingSocialStudent && (
