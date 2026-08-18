@@ -45,13 +45,13 @@ final class ExamScheduleDocumentController extends Controller
         $pdfParams['disposition'] = 'attachment';
         $pdfParams['signature'] = $this->signatureFor($pdfParams);
 
-        $viewUrl = $this->documentUrl($request, 'view', $params);
-        $pdfUrl = $this->documentUrl($request, 'pdf', $pdfParams);
+        $directPdfUrl = $this->documentUrl($request, 'pdf', $params);
+        $downloadPdfUrl = $this->documentUrl($request, 'pdf', $pdfParams);
 
         return response()->json([
             'data' => [
-                'url' => $viewUrl,
-                'pdf_url' => $pdfUrl,
+                'url' => $directPdfUrl,
+                'pdf_url' => $downloadPdfUrl,
             ],
         ]);
     }

@@ -93,36 +93,30 @@ final class ExamSchedulePdfTest extends TestCase
         $response = $this->getJson('/api/v1/learning/exam-schedule/signed-url?scope=student&student=6650100001');
         $response->assertOk()->assertJsonStructure(['data' => ['url', 'pdf_url']]);
 
-        $viewUrl = (string) $response->json('data.url');
+        $inlinePdfUrl = (string) $response->json('data.url');
         $pdfUrl = (string) $response->json('data.pdf_url');
-        $this->assertNotEmpty($viewUrl);
+        $this->assertNotEmpty($inlinePdfUrl);
         $this->assertNotEmpty($pdfUrl);
-        $this->assertStringStartsWith('/learning/schedule/view?', $viewUrl);
+        $this->assertStringStartsWith('/learning/schedule/pdf?', $inlinePdfUrl);
         $this->assertStringStartsWith('/learning/schedule/pdf?', $pdfUrl);
-        $this->assertStringContainsString('signature=', $viewUrl);
+        $this->assertStringContainsString('signature=', $inlinePdfUrl);
         $this->assertStringContainsString('signature=', $pdfUrl);
 
         // Unauthenticate and test that accessing the signed URLs succeeds without session
         auth()->forgetGuards();
         $this->app['auth']->forgetGuards();
 
-        $htmlResponse = $this->get($viewUrl);
-        $htmlResponse->assertOk()
-            ->assertHeader('Content-Type', 'text/html; charset=UTF-8')
-            ->assertSee('ตารางสอบ')
-            ->assertSee('6650100001');
+        $inlinePdfResponse = $this->get($inlinePdfUrl);
+        $inlinePdfResponse->assertOk()
+            ->assertHeader('Content-Type', 'application/pdf');
+        $this->assertStringStartsWith('inline;', (string) $inlinePdfResponse->headers->get('Content-Disposition'));
+        $this->assertStringStartsWith('%PDF-', (string) $inlinePdfResponse->getContent());
 
         $pdfResponse = $this->get($pdfUrl);
         $pdfResponse->assertOk()
             ->assertHeader('Content-Type', 'application/pdf');
         $this->assertStringStartsWith('attachment;', (string) $pdfResponse->headers->get('Content-Disposition'));
         $this->assertStringStartsWith('%PDF-', (string) $pdfResponse->getContent());
-
-        preg_match('/href="([^"]+)" class="btn btn-outline"/', (string) $htmlResponse->getContent(), $downloadLink);
-        $this->assertArrayHasKey(1, $downloadLink);
-        $this->get(html_entity_decode($downloadLink[1], ENT_QUOTES | ENT_HTML5))
-            ->assertOk()
-            ->assertHeader('Content-Type', 'application/pdf');
     }
 
     public function test_signed_document_urls_preserve_the_deployment_subdirectory(): void
@@ -134,11 +128,11 @@ final class ExamSchedulePdfTest extends TestCase
         ])->getJson('/api/v1/learning/exam-schedule/signed-url?scope=student&student=6650100001');
 
         $response->assertOk();
-        $this->assertStringStartsWith('/SDL_school/learning/schedule/view?', (string) $response->json('data.url'));
+        $this->assertStringStartsWith('/SDL_school/learning/schedule/pdf?', (string) $response->json('data.url'));
         $this->assertStringStartsWith('/SDL_school/learning/schedule/pdf?', (string) $response->json('data.pdf_url'));
     }
 
-    public function test_html_view_shows_friendly_error_when_student_not_found(): void
+    public function test_pdf_endpoint_returns_404_when_student_not_found(): void
     {
         $user = $this->viewer('admin');
         Sanctum::actingAs($user);
@@ -146,15 +140,12 @@ final class ExamSchedulePdfTest extends TestCase
         $response = $this->getJson('/api/v1/learning/exam-schedule/signed-url?scope=student&student=9999999999');
         $response->assertOk();
 
-        $viewUrl = (string) $response->json('data.url');
+        $pdfUrl = (string) $response->json('data.url');
         auth()->forgetGuards();
         $this->app['auth']->forgetGuards();
 
-        $htmlResponse = $this->get($viewUrl);
-        $htmlResponse->assertOk()
-            ->assertHeader('Content-Type', 'text/html; charset=UTF-8')
-            ->assertSee('ไม่พบข้อมูลตารางสอบ')
-            ->assertSee('9999999999');
+        $pdfResponse = $this->get($pdfUrl);
+        $pdfResponse->assertNotFound();
     }
 
     /** @param list<string> $groups */
