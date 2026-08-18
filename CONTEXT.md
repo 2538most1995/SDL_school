@@ -42,6 +42,7 @@ District scope is resolved by `ResolveDistrictContext`; role checks are enforced
 13. Authenticated learning routes run an idempotent additive readiness check so a Git-only shared-hosting deploy can repair missing learning/audit tables or columns before the first read/write; normal deployments still run migrations.
 14. งานที่มอบหมายเลือกได้เฉพาะรายวิชาลงทะเบียนในภาคเรียนปัจจุบันและขอบเขตกลุ่มของครู; ครูแนบลิงก์ PDF หรือรูปภาพ private storage เป็นเอกสารประกอบงานได้ นักศึกษาในกลุ่มจึงเห็นชื่อ คำชี้แจง และเอกสารก่อนส่งงาน; การส่งงานใช้ `student_code` จากชุดข้อมูลผู้เรียนปัจจุบัน รองรับลิงก์ PDF หรือรูปภาพหลายไฟล์ และครูเห็น/ตรวจได้เฉพาะงานที่ตนสร้างภายในอำเภอ
 15. หน้าจัดการห้องสอบอ่านและเขียนได้เฉพาะภาคเรียนปัจจุบันที่ได้จากชุดข้อมูลนักศึกษาล่าสุดของอำเภอ; รายการย้อนหลังแก้ไขหรือลบผ่าน endpoint นี้ไม่ได้ และ UI จำแนกช่วงห้องสอบตามตำบล/ระดับชั้นจากนักศึกษาที่ช่วงนั้นครอบคลุม หากภาคเรียนปัจจุบันยังว่าง ผู้ดูแลนำค่าห้องจากตารางสอบของชุดนำเข้าปัจจุบันมาใช้ได้ โดยใช้ลำดับเดียวกับหน้าตารางสอบ (`GRADE.roomno` → ห้องใน `SCHEDULE` → `ห้อง 1`) และระบบป้องกันการนำเข้าซ้ำ
+16. หน้าตารางสอบบนมือถือและ LINE in-app browser เปิดเอกสาร HTML แบบ standalone ผ่าน signed URL ในแท็บเดิม เพื่อไม่พึ่ง PDF blob, iframe หรือ popup ที่ browser ภายในแอปอาจบล็อก; การพิมพ์และดาวน์โหลด PDF ยังใช้ลิงก์ signed แยกกันและรักษา user/district/role scope เดิม
 
 ## Request/data flow
 

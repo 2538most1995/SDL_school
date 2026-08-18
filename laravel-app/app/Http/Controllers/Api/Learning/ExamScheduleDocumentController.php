@@ -10,12 +10,12 @@ use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Http\Response;
 use Illuminate\Support\Facades\File;
-use Illuminate\Support\Facades\URL;
 use Illuminate\Validation\Rule;
 use Mpdf\Config\ConfigVariables;
 use Mpdf\Config\FontVariables;
 use Mpdf\Mpdf;
 use Mpdf\Output\Destination;
+use Symfony\Component\HttpKernel\Exception\HttpExceptionInterface;
 
 final class ExamScheduleDocumentController extends Controller
 {
@@ -39,12 +39,13 @@ final class ExamScheduleDocumentController extends Controller
             'expires' => (string) now()->addHours(24)->timestamp,
         ], static fn ($v) => $v !== null && $v !== '');
 
-        $signedPayload = $this->signedPayload($params);
-        $signature = hash_hmac('sha256', 'exam-schedule:'.http_build_query($signedPayload), (string) config('app.key'));
-        $params['signature'] = $signature;
+        $params['signature'] = $this->signatureFor($params);
+        $pdfParams = $params;
+        $pdfParams['disposition'] = 'attachment';
+        $pdfParams['signature'] = $this->signatureFor($pdfParams);
 
-        $viewUrl = url('/learning/schedule/view').'?'.http_build_query($params);
-        $pdfUrl = url('/learning/schedule/pdf').'?'.http_build_query($params);
+        $viewUrl = $this->documentUrl($request, 'view', $params);
+        $pdfUrl = $this->documentUrl($request, 'pdf', $pdfParams);
 
         return response()->json([
             'data' => [
@@ -63,7 +64,8 @@ final class ExamScheduleDocumentController extends Controller
 
             $pdfParams = $request->query();
             $pdfParams['disposition'] = 'attachment';
-            $selection['pdfDownloadUrl'] = url('/learning/schedule/pdf').'?'.http_build_query($pdfParams);
+            $pdfParams['signature'] = $this->signatureFor($pdfParams);
+            $selection['pdfDownloadUrl'] = $this->documentUrl($request, 'pdf', $pdfParams);
 
             return response()->view('print.exam-schedule-view', $selection, 200, [
                 ...$this->privateHeaders(),
@@ -71,7 +73,7 @@ final class ExamScheduleDocumentController extends Controller
             ]);
         } catch (\Throwable $e) {
             $message = $e->getMessage() ?: 'ไม่สามารถแสดงตารางสอบได้';
-            if ($e instanceof \Symfony\Component\HttpKernel\Exception\HttpExceptionInterface && $e->getStatusCode() === 404) {
+            if ($e instanceof HttpExceptionInterface && $e->getStatusCode() === 404) {
                 $message = 'ไม่พบข้อมูลตารางสอบของนักศึกษา หรือยังไม่มีการประกาศตารางสอบในภาคเรียนนี้';
             }
 
@@ -184,6 +186,24 @@ final class ExamScheduleDocumentController extends Controller
         ksort($payload);
 
         return $payload;
+    }
+
+    /** @param array<string, mixed> $query */
+    private function signatureFor(array $query): string
+    {
+        return hash_hmac(
+            'sha256',
+            'exam-schedule:'.http_build_query($this->signedPayload($query)),
+            (string) config('app.key'),
+        );
+    }
+
+    /** @param array<string, mixed> $query */
+    private function documentUrl(Request $request, string $document, array $query): string
+    {
+        $basePath = rtrim($request->getBaseUrl(), '/');
+
+        return "{$basePath}/learning/schedule/{$document}?".http_build_query($query);
     }
 
     private function resolveDistrict(Request $request, User $user): void

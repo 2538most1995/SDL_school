@@ -97,6 +97,8 @@ final class ExamSchedulePdfTest extends TestCase
         $pdfUrl = (string) $response->json('data.pdf_url');
         $this->assertNotEmpty($viewUrl);
         $this->assertNotEmpty($pdfUrl);
+        $this->assertStringStartsWith('/learning/schedule/view?', $viewUrl);
+        $this->assertStringStartsWith('/learning/schedule/pdf?', $pdfUrl);
         $this->assertStringContainsString('signature=', $viewUrl);
         $this->assertStringContainsString('signature=', $pdfUrl);
 
@@ -113,7 +115,14 @@ final class ExamSchedulePdfTest extends TestCase
         $pdfResponse = $this->get($pdfUrl);
         $pdfResponse->assertOk()
             ->assertHeader('Content-Type', 'application/pdf');
+        $this->assertStringStartsWith('attachment;', (string) $pdfResponse->headers->get('Content-Disposition'));
         $this->assertStringStartsWith('%PDF-', (string) $pdfResponse->getContent());
+
+        preg_match('/href="([^"]+)" class="btn btn-outline"/', (string) $htmlResponse->getContent(), $downloadLink);
+        $this->assertArrayHasKey(1, $downloadLink);
+        $this->get(html_entity_decode($downloadLink[1], ENT_QUOTES | ENT_HTML5))
+            ->assertOk()
+            ->assertHeader('Content-Type', 'application/pdf');
     }
 
     public function test_html_view_shows_friendly_error_when_student_not_found(): void
