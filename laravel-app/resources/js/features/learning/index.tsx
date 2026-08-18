@@ -531,20 +531,29 @@ function ExamSchedulePage() {
         return Array.from(unique.values()).sort((left, right) => left.label.localeCompare(right.label, 'th'));
     }, [level, students.data?.data]);
     const needle = search.trim().toLocaleLowerCase('th-TH');
-    const options = (students.data?.data ?? []).filter((student) => {
-        const matchesLevel = level === '' || student.level.id === Number(level);
-        const matchesGroup = group === '' || group === student.group.code || group === student.group.name;
-        return matchesLevel && matchesGroup && `${student.code} ${student.full_name} ${student.group.name}`.toLocaleLowerCase('th-TH').includes(needle);
-    });
+    const options = useMemo(() => {
+        const list = (students.data?.data ?? []).filter((student) => {
+            const matchesLevel = level === '' || student.level.id === Number(level);
+            const matchesGroup = group === '' || group === student.group.code || group === student.group.name;
+            return matchesLevel && matchesGroup && `${student.code} ${student.full_name} ${student.group.name}`.toLocaleLowerCase('th-TH').includes(needle);
+        });
+        if (studentCode !== '' && !list.some((item) => item.code === studentCode) && schedule.data?.data.student?.name) {
+            const s = schedule.data.data.student;
+            list.unshift({
+                code: s.code,
+                full_name: s.name,
+                level: { id: 0, label: s.level },
+                group: { code: '', name: s.group },
+            } as unknown as ExamStudentOption);
+        }
+        return list;
+    }, [students.data?.data, level, group, needle, studentCode, schedule.data?.data.student]);
     useEffect(() => {
         if (studentCode === '' && students.data?.data.length === 1) setParams({ student: students.data.data[0].code }, { replace: true });
     }, [setParams, studentCode, students.data?.data]);
     useEffect(() => {
         if (group !== '' && !groupOptions.some((item) => item.value === group)) setGroup('');
     }, [group, groupOptions]);
-    useEffect(() => {
-        if (!autoGenerate && studentCode !== '' && students.data && !options.some((student) => student.code === studentCode)) setParams({}, { replace: true });
-    }, [autoGenerate, options, setParams, studentCode, students.data]);
     useEffect(() => () => { if (pdfUrl) URL.revokeObjectURL(pdfUrl); }, [pdfUrl]);
 
     const canGenerate = scope === 'student' ? studentCode !== '' : scope === 'group' ? level !== '' && group !== '' : level !== '';
@@ -592,7 +601,10 @@ function ExamSchedulePage() {
         void generatePdf();
     }, [autoGenerate, scope, studentCode]);
 
-    const selectedStudent = (students.data?.data ?? []).find((student) => student.code === studentCode);
+    const studentFromList = (students.data?.data ?? []).find((student) => student.code === studentCode);
+    const selectedStudentName = studentFromList?.full_name ?? schedule.data?.data.student?.name ?? '';
+    const selectedStudentLevel = studentFromList?.level?.label ?? schedule.data?.data.student?.level ?? '';
+    const selectedStudentGroup = studentFromList?.group?.name ?? schedule.data?.data.student?.group ?? '';
     const scheduleRows = schedule.data?.data.rows ?? [];
     const scheduleColumns = useMemo<ColumnDef<ExamScheduleRow>[]>(() => [
         { accessorKey: 'exam_date_display', header: 'วันสอบ', size: 135, meta: { compactSize: 82, compactTextAlign: 'center' } },
@@ -605,13 +617,30 @@ function ExamSchedulePage() {
 
     return <div>
         <PageHeader category="learning" title="ตารางสอบ" description={autoGenerate ? 'ระบบสร้างไฟล์ PDF ตารางสอบของนักศึกษารายนี้ให้อัตโนมัติ' : 'สร้างไฟล์ PDF ด้วย mPDF และฟอนต์ TH Sarabun New แบบรายคน รายกลุ่ม หรือรายระดับชั้น'} icon={Clock} />
+
+        {isInAppBrowser && (
+            <div className="mb-5 rounded-2xl border border-emerald-300 bg-emerald-50/90 p-4 text-emerald-950 shadow-sm">
+                <div className="flex items-start gap-3">
+                    <span className="text-2xl shrink-0" role="img" aria-label="LINE">📱</span>
+                    <div className="min-w-0">
+                        <p className="font-bold text-emerald-900 text-sm">
+                            เปิดใช้งานผ่านเบราว์เซอร์ของแอป LINE
+                        </p>
+                        <p className="mt-1 text-xs leading-5 text-emerald-800">
+                            ท่านสามารถดูข้อมูลตารางสอบ วัน เวลา สนามสอบ และห้องสอบบนหน้านี้ได้โดยตรง หากต้องการพิมพ์หรือดาวน์โหลดไฟล์ PDF กรุณากดปุ่ม <strong>"เปิดใน Safari / Chrome"</strong>
+                        </p>
+                    </div>
+                </div>
+            </div>
+        )}
+
         <Panel title={autoGenerate ? 'ตารางสอบรายบุคคล' : 'ตัวกรองและขอบเขตการพิมพ์'} description={autoGenerate ? `รหัสนักศึกษา ${studentCode}` : 'รายชื่อและกลุ่มเรียนถูกจำกัดตามอำเภอและขอบเขตที่บัญชีของคุณรับผิดชอบ'}>
             {autoGenerate ? (
                 <div className="flex items-center gap-3 rounded-xl border border-sky-200 bg-sky-50 p-4 text-sky-950">
                     <span className="grid size-10 shrink-0 place-items-center rounded-lg bg-white text-sky-700 shadow-sm"><Printer size={20} weight="bold" aria-hidden="true" /></span>
                     <div className="min-w-0">
-                        <p className="font-bold">{selectedStudent?.full_name ?? 'กำลังสร้างตารางสอบรายบุคคล'}</p>
-                        <p className="mt-0.5 text-sm text-sky-800">{studentCode}{selectedStudent ? ` • ${selectedStudent.level.label} • ${selectedStudent.group.name}` : ''}</p>
+                        <p className="font-bold">{selectedStudentName || 'กำลังสร้างตารางสอบรายบุคคล'}</p>
+                        <p className="mt-0.5 text-sm text-sky-800">{studentCode}{selectedStudentLevel ? ` • ${selectedStudentLevel}` : ''}{selectedStudentGroup ? ` • ${selectedStudentGroup}` : ''}</p>
                     </div>
                 </div>
             ) : <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
@@ -632,7 +661,7 @@ function ExamSchedulePage() {
                 </>}
             </div>
         </Panel>
-        {scope === 'student' && studentCode !== '' && <Panel title="ตารางสอบจากฐานข้อมูลระบบ" description={`${selectedStudent?.full_name ?? studentCode} · ภาคเรียน ${schedule.data?.data.term || '-'}`}>
+        {scope === 'student' && studentCode !== '' && <Panel title="ตารางสอบจากฐานข้อมูลระบบ" description={`${selectedStudentName || studentCode} · ภาคเรียน ${schedule.data?.data.term || '-'}`}>
             {schedule.isPending && <QuerySkeleton rows={5} />}
             {schedule.isError && <QueryError onRetry={() => schedule.refetch()} />}
             {!schedule.isPending && scheduleRows.length === 0 && <p role="status" className="rounded-xl border border-amber-200 bg-amber-50 p-4 text-center text-sm font-bold leading-6 text-amber-950">{EXAM_SCHEDULE_EMPTY_MESSAGE}</p>}
