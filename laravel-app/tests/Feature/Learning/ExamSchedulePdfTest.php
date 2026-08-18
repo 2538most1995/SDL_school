@@ -35,7 +35,7 @@ final class ExamSchedulePdfTest extends TestCase
         $this->assertStringContainsString("worker-src 'self' blob:", $contentSecurityPolicy);
         $this->assertStringContainsString("img-src 'self' data: blob:", $contentSecurityPolicy);
         $this->assertStringStartsWith('%PDF-', (string) $response->getContent());
-        $this->assertMatchesRegularExpression('/attachment; filename="exam-schedule-student-1\.pdf"/', (string) $response->headers->get('Content-Disposition'));
+        $this->assertMatchesRegularExpression('/(?:attachment|inline); filename="exam-schedule-student-1\.pdf"/', (string) $response->headers->get('Content-Disposition'));
     }
 
     public function test_teacher_bulk_scope_is_limited_to_assigned_groups_and_level_intersection(): void

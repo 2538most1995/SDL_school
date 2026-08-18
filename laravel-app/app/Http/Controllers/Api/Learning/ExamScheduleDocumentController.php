@@ -59,11 +59,12 @@ final class ExamScheduleDocumentController extends Controller
         $mpdf->WriteHTML(view('pdf.exam-schedules', $selection)->render());
         $content = $mpdf->Output('', Destination::STRING_RETURN);
         $filename = $this->filename($filters, $selection['count']);
+        $disposition = $request->query('disposition') === 'attachment' ? 'attachment' : 'inline';
 
         return response($content, 200, [
             ...$this->privateHeaders(),
             'Content-Type' => 'application/pdf',
-            'Content-Disposition' => "attachment; filename=\"{$filename}\"",
+            'Content-Disposition' => "{$disposition}; filename=\"{$filename}\"",
             'Content-Length' => (string) strlen($content),
         ]);
     }
@@ -76,6 +77,7 @@ final class ExamScheduleDocumentController extends Controller
             'student' => ['nullable', 'string', 'max:64', 'required_if:scope,student'],
             'group' => ['nullable', 'string', 'max:120', 'required_if:scope,group'],
             'level' => ['nullable', 'integer', Rule::in([1, 2, 3]), 'required_if:scope,group,level'],
+            'disposition' => ['nullable', 'string', Rule::in(['inline', 'attachment'])],
         ]);
     }
 

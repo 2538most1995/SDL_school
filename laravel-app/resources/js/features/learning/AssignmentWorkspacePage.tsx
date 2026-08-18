@@ -201,6 +201,8 @@ function AuthenticatedAttachment({
     const [opening, setOpening] = useState(false);
     const [error, setError] = useState('');
     const [previewUrl, setPreviewUrl] = useState<string | null>(null);
+    const isInAppBrowser = typeof navigator !== 'undefined' && /(Line\/|FBAN|FBAV|Instagram|MicroMessenger)/i.test(navigator.userAgent);
+    const directUrl = `${url}${url.includes('?') ? '&' : '?'}openExternalBrowser=1`;
 
     useEffect(() => () => {
         if (previewUrl) URL.revokeObjectURL(previewUrl);
@@ -246,8 +248,23 @@ function AuthenticatedAttachment({
                         : <iframe src={previewUrl} title={`เอกสาร ${filename}`} className="h-full min-h-[65dvh] w-full rounded-xl bg-white" />}
                 </div>
                 <footer className="flex shrink-0 flex-wrap justify-end gap-2 border-t border-slate-200 bg-white p-3 sm:p-4">
-                    <a href={previewUrl} target="_blank" rel="noopener noreferrer" className="inline-flex h-11 items-center gap-2 rounded-xl border border-slate-300 px-4 text-sm font-bold text-slate-700"><ArrowSquareOut size={18} /> เปิดเต็มหน้าจอ</a>
-                    <a href={previewUrl} download={filename} className="inline-flex h-11 items-center gap-2 rounded-xl bg-brand-700 px-4 text-sm font-bold text-white"><DownloadSimple size={18} /> ดาวน์โหลด</a>
+                    <a
+                        href={isInAppBrowser ? directUrl : previewUrl}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="inline-flex h-11 items-center gap-2 rounded-xl border border-slate-300 px-4 text-sm font-bold text-slate-700 hover:bg-slate-50"
+                    >
+                        <ArrowSquareOut size={18} /> {isInAppBrowser ? 'เปิดใน Safari / Chrome' : 'เปิดเต็มหน้าจอ'}
+                    </a>
+                    <a
+                        href={isInAppBrowser ? `${directUrl}&disposition=attachment` : previewUrl}
+                        download={filename}
+                        target={isInAppBrowser ? '_blank' : undefined}
+                        rel={isInAppBrowser ? 'noopener noreferrer' : undefined}
+                        className="inline-flex h-11 items-center gap-2 rounded-xl bg-brand-700 px-4 text-sm font-bold text-white hover:bg-brand-800"
+                    >
+                        <DownloadSimple size={18} /> ดาวน์โหลด
+                    </a>
                 </footer>
             </section>
         </div>}
