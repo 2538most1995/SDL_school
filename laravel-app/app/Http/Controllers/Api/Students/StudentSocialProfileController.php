@@ -4,9 +4,11 @@ namespace App\Http\Controllers\Api\Students;
 
 use App\Domain\Students\Services\StudentDirectoryService;
 use App\Http\Resources\Students\StudentDetailResource;
+use Illuminate\Database\Schema\Blueprint;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Schema;
 
 final class StudentSocialProfileController extends StudentsApiController
 {
@@ -14,6 +16,8 @@ final class StudentSocialProfileController extends StudentsApiController
 
     public function update(Request $request, string $student): JsonResponse
     {
+        $this->ensureTableExists();
+
         $viewer = $request->user();
         $record = $this->directory->findAccessible($viewer, $student);
         abort_if($record === null, 404, 'ไม่พบข้อมูลนักศึกษาหรือไม่มีสิทธิ์เข้าถึง');
@@ -45,7 +49,7 @@ final class StudentSocialProfileController extends StudentsApiController
         );
 
         try {
-            if (\Illuminate\Support\Facades\Schema::hasTable('audit_logs')) {
+            if (Schema::hasTable('audit_logs')) {
                 DB::table('audit_logs')->insert([
                     'user_id' => $viewer->id,
                     'district_id' => $record->districtId,
@@ -73,5 +77,26 @@ final class StudentSocialProfileController extends StudentsApiController
                 'message' => 'บันทึกช่องทางติดต่อ Facebook และ LINE สำเร็จ',
             ]),
         ])->header('Cache-Control', 'private, no-store');
+    }
+
+    private function ensureTableExists(): void
+    {
+        try {
+            if (! Schema::hasTable('student_social_profiles')) {
+                Schema::create('student_social_profiles', function (Blueprint $table): void {
+                    $table->id();
+                    $table->unsignedBigInteger('district_id')->index();
+                    $table->string('student_code', 32)->index();
+                    $table->string('facebook_url', 500)->nullable();
+                    $table->string('line_id', 255)->nullable();
+                    $table->unsignedBigInteger('updated_by_user_id')->nullable();
+                    $table->timestamps();
+
+                    $table->unique(['district_id', 'student_code'], 'student_social_identity');
+                });
+            }
+        } catch (\Throwable) {
+            // In case of concurrent creation or schema race condition
+        }
     }
 }

@@ -398,14 +398,26 @@ export function StudentsPage() {
         { accessorKey: 'gender', header: 'เพศ', size: 75, meta: { compactSize: 42, compactTextAlign: 'center' } },
         {
             id: 'details',
-            header: 'รายละเอียด / ติดต่อ',
-            size: 270,
-            meta: { compactSize: 96, compactTextAlign: 'center' },
+            header: 'รายละเอียด / จัดการ',
+            size: 340,
+            meta: { compactSize: 160, compactTextAlign: 'center' },
             enableSorting: false,
             cell: ({ row }) => (
-                <div className="flex flex-wrap items-center justify-center gap-1.5">
-                    <Link to={`/students/${encodeURIComponent(String(row.original.id))}`} className="responsive-table-action inline-flex items-center gap-1.5 whitespace-nowrap rounded-lg border border-brand-200 bg-brand-50 px-2.5 py-1.5 text-xs font-bold text-brand-800 hover:bg-brand-100 active:scale-[0.98]" aria-label={`เปิดรายละเอียด ${row.original.name}`}>
+                <div className="flex flex-nowrap items-center justify-center gap-1.5 whitespace-nowrap">
+                    <Link
+                        to={`/students/${encodeURIComponent(String(row.original.id))}`}
+                        className="responsive-table-action inline-flex shrink-0 items-center gap-1.5 whitespace-nowrap rounded-lg border border-brand-200 bg-brand-50 px-2.5 py-1.5 text-xs font-bold text-brand-800 hover:bg-brand-100 active:scale-[0.98]"
+                        aria-label={`เปิดรายละเอียด ${row.original.name}`}
+                    >
                         <Eye size={15} weight="bold" /> <span>เปิดดู</span>
+                    </Link>
+
+                    <Link
+                        to={`/learning/schedule?student=${encodeURIComponent(String(row.original.id))}&auto=1`}
+                        className="responsive-table-action inline-flex shrink-0 items-center gap-1.5 whitespace-nowrap rounded-lg border border-sky-200 bg-sky-50 px-2.5 py-1.5 text-xs font-bold text-sky-800 hover:bg-sky-100 active:scale-[0.98]"
+                        aria-label={`สร้างตารางสอบ ${row.original.name}`}
+                    >
+                        <Printer size={15} weight="bold" /> <span>ตารางสอบ</span>
                     </Link>
 
                     {row.original.social?.facebook_url && (
@@ -413,7 +425,7 @@ export function StudentsPage() {
                             href={row.original.social.facebook_url}
                             target="_blank"
                             rel="noopener noreferrer"
-                            className="inline-flex items-center gap-1 whitespace-nowrap rounded-lg border border-[#1877F2]/30 bg-[#1877F2]/10 px-2 py-1.5 text-xs font-bold text-[#1877F2] hover:bg-[#1877F2]/20 active:scale-[0.98]"
+                            className="inline-flex shrink-0 items-center gap-1 whitespace-nowrap rounded-lg border border-[#1877F2]/30 bg-[#1877F2]/10 px-2 py-1.5 text-xs font-bold text-[#1877F2] hover:bg-[#1877F2]/20 active:scale-[0.98]"
                             title={`เปิด Facebook: ${row.original.social.facebook_raw || row.original.name}`}
                             aria-label={`Facebook ของ ${row.original.name}`}
                         >
@@ -427,7 +439,7 @@ export function StudentsPage() {
                             href={row.original.social.line_url ?? `https://line.me/ti/p/~${row.original.social.line_id}`}
                             target="_blank"
                             rel="noopener noreferrer"
-                            className="inline-flex items-center gap-1 whitespace-nowrap rounded-lg border border-[#06C755]/30 bg-[#06C755]/10 px-2 py-1.5 text-xs font-bold text-[#059639] hover:bg-[#06C755]/20 active:scale-[0.98]"
+                            className="inline-flex shrink-0 items-center gap-1 whitespace-nowrap rounded-lg border border-[#06C755]/30 bg-[#06C755]/10 px-2 py-1.5 text-xs font-bold text-[#059639] hover:bg-[#06C755]/20 active:scale-[0.98]"
                             title={`เปิด LINE ID: ${row.original.social.line_id}`}
                             aria-label={`LINE ของ ${row.original.name}`}
                         >
@@ -444,20 +456,14 @@ export function StudentsPage() {
                                 name: row.original.name,
                                 social: row.original.social,
                             })}
-                            className="inline-flex items-center gap-1 whitespace-nowrap rounded-lg border border-slate-200 bg-slate-50 px-2 py-1.5 text-xs font-bold text-slate-700 hover:bg-slate-100 hover:text-slate-900 active:scale-[0.98]"
+                            className="inline-flex shrink-0 items-center gap-1 whitespace-nowrap rounded-lg border border-slate-200 bg-slate-50 px-2 py-1.5 text-xs font-bold text-slate-700 hover:bg-slate-100 hover:text-slate-900 active:scale-[0.98]"
                             title="แก้ไข / เพิ่ม Facebook & LINE"
                             aria-label={`แก้ไขโซเชียล ${row.original.name}`}
                         >
                             <PencilSimple size={14} weight="bold" />
-                            {(!row.original.social?.facebook_url && !row.original.social?.line_id) && (
-                                <span className="text-[11px] text-slate-600">+โซเชียล</span>
-                            )}
+                            <span>{row.original.social?.facebook_url || row.original.social?.line_id ? 'โซเชียล' : '+โซเชียล'}</span>
                         </button>
                     )}
-
-                    <Link to={`/learning/schedule?student=${encodeURIComponent(String(row.original.id))}&auto=1`} className="responsive-table-action inline-flex items-center gap-1.5 whitespace-nowrap rounded-lg border border-sky-200 bg-sky-50 px-2.5 py-1.5 text-xs font-bold text-sky-800 hover:bg-sky-100 active:scale-[0.98]" aria-label={`สร้างตารางสอบ ${row.original.name}`}>
-                        <Printer size={15} weight="bold" /> <span>ตารางสอบ</span>
-                    </Link>
                 </div>
             ),
         },
