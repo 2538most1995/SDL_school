@@ -77,7 +77,19 @@ function getCompactColumnSize<T>(column: Column<T, unknown>): number {
     return Math.max(58, Math.min(column.getSize(), 128));
 }
 
+function getColumnAlignment<T>(column: Column<T, unknown>, compactTable: boolean): 'left' | 'center' | 'right' {
+    if (column.columnDef.meta?.compactTextAlign) return column.columnDef.meta.compactTextAlign;
+    if (isActionColumn(column)) return 'center';
+    return 'left';
+}
+
 function TableHeaderLabel<T>({ header, compactTable }: { header: Header<T, unknown>; compactTable: boolean }) {
+    const alignment = getColumnAlignment(header.column, compactTable);
+    const isCenter = alignment === 'center';
+    const isRight = alignment === 'right';
+    const justify = isCenter ? 'center' : isRight ? 'flex-end' : 'flex-start';
+    const textAlign = isCenter ? 'center' : isRight ? 'end' : 'start';
+
     const content = (
         <>
             <Box
@@ -89,14 +101,14 @@ function TableHeaderLabel<T>({ header, compactTable }: { header: Header<T, unkno
                     overflowWrap: 'normal',
                     textOverflow: 'clip',
                     whiteSpace: compactTable ? 'normal' : 'nowrap',
-                    textAlign: compactTable ? 'center' : 'start',
+                    textAlign,
                     ...(compactTable ? {
                         '@media (min-width:1024px)': {
                             display: 'block',
                             minWidth: 'max-content',
                             overflow: 'visible',
                             whiteSpace: 'nowrap',
-                            textAlign: 'start',
+                            textAlign,
                         },
                     } : {}),
                 }}
@@ -126,9 +138,9 @@ function TableHeaderLabel<T>({ header, compactTable }: { header: Header<T, unkno
     const sx = {
         display: 'inline-flex',
         alignItems: 'center',
-        width: compactTable ? '100%' : 'max-content',
-        minWidth: compactTable ? 0 : 'max-content',
-        justifyContent: compactTable ? 'center' : 'flex-start',
+        width: '100%',
+        minWidth: 0,
+        justifyContent: justify,
         px: 0,
         overflow: compactTable ? 'hidden' : 'visible',
         color: 'inherit',
@@ -140,9 +152,9 @@ function TableHeaderLabel<T>({ header, compactTable }: { header: Header<T, unkno
         ...(compactTable ? {
             '@media (min-width:640px)': { fontSize: '0.66rem' },
             '@media (min-width:1024px)': {
-                width: 'max-content',
-                minWidth: 'max-content',
-                justifyContent: 'flex-start',
+                width: '100%',
+                minWidth: 0,
+                justifyContent: justify,
                 overflow: 'visible',
                 fontSize: '0.875rem',
                 lineHeight: 1.5,
@@ -261,6 +273,7 @@ export function DataTable<T>({
                                 {headerGroup.headers.map((header) => (
                                     <TableCell
                                         key={header.id}
+                                        align={getColumnAlignment(header.column, compactTable)}
                                         sx={{
                                             width: compactTable ? `${(getCompactColumnSize(header.column) / compactTotalColumnSize) * 100}%` : header.getSize(),
                                             minWidth: compactTable ? 0 : header.getSize(),
@@ -272,6 +285,7 @@ export function DataTable<T>({
                                             whiteSpace: compactTable ? 'normal' : 'nowrap',
                                             overflowWrap: compactTable ? 'normal' : 'normal',
                                             verticalAlign: 'middle',
+                                            textAlign: getColumnAlignment(header.column, compactTable),
                                             bgcolor: 'color-mix(in srgb, var(--ui-accent-50) 68%, var(--ui-surface))',
                                             ...(compactTable ? {
                                                 '@media (min-width:640px)': { px: 0.6, py: 0.65 },
@@ -283,6 +297,7 @@ export function DataTable<T>({
                                                     overflow: 'visible',
                                                     px: 2,
                                                     whiteSpace: 'nowrap',
+                                                    textAlign: getColumnAlignment(header.column, compactTable),
                                                 },
                                             } : {}),
                                         }}
@@ -312,6 +327,7 @@ export function DataTable<T>({
                                 {row.getVisibleCells().map((cell) => (
                                     <TableCell
                                         key={cell.id}
+                                        align={getColumnAlignment(cell.column, compactTable)}
                                         className={compactTable && isActionColumn(cell.column) ? 'responsive-table-action-cell' : undefined}
                                         sx={{
                                             width: compactTable ? `${(getCompactColumnSize(cell.column) / compactTotalColumnSize) * 100}%` : cell.column.getSize(),
@@ -327,7 +343,7 @@ export function DataTable<T>({
                                             fontSize: compactTable ? '0.62rem' : '0.875rem',
                                             lineHeight: compactTable ? 1.38 : 1.5,
                                             letterSpacing: 0,
-                                            textAlign: compactTable ? (cell.column.columnDef.meta?.compactTextAlign ?? 'left') : 'left',
+                                            textAlign: getColumnAlignment(cell.column, compactTable),
                                             ...(compactTable ? {
                                                 '@media (min-width:640px)': {
                                                     px: isActionColumn(cell.column) ? 0.2 : 0.6,
@@ -342,6 +358,7 @@ export function DataTable<T>({
                                                     px: 2,
                                                     fontSize: '0.875rem',
                                                     lineHeight: 1.5,
+                                                    textAlign: getColumnAlignment(cell.column, compactTable),
                                                 },
                                             } : {}),
                                         }}
@@ -350,6 +367,7 @@ export function DataTable<T>({
                                             className="responsive-table-cell-content"
                                             sx={{
                                                 display: 'block',
+                                                textAlign: getColumnAlignment(cell.column, compactTable),
                                                 minWidth: 0,
                                                 maxWidth: '100%',
                                                 overflow: 'hidden',
