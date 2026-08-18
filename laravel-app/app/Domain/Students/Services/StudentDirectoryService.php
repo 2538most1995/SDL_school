@@ -86,10 +86,90 @@ final readonly class StudentDirectoryService
             return [];
         }
 
-        return array_values(array_filter(
+        $students = array_values(array_filter(
             $this->repository->students([$districtId]),
             static fn (Student $student): bool => $scope->allows($student),
         ));
+
+        return $this->enrichWithSocialProfiles($districtId, $students);
+    }
+
+    /**
+     * @param  list<Student>  $students
+     * @return list<Student>
+     */
+    private function enrichWithSocialProfiles(int $districtId, array $students): array
+    {
+        if ($students === []) {
+            return [];
+        }
+
+        try {
+            if (! \Illuminate\Support\Facades\Schema::hasTable('student_social_profiles')) {
+                return $students;
+            }
+
+            $codes = array_values(array_unique(array_map(static fn (Student $s): string => $s->code, $students)));
+            $socialRows = \Illuminate\Support\Facades\DB::table('student_social_profiles')
+                ->where('district_id', $districtId)
+                ->whereIn('student_code', $codes)
+                ->get(['student_code', 'facebook_url', 'line_id']);
+
+            if ($socialRows->isEmpty()) {
+                return $students;
+            }
+
+            $socialMap = [];
+            foreach ($socialRows as $row) {
+                $socialMap[(string) $row->student_code] = $row;
+            }
+
+            return array_map(static function (Student $student) use ($socialMap): Student {
+                $social = $socialMap[(string) $student->code] ?? null;
+                if ($social === null) {
+                    return $student;
+                }
+
+                return new Student(
+                    code: $student->code,
+                    districtId: $student->districtId,
+                    districtName: $student->districtName,
+                    prefix: $student->prefix,
+                    firstName: $student->firstName,
+                    lastName: $student->lastName,
+                    level: $student->level,
+                    levelLabel: $student->levelLabel,
+                    groupCode: $student->groupCode,
+                    groupName: $student->groupName,
+                    enrollmentTerm: $student->enrollmentTerm,
+                    currentTerm: $student->currentTerm,
+                    status: $student->status,
+                    statusLabel: $student->statusLabel,
+                    gpax: $student->gpax,
+                    creditsEarned: $student->creditsEarned,
+                    creditsRequired: $student->creditsRequired,
+                    kpchHours: $student->kpchHours,
+                    moralResult: $student->moralResult,
+                    contact: $student->contact,
+                    guardian: $student->guardian,
+                    demographics: $student->demographics,
+                    creditsCurrent: $student->creditsCurrent,
+                    compulsoryCreditsEarned: $student->compulsoryCreditsEarned,
+                    compulsoryCreditsRequired: $student->compulsoryCreditsRequired,
+                    electiveCreditsEarned: $student->electiveCreditsEarned,
+                    electiveCreditsRequired: $student->electiveCreditsRequired,
+                    dataClassification: $student->dataClassification,
+                    citizenId: $student->citizenId,
+                    phone: $student->phone,
+                    registeredAddress: $student->registeredAddress,
+                    currentAddress: $student->currentAddress,
+                    facebookUrl: $social->facebook_url ?: $student->facebookUrl,
+                    lineId: $social->line_id ?: $student->lineId,
+                );
+            }, $students);
+        } catch (\Throwable $e) {
+            throw $e;
+        }
     }
 
     /**

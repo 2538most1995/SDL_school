@@ -30,6 +30,7 @@ use App\Http\Controllers\Api\Students\StudentGradesController;
 use App\Http\Controllers\Api\Students\StudentKpchController;
 use App\Http\Controllers\Api\Students\StudentMoralController;
 use App\Http\Controllers\Api\Students\StudentReportController;
+use App\Http\Controllers\Api\Students\StudentSocialProfileController;
 use App\Http\Controllers\Api\Students\StudentSubjectsController;
 use App\Http\Controllers\Api\SystemCatalogController;
 use App\Models\District;
@@ -170,6 +171,7 @@ Route::prefix('v1')->group(function (): void {
             Route::post('/learning/scores/scorebooks', [ScoreController::class, 'store'])->middleware('learning.schema');
             Route::put('/learning/scores/scorebooks/{scorebook}/structure', [ScoreController::class, 'structure'])->middleware('learning.schema')->whereNumber('scorebook');
             Route::put('/learning/scores/scorebooks/{scorebook}/entries', [ScoreController::class, 'entries'])->middleware('learning.schema')->whereNumber('scorebook');
+            Route::patch('/students/{student}/social', [StudentSocialProfileController::class, 'update']);
         });
 
     Route::middleware(['auth:sanctum', 'active', 'district', 'role:super_admin'])

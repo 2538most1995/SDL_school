@@ -1,5 +1,6 @@
 import {
     ArrowLeft,
+    ArrowSquareOut,
     BookOpenText,
     CalendarCheck,
     ChartLineUp,
@@ -10,13 +11,14 @@ import {
     IdentificationCard,
     Eye,
     MagnifyingGlass,
+    PencilSimple,
     Printer,
     Sparkle,
     Student,
     UsersThree,
     X,
 } from '@phosphor-icons/react';
-import { keepPreviousData, useQuery } from '@tanstack/react-query';
+import { keepPreviousData, useQuery, useQueryClient } from '@tanstack/react-query';
 import type { ColumnDef } from '@tanstack/react-table';
 import { Button, Field, Input, Select } from '../../components/MaterialUI';
 import { useDeferredValue, useEffect, useMemo, useState, type ReactNode } from 'react';
@@ -30,8 +32,32 @@ import { QueryError, QuerySkeleton } from '../../components/QueryState';
 import { StatTile } from '../../components/StatTile';
 import { StatGrid } from '../../components/StatGrid';
 import { StatusBadge, type StatusTone } from '../../components/StatusBadge';
-import { getFeatureDataWithDemo } from '../api';
+import { getFeatureDataWithDemo, sendFeatureData } from '../api';
 import { useDemoRole } from '../../context/DemoRoleContext';
+import { showErrorAlert, showSuccessAlert } from '../../lib/feedback';
+
+export function FacebookIcon({ className = 'size-4' }: { className?: string }) {
+    return (
+        <svg viewBox="0 0 24 24" fill="currentColor" className={className} aria-hidden="true">
+            <path d="M24 12.073c0-6.627-5.373-12-12-12s-12 5.373-12 12c0 5.99 4.388 10.954 10.125 11.854v-8.385H7.078v-3.47h3.047V9.43c0-3.007 1.792-4.669 4.533-4.669 1.312 0 2.686.235 2.686.235v2.953H15.83c-1.491 0-1.956.925-1.956 1.874v2.25h3.328l-.532 3.47h-2.796v8.385C19.612 23.027 24 18.062 24 12.073z" />
+        </svg>
+    );
+}
+
+export function LineIcon({ className = 'size-4' }: { className?: string }) {
+    return (
+        <svg viewBox="0 0 24 24" fill="currentColor" className={className} aria-hidden="true">
+            <path d="M19.365 9.863c.349 0 .63.285.63.631 0 .345-.281.63-.63.63H17.61v1.125h1.755c.349 0 .63.283.63.63 0 .344-.281.629-.63.629h-2.386c-.345 0-.627-.285-.627-.629V8.108c0-.345.282-.63.63-.63h2.386c.346 0 .627.285.627.63 0 .349-.281.63-.63.63H17.61v1.125h1.755zm-3.855 3.016c0 .27-.174.51-.432.596-.064.021-.133.031-.199.031-.211 0-.391-.09-.51-.25l-2.443-3.317v2.94c0 .344-.279.629-.631.629-.346 0-.626-.285-.626-.629V8.108c0-.27.173-.51.43-.595.06-.023.136-.033.194-.033.195 0 .375.104.495.254l2.462 3.33V8.108c0-.345.282-.63.63-.63.345 0 .63.285.63.63v4.771zm-5.741 0c0 .344-.282.629-.631.629-.345 0-.627-.285-.627-.629V8.108c0-.345.282-.63.627-.63.349 0 .631.285.631.63v4.771zm-2.466.629H4.917c-.345 0-.63-.285-.63-.629V8.108c0-.345.285-.63.63-.63.348 0 .63.285.63.63v4.141h1.756c.348 0 .629.283.629.63 0 .344-.282.629-.629.629M24 10.314C24 4.943 18.615.572 12 .572S0 4.943 0 10.314c0 4.811 4.27 8.842 10.035 9.608.391.082.923.258 1.058.59.12.301.079.766.038 1.08l-.164 1.02c-.045.301-.24 1.186 1.049.645 1.291-.539 6.916-4.078 9.436-6.975C23.176 14.393 24 12.458 24 10.314" />
+        </svg>
+    );
+}
+
+export type StudentSocial = {
+    facebook_url?: string | null;
+    facebook_raw?: string | null;
+    line_id?: string | null;
+    line_url?: string | null;
+};
 
 type StudentRow = {
     id: number | string;
@@ -49,10 +75,33 @@ type StudentRow = {
     creditsEarned: number;
     creditsCurrent: number;
     creditsRequired: number;
+    social?: StudentSocial;
 };
 
 const demoStudents: StudentRow[] = [
-    { id: 'SENA-670142', code: 'SENA-670142', name: 'ณัฐชา ศรีสวัสดิ์', level: 'มัธยมศึกษาตอนปลาย', groupCode: 'G-01', group: 'กลุ่มวันอาทิตย์ 1', district: 'อำเภอเสนา', currentTerm: '1/2569', citizenIdMasked: '1-xxxx-xxxxx-xx-1', birthDate: '01/01/2548', gender: 'หญิง', gpax: 3.24, creditsEarned: 68, creditsCurrent: 73, creditsRequired: 76 },
+    {
+        id: 'SENA-670142',
+        code: 'SENA-670142',
+        name: 'ณัฐชา ศรีสวัสดิ์',
+        level: 'มัธยมศึกษาตอนปลาย',
+        groupCode: 'G-01',
+        group: 'กลุ่มวันอาทิตย์ 1',
+        district: 'อำเภอเสนา',
+        currentTerm: '1/2569',
+        citizenIdMasked: '1-xxxx-xxxxx-xx-1',
+        birthDate: '01/01/2548',
+        gender: 'หญิง',
+        gpax: 3.24,
+        creditsEarned: 68,
+        creditsCurrent: 73,
+        creditsRequired: 76,
+        social: {
+            facebook_url: 'https://facebook.com/nattacha.srisawat',
+            facebook_raw: 'https://facebook.com/nattacha.srisawat',
+            line_id: 'nattacha_sena',
+            line_url: 'https://line.me/ti/p/~nattacha_sena',
+        },
+    },
 ];
 
 function sortAcademicTermsDescending(left: string, right: string): number {
@@ -112,6 +161,143 @@ function DetailDialog({ title, description, items, onClose }: {
     );
 }
 
+export function StudentSocialModal({
+    student,
+    onClose,
+    onSaved,
+}: {
+    student: { code: string; name: string; social?: StudentSocial };
+    onClose: () => void;
+    onSaved?: () => void;
+}) {
+    const [facebookUrl, setFacebookUrl] = useState(student.social?.facebook_raw ?? student.social?.facebook_url ?? '');
+    const [lineId, setLineId] = useState(student.social?.line_id ?? '');
+    const [isSubmitting, setIsSubmitting] = useState(false);
+    const queryClient = useQueryClient();
+
+    useEffect(() => {
+        const previousOverflow = document.body.style.overflow;
+        const onKeyDown = (event: KeyboardEvent) => {
+            if (event.key === 'Escape') onClose();
+        };
+        document.body.style.overflow = 'hidden';
+        window.addEventListener('keydown', onKeyDown);
+
+        return () => {
+            document.body.style.overflow = previousOverflow;
+            window.removeEventListener('keydown', onKeyDown);
+        };
+    }, [onClose]);
+
+    const handleSubmit = async (e: React.FormEvent) => {
+        e.preventDefault();
+        setIsSubmitting(true);
+        try {
+            await sendFeatureData(`/api/v1/students/${encodeURIComponent(student.code)}/social`, 'PATCH', {
+                facebook_url: facebookUrl.trim(),
+                line_id: lineId.trim(),
+            });
+            await queryClient.invalidateQueries({ queryKey: ['students'] });
+            await queryClient.invalidateQueries({ queryKey: ['student', student.code] });
+            showSuccessAlert('บันทึกช่องทาง Facebook และ LINE สำเร็จ');
+            onSaved?.();
+            onClose();
+        } catch (error) {
+            showErrorAlert(error instanceof Error ? error.message : 'ไม่สามารถบันทึกข้อมูลได้ กรุณาลองใหม่อีกครั้ง');
+        } finally {
+            setIsSubmitting(false);
+        }
+    };
+
+    const formattedFbPreview = useMemo(() => {
+        const fb = facebookUrl.trim();
+        if (!fb) return null;
+        if (fb.startsWith('http://') || fb.startsWith('https://')) return fb;
+        if (fb.startsWith('facebook.com/') || fb.startsWith('www.facebook.com/') || fb.startsWith('fb.com/')) return `https://${fb}`;
+        return `https://facebook.com/${fb}`;
+    }, [facebookUrl]);
+
+    const formattedLinePreview = useMemo(() => {
+        const line = lineId.trim();
+        if (!line) return null;
+        if (line.startsWith('http://') || line.startsWith('https://')) return line;
+        const cleanId = line.replace(/^[@~]/, '');
+        return `https://line.me/ti/p/~${cleanId}`;
+    }, [lineId]);
+
+    return (
+        <div className="fixed inset-0 z-[70] grid place-items-center p-4" role="presentation">
+            <button type="button" className="absolute inset-0 bg-slate-950/55 backdrop-blur-[2px]" onClick={onClose} aria-label="ปิดหน้าต่าง" />
+            <section role="dialog" aria-modal="true" aria-labelledby="social-modal-title" className="relative w-full max-w-lg overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-2xl shadow-slate-950/20">
+                <header className="flex items-start justify-between gap-4 border-b border-slate-100 bg-slate-50/80 px-6 py-4">
+                    <div>
+                        <h2 id="social-modal-title" className="text-lg font-black text-slate-950">จัดการช่องทางติดต่อโซเชียล</h2>
+                        <p className="mt-0.5 text-xs font-semibold text-slate-600">
+                            {student.name} <span className="font-mono text-slate-500">({student.code})</span>
+                        </p>
+                    </div>
+                    <button type="button" onClick={onClose} autoFocus className="grid size-9 shrink-0 place-items-center rounded-xl border border-slate-200 bg-white text-slate-600 hover:bg-slate-100 active:scale-[0.98]" aria-label="ปิดหน้าต่าง">
+                        <X size={18} weight="bold" />
+                    </button>
+                </header>
+
+                <form onSubmit={handleSubmit} className="p-6 space-y-4">
+                    <div>
+                        <label className="flex items-center justify-between text-xs font-bold text-slate-700 mb-1.5">
+                            <span className="flex items-center gap-1.5 text-[#1877F2]">
+                                <FacebookIcon className="size-4" /> Facebook URL หรือ ชื่อบัญชี
+                            </span>
+                            {formattedFbPreview && (
+                                <a href={formattedFbPreview} target="_blank" rel="noopener noreferrer" className="inline-flex items-center gap-1 text-[11px] text-brand-700 hover:underline">
+                                    <span>ทดสอบเปิด</span> <ArrowSquareOut size={12} weight="bold" />
+                                </a>
+                            )}
+                        </label>
+                        <Input
+                            value={facebookUrl}
+                            onChange={(_, data) => setFacebookUrl(data.value)}
+                            placeholder="เช่น https://facebook.com/username หรือ ชื่อโปรไฟล์"
+                            size="large"
+                            className="w-full"
+                        />
+                        <p className="mt-1 text-[11px] text-slate-500">ระบุได้ทั้งลิงก์ URL เต็ม หรือ Username / ชื่อใน Facebook</p>
+                    </div>
+
+                    <div>
+                        <label className="flex items-center justify-between text-xs font-bold text-slate-700 mb-1.5">
+                            <span className="flex items-center gap-1.5 text-[#059639]">
+                                <LineIcon className="size-4" /> LINE ID หรือ ลิงก์ LINE
+                            </span>
+                            {formattedLinePreview && (
+                                <a href={formattedLinePreview} target="_blank" rel="noopener noreferrer" className="inline-flex items-center gap-1 text-[11px] text-[#059639] hover:underline">
+                                    <span>ทดสอบเปิด</span> <ArrowSquareOut size={12} weight="bold" />
+                                </a>
+                            )}
+                        </label>
+                        <Input
+                            value={lineId}
+                            onChange={(_, data) => setLineId(data.value)}
+                            placeholder="เช่น my_line_id หรือ @line_id หรือ https://line.me/ti/p/~..."
+                            size="large"
+                            className="w-full"
+                        />
+                        <p className="mt-1 text-[11px] text-slate-500">ระบุ Line ID หรือ ลิงก์เพิ่มเพื่อน Line เพื่อให้คลิกติดต่อได้ทันที</p>
+                    </div>
+
+                    <div className="mt-6 flex items-center justify-end gap-2 border-t border-slate-100 pt-4">
+                        <Button type="button" appearance="subtle" onClick={onClose} disabled={isSubmitting}>
+                            ยกเลิก
+                        </Button>
+                        <Button type="submit" appearance="primary" disabled={isSubmitting}>
+                            {isSubmitting ? 'กำลังบันทึก...' : 'บันทึกข้อมูล'}
+                        </Button>
+                    </div>
+                </form>
+            </section>
+        </div>
+    );
+}
+
 type FilterOption = { value: string | number; label: string };
 type StudentDirectoryMeta = {
     mode?: string;
@@ -127,8 +313,10 @@ export function StudentsPage() {
     const [group, setGroup] = useState('');
     const [page, setPage] = useState(1);
     const [perPage, setPerPage] = useState(25);
+    const [editingSocialStudent, setEditingSocialStudent] = useState<{ code: string; name: string; social?: StudentSocial } | null>(null);
     const deferredSearch = useDeferredValue(search);
     const canFilterGroups = role === 'teacher' || role === 'admin' || role === 'super_admin';
+    const canEditSocial = role === 'teacher' || role === 'admin' || role === 'super_admin';
 
     useEffect(() => setPage(1), [deferredSearch, level, group, perPage]);
     useEffect(() => { if (!canFilterGroups && group !== '') setGroup(''); }, [canFilterGroups, group]);
@@ -154,6 +342,7 @@ export function StudentsPage() {
                 current_term: string;
                 demographics?: { citizen_id?: string; citizen_id_masked?: string; birth_date?: string; gender?: string };
                 academic: { gpax: number; credits_earned: number; credits_current: number; credits_required: number };
+                social?: StudentSocial;
             };
             const response = await getFeatureDataWithDemo<StudentRow[] | StudentApi[]>(`/api/v1/students?${queryString}`, demoStudents, signal);
             const data = response.data.map((student): StudentRow => 'full_name' in student ? {
@@ -172,6 +361,7 @@ export function StudentsPage() {
                 creditsEarned: student.academic.credits_earned,
                 creditsCurrent: student.academic.credits_current,
                 creditsRequired: student.academic.credits_required,
+                social: student.social,
             } : student);
             return { ...response, data, meta: response.meta as unknown as StudentDirectoryMeta };
         },
@@ -208,13 +398,70 @@ export function StudentsPage() {
         { accessorKey: 'gender', header: 'เพศ', size: 75, meta: { compactSize: 42, compactTextAlign: 'center' } },
         {
             id: 'details',
-            header: 'รายละเอียด',
-            size: 220,
-            meta: { compactSize: 86, compactTextAlign: 'center' },
+            header: 'รายละเอียด / ติดต่อ',
+            size: 270,
+            meta: { compactSize: 96, compactTextAlign: 'center' },
             enableSorting: false,
-            cell: ({ row }) => <div className="flex flex-wrap justify-center gap-1.5"><Link to={`/students/${encodeURIComponent(String(row.original.id))}`} className="responsive-table-action inline-flex items-center gap-1.5 whitespace-nowrap rounded-lg border border-brand-200 bg-brand-50 px-2.5 py-1.5 text-xs font-bold text-brand-800 hover:bg-brand-100 active:scale-[0.98]" aria-label={`เปิดรายละเอียด ${row.original.name}`}><Eye size={16} weight="bold" /> <span>เปิดดู</span></Link><Link to={`/learning/schedule?student=${encodeURIComponent(String(row.original.id))}&auto=1`} className="responsive-table-action inline-flex items-center gap-1.5 whitespace-nowrap rounded-lg border border-sky-200 bg-sky-50 px-2.5 py-1.5 text-xs font-bold text-sky-800 hover:bg-sky-100 active:scale-[0.98]" aria-label={`สร้างตารางสอบ ${row.original.name}`}><Printer size={16} weight="bold" /> <span>ตารางสอบ</span></Link></div>,
+            cell: ({ row }) => (
+                <div className="flex flex-wrap items-center justify-center gap-1.5">
+                    <Link to={`/students/${encodeURIComponent(String(row.original.id))}`} className="responsive-table-action inline-flex items-center gap-1.5 whitespace-nowrap rounded-lg border border-brand-200 bg-brand-50 px-2.5 py-1.5 text-xs font-bold text-brand-800 hover:bg-brand-100 active:scale-[0.98]" aria-label={`เปิดรายละเอียด ${row.original.name}`}>
+                        <Eye size={15} weight="bold" /> <span>เปิดดู</span>
+                    </Link>
+
+                    {row.original.social?.facebook_url && (
+                        <a
+                            href={row.original.social.facebook_url}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className="inline-flex items-center gap-1 whitespace-nowrap rounded-lg border border-[#1877F2]/30 bg-[#1877F2]/10 px-2 py-1.5 text-xs font-bold text-[#1877F2] hover:bg-[#1877F2]/20 active:scale-[0.98]"
+                            title={`เปิด Facebook: ${row.original.social.facebook_raw || row.original.name}`}
+                            aria-label={`Facebook ของ ${row.original.name}`}
+                        >
+                            <FacebookIcon className="size-3.5" />
+                            <span>FB</span>
+                        </a>
+                    )}
+
+                    {(row.original.social?.line_url || row.original.social?.line_id) && (
+                        <a
+                            href={row.original.social.line_url ?? `https://line.me/ti/p/~${row.original.social.line_id}`}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className="inline-flex items-center gap-1 whitespace-nowrap rounded-lg border border-[#06C755]/30 bg-[#06C755]/10 px-2 py-1.5 text-xs font-bold text-[#059639] hover:bg-[#06C755]/20 active:scale-[0.98]"
+                            title={`เปิด LINE ID: ${row.original.social.line_id}`}
+                            aria-label={`LINE ของ ${row.original.name}`}
+                        >
+                            <LineIcon className="size-3.5" />
+                            <span>LINE</span>
+                        </a>
+                    )}
+
+                    {canEditSocial && (
+                        <button
+                            type="button"
+                            onClick={() => setEditingSocialStudent({
+                                code: row.original.code,
+                                name: row.original.name,
+                                social: row.original.social,
+                            })}
+                            className="inline-flex items-center gap-1 whitespace-nowrap rounded-lg border border-slate-200 bg-slate-50 px-2 py-1.5 text-xs font-bold text-slate-700 hover:bg-slate-100 hover:text-slate-900 active:scale-[0.98]"
+                            title="แก้ไข / เพิ่ม Facebook & LINE"
+                            aria-label={`แก้ไขโซเชียล ${row.original.name}`}
+                        >
+                            <PencilSimple size={14} weight="bold" />
+                            {(!row.original.social?.facebook_url && !row.original.social?.line_id) && (
+                                <span className="text-[11px] text-slate-600">+โซเชียล</span>
+                            )}
+                        </button>
+                    )}
+
+                    <Link to={`/learning/schedule?student=${encodeURIComponent(String(row.original.id))}&auto=1`} className="responsive-table-action inline-flex items-center gap-1.5 whitespace-nowrap rounded-lg border border-sky-200 bg-sky-50 px-2.5 py-1.5 text-xs font-bold text-sky-800 hover:bg-sky-100 active:scale-[0.98]" aria-label={`สร้างตารางสอบ ${row.original.name}`}>
+                        <Printer size={15} weight="bold" /> <span>ตารางสอบ</span>
+                    </Link>
+                </div>
+            ),
         },
-    ], []);
+    ], [canEditSocial]);
 
     const resetFilters = () => {
         setSearch('');
@@ -265,6 +512,12 @@ export function StudentsPage() {
                 {students.data && <DataTable data={rows} columns={columns} pageSize={perPage} showPagination={false} minWidth="wide" emptyTitle="ไม่พบนักศึกษา" emptyDescription="ลองเปลี่ยนคำค้น ระดับ หรือกลุ่มเรียน" />}
                 {pagination && <Pagination currentPage={pagination.current_page} totalPages={pagination.last_page} totalItems={pagination.total} pageSize={perPage} itemLabel="คน" disabled={students.isFetching} onPageChange={setPage} onPageSizeChange={(nextPageSize) => { setPerPage(nextPageSize); setPage(1); }} />}
             </Panel>
+            {editingSocialStudent && (
+                <StudentSocialModal
+                    student={editingSocialStudent}
+                    onClose={() => setEditingSocialStudent(null)}
+                />
+            )}
         </div>
     );
 }
@@ -297,6 +550,7 @@ type StudentDetail = {
     gpax: number;
     activityHours: number;
     moralResult: string;
+    social?: StudentSocial;
 };
 
 const demoStudent: StudentDetail = {
@@ -327,6 +581,12 @@ const demoStudent: StudentDetail = {
     gpax: 3.24,
     activityHours: 76,
     moralResult: 'ดี',
+    social: {
+        facebook_url: 'https://facebook.com/nattacha.srisawat',
+        facebook_raw: 'https://facebook.com/nattacha.srisawat',
+        line_id: 'nattacha_sena',
+        line_url: 'https://line.me/ti/p/~nattacha_sena',
+    },
 };
 
 type KpchDetailRow = {
@@ -378,13 +638,21 @@ type StaffGradeSummary = {
 
 export function StudentDetailPage() {
     const { studentId = '1' } = useParams();
+    const { role } = useDemoRole();
+    const [editingSocial, setEditingSocial] = useState(false);
+    const canEditSocial = role === 'teacher' || role === 'admin' || role === 'super_admin';
+
     const student = useQuery({
         queryKey: ['student', studentId],
         queryFn: async ({ signal }) => {
             type StudentDetailApi = {
                 code: string; full_name?: string; name?: { full_name: string }; level: { label: string }; group: { code: string; name: string }; district: { name: string };
                 current_term: string; enrollment_term: string;
-                contact?: { phone?: string; phone_masked?: string; email?: string; email_masked?: string; registered_address?: string; current_address?: string };
+                contact?: {
+                    phone?: string; phone_masked?: string; email?: string; email_masked?: string; registered_address?: string; current_address?: string;
+                    facebook_url?: string; facebook_raw?: string; line_id?: string; line_url?: string;
+                };
+                social?: StudentSocial;
                 demographics?: { citizen_id?: string; citizen_id_masked?: string; birth_date?: string; gender?: string; age?: number; application_date?: string; last_updated?: string };
                 academic: {
                     credits_earned: number; credits_current: number; credits_required: number; gpax: number; kpch_hours: number; moral_result: string;
@@ -404,6 +672,12 @@ export function StudentDetailPage() {
                     applicationDate: api.demographics?.application_date ?? '-', lastUpdated: api.demographics?.last_updated ?? '-',
                     creditsEarned: api.academic.credits_earned, creditsCurrent: api.academic.credits_current, creditsRequired: api.academic.credits_required,
                     compulsory: api.academic.compulsory, elective: api.academic.elective, gpax: api.academic.gpax, activityHours: api.academic.kpch_hours, moralResult: api.academic.moral_result,
+                    social: api.social ?? {
+                        facebook_url: api.contact?.facebook_url,
+                        facebook_raw: api.contact?.facebook_raw,
+                        line_id: api.contact?.line_id,
+                        line_url: api.contact?.line_url,
+                    },
                 };
                 return { ...response, data };
             }
@@ -435,16 +709,64 @@ export function StudentDetailPage() {
                         ))}
                     </dl>
                     <div className="mt-6 border-t border-slate-100 pt-5">
-                        <h3 className="text-base font-black text-slate-950">ที่อยู่และข้อมูลติดต่อ</h3>
-                        <dl className="mt-3 grid gap-3 sm:grid-cols-2">
+                        <div className="flex flex-wrap items-center justify-between gap-3 mb-3">
+                            <h3 className="text-base font-black text-slate-950">ที่อยู่และข้อมูลติดต่อ</h3>
+                            {canEditSocial && (
+                                <button
+                                    type="button"
+                                    onClick={() => setEditingSocial(true)}
+                                    className="inline-flex items-center gap-1.5 rounded-xl border border-brand-200 bg-brand-50 px-3 py-1.5 text-xs font-bold text-brand-800 hover:bg-brand-100 active:scale-[0.98]"
+                                >
+                                    <PencilSimple size={15} weight="bold" />
+                                    <span>จัดการ Facebook & LINE</span>
+                                </button>
+                            )}
+                        </div>
+                        <dl className="grid gap-3 sm:grid-cols-2">
                             <div className="min-w-0 rounded-xl bg-brand-50 p-4"><dt className="text-xs font-bold text-brand-800">โทรศัพท์</dt><dd className="mt-1 break-words font-bold leading-7 text-slate-950">{data.phone}</dd></div>
                             <div className="min-w-0 rounded-xl bg-brand-50 p-4"><dt className="text-xs font-bold text-brand-800">อีเมล</dt><dd className="mt-1 break-all font-bold leading-7 text-slate-950">{data.email}</dd></div>
+                            <div className="min-w-0 rounded-xl border border-blue-100 bg-blue-50/70 p-4">
+                                <dt className="flex items-center justify-between text-xs font-bold text-[#1877F2]">
+                                    <span className="flex items-center gap-1.5"><FacebookIcon className="size-4" /> Facebook</span>
+                                    {data.social?.facebook_url && (
+                                        <a href={data.social.facebook_url} target="_blank" rel="noopener noreferrer" className="inline-flex items-center gap-1 text-xs font-bold text-[#1877F2] hover:underline">
+                                            <span>เปิดโปรไฟล์</span> <ArrowSquareOut size={13} weight="bold" />
+                                        </a>
+                                    )}
+                                </dt>
+                                <dd className="mt-1 break-words font-bold leading-7 text-slate-950">
+                                    {data.social?.facebook_raw || data.social?.facebook_url || <span className="font-normal text-slate-400">ยังไม่ได้ระบุ</span>}
+                                </dd>
+                            </div>
+                            <div className="min-w-0 rounded-xl border border-emerald-100 bg-emerald-50/70 p-4">
+                                <dt className="flex items-center justify-between text-xs font-bold text-[#059639]">
+                                    <span className="flex items-center gap-1.5"><LineIcon className="size-4" /> LINE</span>
+                                    {(data.social?.line_url || data.social?.line_id) && (
+                                        <a href={data.social.line_url ?? `https://line.me/ti/p/~${data.social.line_id}`} target="_blank" rel="noopener noreferrer" className="inline-flex items-center gap-1 text-xs font-bold text-[#059639] hover:underline">
+                                            <span>เปิด LINE</span> <ArrowSquareOut size={13} weight="bold" />
+                                        </a>
+                                    )}
+                                </dt>
+                                <dd className="mt-1 break-words font-bold leading-7 text-slate-950">
+                                    {data.social?.line_id ? (
+                                        <span className="font-mono">{data.social.line_id}</span>
+                                    ) : (
+                                        <span className="font-normal text-slate-400">ยังไม่ได้ระบุ</span>
+                                    )}
+                                </dd>
+                            </div>
                             <div className="min-w-0 rounded-xl bg-slate-50 p-4"><dt className="text-xs font-bold text-slate-500">ที่อยู่ตามทะเบียน</dt><dd className="mt-1 whitespace-pre-wrap break-words font-bold leading-7 text-slate-950">{data.registeredAddress}</dd></div>
                             <div className="min-w-0 rounded-xl bg-slate-50 p-4"><dt className="text-xs font-bold text-slate-500">ที่อยู่ปัจจุบัน</dt><dd className="mt-1 whitespace-pre-wrap break-words font-bold leading-7 text-slate-950">{data.currentAddress}</dd></div>
                         </dl>
                     </div>
                 </Panel>
             </div>
+            {editingSocial && (
+                <StudentSocialModal
+                    student={{ code: data.code, name: data.name, social: data.social }}
+                    onClose={() => setEditingSocial(false)}
+                />
+            )}
         </div>
     );
 }

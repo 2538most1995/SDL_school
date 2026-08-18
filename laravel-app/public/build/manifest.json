@@ -1,6 +1,14 @@
 {
-  "_Plus.es-40kEc-GJ.js": {
-    "file": "assets/Plus.es-40kEc-GJ.js",
+  "_PencilSimple.es-B2DrOfgN.js": {
+    "file": "assets/PencilSimple.es-B2DrOfgN.js",
+    "name": "PencilSimple.es",
+    "imports": [
+      "_rolldown-runtime-Bh1tDfsg.js",
+      "_api-shait7_9.js"
+    ]
+  },
+  "_Plus.es-eDwKqTBX.js": {
+    "file": "assets/Plus.es-eDwKqTBX.js",
     "name": "Plus.es",
     "imports": [
       "_rolldown-runtime-Bh1tDfsg.js",
@@ -23,8 +31,8 @@
       "_api-shait7_9.js"
     ]
   },
-  "_StatTile-BD6yG2_K.js": {
-    "file": "assets/StatTile-BD6yG2_K.js",
+  "_StatTile-C8mcJDfU.js": {
+    "file": "assets/StatTile-C8mcJDfU.js",
     "name": "StatTile",
     "imports": [
       "_rolldown-runtime-Bh1tDfsg.js",
@@ -214,7 +222,7 @@
     ]
   },
   "resources/css/app.css": {
-    "file": "assets/app-CMm_wYHM.css",
+    "file": "assets/app-kfqw9upu.css",
     "name": "app",
     "names": [
       "app.css"
@@ -261,7 +269,7 @@
     ]
   },
   "resources/js/app.tsx": {
-    "file": "assets/app-B9LlCrWs.js",
+    "file": "assets/app-Dml5MqRF.js",
     "name": "app",
     "src": "resources/js/app.tsx",
     "isEntry": true,
@@ -282,52 +290,54 @@
     ]
   },
   "resources/js/features/admin/index.tsx": {
-    "file": "assets/admin-DBEkx3PR.js",
+    "file": "assets/admin-C8v7wfSJ.js",
     "name": "admin",
     "src": "resources/js/features/admin/index.tsx",
     "isDynamicEntry": true,
     "imports": [
       "_rolldown-runtime-Bh1tDfsg.js",
       "_api-shait7_9.js",
-      "_StatTile-BD6yG2_K.js",
+      "_StatTile-C8mcJDfU.js",
       "_api-C5yBIVjy.js",
-      "_Plus.es-40kEc-GJ.js",
+      "_Plus.es-eDwKqTBX.js",
+      "_PencilSimple.es-B2DrOfgN.js",
       "_ShieldCheck.es-DpEP3hVw.js",
       "_Trash.es-DxQgYof8.js",
       "resources/js/app.tsx"
     ]
   },
   "resources/js/features/learning/index.tsx": {
-    "file": "assets/learning-DGcg_JeF.js",
+    "file": "assets/learning-Bw4NL0vI.js",
     "name": "learning",
     "src": "resources/js/features/learning/index.tsx",
     "isDynamicEntry": true,
     "imports": [
       "_rolldown-runtime-Bh1tDfsg.js",
       "_api-shait7_9.js",
-      "_StatTile-BD6yG2_K.js",
+      "_StatTile-C8mcJDfU.js",
       "_api-C5yBIVjy.js",
       "_Printer.es-BX5UKu6e.js",
-      "_Plus.es-40kEc-GJ.js",
+      "_Plus.es-eDwKqTBX.js",
+      "_PencilSimple.es-B2DrOfgN.js",
       "_Trash.es-DxQgYof8.js",
       "resources/js/app.tsx"
     ]
   },
   "resources/js/features/reports/index.tsx": {
-    "file": "assets/reports-bsRZ0mKh.js",
+    "file": "assets/reports-Dy7Lj9mE.js",
     "name": "reports",
     "src": "resources/js/features/reports/index.tsx",
     "isDynamicEntry": true,
     "imports": [
       "_rolldown-runtime-Bh1tDfsg.js",
       "_api-shait7_9.js",
-      "_StatTile-BD6yG2_K.js",
+      "_StatTile-C8mcJDfU.js",
       "_api-C5yBIVjy.js",
       "resources/js/app.tsx"
     ]
   },
   "resources/js/features/settings/index.tsx": {
-    "file": "assets/settings-D1yoaQCS.js",
+    "file": "assets/settings-BO1Cq5KZ.js",
     "name": "settings",
     "src": "resources/js/features/settings/index.tsx",
     "isDynamicEntry": true,
@@ -341,16 +351,17 @@
     ]
   },
   "resources/js/features/students/index.tsx": {
-    "file": "assets/students-e60K8lLf.js",
+    "file": "assets/students-iMZyIcqK.js",
     "name": "students",
     "src": "resources/js/features/students/index.tsx",
     "isDynamicEntry": true,
     "imports": [
       "_rolldown-runtime-Bh1tDfsg.js",
       "_api-shait7_9.js",
-      "_StatTile-BD6yG2_K.js",
+      "_StatTile-C8mcJDfU.js",
       "_api-C5yBIVjy.js",
       "_Printer.es-BX5UKu6e.js",
+      "_PencilSimple.es-B2DrOfgN.js",
       "resources/js/app.tsx"
     ]
   }

@@ -7,6 +7,7 @@ use App\Http\Controllers\Api\Students\StudentGradesController;
 use App\Http\Controllers\Api\Students\StudentKpchController;
 use App\Http\Controllers\Api\Students\StudentMoralController;
 use App\Http\Controllers\Api\Students\StudentReportController;
+use App\Http\Controllers\Api\Students\StudentSocialProfileController;
 use App\Http\Controllers\Api\Students\StudentSubjectsController;
 use App\Models\District;
 use App\Models\User;
@@ -28,6 +29,7 @@ final class StudentApiTest extends TestCase
         Route::prefix('api/v1')->middleware('auth:sanctum')->group(function (): void {
             Route::get('/students', [StudentDirectoryController::class, 'index']);
             Route::get('/students/{student}', [StudentDirectoryController::class, 'show']);
+            Route::patch('/students/{student}/social', [StudentSocialProfileController::class, 'update']);
             Route::get('/students/{student}/grades', StudentGradesController::class);
             Route::get('/students/{student}/kpch', StudentKpchController::class);
             Route::get('/students/{student}/moral', StudentMoralController::class);
@@ -275,6 +277,48 @@ final class StudentApiTest extends TestCase
             ->assertJsonPath('meta.pagination.per_page', 1000);
         $this->getJson('/api/v1/students?per_page=1001')->assertUnprocessable();
         $this->getJson('/api/v1/students/6650100001/grades?term=2568/2')->assertUnprocessable();
+    }
+
+    public function test_teacher_can_update_student_social_profile(): void
+    {
+        $teacher = $this->viewer('teacher', groups: ['SENA-P1-A']);
+        Sanctum::actingAs($teacher);
+
+        $response = $this->patchJson('/api/v1/students/6650100001/social', [
+            'facebook_url' => 'https://facebook.com/nattacha.s',
+            'line_id' => 'nattacha_line',
+        ]);
+
+        $response->assertOk()
+            ->assertJsonPath('data.social.facebook_url', 'https://facebook.com/nattacha.s')
+            ->assertJsonPath('data.social.line_id', 'nattacha_line')
+            ->assertJsonPath('data.social.line_url', 'https://line.me/ti/p/~nattacha_line');
+
+        // Check that student listing returns the social profile
+        $listResponse = $this->getJson('/api/v1/students?search=6650100001');
+        $listResponse->assertOk()
+            ->assertJsonPath('data.0.social.facebook_url', 'https://facebook.com/nattacha.s')
+            ->assertJsonPath('data.0.social.line_id', 'nattacha_line')
+            ->assertJsonPath('data.0.social.line_url', 'https://line.me/ti/p/~nattacha_line');
+
+        // Check that student detail returns the social profile in contact and social
+        $detailResponse = $this->getJson('/api/v1/students/6650100001');
+        $detailResponse->assertOk()
+            ->assertJsonPath('data.contact.facebook_url', 'https://facebook.com/nattacha.s')
+            ->assertJsonPath('data.contact.line_id', 'nattacha_line')
+            ->assertJsonPath('data.contact.line_url', 'https://line.me/ti/p/~nattacha_line');
+    }
+
+    public function test_teacher_cannot_update_student_outside_assigned_groups(): void
+    {
+        $teacher = $this->viewer('teacher', groups: ['SENA-M2-A']);
+        Sanctum::actingAs($teacher);
+
+        // 6650100001 is in SENA-P1-A
+        $this->patchJson('/api/v1/students/6650100001/social', [
+            'facebook_url' => 'https://facebook.com/nattacha.s',
+            'line_id' => 'nattacha_line',
+        ])->assertNotFound();
     }
 
     /** @param list<string> $groups */

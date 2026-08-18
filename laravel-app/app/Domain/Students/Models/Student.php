@@ -43,11 +43,43 @@ final readonly class Student
         public ?string $phone = null,
         public ?string $registeredAddress = null,
         public ?string $currentAddress = null,
+        public ?string $facebookUrl = null,
+        public ?string $lineId = null,
     ) {}
 
     public function fullName(): string
     {
         return trim("{$this->prefix}{$this->firstName} {$this->lastName}");
+    }
+
+    public function lineUrl(): ?string
+    {
+        if ($this->lineId === null || trim($this->lineId) === '') {
+            return null;
+        }
+        $line = trim($this->lineId);
+        if (str_starts_with($line, 'http://') || str_starts_with($line, 'https://')) {
+            return $line;
+        }
+        $cleanId = ltrim($line, '@~');
+
+        return "https://line.me/ti/p/~{$cleanId}";
+    }
+
+    public function facebookUrlFormatted(): ?string
+    {
+        if ($this->facebookUrl === null || trim($this->facebookUrl) === '') {
+            return null;
+        }
+        $fb = trim($this->facebookUrl);
+        if (str_starts_with($fb, 'http://') || str_starts_with($fb, 'https://')) {
+            return $fb;
+        }
+        if (str_starts_with($fb, 'facebook.com/') || str_starts_with($fb, 'www.facebook.com/') || str_starts_with($fb, 'fb.com/')) {
+            return "https://{$fb}";
+        }
+
+        return "https://facebook.com/{$fb}";
     }
 
     /** @return array<string, mixed> */
@@ -62,6 +94,13 @@ final readonly class Student
         } else {
             $demographics['age'] = $currentAge;
         }
+
+        $social = [
+            'facebook_url' => $this->facebookUrlFormatted(),
+            'facebook_raw' => $this->facebookUrl,
+            'line_id' => $this->lineId,
+            'line_url' => $this->lineUrl(),
+        ];
 
         return [
             'code' => $this->code,
@@ -101,12 +140,20 @@ final readonly class Student
                 'moral_result' => $this->moralResult,
             ],
             'demographics' => $demographics,
+            'social' => $social,
         ];
     }
 
     /** @return array<string, mixed> */
     public function toDetailArray(): array
     {
+        $social = [
+            'facebook_url' => $this->facebookUrlFormatted(),
+            'facebook_raw' => $this->facebookUrl,
+            'line_id' => $this->lineId,
+            'line_url' => $this->lineUrl(),
+        ];
+
         return [
             ...$this->toSummaryArray(),
             'name' => [
@@ -116,7 +163,11 @@ final readonly class Student
                 'full_name' => $this->fullName(),
             ],
             'enrollment_term' => $this->enrollmentTerm,
-            'contact' => $this->contact,
+            'contact' => [
+                ...$this->contact,
+                ...$social,
+            ],
+            'social' => $social,
             'guardian' => $this->guardian,
             'data_classification' => $this->dataClassification,
         ];
