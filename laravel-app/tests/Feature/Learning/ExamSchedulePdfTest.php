@@ -91,17 +91,26 @@ final class ExamSchedulePdfTest extends TestCase
         Sanctum::actingAs($user);
 
         $response = $this->getJson('/api/v1/learning/exam-schedule/signed-url?scope=student&student=6650100001');
-        $response->assertOk()->assertJsonStructure(['data' => ['url']]);
+        $response->assertOk()->assertJsonStructure(['data' => ['url', 'pdf_url']]);
 
-        $signedUrl = (string) $response->json('data.url');
-        $this->assertNotEmpty($signedUrl);
-        $this->assertStringContainsString('signature=', $signedUrl);
+        $viewUrl = (string) $response->json('data.url');
+        $pdfUrl = (string) $response->json('data.pdf_url');
+        $this->assertNotEmpty($viewUrl);
+        $this->assertNotEmpty($pdfUrl);
+        $this->assertStringContainsString('signature=', $viewUrl);
+        $this->assertStringContainsString('signature=', $pdfUrl);
 
-        // Unauthenticate and test that accessing the signed URL succeeds
+        // Unauthenticate and test that accessing the signed URLs succeeds without session
         auth()->forgetGuards();
         $this->app['auth']->forgetGuards();
 
-        $pdfResponse = $this->get($signedUrl);
+        $htmlResponse = $this->get($viewUrl);
+        $htmlResponse->assertOk()
+            ->assertHeader('Content-Type', 'text/html; charset=UTF-8')
+            ->assertSee('ตารางสอบ')
+            ->assertSee('6650100001');
+
+        $pdfResponse = $this->get($pdfUrl);
         $pdfResponse->assertOk()
             ->assertHeader('Content-Type', 'application/pdf');
         $this->assertStringStartsWith('%PDF-', (string) $pdfResponse->getContent());

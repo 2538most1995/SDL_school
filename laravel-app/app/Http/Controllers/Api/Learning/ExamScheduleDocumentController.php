@@ -35,72 +35,47 @@ final class ExamScheduleDocumentController extends Controller
             'disposition' => $request->query('disposition', 'inline'),
             'user_id' => (string) $user->id,
             'district_id' => $districtId ? (string) $districtId : null,
+            'openExternalBrowser' => '1',
             'expires' => (string) now()->addHours(24)->timestamp,
         ], static fn ($v) => $v !== null && $v !== '');
 
-        ksort($params);
-        $signature = hash_hmac('sha256', 'api/v1/learning/exam-schedule/pdf?'.http_build_query($params), (string) config('app.key'));
-        $url = url('/api/v1/learning/exam-schedule/pdf').'?'.http_build_query($params + ['signature' => $signature]);
+        $signedPayload = $this->signedPayload($params);
+        $signature = hash_hmac('sha256', 'exam-schedule:'.http_build_query($signedPayload), (string) config('app.key'));
+        $params['signature'] = $signature;
+
+        $viewUrl = url('/api/v1/learning/exam-schedule/view').'?'.http_build_query($params);
+        $pdfUrl = url('/api/v1/learning/exam-schedule/pdf').'?'.http_build_query($params);
 
         return response()->json([
             'data' => [
-                'url' => $url,
+                'url' => $viewUrl,
+                'pdf_url' => $pdfUrl,
             ],
+        ]);
+    }
+
+    public function html(Request $request, ExamScheduleExportService $export): Response
+    {
+        $user = $this->resolveUser($request);
+        $this->resolveDistrict($request, $user);
+        $selection = $export->build($user, $filters = $this->filters($request));
+
+        $pdfParams = $request->query();
+        $pdfParams['disposition'] = 'attachment';
+        $selection['pdfDownloadUrl'] = url('/api/v1/learning/exam-schedule/pdf').'?'.http_build_query($pdfParams);
+
+        return response()->view('print.exam-schedule-view', $selection, 200, [
+            ...$this->privateHeaders(),
+            'Content-Type' => 'text/html; charset=UTF-8',
         ]);
     }
 
     public function pdf(Request $request, ExamScheduleExportService $export): Response
     {
-        $user = $request->user('sanctum');
-        if ($user === null) {
-            $signature = (string) $request->query('signature');
-            $expires = (int) $request->query('expires');
-            $valid = false;
-
-            if ($signature !== '' && $expires >= now()->timestamp) {
-                $params = $request->query();
-                unset($params['signature']);
-                ksort($params);
-                $expected = hash_hmac('sha256', 'api/v1/learning/exam-schedule/pdf?'.http_build_query($params), (string) config('app.key'));
-                $valid = hash_equals($expected, $signature);
-            }
-
-            if (! $valid) {
-                $valid = $request->hasValidSignature()
-                    || $request->hasValidRelativeSignature()
-                    || $request->hasValidSignature(false)
-                    || $request->hasValidRelativeSignature(false);
-            }
-
-            abort_unless($valid, 401, 'Unauthenticated.');
-            $userId = (int) $request->query('user_id');
-            $user = User::query()->whereNull('disabled_at')->find($userId);
-            abort_if($user === null, 401, 'Unauthenticated.');
-        }
-
-        $requestedDistrict = $request->header('X-District-Id') ?: $request->query('district_id');
-        if ($user->role === 'super_admin') {
-            abort_if(blank($requestedDistrict), 422, 'กรุณาเลือกอำเภอก่อนเรียกดูข้อมูล');
-            $districtId = filter_var($requestedDistrict, FILTER_VALIDATE_INT, ['options' => ['min_range' => 1]]);
-            abort_unless($districtId, 422, 'รหัสอำเภอไม่ถูกต้อง');
-        } else {
-            abort_unless($user->district_id, 403, 'บัญชีนี้ยังไม่ได้กำหนดอำเภอ');
-            $districtId = (int) $user->district_id;
-            if (filled($requestedDistrict) && (int) $requestedDistrict !== $districtId) {
-                abort(403, 'ไม่สามารถเข้าถึงข้อมูลของอำเภออื่นได้');
-            }
-        }
-
-        $isActive = District::query()
-            ->whereKey($districtId)
-            ->where('is_active', true)
-            ->exists();
-        abort_unless($isActive, 404, 'ไม่พบอำเภอที่เปิดใช้งาน');
-
-        $request->attributes->set('district_id', (int) $districtId);
-        $user->setRelation('selectedDistrictContext', (int) $districtId);
-
+        $user = $this->resolveUser($request);
+        $this->resolveDistrict($request, $user);
         $selection = $export->build($user, $filters = $this->filters($request));
+
         $fontDirectory = resource_path('fonts/thsarabunnew');
         $tempDirectory = storage_path('app/private/mpdf');
         File::ensureDirectoryExists($tempDirectory, 0750, true);
@@ -127,8 +102,6 @@ final class ExamScheduleDocumentController extends Controller
             ],
             'default_font' => 'thsarabunnew',
             'default_font_size' => 16,
-            // TH Sarabun New does not contain the zero-width space glyph that
-            // mPDF's Thai dictionary line-breaker inserts between words.
             'useDictionaryLBR' => false,
         ]);
         $mpdf->SetTitle('ตารางสอบ');
@@ -136,8 +109,6 @@ final class ExamScheduleDocumentController extends Controller
         $mpdf->showImageErrors = false;
         $mpdf->shrink_tables_to_fit = 1;
         $mpdf->keep_table_proportions = true;
-        // packTableData corrupts mixed-border table metadata in mPDF 8.3.1
-        // and causes _fixTableBorders() to treat packed integers as arrays.
         $mpdf->packTableData = false;
         $mpdf->WriteHTML(view('pdf.exam-schedules', $selection)->render());
         $content = $mpdf->Output('', Destination::STRING_RETURN);
@@ -150,6 +121,79 @@ final class ExamScheduleDocumentController extends Controller
             'Content-Disposition' => "{$disposition}; filename=\"{$filename}\"",
             'Content-Length' => (string) strlen($content),
         ]);
+    }
+
+    private function resolveUser(Request $request): User
+    {
+        $user = $request->user('sanctum');
+        if ($user !== null) {
+            return $user;
+        }
+
+        $valid = $this->verifySignature($request);
+        abort_unless($valid, 401, 'Unauthenticated.');
+        $userId = (int) $request->query('user_id');
+        $user = User::query()->whereNull('disabled_at')->find($userId);
+        abort_if($user === null, 401, 'Unauthenticated.');
+
+        return $user;
+    }
+
+    private function verifySignature(Request $request): bool
+    {
+        $signature = (string) $request->query('signature');
+        $expires = (int) $request->query('expires');
+        if ($signature !== '' && $expires >= now()->timestamp) {
+            $signedPayload = $this->signedPayload($request->query());
+            $expected = hash_hmac('sha256', 'exam-schedule:'.http_build_query($signedPayload), (string) config('app.key'));
+            if (hash_equals($expected, $signature)) {
+                return true;
+            }
+        }
+
+        return $request->hasValidSignature()
+            || $request->hasValidRelativeSignature()
+            || $request->hasValidSignature(false)
+            || $request->hasValidRelativeSignature(false);
+    }
+
+    /** @param array<string, mixed> $query */
+    private function signedPayload(array $query): array
+    {
+        $payload = [];
+        foreach (['scope', 'student', 'group', 'level', 'disposition', 'user_id', 'district_id', 'expires', 'openExternalBrowser'] as $key) {
+            if (isset($query[$key]) && (string) $query[$key] !== '') {
+                $payload[$key] = (string) $query[$key];
+            }
+        }
+        ksort($payload);
+
+        return $payload;
+    }
+
+    private function resolveDistrict(Request $request, User $user): void
+    {
+        $requestedDistrict = $request->header('X-District-Id') ?: $request->query('district_id');
+        if ($user->role === 'super_admin') {
+            abort_if(blank($requestedDistrict), 422, 'กรุณาเลือกอำเภอก่อนเรียกดูข้อมูล');
+            $districtId = filter_var($requestedDistrict, FILTER_VALIDATE_INT, ['options' => ['min_range' => 1]]);
+            abort_unless($districtId, 422, 'รหัสอำเภอไม่ถูกต้อง');
+        } else {
+            abort_unless($user->district_id, 403, 'บัญชีนี้ยังไม่ได้กำหนดอำเภอ');
+            $districtId = (int) $user->district_id;
+            if (filled($requestedDistrict) && (int) $requestedDistrict !== $districtId) {
+                abort(403, 'ไม่สามารถเข้าถึงข้อมูลของอำเภออื่นได้');
+            }
+        }
+
+        $isActive = District::query()
+            ->whereKey($districtId)
+            ->where('is_active', true)
+            ->exists();
+        abort_unless($isActive, 404, 'ไม่พบอำเภอที่เปิดใช้งาน');
+
+        $request->attributes->set('district_id', (int) $districtId);
+        $user->setRelation('selectedDistrictContext', (int) $districtId);
     }
 
     /** @return array{scope: string, student?: string, group?: string, level?: int} */

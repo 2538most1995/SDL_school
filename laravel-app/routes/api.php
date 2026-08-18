@@ -42,6 +42,7 @@ Route::prefix('v1')->group(function (): void {
     Route::get('/auth/branding', [PublicBrandingController::class, 'show']);
     Route::get('/auth/branding/hero', [PublicBrandingController::class, 'hero']);
     Route::get('/auth/branding/assets/{slot}', [PublicBrandingController::class, 'asset'])->whereIn('slot', ['logo', 'dashboard-hero']);
+    Route::get('/learning/exam-schedule/view', [ExamScheduleDocumentController::class, 'html'])->name('api.learning.exam-schedule.view');
     Route::get('/learning/exam-schedule/pdf', [ExamScheduleDocumentController::class, 'pdf'])->name('api.learning.exam-schedule.pdf');
 
     if ((bool) config('sena.demo_mode')) {
