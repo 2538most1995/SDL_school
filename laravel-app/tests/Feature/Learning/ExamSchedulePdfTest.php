@@ -116,6 +116,25 @@ final class ExamSchedulePdfTest extends TestCase
         $this->assertStringStartsWith('%PDF-', (string) $pdfResponse->getContent());
     }
 
+    public function test_html_view_shows_friendly_error_when_student_not_found(): void
+    {
+        $user = $this->viewer('admin');
+        Sanctum::actingAs($user);
+
+        $response = $this->getJson('/api/v1/learning/exam-schedule/signed-url?scope=student&student=9999999999');
+        $response->assertOk();
+
+        $viewUrl = (string) $response->json('data.url');
+        auth()->forgetGuards();
+        $this->app['auth']->forgetGuards();
+
+        $htmlResponse = $this->get($viewUrl);
+        $htmlResponse->assertOk()
+            ->assertHeader('Content-Type', 'text/html; charset=UTF-8')
+            ->assertSee('ไม่พบข้อมูลตารางสอบ')
+            ->assertSee('9999999999');
+    }
+
     /** @param list<string> $groups */
     private function viewer(string $role, array $groups = [], ?string $username = null): User
     {

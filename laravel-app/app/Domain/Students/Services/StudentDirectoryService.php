@@ -60,18 +60,31 @@ final readonly class StudentDirectoryService
 
     public function findAccessible(User $viewer, string $code): ?Student
     {
+        $code = trim($code);
         $matches = array_values(array_filter(
             $this->accessibleStudents($viewer),
-            static fn (Student $student): bool => hash_equals($student->code, trim($code)),
+            static fn (Student $student): bool => hash_equals($student->code, $code),
         ));
 
-        // A student code is not globally unique across districts or levels. Refuse
-        // an ambiguous lookup until the route carries a canonical opaque identity.
-        if (count($matches) !== 1) {
-            return null;
+        if (count($matches) === 1) {
+            return $matches[0];
         }
 
-        return $matches[0];
+        $districtId = $viewer->relationLoaded('selectedDistrictContext')
+            ? (int) $viewer->getRelation('selectedDistrictContext')
+            : ($viewer->district_id !== null ? (int) $viewer->district_id : null);
+
+        if ($districtId !== null && $districtId > 0) {
+            $student = $this->repository->find($code, $districtId);
+            if ($student !== null) {
+                $scope = StudentAccessScope::forUser($viewer);
+                if ($scope->allows($student)) {
+                    return $student;
+                }
+            }
+        }
+
+        return null;
     }
 
     /** @return list<Student> */

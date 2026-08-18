@@ -4,9 +4,6 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>ตารางสอบ - SDL School</title>
-    <link rel="preconnect" href="https://fonts.googleapis.com">
-    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-    <link href="https://fonts.googleapis.com/css2?family=Sarabun:wght@400;600;700;800&display=swap" rel="stylesheet">
     <style>
         * { box-sizing: border-box; }
         body {
@@ -14,7 +11,7 @@
             padding: 0;
             background: #f1f5f9;
             color: #0f172a;
-            font-family: 'Sarabun', 'TH Sarabun New', sans-serif;
+            font-family: -apple-system, BlinkMacSystemFont, "Sarabun", "TH Sarabun New", "Segoe UI", Roboto, sans-serif;
             font-size: 16px;
             line-height: 1.4;
             -webkit-font-smoothing: antialiased;

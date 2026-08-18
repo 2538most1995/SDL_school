@@ -43,8 +43,8 @@ final class ExamScheduleDocumentController extends Controller
         $signature = hash_hmac('sha256', 'exam-schedule:'.http_build_query($signedPayload), (string) config('app.key'));
         $params['signature'] = $signature;
 
-        $viewUrl = url('/api/v1/learning/exam-schedule/view').'?'.http_build_query($params);
-        $pdfUrl = url('/api/v1/learning/exam-schedule/pdf').'?'.http_build_query($params);
+        $viewUrl = url('/learning/schedule/view').'?'.http_build_query($params);
+        $pdfUrl = url('/learning/schedule/pdf').'?'.http_build_query($params);
 
         return response()->json([
             'data' => [
@@ -56,18 +56,33 @@ final class ExamScheduleDocumentController extends Controller
 
     public function html(Request $request, ExamScheduleExportService $export): Response
     {
-        $user = $this->resolveUser($request);
-        $this->resolveDistrict($request, $user);
-        $selection = $export->build($user, $filters = $this->filters($request));
+        try {
+            $user = $this->resolveUser($request);
+            $this->resolveDistrict($request, $user);
+            $selection = $export->build($user, $filters = $this->filters($request));
 
-        $pdfParams = $request->query();
-        $pdfParams['disposition'] = 'attachment';
-        $selection['pdfDownloadUrl'] = url('/api/v1/learning/exam-schedule/pdf').'?'.http_build_query($pdfParams);
+            $pdfParams = $request->query();
+            $pdfParams['disposition'] = 'attachment';
+            $selection['pdfDownloadUrl'] = url('/learning/schedule/pdf').'?'.http_build_query($pdfParams);
 
-        return response()->view('print.exam-schedule-view', $selection, 200, [
-            ...$this->privateHeaders(),
-            'Content-Type' => 'text/html; charset=UTF-8',
-        ]);
+            return response()->view('print.exam-schedule-view', $selection, 200, [
+                ...$this->privateHeaders(),
+                'Content-Type' => 'text/html; charset=UTF-8',
+            ]);
+        } catch (\Throwable $e) {
+            $message = $e->getMessage() ?: 'ไม่สามารถแสดงตารางสอบได้';
+            if ($e instanceof \Symfony\Component\HttpKernel\Exception\HttpExceptionInterface && $e->getStatusCode() === 404) {
+                $message = 'ไม่พบข้อมูลตารางสอบของนักศึกษา หรือยังไม่มีการประกาศตารางสอบในภาคเรียนนี้';
+            }
+
+            return response()->view('print.exam-schedule-error', [
+                'message' => $message,
+                'studentCode' => (string) $request->query('student', ''),
+            ], 200, [
+                ...$this->privateHeaders(),
+                'Content-Type' => 'text/html; charset=UTF-8',
+            ]);
+        }
     }
 
     public function pdf(Request $request, ExamScheduleExportService $export): Response
