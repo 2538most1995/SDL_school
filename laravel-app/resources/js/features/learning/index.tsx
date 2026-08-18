@@ -1,4 +1,5 @@
 import {
+    ArrowSquareOut,
     BookOpenText,
     Books,
     CalendarBlank,
