@@ -29,10 +29,32 @@ final class LegacyExamScheduleService
     /** @return array<string, mixed> */
     public function forStudent(Student $student): array
     {
+        $normalizedStudentTerm = AcademicTerm::normalize($student->currentTerm) ?? trim((string) $student->currentTerm);
+        $allSubjects = $this->students->subjectsFor($student);
         $registered = array_values(array_filter(
-            $this->students->subjectsFor($student),
-            static fn ($subject): bool => $subject->term === $student->currentTerm && $subject->grade === null,
+            $allSubjects,
+            static function ($subject) use ($normalizedStudentTerm, $student): bool {
+                $normalizedTerm = AcademicTerm::normalize($subject->term) ?? trim((string) $subject->term);
+                $matchesTerm = $normalizedTerm === $normalizedStudentTerm || $subject->term === $student->currentTerm;
+                if (! $matchesTerm) {
+                    return false;
+                }
+
+                return $subject->grade === null || trim((string) $subject->grade) === '' || $subject->registrationStatus === 'registered';
+            },
         ));
+
+        if ($registered === []) {
+            $registered = array_values(array_filter(
+                $allSubjects,
+                static function ($subject) use ($normalizedStudentTerm, $student): bool {
+                    $normalizedTerm = AcademicTerm::normalize($subject->term) ?? trim((string) $subject->term);
+
+                    return $normalizedTerm === $normalizedStudentTerm || $subject->term === $student->currentTerm;
+                },
+            ));
+        }
+
         $subjects = [];
         foreach ($registered as $subject) {
             $subjects[trim($subject->code)] = $subject;
@@ -47,18 +69,23 @@ final class LegacyExamScheduleService
         $studentGroupFld = $groupFields[trim((string) $student->groupCode)] ?? '';
 
         $rows = [];
-        if ($scheduleTable !== null) {
+        if ($scheduleTable !== null && $subjects !== []) {
+            $termVariants = array_values(array_unique(array_filter([
+                $student->currentTerm,
+                $normalizedStudentTerm,
+                ...AcademicTerm::variants($student->currentTerm),
+            ])));
+
             $scheduleRows = $this->database->connection()->table($scheduleTable)
                 ->whereIn('_perf_sub', array_keys($subjects))
-                ->whereIn('_perf_semestry', AcademicTerm::variants($student->currentTerm))
                 ->get();
             foreach ($scheduleRows as $record) {
                 $row = (array) $record;
-                $code = trim((string) ($row['sub_code'] ?? ''));
-                $rawTerm = trim((string) ($row['semestry'] ?? ''));
+                $code = trim((string) ($row['sub_code'] ?? $row['_perf_sub'] ?? ''));
+                $rawTerm = trim((string) ($row['semestry'] ?? $row['_perf_semestry'] ?? ''));
                 $term = AcademicTerm::normalize($rawTerm) ?? $rawTerm;
                 $date = trim((string) ($row['exam_day'] ?? ''));
-                if (! isset($subjects[$code]) || $term !== $student->currentTerm || $date === '') {
+                if (! isset($subjects[$code]) || ($term !== $normalizedStudentTerm && $term !== $student->currentTerm && ! in_array($rawTerm, $termVariants, true)) || $date === '') {
                     continue;
                 }
                 $fieldCode = trim((string) (

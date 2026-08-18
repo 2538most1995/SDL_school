@@ -412,7 +412,7 @@ export function StudentsPage() {
                     </Link>
 
                     <Link
-                        to={`/learning/schedule?student=${encodeURIComponent(String(row.original.id))}&auto=1`}
+                        to={`/learning/schedule?student=${encodeURIComponent(String(row.original.code || row.original.id))}&auto=1`}
                         className="responsive-table-action inline-flex shrink-0 items-center gap-1.5 whitespace-nowrap rounded-lg border border-sky-200 bg-sky-50 px-2.5 py-1.5 text-xs font-bold text-sky-800 hover:bg-sky-100 active:scale-[0.98]"
                         aria-label={`สร้างตารางสอบ ${row.original.name}`}
                     >

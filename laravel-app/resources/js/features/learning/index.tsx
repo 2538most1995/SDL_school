@@ -635,9 +635,9 @@ function ExamSchedulePage() {
         {scope === 'student' && studentCode !== '' && <Panel title="ตารางสอบจากฐานข้อมูลระบบ" description={`${selectedStudent?.full_name ?? studentCode} · ภาคเรียน ${schedule.data?.data.term || '-'}`}>
             {schedule.isPending && <QuerySkeleton rows={5} />}
             {schedule.isError && <QueryError onRetry={() => schedule.refetch()} />}
-            {schedule.data && scheduleRows.length === 0 && <p role="status" className="rounded-xl border border-amber-200 bg-amber-50 p-4 text-center text-sm font-bold leading-6 text-amber-950">{EXAM_SCHEDULE_EMPTY_MESSAGE}</p>}
-            {schedule.data?.data.source_ready && scheduleRows.length > 0 && schedule.data.data.sources?.field === false && <p role="alert" className="mb-4 rounded-xl border border-sky-200 bg-sky-50 p-3 text-sm font-bold text-sky-900">ยังไม่มีข้อมูลสนามสอบในชุดข้อมูลปัจจุบัน ระบบจึงใช้ชื่ออำเภอแทนชื่อสนามสอบชั่วคราว</p>}
-            {schedule.data?.data.source_ready && scheduleRows.length > 0 && <DataTable data={scheduleRows} columns={scheduleColumns} minWidth="wide" />}
+            {!schedule.isPending && scheduleRows.length === 0 && <p role="status" className="rounded-xl border border-amber-200 bg-amber-50 p-4 text-center text-sm font-bold leading-6 text-amber-950">{EXAM_SCHEDULE_EMPTY_MESSAGE}</p>}
+            {schedule.data?.data.sources?.field === false && scheduleRows.length > 0 && <p role="alert" className="mb-4 rounded-xl border border-sky-200 bg-sky-50 p-3 text-sm font-bold text-sky-900">ยังไม่มีข้อมูลสนามสอบในชุดข้อมูลปัจจุบัน ระบบจึงใช้ชื่ออำเภอแทนชื่อสนามสอบชั่วคราว</p>}
+            {scheduleRows.length > 0 && <DataTable data={scheduleRows} columns={scheduleColumns} minWidth="wide" responsiveMode="cards" />}
         </Panel>}
         <Panel title="ตัวอย่างไฟล์ PDF" description={pdfUrl ? 'ตัวอย่างนี้เป็นไฟล์เดียวกับที่ดาวน์โหลดและพิมพ์ ตำแหน่งจึงตรงกันทุกจุด' : autoGenerate ? 'ระบบกำลังสร้างตารางสอบของนักศึกษารายนี้' : 'เลือกขอบเขตแล้วกดสร้าง PDF เพื่อแสดงตัวอย่าง'}>
             {pdfLoading && <QuerySkeleton rows={8} />}
