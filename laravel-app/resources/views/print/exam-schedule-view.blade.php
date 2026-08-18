@@ -6,110 +6,137 @@
     <title>ตารางสอบ - SDL School</title>
     <style>
         * { box-sizing: border-box; }
-        body {
+        html, body {
             margin: 0;
             padding: 0;
-            background: #f1f5f9;
+            background: #e2e8f0;
             color: #0f172a;
-            font-family: -apple-system, BlinkMacSystemFont, "Sarabun", "TH Sarabun New", "Segoe UI", Roboto, sans-serif;
+            font-family: "TH Sarabun New", "Sarabun", -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
             font-size: 16px;
-            line-height: 1.4;
+            line-height: 1.35;
             -webkit-font-smoothing: antialiased;
         }
+
+        /* Top Action Bar */
         .no-print-bar {
             position: sticky;
             top: 0;
-            z-index: 50;
+            z-index: 100;
             background: #0f172a;
-            color: #fff;
-            padding: 12px 16px;
+            color: #ffffff;
+            padding: 10px 16px;
             display: flex;
             align-items: center;
             justify-content: space-between;
             gap: 12px;
-            box-shadow: 0 4px 6px -1px rgba(0,0,0,0.1);
+            box-shadow: 0 2px 8px rgba(0,0,0,0.2);
         }
-        .no-print-bar h2 {
+        .bar-title {
             margin: 0;
             font-size: 15px;
             font-weight: 700;
+            display: flex;
+            align-items: center;
+            gap: 6px;
             white-space: nowrap;
             overflow: hidden;
             text-overflow: ellipsis;
         }
-        .btn-group {
+        .bar-actions {
             display: flex;
             align-items: center;
             gap: 8px;
-            flex-wrap: wrap;
+            flex-shrink: 0;
         }
         .btn {
             display: inline-flex;
             align-items: center;
             gap: 6px;
-            padding: 8px 14px;
+            padding: 8px 16px;
             border-radius: 8px;
-            font-size: 13px;
+            font-size: 14px;
             font-weight: 700;
             font-family: inherit;
             cursor: pointer;
             text-decoration: none;
             border: none;
-            transition: transform 0.1s, opacity 0.15s;
+            transition: all 0.15s ease;
         }
-        .btn:active { transform: scale(0.97); }
-        .btn-primary { background: #2563eb; color: #fff; }
-        .btn-outline { background: #334155; color: #fff; }
-        .page-container {
-            max-width: 820px;
-            margin: 20px auto;
-            padding: 0 16px 40px;
+        .btn:active { transform: scale(0.96); }
+        .btn-primary {
+            background: #2563eb;
+            color: #ffffff;
+            box-shadow: 0 1px 3px rgba(37,99,235,0.4);
         }
-        .sheet {
-            background: #fff;
-            padding: 32px 36px;
-            border-radius: 12px;
-            box-shadow: 0 1px 3px rgba(0,0,0,0.1);
+        .btn-primary:hover { background: #1d4ed8; }
+        .btn-outline {
+            background: #334155;
+            color: #ffffff;
+            border: 1px solid #475569;
+        }
+        .btn-outline:hover { background: #475569; }
+
+        /* Document Container (Simulated A4 Paper Sheet) */
+        .document-wrapper {
+            max-width: 900px;
+            margin: 20px auto 40px;
+            padding: 0 12px;
+        }
+        .a4-sheet {
+            background: #ffffff;
+            width: 100%;
+            padding: 36px 40px;
+            border-radius: 8px;
+            box-shadow: 0 4px 12px rgba(0,0,0,0.08);
             margin-bottom: 24px;
         }
-        h1 {
+
+        h1.doc-title {
             margin: 0 0 20px;
             text-align: center;
             font-size: 26px;
             font-weight: 800;
             color: #0f172a;
+            letter-spacing: 0.5px;
         }
-        .info-grid {
-            display: grid;
-            grid-template-columns: repeat(2, 1fr);
-            gap: 12px 24px;
-            margin-bottom: 24px;
-            padding-bottom: 16px;
-            border-bottom: 1px solid #e2e8f0;
-        }
-        .info-item {
-            display: flex;
-            align-items: baseline;
-            gap: 8px;
+
+        /* Header Info Layout matching PDF */
+        .doc-info-table {
+            width: 100%;
+            border-collapse: separate;
+            border-spacing: 0 8px;
+            margin-bottom: 20px;
             font-size: 15px;
         }
-        .info-label {
-            font-weight: 700;
-            color: #475569;
-            white-space: nowrap;
-            min-width: 75px;
+        .doc-info-table td {
+            vertical-align: bottom;
+            padding: 0;
         }
-        .info-value {
+        .doc-info-table .label {
+            font-weight: 700;
+            color: #334155;
+            white-space: nowrap;
+            padding-right: 8px;
+            width: 1%;
+        }
+        .doc-info-table .value {
             font-weight: 700;
             color: #0f172a;
-            border-bottom: 1px dotted #94a3b8;
-            flex: 1;
-            padding-bottom: 2px;
+            border-bottom: 1px dotted #64748b;
+            padding: 0 4px 2px;
+            width: 44%;
         }
-        .table-responsive {
+        .doc-info-table .spacer {
+            width: 8%;
+        }
+
+        /* Official Exam Schedule Table */
+        .table-container {
             width: 100%;
             overflow-x: auto;
             -webkit-overflow-scrolling: touch;
+            margin-top: 8px;
+            border-radius: 4px;
         }
         .exam-table {
             width: 100%;
@@ -118,67 +145,145 @@
             table-layout: auto;
         }
         .exam-table th, .exam-table td {
-            border: 1px solid #cbd5e1;
-            padding: 10px 8px;
+            border: 1px solid #334155;
+            padding: 8px 6px;
             text-align: center;
             vertical-align: middle;
         }
         .exam-table th {
             background: #f8fafc;
-            font-weight: 700;
-            color: #334155;
+            font-weight: 800;
+            color: #0f172a;
             white-space: nowrap;
         }
-        .exam-table td.subject {
+        .exam-table td.subject-col {
             text-align: left;
+            padding-left: 10px;
+        }
+        .subject-code {
+            font-weight: 800;
+            color: #0f172a;
+            margin-right: 4px;
+        }
+        .subject-name {
             font-weight: 600;
+            color: #1e293b;
         }
-        .room-badge {
-            display: inline-block;
-            background: #e0f2fe;
-            color: #0369a1;
-            padding: 2px 8px;
-            border-radius: 6px;
+        .room-text {
             font-weight: 700;
-            font-size: 13px;
+            color: #0369a1;
+            white-space: nowrap;
         }
-        .empty-cell {
+        .empty-row {
             padding: 36px 16px;
             color: #64748b;
             font-weight: 600;
+            text-align: center;
         }
-        .footer-note {
-            margin-top: 16px;
+        .doc-footer {
+            margin-top: 14px;
             text-align: right;
             font-size: 12px;
             color: #64748b;
         }
 
+        /* Mobile specific adjustments */
         @media (max-width: 640px) {
-            .page-container { margin: 8px auto; padding: 0 8px 30px; }
-            .sheet { padding: 20px 16px; border-radius: 8px; }
-            h1 { font-size: 22px; margin-bottom: 16px; }
-            .info-grid { grid-template-columns: 1fr; gap: 8px; }
-            .exam-table th, .exam-table td { padding: 8px 5px; font-size: 13px; }
+            html, body { background: #f1f5f9; font-size: 14px; }
+            .document-wrapper { margin: 8px auto 24px; padding: 0 6px; }
+            .a4-sheet { padding: 20px 14px; border-radius: 6px; }
+            h1.doc-title { font-size: 22px; margin-bottom: 14px; }
+            .doc-info-table { font-size: 13px; border-spacing: 0 6px; }
+            .doc-info-table .label { padding-right: 4px; }
+            .doc-info-table .value { padding: 0 2px 2px; }
+            .doc-info-table .spacer { width: 4%; }
+            .exam-table { min-width: 580px; }
+            .exam-table th, .exam-table td { padding: 6px 4px; font-size: 13px; }
+            .no-print-bar { padding: 8px 12px; }
+            .bar-title { font-size: 13px; }
+            .btn { padding: 7px 12px; font-size: 13px; }
         }
 
+        /* Print Mode: Exact 1:1 match with official A4 paper */
         @media print {
-            body { background: #fff; font-size: 14pt; }
-            .no-print-bar { display: none !important; }
-            .page-container { max-width: 100%; margin: 0; padding: 0; }
-            .sheet { padding: 0; border-radius: 0; box-shadow: none; page-break-after: always; }
-            .sheet:last-child { page-break-after: auto; }
-            .info-grid { border-bottom: none; }
-            .exam-table th { background: #f8fafc !important; -webkit-print-color-adjust: exact; print-color-adjust: exact; }
-            .room-badge { background: transparent !important; color: #000 !important; border: 1px solid #000; }
+            @page {
+                size: A4 portrait;
+                margin: 12mm 15mm;
+            }
+            html, body {
+                background: #ffffff !important;
+                color: #000000 !important;
+                font-family: "TH Sarabun New", "Sarabun", sans-serif !important;
+                font-size: 16pt !important;
+                line-height: 1.18 !important;
+            }
+            .no-print-bar {
+                display: none !important;
+            }
+            .document-wrapper {
+                max-width: 100% !important;
+                margin: 0 !important;
+                padding: 0 !important;
+            }
+            .a4-sheet {
+                padding: 0 !important;
+                border-radius: 0 !important;
+                box-shadow: none !important;
+                page-break-after: always;
+            }
+            .a4-sheet:last-child {
+                page-break-after: auto;
+            }
+            h1.doc-title {
+                font-size: 26pt !important;
+                margin: 0 0 6mm !important;
+            }
+            .doc-info-table {
+                font-size: 16pt !important;
+                border-spacing: 0 2mm !important;
+                margin-bottom: 6mm !important;
+            }
+            .doc-info-table .value {
+                border-bottom: 0.35mm dotted #000000 !important;
+            }
+            .table-container {
+                overflow: visible !important;
+            }
+            .exam-table {
+                width: 100% !important;
+                min-width: 100% !important;
+                font-size: 14pt !important;
+            }
+            .exam-table th, .exam-table td {
+                border: 0.3mm solid #000000 !important;
+                padding: 2mm 1.5mm !important;
+                color: #000000 !important;
+            }
+            .exam-table th {
+                background: #f8fafc !important;
+                -webkit-print-color-adjust: exact;
+                print-color-adjust: exact;
+            }
+            .room-text {
+                color: #000000 !important;
+            }
+            .doc-footer {
+                margin-top: 4mm !important;
+                font-size: 11pt !important;
+                color: #000000 !important;
+            }
         }
     </style>
 </head>
 <body>
-    <div class="no-print-bar">
-        <h2>ตารางสอบ ({{ $count }} ชุด)</h2>
-        <div class="btn-group">
-            <button class="btn btn-primary" onclick="window.print()">
+    <!-- Sticky Action Bar for Mobile & Desktop -->
+    <header class="no-print-bar">
+        <div class="bar-title">
+            <span>ตารางสอบ</span>
+            <span style="font-size: 12px; opacity: 0.8;">({{ $count }} ชุด)</span>
+        </div>
+        <div class="bar-actions">
+            <button type="button" id="btnPrint" class="btn btn-primary" onclick="triggerPrint()">
                 <svg width="16" height="16" viewBox="0 0 256 256" fill="currentColor"><path d="M200,80V48a16,16,0,0,0-16-16H72A16,16,0,0,0,56,48V80a8,8,0,0,0,16,0V48H184V80a8,8,0,0,0,16,0ZM224,88H32a16,16,0,0,0-16,16v64a16,16,0,0,0,16,16H56v40a16,16,0,0,0,16,16H184a16,16,0,0,0,16-16V184h24a16,16,0,0,0,16-16V104A16,16,0,0,0,224,88Zm-40,136H72V168H184Zm40-56H200V152a8,8,0,0,0-8-8H64a8,8,0,0,0-8,8v16H32V104H224v64Z"></path></svg>
                 <span>พิมพ์เอกสาร</span>
             </button>
@@ -189,49 +294,50 @@
                 </a>
             @endif
         </div>
-    </div>
+    </header>
 
-    <main class="page-container">
+    <!-- Main Documents Container -->
+    <main class="document-wrapper">
         @foreach ($documents as $document)
-            <article class="sheet">
-                <h1>ตารางสอบ</h1>
-                <div class="info-grid">
-                    <div class="info-item">
-                        <span class="info-label">สถานศึกษา:</span>
-                        <span class="info-value">{{ $document['student']['district'] ?? '-' }}</span>
-                    </div>
-                    <div class="info-item">
-                        <span class="info-label">ภาคเรียน:</span>
-                        <span class="info-value">{{ $document['term'] ?? '-' }}</span>
-                    </div>
-                    <div class="info-item">
-                        <span class="info-label">ชื่อ-สกุล:</span>
-                        <span class="info-value">{{ $document['student']['name'] ?? '-' }}</span>
-                    </div>
-                    <div class="info-item">
-                        <span class="info-label">ระดับชั้น:</span>
-                        <span class="info-value">{{ $document['student']['level'] ?? '-' }}</span>
-                    </div>
-                    <div class="info-item">
-                        <span class="info-label">รหัสนักศึกษา:</span>
-                        <span class="info-value">{{ $document['student']['code'] ?? '-' }}</span>
-                    </div>
-                    <div class="info-item">
-                        <span class="info-label">กลุ่ม:</span>
-                        <span class="info-value">{{ $document['student']['group'] ?? '-' }}</span>
-                    </div>
-                </div>
+            <article class="a4-sheet">
+                <h1 class="doc-title">ตารางสอบ</h1>
 
-                <div class="table-responsive">
+                <!-- 2-Column Info Table matching PDF layout -->
+                <table class="doc-info-table">
+                    <tr>
+                        <td class="label">สถานศึกษา:</td>
+                        <td class="value">{{ $document['student']['district'] ?? '-' }}</td>
+                        <td class="spacer"></td>
+                        <td class="label">ภาคเรียน:</td>
+                        <td class="value">{{ $document['term'] ?? '-' }}</td>
+                    </tr>
+                    <tr>
+                        <td class="label">ชื่อ-สกุล:</td>
+                        <td class="value">{{ $document['student']['name'] ?? '-' }}</td>
+                        <td class="spacer"></td>
+                        <td class="label">ระดับชั้น:</td>
+                        <td class="value">{{ $document['student']['level'] ?? '-' }}</td>
+                    </tr>
+                    <tr>
+                        <td class="label">รหัสนักศึกษา:</td>
+                        <td class="value">{{ $document['student']['code'] ?? '-' }}</td>
+                        <td class="spacer"></td>
+                        <td class="label">กลุ่ม:</td>
+                        <td class="value">{{ $document['student']['group'] ?? '-' }}</td>
+                    </tr>
+                </table>
+
+                <!-- Official Exam Table matching PDF columns -->
+                <div class="table-container">
                     <table class="exam-table">
                         <thead>
                             <tr>
-                                <th style="width: 40px;">ที่</th>
-                                <th style="width: 70px;">เทอม</th>
-                                <th>รหัส / รายวิชา</th>
-                                <th style="width: 105px;">วันสอบ</th>
-                                <th style="width: 110px;">เวลา</th>
-                                <th style="width: 120px;">สถานที่</th>
+                                <th style="width: 38px;">ที่</th>
+                                <th style="width: 65px;">เทอม</th>
+                                <th>วิชา</th>
+                                <th style="width: 105px;">วัน/เดือน/ปี</th>
+                                <th style="width: 120px;">เวลา</th>
+                                <th style="width: 115px;">สถานที่</th>
                                 <th style="width: 75px;">ห้องสอบ</th>
                             </tr>
                         </thead>
@@ -240,18 +346,18 @@
                                 <tr>
                                     <td>{{ $index + 1 }}</td>
                                     <td>{{ $row['term'] }}</td>
-                                    <td class="subject">
-                                        <div style="font-family: monospace; font-size: 12px; color: #475569;">{{ $row['subject_code'] }}</div>
-                                        <div style="font-weight: 700; color: #0f172a;">{{ $row['subject_name'] }}</div>
+                                    <td class="subject-col">
+                                        <span class="subject-code">{{ $row['subject_code'] }}</span>
+                                        <span class="subject-name">{{ $row['subject_name'] }}</span>
                                     </td>
                                     <td>{{ $row['exam_date_display'] }}</td>
                                     <td style="white-space: nowrap;">{{ $row['start_time'] }} - {{ $row['end_time'] }} น.</td>
                                     <td>{{ $row['location'] }}</td>
-                                    <td><span class="room-badge">{{ $row['room'] }}</span></td>
+                                    <td><span class="room-text">{{ $row['room'] }}</span></td>
                                 </tr>
                             @empty
                                 <tr>
-                                    <td colspan="7" class="empty-cell">ยังไม่พบตารางสอบในภาคเรียนปัจจุบัน รอเจ้าหน้าที่อัปเดตข้อมูล</td>
+                                    <td colspan="7" class="empty-row">ยังไม่พบตารางสอบในภาคเรียนปัจจุบัน รอเจ้าหน้าที่อัปเดตข้อมูล</td>
                                 </tr>
                             @endforelse
                         </tbody>
@@ -259,10 +365,31 @@
                 </div>
 
                 @if ($count > 1)
-                    <div class="footer-note">เอกสารลำดับที่ {{ $loop->iteration }} จาก {{ $count }}</div>
+                    <div class="doc-footer">เอกสารลำดับที่ {{ $loop->iteration }} จาก {{ $count }}</div>
                 @endif
             </article>
         @endforeach
     </main>
+
+    <!-- Reliable Print Handler Script -->
+    <script>
+        function triggerPrint() {
+            try {
+                window.print();
+            } catch (e) {
+                console.error('Print failed', e);
+            }
+        }
+
+        document.addEventListener('DOMContentLoaded', function() {
+            var btn = document.getElementById('btnPrint');
+            if (btn) {
+                btn.addEventListener('click', function(e) {
+                    e.preventDefault();
+                    triggerPrint();
+                });
+            }
+        });
+    </script>
 </body>
 </html>
