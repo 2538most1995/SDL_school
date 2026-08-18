@@ -321,6 +321,40 @@ final class StudentApiTest extends TestCase
         ])->assertNotFound();
     }
 
+    public function test_student_can_update_own_social_profile(): void
+    {
+        $studentUser = $this->viewer('student', username: '6650100001');
+        Sanctum::actingAs($studentUser);
+
+        $response = $this->patchJson('/api/v1/students/6650100001/social', [
+            'facebook_url' => 'https://facebook.com/student.me',
+            'line_id' => 'my_own_line',
+        ]);
+
+        $response->assertOk()
+            ->assertJsonPath('data.social.facebook_url', 'https://facebook.com/student.me')
+            ->assertJsonPath('data.social.line_id', 'my_own_line');
+
+        // Check that my-learning returns the updated social info
+        $myLearning = $this->getJson('/api/v1/my-learning');
+        $myLearning->assertOk()
+            ->assertJsonPath('data.social.facebook_url', 'https://facebook.com/student.me')
+            ->assertJsonPath('data.social.line_id', 'my_own_line')
+            ->assertJsonPath('data.social.line_url', 'https://line.me/ti/p/~my_own_line');
+    }
+
+    public function test_student_cannot_update_another_student_social_profile(): void
+    {
+        $studentUser = $this->viewer('student', username: '6650100001');
+        Sanctum::actingAs($studentUser);
+
+        // Try updating 6650200002
+        $this->patchJson('/api/v1/students/6650200002/social', [
+            'facebook_url' => 'https://facebook.com/hacker',
+            'line_id' => 'hacker_line',
+        ])->assertNotFound();
+    }
+
     /** @param list<string> $groups */
     private function viewer(
         string $role,
@@ -333,6 +367,7 @@ final class StudentApiTest extends TestCase
             'district_id' => $districtId ?? ($role === 'super_admin' ? null : $this->sena->id),
             'assigned_groups' => $groups,
             'username' => $username,
+            'student_code' => $role === 'student' ? $username : null,
         ]);
     }
 }

@@ -30,6 +30,12 @@ final class CurrentStudentController extends Controller
             'advisor' => 'ตรวจสอบกับครูประจำกลุ่ม',
             'currentTerm' => $student->currentTerm,
             'nextMeeting' => 'ดูวันนัดหมายล่าสุดจากปฏิทินการเรียนรู้',
+            'social' => [
+                'facebook_url' => $student->facebookUrlFormatted(),
+                'facebook_raw' => $student->facebookUrl,
+                'line_id' => $student->lineId,
+                'line_url' => $student->lineUrl(),
+            ],
         ]);
     }
 

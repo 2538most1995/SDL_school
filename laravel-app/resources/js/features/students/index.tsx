@@ -868,35 +868,110 @@ type LearningProfile = {
     advisor: string;
     currentTerm: string;
     nextMeeting: string;
+    social?: StudentSocial;
 };
 
 const demoLearningProfile: LearningProfile = {
-    name: 'ณัฐชา ศรีสวัสดิ์', code: 'SENA-670142', level: 'มัธยมศึกษาตอนปลาย', group: 'กลุ่มวันอาทิตย์ 1', advisor: 'ครูสุภาวดี รักษ์เรียน', currentTerm: '1/2569', nextMeeting: 'อาทิตย์ 19 ก.ค. เวลา 09:00 น.',
+    name: 'ณัฐชา ศรีสวัสดิ์',
+    code: 'SENA-670142',
+    level: 'มัธยมศึกษาตอนปลาย',
+    group: 'กลุ่มวันอาทิตย์ 1',
+    advisor: 'ครูสุภาวดี รักษ์เรียน',
+    currentTerm: '1/2569',
+    nextMeeting: 'อาทิตย์ 19 ก.ค. เวลา 09:00 น.',
+    social: {
+        facebook_url: 'https://facebook.com/nattacha.srisawat',
+        facebook_raw: 'https://facebook.com/nattacha.srisawat',
+        line_id: 'nattacha_sena',
+        line_url: 'https://line.me/ti/p/~nattacha_sena',
+    },
 };
 
 export function MyLearningPage() {
+    const [editingSocial, setEditingSocial] = useState(false);
     const profile = useQuery({ queryKey: ['my-learning'], queryFn: ({ signal }) => getFeatureDataWithDemo<LearningProfile>('/api/v1/my-learning', demoLearningProfile, signal) });
     if (profile.isPending) return <QuerySkeleton rows={6} />;
     if (profile.isError) return <QueryError onRetry={() => profile.refetch()} />;
     const data = profile.data.data;
     return (
         <div>
-            <PageHeader title={`ข้อมูลการเรียนของ ${data.name}`} description="ตรวจข้อมูลประจำตัว กลุ่มเรียน และภาคเรียนของคุณ" icon={Student} category={data.code} />
+            <PageHeader title={`ข้อมูลการเรียนของ ${data.name}`} description="ตรวจข้อมูลประจำตัว กลุ่มเรียน และช่องทางติดต่อของคุณ" icon={Student} category={data.code} />
             <div className="grid gap-5 lg:grid-cols-[1fr_0.8fr]">
-                <Panel title="ข้อมูลภาคเรียนปัจจุบัน">
-                    <dl className="grid gap-4 sm:grid-cols-2">
-                        {[["ระดับการศึกษา", data.level], ["กลุ่มเรียน", data.group], ["ครูที่ปรึกษา", data.advisor], ["ภาคเรียน", data.currentTerm]].map(([label, value]) => (
-                            <div key={label} className="rounded-2xl bg-slate-50 p-4"><dt className="text-xs font-bold text-slate-500">{label}</dt><dd className="mt-1 font-bold text-slate-900">{value}</dd></div>
-                        ))}
-                    </dl>
-                </Panel>
-                <Panel title="นัดหมายถัดไป" className="border-amber-200 bg-amber-50">
-                    <CalendarCheck size={30} weight="duotone" className="text-amber-800" />
-                    <p className="mt-4 text-lg font-bold text-slate-950">วันพบกลุ่ม</p>
-                    <p className="mt-1 text-sm leading-6 text-slate-700">{data.nextMeeting}</p>
-                    <Link to="/learning/calendar" className="mt-5 inline-flex whitespace-nowrap rounded-full bg-amber-800 px-5 py-2.5 text-sm font-bold text-white hover:bg-amber-900 active:scale-[0.98]">ดูปฏิทิน</Link>
-                </Panel>
+                <div className="space-y-5">
+                    <Panel title="ข้อมูลภาคเรียนปัจจุบัน">
+                        <dl className="grid gap-4 sm:grid-cols-2">
+                            {[["ระดับการศึกษา", data.level], ["กลุ่มเรียน", data.group], ["ครูที่ปรึกษา", data.advisor], ["ภาคเรียน", data.currentTerm]].map(([label, value]) => (
+                                <div key={label} className="rounded-2xl bg-slate-50 p-4"><dt className="text-xs font-bold text-slate-500">{label}</dt><dd className="mt-1 font-bold text-slate-900">{value}</dd></div>
+                            ))}
+                        </dl>
+                    </Panel>
+
+                    <Panel
+                        title="ช่องทางติดต่อโซเชียล (Facebook & LINE)"
+                        description="เพิ่มหรือแก้ไขช่องทางติดต่อเพื่อให้ครูและเพื่อนร่วมกลุ่มติดต่อได้สะดวกรวดเร็ว"
+                        action={(
+                            <button
+                                type="button"
+                                onClick={() => setEditingSocial(true)}
+                                className="inline-flex items-center gap-1.5 rounded-xl border border-brand-200 bg-brand-50 px-3 py-1.5 text-xs font-bold text-brand-800 hover:bg-brand-100 active:scale-[0.98]"
+                            >
+                                <PencilSimple size={15} weight="bold" />
+                                <span>{data.social?.facebook_url || data.social?.line_id ? 'แก้ไข Facebook & LINE' : '+ เพิ่ม Facebook & LINE'}</span>
+                            </button>
+                        )}
+                    >
+                        <div className="grid gap-3 sm:grid-cols-2">
+                            <div className="min-w-0 rounded-2xl border border-blue-100 bg-blue-50/70 p-4">
+                                <div className="flex items-center justify-between text-xs font-bold text-[#1877F2]">
+                                    <span className="flex items-center gap-1.5"><FacebookIcon className="size-4" /> Facebook</span>
+                                    {data.social?.facebook_url && (
+                                        <a href={data.social.facebook_url} target="_blank" rel="noopener noreferrer" className="inline-flex items-center gap-1 text-xs font-bold text-[#1877F2] hover:underline">
+                                            <span>เปิดโปรไฟล์</span> <ArrowSquareOut size={13} weight="bold" />
+                                        </a>
+                                    )}
+                                </div>
+                                <p className="mt-1.5 break-words font-bold text-slate-950">
+                                    {data.social?.facebook_raw || data.social?.facebook_url || <span className="font-normal text-slate-400">ยังไม่ได้ระบุ</span>}
+                                </p>
+                            </div>
+
+                            <div className="min-w-0 rounded-2xl border border-emerald-100 bg-emerald-50/70 p-4">
+                                <div className="flex items-center justify-between text-xs font-bold text-[#059639]">
+                                    <span className="flex items-center gap-1.5"><LineIcon className="size-4" /> LINE</span>
+                                    {(data.social?.line_url || data.social?.line_id) && (
+                                        <a href={data.social.line_url ?? `https://line.me/ti/p/~${data.social.line_id}`} target="_blank" rel="noopener noreferrer" className="inline-flex items-center gap-1 text-xs font-bold text-[#059639] hover:underline">
+                                            <span>เปิด LINE</span> <ArrowSquareOut size={13} weight="bold" />
+                                        </a>
+                                    )}
+                                </div>
+                                <p className="mt-1.5 break-words font-bold text-slate-950">
+                                    {data.social?.line_id ? (
+                                        <span className="font-mono">{data.social.line_id}</span>
+                                    ) : (
+                                        <span className="font-normal text-slate-400">ยังไม่ได้ระบุ</span>
+                                    )}
+                                </p>
+                            </div>
+                        </div>
+                    </Panel>
+                </div>
+
+                <div className="space-y-5">
+                    <Panel title="นัดหมายถัดไป" className="border-amber-200 bg-amber-50">
+                        <CalendarCheck size={30} weight="duotone" className="text-amber-800" />
+                        <p className="mt-4 text-lg font-bold text-slate-950">วันพบกลุ่ม</p>
+                        <p className="mt-1 text-sm leading-6 text-slate-700">{data.nextMeeting}</p>
+                        <Link to="/learning/calendar" className="mt-5 inline-flex whitespace-nowrap rounded-full bg-amber-800 px-5 py-2.5 text-sm font-bold text-white hover:bg-amber-900 active:scale-[0.98]">ดูปฏิทิน</Link>
+                    </Panel>
+                </div>
             </div>
+            {editingSocial && (
+                <StudentSocialModal
+                    student={{ code: data.code, name: data.name, social: data.social }}
+                    onClose={() => setEditingSocial(false)}
+                    onSaved={() => profile.refetch()}
+                />
+            )}
         </div>
     );
 }

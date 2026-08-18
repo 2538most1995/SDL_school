@@ -116,6 +116,7 @@ Route::prefix('v1')->group(function (): void {
         Route::get('/students/{student}/kpch', StudentKpchController::class);
         Route::get('/students/{student}/moral', StudentMoralController::class);
         Route::get('/students/{student}/subjects', StudentSubjectsController::class);
+        Route::patch('/students/{student}/social', [StudentSocialProfileController::class, 'update']);
         Route::get('/reports/students/overview', [StudentReportController::class, 'overview']);
         Route::get('/reports/new-students', [StudentReportController::class, 'newStudents']);
         Route::get('/reports/graduates', [StudentReportController::class, 'graduates']);
@@ -171,7 +172,6 @@ Route::prefix('v1')->group(function (): void {
             Route::post('/learning/scores/scorebooks', [ScoreController::class, 'store'])->middleware('learning.schema');
             Route::put('/learning/scores/scorebooks/{scorebook}/structure', [ScoreController::class, 'structure'])->middleware('learning.schema')->whereNumber('scorebook');
             Route::put('/learning/scores/scorebooks/{scorebook}/entries', [ScoreController::class, 'entries'])->middleware('learning.schema')->whereNumber('scorebook');
-            Route::patch('/students/{student}/social', [StudentSocialProfileController::class, 'update']);
         });
 
     Route::middleware(['auth:sanctum', 'active', 'district', 'role:super_admin'])
