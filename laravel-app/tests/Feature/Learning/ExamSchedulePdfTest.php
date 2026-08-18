@@ -85,6 +85,28 @@ final class ExamSchedulePdfTest extends TestCase
             ->assertHeader('Content-Type', 'application/pdf');
     }
 
+    public function test_user_can_get_signed_url_and_download_pdf_without_session(): void
+    {
+        $user = $this->viewer('admin');
+        Sanctum::actingAs($user);
+
+        $response = $this->getJson('/api/v1/learning/exam-schedule/signed-url?scope=student&student=6650100001');
+        $response->assertOk()->assertJsonStructure(['data' => ['url']]);
+
+        $signedUrl = (string) $response->json('data.url');
+        $this->assertNotEmpty($signedUrl);
+        $this->assertStringContainsString('signature=', $signedUrl);
+
+        // Unauthenticate and test that accessing the signed URL succeeds
+        auth()->forgetGuards();
+        $this->app['auth']->forgetGuards();
+
+        $pdfResponse = $this->get($signedUrl);
+        $pdfResponse->assertOk()
+            ->assertHeader('Content-Type', 'application/pdf');
+        $this->assertStringStartsWith('%PDF-', (string) $pdfResponse->getContent());
+    }
+
     /** @param list<string> $groups */
     private function viewer(string $role, array $groups = [], ?string $username = null): User
     {

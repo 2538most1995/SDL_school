@@ -413,85 +413,7 @@ type ExamSchedulePayload = {
 
 const EXAM_SCHEDULE_EMPTY_MESSAGE = 'ยังไม่พบตารางสอบในภาคเรียนปัจจุบัน รอเจ้าหน้าที่อัปเดตข้อมูล';
 
-function MobileExamSchedulePreview({
-    document,
-    pdfUrl,
-    pdfName,
-    directPdfUrl,
-}: {
-    document: ExamSchedulePayload | undefined;
-    pdfUrl: string;
-    pdfName: string;
-    directPdfUrl: string;
-}) {
-    const isLineBrowser = typeof navigator !== 'undefined' && /Line\//i.test(navigator.userAgent);
-    const isInAppBrowser = typeof navigator !== 'undefined' && /(Line\/|FBAN|FBAV|Instagram|MicroMessenger)/i.test(navigator.userAgent);
 
-    return <div className="lg:hidden">
-        <section className="rounded-xl border border-slate-200 bg-white p-4 shadow-sm">
-            <div className="border-b border-slate-200 pb-3 text-center">
-                <p className="text-lg font-black text-slate-950">ตารางสอบ</p>
-                <p className="mt-1 break-all text-xs text-slate-500">{pdfName}</p>
-            </div>
-
-            {isLineBrowser && (
-                <div className="mt-3 rounded-xl border border-emerald-200 bg-emerald-50 p-3.5 text-left text-xs text-emerald-950">
-                    <p className="flex items-center gap-1.5 font-black text-emerald-900">
-                        <span>💡</span> แนะนำสำหรับผู้ใช้งาน LINE
-                    </p>
-                    <p className="mt-1 leading-5 text-emerald-800">
-                        เบราว์เซอร์ของ LINE อาจไม่อนุญาตให้เปิดดูหรือบันทึกไฟล์ PDF โดยตรง กรุณากดปุ่ม <strong>"เปิดในเบราว์เซอร์ภายนอก (Safari / Chrome)"</strong> หรือกดเมนู <strong>⋯ / ⋮</strong> ด้านบนของ LINE แล้วเลือก <strong>"เปิดด้วยเบราว์เซอร์อื่น"</strong>
-                    </p>
-                </div>
-            )}
-
-            {document ? <>
-                <dl className="grid grid-cols-2 gap-x-4 gap-y-3 py-4 text-sm">
-                    <div className="col-span-2"><dt className="text-xs font-bold text-slate-500">ชื่อ-สกุล</dt><dd className="mt-0.5 font-bold text-slate-950">{document.student.name || '-'}</dd></div>
-                    <div><dt className="text-xs font-bold text-slate-500">รหัสนักศึกษา</dt><dd className="mt-0.5 font-bold text-slate-950">{document.student.code || '-'}</dd></div>
-                    <div><dt className="text-xs font-bold text-slate-500">ภาคเรียน</dt><dd className="mt-0.5 font-bold text-slate-950">{document.term || '-'}</dd></div>
-                    <div><dt className="text-xs font-bold text-slate-500">ระดับชั้น</dt><dd className="mt-0.5 font-bold text-slate-950">{document.student.level || '-'}</dd></div>
-                    <div><dt className="text-xs font-bold text-slate-500">กลุ่ม</dt><dd className="mt-0.5 font-bold text-slate-950">{document.student.group || '-'}</dd></div>
-                </dl>
-                {document.rows.length > 0 ? <div className="grid gap-3">{document.rows.map((row, index) => <article key={`${row.subject_code}-${row.exam_date}-${index}`} className="rounded-xl bg-slate-50 p-3.5">
-                    <div className="flex items-start justify-between gap-3"><div className="min-w-0"><p className="font-bold text-slate-950">{row.subject_name}</p><p className="mt-0.5 text-xs font-bold text-slate-500">{row.subject_code}</p></div><StatusBadge tone="info">{row.room}</StatusBadge></div>
-                    <dl className="mt-3 grid gap-2 text-sm text-slate-700"><div><dt className="inline font-bold">วันสอบ: </dt><dd className="inline">{row.exam_date_display}</dd></div><div><dt className="inline font-bold">เวลา: </dt><dd className="inline">{row.start_time} - {row.end_time} น.</dd></div><div><dt className="inline font-bold">สนามสอบ: </dt><dd className="inline">{row.location}</dd></div></dl>
-                </article>)}</div> : <p role="status" className="rounded-xl border border-amber-200 bg-amber-50 p-4 text-center text-sm font-bold leading-6 text-amber-950">{EXAM_SCHEDULE_EMPTY_MESSAGE}</p>}
-            </> : <p className="py-6 text-center text-sm leading-6 text-slate-600">ไฟล์ PDF พร้อมแล้ว กดปุ่มด้านล่างเพื่อเปิดดูเอกสารฉบับเต็ม</p>}
-
-            <div className="mt-4 space-y-2">
-                <Button
-                    as="a"
-                    href={isInAppBrowser ? directPdfUrl : (pdfUrl || directPdfUrl)}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    appearance="primary"
-                    size="large"
-                    icon={<DownloadSimple size={18} weight="bold" />}
-                    className="w-full"
-                >
-                    {isInAppBrowser ? 'เปิดไฟล์ PDF ใน Safari / Chrome' : 'เปิดไฟล์ PDF'}
-                </Button>
-
-                {isInAppBrowser && (
-                    <Button
-                        as="a"
-                        href={`${directPdfUrl}&disposition=attachment`}
-                        target="_blank"
-                        rel="noopener noreferrer"
-                        appearance="outline"
-                        size="large"
-                        icon={<ArrowSquareOut size={18} weight="bold" />}
-                        className="w-full"
-                    >
-                        ดาวน์โหลดไฟล์ PDF โดยตรง
-                    </Button>
-                )}
-            </div>
-        </section>
-        <p className="mt-2 text-xs leading-5 text-slate-500">บนมือถือระบบแสดงเนื้อหาแบบอ่านง่าย ส่วนไฟล์ที่เปิดจากปุ่มเป็นเอกสารเดียวกับที่ใช้ดาวน์โหลดและพิมพ์</p>
-    </div>;
-}
 
 function ExamSchedulePage() {
     const { role } = useDemoRole();
@@ -568,11 +490,28 @@ function ExamSchedulePage() {
         return `/api/v1/learning/exam-schedule/pdf?${query.toString()}`;
     };
 
+    const signedUrlQuery = useQuery({
+        queryKey: ['exam-schedule-signed-url', scope, studentCode, group, level],
+        queryFn: ({ signal }) => {
+            const query = new URLSearchParams({ scope });
+            if (scope === 'student') query.set('student', studentCode);
+            if (scope === 'group') { query.set('group', group); query.set('level', level); }
+            if (scope === 'level') query.set('level', level);
+            const districtId = window.localStorage.getItem('sena-district-id');
+            if (districtId) query.set('district_id', districtId);
+            return getFeatureDataWithDemo<{ url: string }>(`/api/v1/learning/exam-schedule/signed-url?${query.toString()}`, { url: '' }, signal);
+        },
+        enabled: canGenerate,
+    });
+
     const directExternalPdfUrl = useMemo(() => {
+        if (signedUrlQuery.data?.data?.url) {
+            return signedUrlQuery.data.data.url;
+        }
         const path = buildPdfPath();
         const separator = path.includes('?') ? '&' : '?';
         return withAppBasePath(`${path}${separator}openExternalBrowser=1`);
-    }, [scope, studentCode, group, level]);
+    }, [signedUrlQuery.data?.data?.url, scope, studentCode, group, level]);
 
     const generatePdf = async () => {
         if (!canGenerate) return;
@@ -669,9 +608,15 @@ function ExamSchedulePage() {
             {schedule.data?.data.sources?.field === false && scheduleRows.length > 0 && <p role="alert" className="mb-4 rounded-xl border border-sky-200 bg-sky-50 p-3 text-sm font-bold text-sky-900">ยังไม่มีข้อมูลสนามสอบในชุดข้อมูลปัจจุบัน ระบบจึงใช้ชื่ออำเภอแทนชื่อสนามสอบชั่วคราว</p>}
             {scheduleRows.length > 0 && <DataTable data={scheduleRows} columns={scheduleColumns} minWidth="wide" responsiveMode="cards" />}
         </Panel>}
-        <Panel title="ตัวอย่างไฟล์ PDF" description={pdfUrl ? 'ตัวอย่างนี้เป็นไฟล์เดียวกับที่ดาวน์โหลดและพิมพ์ ตำแหน่งจึงตรงกันทุกจุด' : autoGenerate ? 'ระบบกำลังสร้างตารางสอบของนักศึกษารายนี้' : 'เลือกขอบเขตแล้วกดสร้าง PDF เพื่อแสดงตัวอย่าง'}>
-            {pdfLoading && <QuerySkeleton rows={8} />}
-            {pdfUrl ? <><MobileExamSchedulePreview document={scope === 'student' ? schedule.data?.data : undefined} pdfUrl={pdfUrl} pdfName={pdfName} directPdfUrl={directExternalPdfUrl} /><iframe src={pdfUrl} title="ตัวอย่างตารางสอบ PDF" className="hidden h-[min(1120px,78vh)] min-h-[680px] w-full rounded-xl border border-slate-200 bg-slate-100 lg:block" /></> : !pdfLoading && <div className="grid min-h-72 place-items-center rounded-xl border border-dashed border-slate-300 bg-slate-50 text-center text-sm text-slate-500">ยังไม่ได้สร้างตัวอย่าง PDF</div>}
-        </Panel>
+        <div className="hidden lg:block">
+            <Panel title="ตัวอย่างไฟล์ PDF" description={pdfUrl ? 'ตัวอย่างนี้เป็นไฟล์เดียวกับที่ดาวน์โหลดและพิมพ์ ตำแหน่งจึงตรงกันทุกจุด' : autoGenerate ? 'ระบบกำลังสร้างตารางสอบของนักศึกษารายนี้' : 'เลือกขอบเขตแล้วกดสร้าง PDF เพื่อแสดงตัวอย่าง'}>
+                {pdfLoading && <QuerySkeleton rows={8} />}
+                {pdfUrl ? (
+                    <iframe src={pdfUrl} title="ตัวอย่างตารางสอบ PDF" className="h-[min(1120px,78vh)] min-h-[680px] w-full rounded-xl border border-slate-200 bg-slate-100" />
+                ) : (
+                    !pdfLoading && <div className="grid min-h-72 place-items-center rounded-xl border border-dashed border-slate-300 bg-slate-50 text-center text-sm text-slate-500">ยังไม่ได้สร้างตัวอย่าง PDF</div>
+                )}
+            </Panel>
+        </div>
     </div>;
 }

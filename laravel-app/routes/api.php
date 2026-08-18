@@ -42,6 +42,7 @@ Route::prefix('v1')->group(function (): void {
     Route::get('/auth/branding', [PublicBrandingController::class, 'show']);
     Route::get('/auth/branding/hero', [PublicBrandingController::class, 'hero']);
     Route::get('/auth/branding/assets/{slot}', [PublicBrandingController::class, 'asset'])->whereIn('slot', ['logo', 'dashboard-hero']);
+    Route::get('/learning/exam-schedule/pdf', [ExamScheduleDocumentController::class, 'pdf'])->name('api.learning.exam-schedule.pdf');
 
     if ((bool) config('sena.demo_mode')) {
         Route::get('/portal-demo', PortalDemoController::class);
@@ -103,7 +104,7 @@ Route::prefix('v1')->group(function (): void {
         Route::get('/learning/schedule', ScheduleController::class)->middleware('learning.schema');
         Route::get('/learning/scores', ScoreController::class)->middleware('learning.schema');
         Route::get('/learning/scores/workspace', [ScoreController::class, 'workspace'])->middleware(['learning.schema', 'role:teacher,admin,super_admin']);
-        Route::get('/learning/exam-schedule/pdf', [ExamScheduleDocumentController::class, 'pdf']);
+        Route::get('/learning/exam-schedule/signed-url', [ExamScheduleDocumentController::class, 'signedUrl']);
         Route::get('/my-learning', [CurrentStudentController::class, 'profile']);
         Route::get('/grades', [CurrentStudentController::class, 'grades']);
         Route::get('/kpch', [CurrentStudentController::class, 'kpch']);
