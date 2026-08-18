@@ -391,16 +391,15 @@ export function StudentsPage() {
         {
             accessorKey: 'group',
             header: 'กลุ่มเรียน',
-            size: 245,
-            meta: { compactSize: 116 },
+            size: 250,
+            meta: { compactSize: 120 },
             cell: ({ row }) => <div className="min-w-0"><EllipsisText title={row.original.group}><span className="text-[13px] font-semibold leading-5 text-slate-900">{row.original.group}</span></EllipsisText><EllipsisText title={`${row.original.level} · ${row.original.groupCode}`}><span className="mt-0.5 text-[10px] leading-4 text-slate-500">{row.original.level} · {row.original.groupCode}</span></EllipsisText></div>,
         },
-        { accessorKey: 'gender', header: 'เพศ', size: 75, meta: { compactSize: 42, compactTextAlign: 'center' } },
         {
             id: 'details',
             header: 'รายละเอียด / จัดการ',
-            size: 340,
-            meta: { compactSize: 160, compactTextAlign: 'center' },
+            size: 360,
+            meta: { compactSize: 180, compactTextAlign: 'center' },
             enableSorting: false,
             cell: ({ row }) => (
                 <div className="flex flex-nowrap items-center justify-center gap-1.5 whitespace-nowrap">
