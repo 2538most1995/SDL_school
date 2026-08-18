@@ -68,6 +68,11 @@ final class ExamScheduleDocumentController extends Controller
             $pdfParams['signature'] = $this->signatureFor($pdfParams);
             $selection['pdfDownloadUrl'] = $this->documentUrl($request, 'pdf', $pdfParams);
 
+            $printParams = $request->query();
+            $printParams['disposition'] = 'inline';
+            $printParams['signature'] = $this->signatureFor($printParams);
+            $selection['pdfPrintUrl'] = $this->documentUrl($request, 'pdf', $printParams);
+
             return response()->view('print.exam-schedule-view', $selection, 200, [
                 ...$this->privateHeaders(),
                 'Content-Type' => 'text/html; charset=UTF-8',

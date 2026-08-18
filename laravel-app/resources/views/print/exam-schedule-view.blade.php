@@ -283,10 +283,12 @@
             <span style="font-size: 12px; opacity: 0.8;">({{ $count }} ชุด)</span>
         </div>
         <div class="bar-actions">
-            <button type="button" id="btnPrint" class="btn btn-primary" onclick="triggerPrint()">
-                <svg width="16" height="16" viewBox="0 0 256 256" fill="currentColor"><path d="M200,80V48a16,16,0,0,0-16-16H72A16,16,0,0,0,56,48V80a8,8,0,0,0,16,0V48H184V80a8,8,0,0,0,16,0ZM224,88H32a16,16,0,0,0-16,16v64a16,16,0,0,0,16,16H56v40a16,16,0,0,0,16,16H184a16,16,0,0,0,16-16V184h24a16,16,0,0,0,16-16V104A16,16,0,0,0,224,88Zm-40,136H72V168H184Zm40-56H200V152a8,8,0,0,0-8-8H64a8,8,0,0,0-8,8v16H32V104H224v64Z"></path></svg>
-                <span>พิมพ์เอกสาร</span>
-            </button>
+            @if(isset($pdfPrintUrl))
+                <a href="{{ $pdfPrintUrl }}" target="_blank" rel="noopener noreferrer" class="btn btn-primary">
+                    <svg width="16" height="16" viewBox="0 0 256 256" fill="currentColor"><path d="M200,80V48a16,16,0,0,0-16-16H72A16,16,0,0,0,56,48V80a8,8,0,0,0,16,0V48H184V80a8,8,0,0,0,16,0ZM224,88H32a16,16,0,0,0-16,16v64a16,16,0,0,0,16,16H56v40a16,16,0,0,0,16,16H184a16,16,0,0,0,16-16V184h24a16,16,0,0,0,16-16V104A16,16,0,0,0,224,88Zm-40,136H72V168H184Zm40-56H200V152a8,8,0,0,0-8-8H64a8,8,0,0,0-8,8v16H32V104H224v64Z"></path></svg>
+                    <span>พิมพ์เอกสาร (เปิดไฟล์ PDF)</span>
+                </a>
+            @endif
             @if(isset($pdfDownloadUrl))
                 <a href="{{ $pdfDownloadUrl }}" class="btn btn-outline">
                     <svg width="16" height="16" viewBox="0 0 256 256" fill="currentColor"><path d="M224,144v64a8,8,0,0,1-8,8H40a8,8,0,0,1-8-8V144a8,8,0,0,1,16,0v56H208V144a8,8,0,0,1,16,0Zm-101.66,7.66a8,8,0,0,0,11.32,0l40-40a8,8,0,0,0-11.32-11.32L136,126.69V32a8,8,0,0,0-16,0V126.69L93.66,100.34a8,8,0,0,0-11.32,11.32Z"></path></svg>
@@ -371,25 +373,5 @@
         @endforeach
     </main>
 
-    <!-- Reliable Print Handler Script -->
-    <script>
-        function triggerPrint() {
-            try {
-                window.print();
-            } catch (e) {
-                console.error('Print failed', e);
-            }
-        }
-
-        document.addEventListener('DOMContentLoaded', function() {
-            var btn = document.getElementById('btnPrint');
-            if (btn) {
-                btn.addEventListener('click', function(e) {
-                    e.preventDefault();
-                    triggerPrint();
-                });
-            }
-        });
-    </script>
 </body>
 </html>
