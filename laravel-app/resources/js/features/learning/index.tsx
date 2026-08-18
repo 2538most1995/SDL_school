@@ -413,7 +413,17 @@ type ExamSchedulePayload = {
 
 const EXAM_SCHEDULE_EMPTY_MESSAGE = 'ยังไม่พบตารางสอบในภาคเรียนปัจจุบัน รอเจ้าหน้าที่อัปเดตข้อมูล';
 
-
+function resolveExamDocumentUrl(value: string): string {
+    if (value === '') return '';
+    try {
+        const url = new URL(value, window.location.origin);
+        if (url.origin !== window.location.origin) return '';
+        url.pathname = withAppBasePath(url.pathname);
+        return url.toString();
+    } catch {
+        return '';
+    }
+}
 
 function ExamSchedulePage() {
     const { role } = useDemoRole();
@@ -504,7 +514,8 @@ function ExamSchedulePage() {
         enabled: canGenerate,
     });
 
-    const standaloneScheduleUrl = signedUrlQuery.data?.data?.url ?? '';
+    const standaloneScheduleUrl = resolveExamDocumentUrl(signedUrlQuery.data?.data?.url ?? '');
+    const signedPdfDownloadUrl = resolveExamDocumentUrl(signedUrlQuery.data?.data?.pdf_url ?? '');
 
     const openStandaloneSchedule = async () => {
         if (!canGenerate || scheduleOpening) return;
@@ -514,7 +525,7 @@ function ExamSchedulePage() {
             let url = standaloneScheduleUrl;
             if (url === '') {
                 const result = await signedUrlQuery.refetch();
-                url = result.data?.data?.url ?? '';
+                url = resolveExamDocumentUrl(result.data?.data?.url ?? '');
             }
             if (url === '') throw new Error('ไม่สามารถเตรียมลิงก์ตารางสอบได้ กรุณาลองใหม่อีกครั้ง');
 
@@ -611,7 +622,7 @@ function ExamSchedulePage() {
         <div className="mt-5 hidden flex-wrap justify-end gap-2 lg:flex">
             <Button type="button" appearance="primary" size="large" icon={<DownloadSimple size={18} weight="bold" />} onClick={generatePdf} disabled={!canGenerate || pdfLoading}>{pdfLoading ? 'กำลังสร้าง PDF' : autoGenerate ? 'สร้าง PDF ใหม่' : 'สร้างและแสดงตัวอย่าง PDF'}</Button>
             {pdfUrl && <>
-                <Button as="a" href={signedUrlQuery.data?.data?.pdf_url || pdfUrl} download={pdfName} appearance="outline" size="large" icon={<DownloadSimple size={18} weight="bold" />}>ดาวน์โหลด PDF</Button>
+                <Button as="a" href={signedPdfDownloadUrl || pdfUrl} download={pdfName} appearance="outline" size="large" icon={<DownloadSimple size={18} weight="bold" />}>ดาวน์โหลด PDF</Button>
                 <Button as="a" href={standaloneScheduleUrl || pdfUrl} target="_blank" rel="noopener noreferrer" appearance="outline" size="large" icon={<Printer size={18} weight="bold" />}>เปิดเพื่อพิมพ์</Button>
             </>}
         </div>

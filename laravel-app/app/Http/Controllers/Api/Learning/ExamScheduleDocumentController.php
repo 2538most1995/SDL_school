@@ -6,6 +6,7 @@ use App\Domain\Students\Services\ExamScheduleExportService;
 use App\Http\Controllers\Controller;
 use App\Models\District;
 use App\Models\User;
+use App\Support\ApplicationBasePath;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Http\Response;
@@ -201,7 +202,7 @@ final class ExamScheduleDocumentController extends Controller
     /** @param array<string, mixed> $query */
     private function documentUrl(Request $request, string $document, array $query): string
     {
-        $basePath = rtrim($request->getBaseUrl(), '/');
+        $basePath = ApplicationBasePath::resolve($request);
 
         return "{$basePath}/learning/schedule/{$document}?".http_build_query($query);
     }

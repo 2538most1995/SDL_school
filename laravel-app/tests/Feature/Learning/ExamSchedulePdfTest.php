@@ -125,6 +125,19 @@ final class ExamSchedulePdfTest extends TestCase
             ->assertHeader('Content-Type', 'application/pdf');
     }
 
+    public function test_signed_document_urls_preserve_the_deployment_subdirectory(): void
+    {
+        Sanctum::actingAs($this->viewer('admin'));
+
+        $response = $this->withServerVariables([
+            'SENA_APP_BASE_PATH' => '/SDL_school',
+        ])->getJson('/api/v1/learning/exam-schedule/signed-url?scope=student&student=6650100001');
+
+        $response->assertOk();
+        $this->assertStringStartsWith('/SDL_school/learning/schedule/view?', (string) $response->json('data.url'));
+        $this->assertStringStartsWith('/SDL_school/learning/schedule/pdf?', (string) $response->json('data.pdf_url'));
+    }
+
     public function test_html_view_shows_friendly_error_when_student_not_found(): void
     {
         $user = $this->viewer('admin');
