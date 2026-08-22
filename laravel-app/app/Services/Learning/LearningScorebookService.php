@@ -409,21 +409,39 @@ final readonly class LearningScorebookService
         $connection->transaction(function () use ($connection, $viewer, $districtId, $scorebookId, $studentValues, $ipAddress): void {
             foreach ($studentValues as $student) {
                 $studentCode = trim((string) $student['student_code']);
+                $connection->table('learning_score_entries')
+                    ->where('scorebook_id', $scorebookId)
+                    ->where('student_code', $studentCode)
+                    ->delete();
                 foreach ($student['scores'] as $score) {
-                    $identity = ['scorebook_id' => $scorebookId, 'component_id' => (int) $score['component_id'], 'student_code' => $studentCode];
-                    $query = $connection->table('learning_score_entries')->where($identity);
-                    $values = ['score' => $score['score'], 'updated_by' => (int) $viewer->id, 'updated_at' => now()];
-                    $query->exists()
-                        ? $query->update($values)
-                        : $connection->table('learning_score_entries')->insert([...$identity, ...$values, 'created_at' => now()]);
+                    if ($score['score'] === null) {
+                        continue;
+                    }
+                    $connection->table('learning_score_entries')->insert([
+                        'scorebook_id' => $scorebookId,
+                        'component_id' => (int) $score['component_id'],
+                        'student_code' => $studentCode,
+                        'score' => $score['score'],
+                        'updated_by' => (int) $viewer->id,
+                        'created_at' => now(),
+                        'updated_at' => now(),
+                    ]);
                 }
                 $note = trim((string) ($student['note'] ?? ''));
-                $noteIdentity = ['scorebook_id' => $scorebookId, 'student_code' => $studentCode];
-                $noteQuery = $connection->table('learning_score_notes')->where($noteIdentity);
-                $noteValues = ['note' => $note === '' ? null : $note, 'updated_by' => (int) $viewer->id, 'updated_at' => now()];
-                $noteQuery->exists()
-                    ? $noteQuery->update($noteValues)
-                    : $connection->table('learning_score_notes')->insert([...$noteIdentity, ...$noteValues, 'created_at' => now()]);
+                $connection->table('learning_score_notes')
+                    ->where('scorebook_id', $scorebookId)
+                    ->where('student_code', $studentCode)
+                    ->delete();
+                if ($note !== '') {
+                    $connection->table('learning_score_notes')->insert([
+                        'scorebook_id' => $scorebookId,
+                        'student_code' => $studentCode,
+                        'note' => $note,
+                        'updated_by' => (int) $viewer->id,
+                        'created_at' => now(),
+                        'updated_at' => now(),
+                    ]);
+                }
             }
             $this->audit($viewer, $districtId, 'learning.scorebook.entries_saved', $scorebookId, $ipAddress, [
                 'student_count' => count($studentValues),

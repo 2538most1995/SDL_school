@@ -194,12 +194,47 @@ final class LearningScorebookTest extends TestCase
         $this->putJson("/api/v1/learning/scores/scorebooks/{$scorebookId}/entries", [
             'students' => [[
                 'student_code' => '6650300005',
+                'note' => 'คะแนนเดิม',
                 'scores' => [
                     ['component_id' => $components[0]->id, 'score' => 75],
                     ['component_id' => $components[1]->id, 'score' => 18],
                 ],
             ]],
         ])->assertOk()->assertJsonPath('data.saved_students', 1);
+
+        $this->putJson("/api/v1/learning/scores/scorebooks/{$scorebookId}/entries", [
+            'students' => [[
+                'student_code' => '6650300005',
+                'note' => null,
+                'scores' => [['component_id' => $components[0]->id, 'score' => 70]],
+            ]],
+        ])->assertOk();
+        $this->assertDatabaseHas('learning_score_entries', [
+            'scorebook_id' => $scorebookId,
+            'component_id' => $components[0]->id,
+            'student_code' => '6650300005',
+            'score' => 70,
+        ]);
+        $this->assertDatabaseMissing('learning_score_entries', [
+            'scorebook_id' => $scorebookId,
+            'component_id' => $components[1]->id,
+            'student_code' => '6650300005',
+        ]);
+        $this->assertDatabaseMissing('learning_score_notes', [
+            'scorebook_id' => $scorebookId,
+            'student_code' => '6650300005',
+        ]);
+
+        $this->putJson("/api/v1/learning/scores/scorebooks/{$scorebookId}/entries", [
+            'students' => [[
+                'student_code' => '6650300005',
+                'scores' => [['component_id' => $components[0]->id, 'score' => null]],
+            ]],
+        ])->assertOk();
+        $this->assertDatabaseMissing('learning_score_entries', [
+            'scorebook_id' => $scorebookId,
+            'student_code' => '6650300005',
+        ]);
 
         Sanctum::actingAs($this->teacher(['SENA-M2-A']));
         $this->putJson("/api/v1/learning/scores/scorebooks/{$scorebookId}/entries", [

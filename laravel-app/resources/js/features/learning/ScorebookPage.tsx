@@ -273,9 +273,16 @@ function TeacherScorebook() {
 
     const changeSubject = (value: string) => {
         setScoresDirty(false);
+        setStudentValues({});
         setSelected(value);
         setGroup('');
         setTab('scores');
+    };
+
+    const reloadWorkspace = () => {
+        setScoresDirty(false);
+        setStudentValues({});
+        void workspace.refetch();
     };
 
     const updateScore = (studentCode: string, componentId: string, value: string) => {
@@ -356,17 +363,17 @@ function TeacherScorebook() {
                     </Select>
                 </Field>
                 <Field label="ภาคเรียน">
-                    <Select value={term} onChange={(_, option) => { setTerm(option.value); setSelected(''); setGroup(''); }} size="large">
+                    <Select value={term} onChange={(_, option) => { setScoresDirty(false); setStudentValues({}); setTerm(option.value); setSelected(''); setGroup(''); }} size="large">
                         {(data?.terms ?? []).map((item) => <option key={item} value={item}>{item}</option>)}
                     </Select>
                 </Field>
                 <Field label="กลุ่มเรียน">
-                    <Select value={group} onChange={(_, option) => setGroup(option.value)} size="large" disabled={!selectedSubject}>
+                    <Select value={group} onChange={(_, option) => { setScoresDirty(false); setStudentValues({}); setGroup(option.value); }} size="large" disabled={!selectedSubject}>
                         <option value="">ทุกกลุ่มในวิชา</option>
                         {groupOptions.map((item) => <option key={item.code || item.name} value={item.code || item.name}>{item.name || item.code}</option>)}
                     </Select>
                 </Field>
-                <Button type="button" appearance="outline" size="large" icon={<ArrowsClockwise size={18} weight="bold" />} onClick={() => workspace.refetch()} disabled={workspace.isFetching}>โหลดข้อมูลใหม่</Button>
+                <Button type="button" appearance="outline" size="large" icon={<ArrowsClockwise size={18} weight="bold" />} onClick={reloadWorkspace} disabled={workspace.isFetching}>โหลดข้อมูลใหม่</Button>
             </div>
             {selectedSubject && <div className="grid border-t border-slate-100 bg-slate-50/70 sm:grid-cols-3">
                 <div className="p-4 sm:border-r sm:border-slate-200"><p className="text-xs font-bold text-slate-500">ระดับ</p><p className="mt-1 font-black text-slate-900">{selectedSubject.level_label}</p></div>
@@ -451,16 +458,6 @@ function TeacherScorebook() {
                                 </tr>;
                             })}
                         </tbody>
-                        <tfoot className="bg-slate-50 font-bold text-slate-700">
-                            <tr>
-                                <td colSpan={2} className="border-r border-slate-200 px-4 py-3 text-right">คะแนนเต็ม</td>
-                                {scorebook.components.map((component) => <td key={component.id} className="border-r border-slate-200 px-3 py-3 text-center font-mono">{formatScore(component.max_score)}</td>)}
-                                <td className="border-r border-slate-200 bg-sky-50 px-3 py-3 text-center font-mono text-sky-800">{courseworkWeight}</td>
-                                <td className="border-r border-slate-200 bg-amber-50 px-3 py-3 text-center font-mono text-amber-800">{finalExamWeight}</td>
-                                <td className="border-r border-slate-200 px-3 py-3 text-center font-mono text-brand-800">{formatScore(scorebook.maximum_score)}</td>
-                                <td />
-                            </tr>
-                        </tfoot>
                     </table>
                 </div>}
                 {invalidScores.length > 0 && <p role="alert" className="mt-4 rounded-xl border border-rose-200 bg-rose-50 p-3 text-sm font-bold text-rose-800">มีคะแนนเกินคะแนนเต็ม: {invalidScores.slice(0, 3).join(', ')}{invalidScores.length > 3 ? ` และอีก ${invalidScores.length - 3} รายการ` : ''}</p>}

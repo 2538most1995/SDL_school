@@ -42,8 +42,8 @@ Domain classes under `app/Domain/Students/Models/` (`Student`, `Grade`, `Registe
 - `learning_schedules`: district, term, subject, group, teacher, type, start/end and room; indexed term/subject/group/type/start
 - `learning_scorebooks`: สมุดคะแนนหนึ่งชุดต่อ district/term/subject/level/group พร้อมผู้สร้างและน้ำหนัก `coursework_weight`/`final_exam_weight` สำหรับ 60:40, 70:30 หรือ 80:20; ค่า nullable รักษาสมุดคะแนนเดิมโดยไม่เดาสัดส่วน; UNIQUE (`district_id`, `academic_term`, `subject_code`, `education_level`, `group_code`)
 - `learning_score_components`: ช่องคะแนนและคะแนนเต็มเรียงตามลำดับ พร้อม `category` (`coursework` หรือ `final_exam`); UNIQUE (`scorebook_id`, `position`)
-- `learning_score_entries`: คะแนนรายนักศึกษาและช่องคะแนน โดยใช้ `student_code` snapshot แทน foreign key ไปตาราง DBF แบบ dynamic; UNIQUE (`scorebook_id`, `component_id`, `student_code`)
-- `learning_score_notes`: หมายเหตุรายนักศึกษาในสมุดคะแนน; UNIQUE (`scorebook_id`, `student_code`)
+- `learning_score_entries`: คะแนนรายนักศึกษาและช่องคะแนน โดยใช้ `student_code` snapshot แทน foreign key ไปตาราง DBF แบบ dynamic; UNIQUE (`scorebook_id`, `component_id`, `student_code`); เก็บเฉพาะช่องที่มีคะแนน การบันทึกใหม่ของนักศึกษาแทนค่าทั้งชุดและลบแถวของช่องว่าง/ช่องที่ไม่ส่งมาเพื่อไม่ให้คะแนนเก่าค้าง
+- `learning_score_notes`: หมายเหตุรายนักศึกษาในสมุดคะแนน; UNIQUE (`scorebook_id`, `student_code`); หมายเหตุว่างจะลบแถวเดิม
 - `exam_rooms`: latest repair migration uses `term`, `subject_code`, `assignment_type`, `start_val`, `end_val`, `room_name`, district/import batch and timestamps; index (`district_id`, `term`, `subject_code`)
 
 Column names from older migration definitions (`academic_term`, `room_code`, `student_code`, `seat_number`) are migrated by `2026_08_07_000014_fix_import_and_exam_room_schema.php`; do not write new code against the old shape.
