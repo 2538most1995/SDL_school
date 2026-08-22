@@ -349,6 +349,86 @@ final readonly class LearningScorebookService
         ]);
     }
 
+    /** @return array{created_count: int, skipped_count: int, eligible_count: int} */
+    public function applyTemplateToSubjects(User $viewer, int $districtId, int $templateId, string $term, ?string $ipAddress): array
+    {
+        $template = $this->database->connection()->table('learning_score_templates')
+            ->where('id', $templateId)
+            ->where('district_id', $districtId)
+            ->first();
+        abort_unless($template !== null, 404);
+
+        $components = json_decode((string) ($template->components ?? '[]'), true);
+        abort_unless(is_array($components), 422, 'ข้อมูลต้นแบบไม่สมบูรณ์');
+        [$courseworkWeight, $finalExamWeight] = $this->assertScoreStructure((string) $template->score_ratio, $components);
+        $source = $this->registrationSource($viewer, $districtId, ['term' => $term]);
+        $subjects = $this->subjects($source['rows']);
+        if (! (bool) $template->applies_to_all) {
+            $subjectCodes = json_decode((string) ($template->subject_codes ?? '[]'), true);
+            $allowed = array_fill_keys(is_array($subjectCodes) ? $subjectCodes : [], true);
+            $subjects = array_values(array_filter(
+                $subjects,
+                static fn (array $subject): bool => isset($allowed[(string) $subject['code']]),
+            ));
+        }
+
+        $created = 0;
+        $skipped = 0;
+        $connection = $this->database->connection();
+        foreach ($subjects as $subject) {
+            $existing = $connection->table('learning_scorebooks')
+                ->where('district_id', $districtId)
+                ->where('academic_term', $term)
+                ->where('subject_code', (string) $subject['code'])
+                ->where('education_level', (int) $subject['level'])
+                ->exists();
+            if ($existing) {
+                $skipped++;
+
+                continue;
+            }
+
+            try {
+                $scorebookId = $connection->transaction(function () use ($connection, $viewer, $districtId, $term, $subject, $courseworkWeight, $finalExamWeight, $components): int {
+                    $id = (int) $connection->table('learning_scorebooks')->insertGetId([
+                        'district_id' => $districtId,
+                        'created_by' => (int) $viewer->id,
+                        'academic_term' => $term,
+                        'subject_code' => (string) $subject['code'],
+                        'subject_name' => (string) $subject['name'],
+                        'education_level' => (int) $subject['level'],
+                        'group_code' => '',
+                        'coursework_weight' => $courseworkWeight,
+                        'final_exam_weight' => $finalExamWeight,
+                        'created_at' => now(),
+                        'updated_at' => now(),
+                    ]);
+                    $this->replaceComponents($id, $components);
+
+                    return $id;
+                });
+            } catch (UniqueConstraintViolationException) {
+                $skipped++;
+
+                continue;
+            }
+            $created++;
+            $this->audit($viewer, $districtId, 'learning.scorebook.created_from_template', $scorebookId, $ipAddress, [
+                'template_id' => $templateId,
+                'term' => $term,
+                'subject_code' => (string) $subject['code'],
+                'level' => (int) $subject['level'],
+                'group' => '',
+            ]);
+        }
+
+        return [
+            'created_count' => $created,
+            'skipped_count' => $skipped,
+            'eligible_count' => count($subjects),
+        ];
+    }
+
     /**
      * @param  array<string, mixed>  $values
      * @return array<string, mixed>

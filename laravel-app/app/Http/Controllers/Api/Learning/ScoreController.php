@@ -107,6 +107,24 @@ final class ScoreController extends Controller
         return response()->json(['data' => ['deleted' => true]]);
     }
 
+    public function applyTemplate(Request $request, int $template, LearningScorebookService $scorebooks): JsonResponse
+    {
+        $this->assertWriteEnabled();
+        $values = $request->validate([
+            'term' => ['required', 'regex:/^[12]\/25\d{2}$/'],
+        ]);
+
+        return response()->json([
+            'data' => $scorebooks->applyTemplateToSubjects(
+                $request->user(),
+                $this->districtId($request),
+                $template,
+                $values['term'],
+                $request->ip(),
+            ),
+        ]);
+    }
+
     public function structure(Request $request, int $scorebook, LearningScorebookService $scorebooks): JsonResponse
     {
         $this->assertWriteEnabled();

@@ -176,6 +176,7 @@ Route::prefix('v1')->group(function (): void {
             Route::delete('/learning/{kind}/{content}', [LearningContentController::class, 'destroy'])->middleware('learning.schema')->whereIn('kind', ['resources', 'lesson-plans', 'calendar'])->whereNumber('content');
             Route::post('/learning/scores/scorebooks', [ScoreController::class, 'store'])->middleware('learning.schema');
             Route::post('/learning/scores/templates', [ScoreController::class, 'storeTemplate'])->middleware('learning.schema');
+            Route::post('/learning/scores/templates/{template}/apply', [ScoreController::class, 'applyTemplate'])->middleware('learning.schema')->whereNumber('template');
             Route::delete('/learning/scores/templates/{template}', [ScoreController::class, 'destroyTemplate'])->middleware('learning.schema')->whereNumber('template');
             Route::put('/learning/scores/scorebooks/{scorebook}/structure', [ScoreController::class, 'structure'])->middleware('learning.schema')->whereNumber('scorebook');
             Route::put('/learning/scores/scorebooks/{scorebook}/entries', [ScoreController::class, 'entries'])->middleware('learning.schema')->whereNumber('scorebook');

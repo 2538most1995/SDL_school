@@ -333,6 +333,25 @@ final class LearningScorebookTest extends TestCase
             ->assertOk()
             ->assertJsonCount(2, 'data');
 
+        $applied = $this->postJson("/api/v1/learning/scores/templates/{$allTemplateId}/apply", [
+            'term' => '2/2568',
+        ])->assertOk();
+        $eligibleCount = (int) $applied->json('data.eligible_count');
+        $this->assertGreaterThan(0, $eligibleCount);
+        $this->assertSame($eligibleCount, (int) $applied->json('data.created_count'));
+        $this->assertSame(0, (int) $applied->json('data.skipped_count'));
+        $this->assertDatabaseCount('learning_scorebooks', $eligibleCount);
+
+        $this->postJson("/api/v1/learning/scores/templates/{$allTemplateId}/apply", [
+            'term' => '2/2568',
+        ])->assertOk()
+            ->assertJsonPath('data.created_count', 0)
+            ->assertJsonPath('data.skipped_count', $eligibleCount);
+        $this->getJson('/api/v1/learning/scores/workspace?term=2/2568&subject_code=%E0%B8%9E%E0%B8%A731001&level=3')
+            ->assertOk()
+            ->assertJsonPath('data.scorebook.score_ratio', '70:30')
+            ->assertJsonPath('data.scorebook.components.0.title', 'งานระหว่างภาค');
+
         $this->postJson('/api/v1/learning/scores/templates', [
             'name' => 'ต้นแบบนอกขอบเขต',
             'score_ratio' => '70:30',
@@ -381,6 +400,7 @@ final class LearningScorebookTest extends TestCase
         $this->getJson('/api/v1/learning/scores/workspace')->assertForbidden();
         $this->getJson('/api/v1/learning/scores/templates')->assertForbidden();
         $this->postJson('/api/v1/learning/scores/scorebooks', [])->assertForbidden();
+        $this->postJson('/api/v1/learning/scores/templates/1/apply', ['term' => '2/2568'])->assertForbidden();
     }
 
     public function test_legacy_scorebook_without_ratio_remains_readable(): void

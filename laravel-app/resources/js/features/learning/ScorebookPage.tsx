@@ -142,6 +142,7 @@ function TeacherScorebook() {
     const [studentValues, setStudentValues] = useState<StudentDraft>({});
     const [scoresDirty, setScoresDirty] = useState(false);
     const [selectedTemplateId, setSelectedTemplateId] = useState('');
+    const [bulkTemplateId, setBulkTemplateId] = useState('');
     const [templateName, setTemplateName] = useState('');
     const [templateAppliesToAll, setTemplateAppliesToAll] = useState(true);
     const [templateSubjectCodes, setTemplateSubjectCodes] = useState<string[]>([]);
@@ -201,6 +202,7 @@ function TeacherScorebook() {
     const availableSubjects = useMemo(() => Array.from(new Map((data?.subjects ?? []).map((subject) => [subject.code, subject])).values()), [data?.subjects]);
     const applicableTemplates = useMemo(() => templateRows.filter((template) => template.applies_to_all
         || (selectedSubject !== null && selectedSubject !== undefined && template.subject_codes.includes(selectedSubject.code))), [selectedSubject, templateRows]);
+    const allSubjectTemplates = useMemo(() => templateRows.filter((template) => template.applies_to_all), [templateRows]);
     const readOnly = workspace.data?.meta.read_only === true;
     const canEdit = !readOnly && (scorebook?.can_edit ?? true);
     const groupOptions = selectedSubject?.groups ?? [];
@@ -210,6 +212,7 @@ function TeacherScorebook() {
         && Math.abs(courseworkTotal - courseworkWeight) < 0.001
         && Math.abs(finalExamTotal - finalExamWeight) < 0.001;
     const selectedTemplate = applicableTemplates.find((template) => template.id === selectedTemplateId);
+    const bulkTemplate = allSubjectTemplates.find((template) => template.id === bulkTemplateId);
     const canCreateTemplate = canEdit && canSaveStructure && templateName.trim() !== ''
         && (templateAppliesToAll || templateSubjectCodes.length > 0);
 
@@ -324,6 +327,18 @@ function TeacherScorebook() {
         },
     });
 
+    const applyTemplateToAllSubjects = useMutation({
+        mutationFn: () => sendFeatureData<{ created_count: number; skipped_count: number; eligible_count: number }>(`/api/v1/learning/scores/templates/${bulkTemplateId}/apply`, 'POST', {
+            term: data?.selected_term ?? term,
+        }),
+        onSuccess: async (response) => {
+            setScoresDirty(false);
+            setStudentValues({});
+            await refresh();
+            showSuccessAlert(`สร้างสมุดคะแนน ${response.data.created_count} วิชา${response.data.skipped_count > 0 ? ` · ข้ามวิชาที่มีอยู่แล้ว ${response.data.skipped_count}` : ''}`);
+        },
+    });
+
     const applyTemplate = () => {
         const template = applicableTemplates.find((item) => item.id === selectedTemplateId);
         if (!template) return;
@@ -417,7 +432,7 @@ function TeacherScorebook() {
         ]);
     };
 
-    const mutationError = createScorebook.error ?? saveStructure.error ?? saveScores.error ?? createTemplate.error ?? deleteTemplate.error;
+    const mutationError = createScorebook.error ?? saveStructure.error ?? saveScores.error ?? createTemplate.error ?? deleteTemplate.error ?? applyTemplateToAllSubjects.error;
     const invalidScores = (data?.students ?? []).flatMap((student) => (scorebook?.components ?? []).filter((component) => {
         const raw = studentValues[student.student_code]?.scores[component.id] ?? '';
         return raw !== '' && Number(raw) > component.max_score;
@@ -453,6 +468,24 @@ function TeacherScorebook() {
                 <div className="p-4"><p className="text-xs font-bold text-slate-500">คะแนนเต็มรวม</p><p className={`mt-1 font-black ${componentTotal > 100 ? 'text-rose-700' : 'text-brand-800'}`}>{formatScore(componentTotal)} คะแนน</p></div>
             </div>}
         </section>
+
+        {data && allSubjectTemplates.length > 0 && <section className="mb-5 rounded-2xl border border-emerald-200 bg-emerald-50/70 p-5 shadow-sm shadow-emerald-100/70">
+            <div className="grid gap-4 lg:grid-cols-[minmax(0,1fr)_minmax(280px,0.75fr)_auto] lg:items-end">
+                <div>
+                    <p className="text-lg font-black text-emerald-950">สร้างสมุดคะแนนทุกรายวิชาในครั้งเดียว</p>
+                    <p className="mt-1 text-sm leading-6 text-emerald-800">เลือกต้นแบบสำหรับทุกรายวิชา ระบบจะสร้างสมุดคะแนนให้ทุกวิชาที่ครูเข้าถึงได้ในภาคเรียน {data.selected_term ?? term} และข้ามวิชาที่มีสมุดคะแนนอยู่แล้ว</p>
+                </div>
+                <Field label="ต้นแบบสำหรับทุกรายวิชา">
+                    <Select value={bulkTemplateId} onChange={(_, option) => setBulkTemplateId(option.value)} size="large" disabled={readOnly || applyTemplateToAllSubjects.isPending}>
+                        <option value="">เลือกต้นแบบ</option>
+                        {allSubjectTemplates.map((template) => <option key={template.id} value={template.id}>{template.name} ({template.score_ratio})</option>)}
+                    </Select>
+                </Field>
+                <Button type="button" appearance="primary" size="large" icon={<BookOpenText size={18} weight="bold" />} disabled={!bulkTemplate || readOnly || applyTemplateToAllSubjects.isPending || !data.selected_term} onClick={() => {
+                    if (bulkTemplate && window.confirm(`ใช้ต้นแบบ “${bulkTemplate.name}” สร้างสมุดคะแนนให้ทุกรายวิชาในภาคเรียน ${data.selected_term ?? term}?\n\nวิชาที่มีสมุดคะแนนอยู่แล้วจะไม่ถูกเปลี่ยนแปลง`)) applyTemplateToAllSubjects.mutate();
+                }}>{applyTemplateToAllSubjects.isPending ? 'กำลังสร้างสมุดคะแนน' : 'ใช้กับทุกรายวิชา'}</Button>
+            </div>
+        </section>}
 
         {workspace.isPending && <QuerySkeleton rows={7} />}
         {workspace.isError && <QueryError onRetry={() => workspace.refetch()} />}
@@ -526,11 +559,11 @@ function TeacherScorebook() {
                 </div>
             </Panel>}
 
-            {tab === 'scores' && !scorebook && <Panel title="สร้างสมุดคะแนนก่อนบันทึก" description="ระบบเตรียมโครงสร้างตัวอย่าง 100 คะแนนตามแบบที่แนบไว้แล้ว">
+            {tab === 'scores' && !scorebook && <Panel title="ยังไม่มีสมุดคะแนนสำหรับวิชานี้" description={allSubjectTemplates.length > 0 ? 'เลือกต้นแบบในส่วนสร้างสมุดคะแนนทุกรายวิชาด้านบนได้ทันที โดยไม่ต้องตรวจทีละวิชา' : 'สร้างต้นแบบสำหรับทุกรายวิชาในแท็บโครงสร้างคะแนนก่อนใช้งานแบบอัตโนมัติ'}>
                 <div className="flex min-h-48 flex-col items-center justify-center gap-4 rounded-xl border border-dashed border-slate-300 bg-slate-50 p-6 text-center">
                     <BookOpenText size={38} className="text-brand-700" />
-                    <p className="max-w-lg text-sm leading-6 text-slate-600">ตรวจชื่อช่องและคะแนนเต็มในแท็บโครงสร้างคะแนน จากนั้นสร้างสมุดคะแนนเพื่อเริ่มกรอกคะแนนนักศึกษา</p>
-                    <Button type="button" appearance="primary" onClick={() => setTab('structure')}>ตรวจโครงสร้างคะแนน</Button>
+                    <p className="max-w-lg text-sm leading-6 text-slate-600">{allSubjectTemplates.length > 0 ? 'เลือกต้นแบบด้านบนแล้วกด “ใช้กับทุกรายวิชา” ระบบจะเตรียมสมุดคะแนนทั้งหมดให้โดยอัตโนมัติ' : 'ไปที่โครงสร้างคะแนนเพื่อสร้างต้นแบบแรก จากนั้นจะใช้สร้างสมุดคะแนนทุกวิชาได้ในครั้งเดียว'}</p>
+                    {allSubjectTemplates.length === 0 && <Button type="button" appearance="primary" onClick={() => setTab('structure')}>สร้างต้นแบบโครงสร้างคะแนน</Button>}
                 </div>
             </Panel>}
 
