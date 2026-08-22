@@ -174,14 +174,39 @@ final class LearningScorebookTest extends TestCase
             ],
         ])->assertUnprocessable()->assertJsonValidationErrors('components');
 
-        $otherTeacher = $this->teacher(['SENA-M3-A']);
-        Sanctum::actingAs($otherTeacher);
+        $coTeacher = $this->teacher(['SENA-M3-A']);
+        Sanctum::actingAs($coTeacher);
+        $this->getJson("/api/v1/learning/scores/workspace?term=2/2568&subject_code=%E0%B8%9E%E0%B8%A731001&level=3&group=SENA-M3-A&scorebook_id={$scorebookId}")
+            ->assertOk()
+            ->assertJsonPath('data.scorebook.can_edit', true);
         $this->putJson("/api/v1/learning/scores/scorebooks/{$scorebookId}/structure", [
             'score_ratio' => '80:20',
             'components' => [
-                ['id' => $componentId, 'category' => 'coursework', 'title' => 'แก้ของครูอื่น', 'max_score' => 80],
+                ['id' => $componentId, 'category' => 'coursework', 'title' => 'คะแนนเก็บร่วม', 'max_score' => 80],
                 ['category' => 'final_exam', 'title' => 'สอบปลายภาค', 'max_score' => 20],
             ],
+        ])->assertOk();
+
+        $components = DB::table('learning_score_components')
+            ->where('scorebook_id', $scorebookId)
+            ->orderBy('position')
+            ->get();
+        $this->putJson("/api/v1/learning/scores/scorebooks/{$scorebookId}/entries", [
+            'students' => [[
+                'student_code' => '6650300005',
+                'scores' => [
+                    ['component_id' => $components[0]->id, 'score' => 75],
+                    ['component_id' => $components[1]->id, 'score' => 18],
+                ],
+            ]],
+        ])->assertOk()->assertJsonPath('data.saved_students', 1);
+
+        Sanctum::actingAs($this->teacher(['SENA-M2-A']));
+        $this->putJson("/api/v1/learning/scores/scorebooks/{$scorebookId}/entries", [
+            'students' => [[
+                'student_code' => '6650300005',
+                'scores' => [['component_id' => $components[0]->id, 'score' => 70]],
+            ]],
         ])->assertNotFound();
     }
 

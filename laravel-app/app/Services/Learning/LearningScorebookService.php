@@ -212,7 +212,11 @@ final readonly class LearningScorebookService
             'scorebook' => $scorebook === null ? null : [
                 'id' => (string) $scorebook->id,
                 'created_by' => (string) $scorebook->created_by,
-                'can_edit' => $viewer->role !== 'teacher' || (int) $scorebook->created_by === (int) $viewer->id,
+                // A scorebook belongs to its district/term/subject/group scope,
+                // not exclusively to the account that created it. This lets a
+                // replacement or co-teacher maintain scores for an assigned
+                // group while the registration source still enforces scope.
+                'can_edit' => $viewer->role !== 'teacher' || $selectedRows !== [],
                 'group' => (string) $scorebook->group_code,
                 'score_ratio' => $this->scoreRatio($scorebook),
                 'coursework_weight' => $scorebook->coursework_weight === null ? null : (int) $scorebook->coursework_weight,
@@ -325,7 +329,7 @@ final readonly class LearningScorebookService
      */
     public function updateStructure(User $viewer, int $districtId, int $scorebookId, string $scoreRatio, array $components, ?string $ipAddress): array
     {
-        $scorebook = $this->ownedScorebook($viewer, $districtId, $scorebookId);
+        $scorebook = $this->scopedScorebook($districtId, $scorebookId);
         $this->assertCurrentScorebookScope($viewer, $districtId, $scorebook);
         [$courseworkWeight, $finalExamWeight] = $this->assertScoreStructure($scoreRatio, $components);
         $this->assertUniqueComponentIds($components);
@@ -362,7 +366,7 @@ final readonly class LearningScorebookService
      */
     public function saveEntries(User $viewer, int $districtId, int $scorebookId, array $studentValues, ?string $ipAddress): array
     {
-        $scorebook = $this->ownedScorebook($viewer, $districtId, $scorebookId);
+        $scorebook = $this->scopedScorebook($districtId, $scorebookId);
         $workspace = $this->workspace($viewer, $districtId, [
             'term' => (string) $scorebook->academic_term,
             'subject_code' => (string) $scorebook->subject_code,
@@ -370,6 +374,7 @@ final readonly class LearningScorebookService
             'group' => (string) $scorebook->group_code,
             'scorebook_id' => $scorebookId,
         ]);
+        abort_unless($workspace['selected_subject'] !== null && $workspace['students'] !== [], 404);
         $allowedStudents = array_fill_keys(array_column($workspace['students'], 'student_code'), true);
         $components = collect($this->components($scorebookId))->keyBy(fn (array $component): string => (string) $component['id']);
         $seenStudents = [];
@@ -542,13 +547,12 @@ final readonly class LearningScorebookService
         return $query->orderByDesc('updated_at')->orderByDesc('id')->first();
     }
 
-    private function ownedScorebook(User $viewer, int $districtId, int $scorebookId): object
+    private function scopedScorebook(int $districtId, int $scorebookId): object
     {
-        $query = $this->database->connection()->table('learning_scorebooks')->where('id', $scorebookId)->where('district_id', $districtId);
-        if ($viewer->role === 'teacher') {
-            $query->where('created_by', (int) $viewer->id);
-        }
-        $scorebook = $query->first();
+        $scorebook = $this->database->connection()->table('learning_scorebooks')
+            ->where('id', $scorebookId)
+            ->where('district_id', $districtId)
+            ->first();
         abort_unless($scorebook !== null, 404);
 
         return $scorebook;
