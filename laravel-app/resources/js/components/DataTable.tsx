@@ -1,4 +1,4 @@
-import { CaretDown, CaretUp, CaretUpDown } from '@phosphor-icons/react';
+import { CaretDown, CaretUp, CaretUpDown, FileXls } from '@phosphor-icons/react';
 import {
     Box,
     Button,
@@ -25,7 +25,8 @@ import {
     type RowData,
     type SortingState,
 } from '@tanstack/react-table';
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
+import { downloadExcel } from '../lib/excel';
 import { Pagination } from './Pagination';
 import { EmptyState } from './QueryState';
 
@@ -46,6 +47,9 @@ type DataTableProps<T> = {
     showPagination?: boolean;
     minWidth?: 'default' | 'wide' | 'extra-wide';
     responsiveMode?: 'cards' | 'compact-table';
+    exportFileName?: string;
+    exportSheetName?: string;
+    disableExport?: boolean;
 };
 
 const minimumWidths = {
@@ -60,7 +64,7 @@ function getColumnSearchKey<T>(column: Column<T, unknown>): string {
 }
 
 function isActionColumn<T>(column: Column<T, unknown>): boolean {
-    return /actions|details|manage|open|จัดการ|รายละเอียด|เปิดสื่อ/.test(getColumnSearchKey(column));
+    return /actions|details|manage|open|select|จัดการ|รายละเอียด|เปิดสื่อ|เลือก/.test(getColumnSearchKey(column));
 }
 
 function getCompactColumnSize<T>(column: Column<T, unknown>): number {
@@ -177,7 +181,11 @@ export function DataTable<T>({
     showPagination = true,
     minWidth = 'default',
     responsiveMode = 'compact-table',
+    exportFileName,
+    exportSheetName,
+    disableExport = false,
 }: DataTableProps<T>) {
+    const exportContainer = useRef<HTMLDivElement>(null);
     const [sorting, setSorting] = useState<SortingState>([]);
     const [pagination, setPagination] = useState<PaginationState>({ pageIndex: 0, pageSize });
 
@@ -196,6 +204,27 @@ export function DataTable<T>({
         getPaginationRowModel: getPaginationRowModel(),
     });
     const compactTable = responsiveMode === 'compact-table';
+    const exportColumns = table.getVisibleLeafColumns().filter((column) => !isActionColumn(column));
+    const exportToExcel = () => {
+        const pathLabel = window.location.pathname.split('/').filter(Boolean).at(-1) ?? 'ข้อมูล';
+        const tableElement = exportContainer.current?.querySelector('table');
+        if (!tableElement) throw new Error('ไม่พบตารางสำหรับส่งออก');
+        const includedIndexes = table.getVisibleLeafColumns()
+            .map((column, index) => ({ column, index }))
+            .filter(({ column }) => !isActionColumn(column))
+            .map(({ index }) => index);
+        const headers = Array.from(tableElement.querySelectorAll('thead tr:last-child th'));
+        const renderedRows = Array.from(tableElement.querySelectorAll('tbody tr'));
+        const displayedText = (element: Element | undefined): string => (element?.textContent ?? '').replace(/\s+/g, ' ').trim();
+        downloadExcel(exportFileName ?? pathLabel, [{
+            name: exportSheetName ?? 'ข้อมูล',
+            columns: includedIndexes.map((index) => displayedText(headers[index])),
+            rows: renderedRows.map((row) => {
+                const cells = Array.from(row.querySelectorAll('td'));
+                return includedIndexes.map((index) => displayedText(cells[index]));
+            }),
+        }]);
+    };
     const compactTotalColumnSize = Math.max(
         table.getVisibleLeafColumns().reduce((sum, column) => sum + getCompactColumnSize(column), 0),
         1,
@@ -207,27 +236,34 @@ export function DataTable<T>({
 
     return (
         <Box
+            ref={exportContainer}
             className={compactTable ? 'responsive-data-table responsive-data-table--compact' : 'responsive-data-table'}
             sx={{ minWidth: 0 }}
         >
             <Box
                 sx={{
-                    display: compactTable ? 'flex' : 'none',
+                    display: 'flex',
                     alignItems: 'center',
                     justifyContent: 'space-between',
                     gap: 2,
                     mb: 1,
                     px: 0.5,
                     color: 'text.secondary',
-                    '@media (min-width:768px)': { display: 'flex' },
                 }}
             >
                 <Typography variant="caption" sx={{ fontWeight: 700 }}>
                     ทั้งหมด {data.length.toLocaleString('th-TH')} รายการ
                 </Typography>
-                <Typography variant="caption" sx={{ display: compactTable ? 'none' : 'block', '@media (min-width:640px)': { display: 'block' } }}>
-                    เลือกชื่อคอลัมน์เพื่อเรียงข้อมูล
-                </Typography>
+                <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.5 }}>
+                    <Typography variant="caption" sx={{ display: compactTable ? 'none' : 'block', '@media (min-width:1024px)': { display: 'block' } }}>
+                        เลือกชื่อคอลัมน์เพื่อเรียงข้อมูล
+                    </Typography>
+                    {!disableExport && exportColumns.length > 0 && (
+                        <Button variant="outlined" size="small" startIcon={<FileXls size={17} weight="bold" />} onClick={exportToExcel}>
+                            ส่งออก Excel (ข้อมูลที่แสดง)
+                        </Button>
+                    )}
+                </Box>
             </Box>
 
             <TableContainer

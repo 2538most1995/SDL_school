@@ -323,7 +323,7 @@ final class LegacyPortalReadService
                 'items' => $rows->count(),
             ],
             'courses' => $courses,
-            'disclaimer' => 'คะแนนเก็บภายในระบบ ยังไม่ใช่ผลการเรียนปลายภาค',
+            'disclaimer' => 'คะแนนจากงานเดิมที่ยังไม่ได้กำหนดโครงสร้างคะแนนเก็บและคะแนนสอบปลายภาค',
         ];
     }
 

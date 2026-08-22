@@ -52,7 +52,7 @@ export const featureRouteCatalog: FeatureRoute[] = [
     { path: '/learning/lesson-plans', label: 'แผนการสอน', roles: ['teacher', 'admin', 'super_admin'], element: <LearningListPage kind="lesson-plans" /> },
     { path: '/learning/calendar', label: 'ปฏิทินพบกลุ่ม', roles: ['student', 'teacher', 'admin', 'super_admin'], element: <LearningListPage kind="calendar" /> },
     { path: '/learning/schedule', label: 'ตารางสอบ', roles: ['student', 'teacher', 'admin', 'super_admin'], element: <LearningListPage kind="schedule" /> },
-    { path: '/learning/scores', label: 'คะแนนเก็บ', roles: ['student', 'teacher', 'admin', 'super_admin'], element: <LearningListPage kind="scores" /> },
+    { path: '/learning/scores', label: 'คะแนน', roles: ['student', 'teacher', 'admin', 'super_admin'], element: <LearningListPage kind="scores" /> },
 
     { path: '/admin/users', label: 'ผู้ใช้งาน', roles: ['admin', 'super_admin'], element: <AdminUsersPage /> },
     { path: '/admin/exam-rooms', label: 'ห้องสอบ', roles: ['teacher', 'admin', 'super_admin'], element: <AdminExamRoomsPage /> },

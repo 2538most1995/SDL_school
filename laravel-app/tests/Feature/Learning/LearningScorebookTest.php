@@ -52,12 +52,13 @@ final class LearningScorebookTest extends TestCase
             'subject_code' => 'พว31001',
             'level' => 3,
             'group' => 'SENA-M3-A',
+            'score_ratio' => '70:30',
             'components' => [
-                ['title' => 'คะแนนเก็บครั้งที่ 1', 'max_score' => 20],
-                ['title' => 'ใบงานที่ 1', 'max_score' => 10],
-                ['title' => 'แบบทดสอบย่อย', 'max_score' => 20],
-                ['title' => 'การนำเสนอ', 'max_score' => 20],
-                ['title' => 'พฤติกรรม/คุณลักษณะ', 'max_score' => 30],
+                ['category' => 'coursework', 'title' => 'คะแนนเก็บครั้งที่ 1', 'max_score' => 20],
+                ['category' => 'coursework', 'title' => 'ใบงานที่ 1', 'max_score' => 10],
+                ['category' => 'coursework', 'title' => 'แบบทดสอบย่อย', 'max_score' => 20],
+                ['category' => 'coursework', 'title' => 'การนำเสนอ', 'max_score' => 20],
+                ['category' => 'final_exam', 'title' => 'สอบปลายภาค', 'max_score' => 30],
             ],
         ])->assertCreated()->assertJsonCount(5, 'data.components');
         $scorebookId = (int) $created->json('data.id');
@@ -78,6 +79,9 @@ final class LearningScorebookTest extends TestCase
         $this->getJson("/api/v1/learning/scores/workspace?term=2/2568&subject_code={$subject}&level=3&group=SENA-M3-A&scorebook_id={$scorebookId}")
             ->assertOk()
             ->assertJsonPath('data.scorebook.maximum_score', 100)
+            ->assertJsonPath('data.scorebook.score_ratio', '70:30')
+            ->assertJsonPath('data.students.0.coursework_score', 60)
+            ->assertJsonPath('data.students.0.final_exam_score', 25)
             ->assertJsonPath('data.students.0.total', 85)
             ->assertJsonPath('data.students.0.note', 'ตั้งใจเรียน')
             ->assertJsonPath('data.scorebook.can_edit', true);
@@ -107,6 +111,9 @@ final class LearningScorebookTest extends TestCase
             ->assertOk()
             ->assertJsonPath('data.term', '2/2568')
             ->assertJsonPath('data.courses.0.subject_code', 'พว31001')
+            ->assertJsonPath('data.courses.0.score_ratio', '70:30')
+            ->assertJsonPath('data.courses.0.assignment_score', 60)
+            ->assertJsonPath('data.courses.0.exam_score', 25)
             ->assertJsonPath('data.courses.0.total_score', 85)
             ->assertJsonPath('data.courses.0.note', 'ตั้งใจเรียน')
             ->assertJsonMissing(['student_code' => 'OTHER-STUDENT']);
@@ -132,7 +139,11 @@ final class LearningScorebookTest extends TestCase
             'subject_code' => 'พว31001',
             'level' => 3,
             'group' => 'SENA-M3-A',
-            'components' => [['title' => 'คะแนนเก็บ', 'max_score' => 20]],
+            'score_ratio' => '80:20',
+            'components' => [
+                ['category' => 'coursework', 'title' => 'คะแนนเก็บ', 'max_score' => 80],
+                ['category' => 'final_exam', 'title' => 'สอบปลายภาค', 'max_score' => 20],
+            ],
         ])->assertCreated();
         $scorebookId = (int) $created->json('data.id');
         $componentId = (int) $created->json('data.components.0.id');
@@ -147,7 +158,7 @@ final class LearningScorebookTest extends TestCase
         $this->putJson("/api/v1/learning/scores/scorebooks/{$scorebookId}/entries", [
             'students' => [[
                 'student_code' => '6650300005',
-                'scores' => [['component_id' => $componentId, 'score' => 21]],
+                'scores' => [['component_id' => $componentId, 'score' => 81]],
             ]],
         ])->assertUnprocessable()->assertJsonValidationErrors('students.0.scores.0.score');
 
@@ -156,17 +167,76 @@ final class LearningScorebookTest extends TestCase
             'subject_code' => 'พว31001',
             'level' => 3,
             'group' => 'SENA-M3-A',
+            'score_ratio' => '60:40',
             'components' => [
-                ['title' => 'ช่อง 1', 'max_score' => 60],
-                ['title' => 'ช่อง 2', 'max_score' => 50],
+                ['category' => 'coursework', 'title' => 'ช่อง 1', 'max_score' => 60],
+                ['category' => 'final_exam', 'title' => 'ช่อง 2', 'max_score' => 50],
             ],
         ])->assertUnprocessable()->assertJsonValidationErrors('components');
 
         $otherTeacher = $this->teacher(['SENA-M3-A']);
         Sanctum::actingAs($otherTeacher);
         $this->putJson("/api/v1/learning/scores/scorebooks/{$scorebookId}/structure", [
-            'components' => [['id' => $componentId, 'title' => 'แก้ของครูอื่น', 'max_score' => 20]],
+            'score_ratio' => '80:20',
+            'components' => [
+                ['id' => $componentId, 'category' => 'coursework', 'title' => 'แก้ของครูอื่น', 'max_score' => 80],
+                ['category' => 'final_exam', 'title' => 'สอบปลายภาค', 'max_score' => 20],
+            ],
         ])->assertNotFound();
+    }
+
+    public function test_score_structure_accepts_supported_ratios_and_rejects_invalid_structures(): void
+    {
+        Sanctum::actingAs($this->teacher(['SENA-M3-A']));
+        $created = $this->postJson('/api/v1/learning/scores/scorebooks', [
+            'term' => '2/2568',
+            'subject_code' => 'พว31001',
+            'level' => 3,
+            'group' => 'SENA-M3-A',
+            'score_ratio' => '60:40',
+            'components' => [
+                ['category' => 'coursework', 'title' => 'คะแนนเก็บ', 'max_score' => 60],
+                ['category' => 'final_exam', 'title' => 'สอบปลายภาค', 'max_score' => 40],
+            ],
+        ])->assertCreated()->assertJsonPath('data.score_ratio', '60:40');
+        $scorebookId = (int) $created->json('data.id');
+        $courseworkId = (int) $created->json('data.components.0.id');
+        $examId = (int) $created->json('data.components.1.id');
+
+        foreach ([[70, 30], [80, 20]] as [$coursework, $exam]) {
+            $ratio = "{$coursework}:{$exam}";
+            $this->putJson("/api/v1/learning/scores/scorebooks/{$scorebookId}/structure", [
+                'score_ratio' => $ratio,
+                'components' => [
+                    ['id' => $courseworkId, 'category' => 'coursework', 'title' => 'คะแนนเก็บ', 'max_score' => $coursework],
+                    ['id' => $examId, 'category' => 'final_exam', 'title' => 'สอบปลายภาค', 'max_score' => $exam],
+                ],
+            ])->assertOk()->assertJsonPath('data.score_ratio', $ratio);
+        }
+
+        $this->putJson("/api/v1/learning/scores/scorebooks/{$scorebookId}/structure", [
+            'score_ratio' => '50:50',
+            'components' => [
+                ['id' => $courseworkId, 'category' => 'coursework', 'title' => 'คะแนนเก็บ', 'max_score' => 50],
+                ['id' => $examId, 'category' => 'final_exam', 'title' => 'สอบปลายภาค', 'max_score' => 50],
+            ],
+        ])->assertUnprocessable()->assertJsonValidationErrors('score_ratio');
+
+        $this->putJson("/api/v1/learning/scores/scorebooks/{$scorebookId}/structure", [
+            'score_ratio' => '70:30',
+            'components' => [
+                ['id' => $courseworkId, 'category' => 'coursework', 'title' => 'คะแนนเก็บ', 'max_score' => 60],
+                ['id' => $examId, 'category' => 'final_exam', 'title' => 'สอบปลายภาค', 'max_score' => 40],
+            ],
+        ])->assertUnprocessable()->assertJsonValidationErrors('components');
+
+        $this->putJson("/api/v1/learning/scores/scorebooks/{$scorebookId}/structure", [
+            'score_ratio' => '70:30',
+            'components' => [
+                ['id' => $courseworkId, 'category' => 'coursework', 'title' => 'คะแนนเก็บ', 'max_score' => 70],
+                ['id' => $examId, 'category' => 'coursework', 'title' => 'ไม่มีปลายภาค', 'max_score' => 30],
+            ],
+        ])->assertUnprocessable()->assertJsonValidationErrors('components');
     }
 
     public function test_student_cannot_open_scorebook_workspace_or_write_scores(): void
@@ -180,6 +250,56 @@ final class LearningScorebookTest extends TestCase
 
         $this->getJson('/api/v1/learning/scores/workspace')->assertForbidden();
         $this->postJson('/api/v1/learning/scores/scorebooks', [])->assertForbidden();
+    }
+
+    public function test_legacy_scorebook_without_ratio_remains_readable(): void
+    {
+        $teacher = $this->teacher(['SENA-M3-A']);
+        $scorebookId = DB::table('learning_scorebooks')->insertGetId([
+            'district_id' => $this->district->id,
+            'created_by' => $teacher->id,
+            'academic_term' => '2/2568',
+            'subject_code' => 'พว31001',
+            'subject_name' => 'วิทยาศาสตร์',
+            'education_level' => 3,
+            'group_code' => 'SENA-M3-A',
+            'coursework_weight' => null,
+            'final_exam_weight' => null,
+            'created_at' => now(),
+            'updated_at' => now(),
+        ]);
+        $componentId = DB::table('learning_score_components')->insertGetId([
+            'scorebook_id' => $scorebookId,
+            'category' => 'coursework',
+            'title' => 'คะแนนเดิม',
+            'max_score' => 20,
+            'position' => 0,
+            'created_at' => now(),
+            'updated_at' => now(),
+        ]);
+        DB::table('learning_score_entries')->insert([
+            'scorebook_id' => $scorebookId,
+            'component_id' => $componentId,
+            'student_code' => '6650300005',
+            'score' => 15,
+            'updated_by' => $teacher->id,
+            'created_at' => now(),
+            'updated_at' => now(),
+        ]);
+
+        Sanctum::actingAs(User::factory()->create([
+            'role' => 'student',
+            'district_id' => $this->district->id,
+            'student_code' => '6650300005',
+            'username' => 'student-legacy-score',
+        ]));
+
+        $this->getJson('/api/v1/learning/scores')
+            ->assertOk()
+            ->assertJsonPath('data.courses.0.score_ratio', null)
+            ->assertJsonPath('data.courses.0.assignment_score', 15)
+            ->assertJsonPath('data.courses.0.exam_score', null)
+            ->assertJsonPath('data.courses.0.total_score', 15);
     }
 
     public function test_git_only_learning_readiness_repairs_scorebook_tables_and_indexes(): void
@@ -202,6 +322,8 @@ final class LearningScorebookTest extends TestCase
         $this->assertTrue(Schema::hasIndex('learning_score_components', 'learning_score_components_scorebook_id_position_unique'));
         $this->assertTrue(Schema::hasIndex('learning_score_entries', 'learning_score_entries_unique'));
         $this->assertTrue(Schema::hasIndex('learning_score_notes', 'learning_score_notes_scorebook_id_student_code_unique'));
+        $this->assertTrue(Schema::hasColumns('learning_scorebooks', ['coursework_weight', 'final_exam_weight']));
+        $this->assertTrue(Schema::hasColumn('learning_score_components', 'category'));
 
         Schema::table('learning_score_entries', function ($table): void {
             $table->dropUnique('learning_score_entries_unique');

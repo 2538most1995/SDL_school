@@ -119,14 +119,16 @@ Route::prefix('v1')->group(function (): void {
         Route::get('/students/{student}/moral', StudentMoralController::class);
         Route::get('/students/{student}/subjects', StudentSubjectsController::class);
         Route::patch('/students/{student}/social', [StudentSocialProfileController::class, 'update']);
-        Route::get('/reports/students/overview', [StudentReportController::class, 'overview']);
-        Route::get('/reports/new-students', [StudentReportController::class, 'newStudents']);
-        Route::get('/reports/graduates', [StudentReportController::class, 'graduates']);
-        Route::get('/reports/expected-graduates', [StudentReportController::class, 'expectedGraduates']);
-        Route::get('/reports/transfers', [StudentReportController::class, 'transfers']);
-        Route::get('/reports/registered-subjects', [StudentReportController::class, 'registeredSubjects']);
-        Route::get('/reports/students/grades-above-two', [StudentReportController::class, 'gradesAboveTwo']);
-        Route::get('/reports/students/exam-attendance', [StudentReportController::class, 'examAttendance']);
+        Route::middleware('role:teacher,admin,super_admin')->group(function (): void {
+            Route::get('/reports/students/overview', [StudentReportController::class, 'overview']);
+            Route::get('/reports/new-students', [StudentReportController::class, 'newStudents']);
+            Route::get('/reports/graduates', [StudentReportController::class, 'graduates']);
+            Route::get('/reports/expected-graduates', [StudentReportController::class, 'expectedGraduates']);
+            Route::get('/reports/transfers', [StudentReportController::class, 'transfers']);
+            Route::get('/reports/registered-subjects', [StudentReportController::class, 'registeredSubjects']);
+            Route::get('/reports/students/grades-above-two', [StudentReportController::class, 'gradesAboveTwo']);
+            Route::get('/reports/students/exam-attendance', [StudentReportController::class, 'examAttendance']);
+        });
         Route::get('/settings/profile', [ProfileController::class, 'show']);
         Route::patch('/settings/profile', [ProfileController::class, 'update']);
         Route::patch('/settings/password', [ProfileController::class, 'updatePassword']);

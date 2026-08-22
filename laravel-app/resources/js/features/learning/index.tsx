@@ -235,7 +235,7 @@ const learningConfig: Record<LearningKind, {
         ] },
     },
     scores: {
-        title: 'คะแนนเก็บ', description: 'ดูคะแนนงาน แบบทดสอบ และผลประเมินระหว่างภาค', icon: Trophy, timingLabel: 'ประเมินเมื่อ', actionLabel: 'คะแนน',
+        title: 'คะแนน', description: 'ดูคะแนนเก็บ คะแนนสอบปลายภาค และผลรวม', icon: Trophy, timingLabel: 'ประเมินเมื่อ', actionLabel: 'คะแนน',
         demo: { total: 11, actionNeeded: 2, courses: 5, rows: [
             { id: '1', title: 'แบบฝึกหัดบทที่ 2', subtitle: 'ตรวจและให้คะแนนแล้ว', course: 'ภาษาไทย', timing: '12 ก.ค. 2569', status: '18/20' },
             { id: '2', title: 'รายงานการทดลองครั้งที่ 1', subtitle: 'ตรวจและให้คะแนนแล้ว', course: 'วิทยาศาสตร์', timing: '10 ก.ค. 2569', status: '17/20' },

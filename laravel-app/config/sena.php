@@ -48,7 +48,7 @@ return [
                 ['key' => 'lesson-plans', 'label' => 'แผนการสอน', 'description' => 'แผนการจัดการเรียนรู้ของครู', 'route' => '/learning/lesson-plans', 'icon' => 'notebook', 'roles' => ['teacher', 'admin', 'super_admin']],
                 ['key' => 'calendar', 'label' => 'ปฏิทินพบกลุ่ม', 'description' => 'กิจกรรม วันพบกลุ่ม และกำหนดส่ง', 'route' => '/learning/calendar', 'icon' => 'calendar', 'roles' => ['student', 'teacher', 'admin', 'super_admin']],
                 ['key' => 'schedule', 'label' => 'ตารางสอบ', 'description' => 'ตารางสอบรายนักศึกษาและสร้าง PDF', 'route' => '/learning/schedule', 'icon' => 'clock', 'roles' => ['student', 'teacher', 'admin', 'super_admin']],
-                ['key' => 'scores', 'label' => 'คะแนนเก็บ', 'description' => 'คะแนนระหว่างภาคและผลการประเมิน', 'route' => '/learning/scores', 'icon' => 'trophy', 'roles' => ['student', 'teacher', 'admin', 'super_admin']],
+                ['key' => 'scores', 'label' => 'คะแนน', 'description' => 'คะแนนเก็บ คะแนนสอบปลายภาค และผลรวม', 'route' => '/learning/scores', 'icon' => 'trophy', 'roles' => ['student', 'teacher', 'admin', 'super_admin']],
             ],
         ],
         [

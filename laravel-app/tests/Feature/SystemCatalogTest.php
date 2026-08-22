@@ -32,6 +32,9 @@ class SystemCatalogTest extends TestCase
         $basicItems = collect($response->json('data.groups'))
             ->firstWhere('key', 'basic-information')['items'];
         $this->assertSame(['my-learning', 'grades', 'kpch', 'moral'], collect($basicItems)->pluck('key')->values()->all());
+        $scoreItem = collect($response->json('data.groups'))
+            ->firstWhere('key', 'learning')['items'];
+        $this->assertSame('คะแนน', collect($scoreItem)->firstWhere('key', 'scores')['label']);
     }
 
     public function test_admin_catalog_includes_administration_and_own_district_branding(): void

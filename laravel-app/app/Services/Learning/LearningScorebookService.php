@@ -52,7 +52,7 @@ final readonly class LearningScorebookService
                     ->where('own_entry.student_code', $studentCode);
             })
             ->orderByDesc('scorebook.academic_term')->orderBy('scorebook.subject_code')
-            ->get(['scorebook.id', 'scorebook.academic_term', 'scorebook.subject_code', 'scorebook.subject_name', 'scorebook.education_level', 'scorebook.group_code']);
+            ->get(['scorebook.id', 'scorebook.academic_term', 'scorebook.subject_code', 'scorebook.subject_name', 'scorebook.education_level', 'scorebook.group_code', 'scorebook.coursework_weight', 'scorebook.final_exam_weight']);
         $eligible = $scorebooks->filter(static function (object $scorebook) use ($registered): bool {
             $key = (string) $scorebook->academic_term.'|'.(int) $scorebook->education_level.'|'.(string) $scorebook->subject_code;
             $registration = $registered[$key] ?? null;
@@ -68,7 +68,7 @@ final readonly class LearningScorebookService
         $ids = $eligible->pluck('id')->map(static fn ($id): int => (int) $id)->all();
         $componentRows = $this->database->connection()->table('learning_score_components')
             ->whereIn('scorebook_id', $ids)->orderBy('position')->orderBy('id')
-            ->get(['scorebook_id', 'id', 'title', 'max_score', 'position'])->groupBy('scorebook_id');
+            ->get(['scorebook_id', 'id', 'category', 'title', 'max_score', 'position'])->groupBy('scorebook_id');
         $scoreRows = $this->database->connection()->table('learning_score_entries')
             ->whereIn('scorebook_id', $ids)->where('student_code', $studentCode)
             ->get(['scorebook_id', 'component_id', 'score'])
@@ -79,19 +79,28 @@ final readonly class LearningScorebookService
         foreach ($eligible as $scorebook) {
             $key = (string) $scorebook->academic_term.'|'.(int) $scorebook->education_level.'|'.(string) $scorebook->subject_code;
             $courseComponents = $componentRows->get((int) $scorebook->id, collect());
-            $total = (float) $courseComponents->sum(function (object $component) use ($scoreRows, $scorebook): float {
+            $componentScore = function (object $component) use ($scoreRows, $scorebook): float {
                 $entry = $scoreRows->get((int) $scorebook->id.'|'.(int) $component->id);
 
                 return $entry?->score === null ? 0.0 : (float) $entry->score;
-            });
+            };
+            $total = (float) $courseComponents->sum($componentScore);
+            $hasStructuredRatio = $scorebook->coursework_weight !== null && $scorebook->final_exam_weight !== null;
+            $courseworkScore = $hasStructuredRatio
+                ? (float) $courseComponents->where('category', 'coursework')->sum($componentScore)
+                : $total;
+            $finalExamScore = $hasStructuredRatio
+                ? (float) $courseComponents->where('category', 'final_exam')->sum($componentScore)
+                : null;
             $maximum = (float) $courseComponents->sum(static fn (object $component): float => (float) $component->max_score);
             $courses[] = [
                 'id' => 'scorebook-'.(int) $scorebook->id,
                 'subject_code' => (string) $scorebook->subject_code,
                 'subject_name' => (string) $scorebook->subject_name,
                 'credits' => (float) ($registered[$key]['credits'] ?? 0),
-                'assignment_score' => round($total, 2),
-                'exam_score' => null,
+                'score_ratio' => $hasStructuredRatio ? (int) $scorebook->coursework_weight.':'.(int) $scorebook->final_exam_weight : null,
+                'assignment_score' => round($courseworkScore, 2),
+                'exam_score' => $finalExamScore === null ? null : round($finalExamScore, 2),
                 'total_score' => round($total, 2),
                 'maximum_score' => round($maximum, 2),
                 'grade' => null,
@@ -102,6 +111,7 @@ final readonly class LearningScorebookService
 
                     return [
                         'id' => (string) $component->id,
+                        'category' => (string) $component->category,
                         'title' => (string) $component->title,
                         'score' => $entry?->score === null ? null : (float) $entry->score,
                         'max_score' => (float) $component->max_score,
@@ -162,18 +172,28 @@ final readonly class LearningScorebookService
             $studentCode = (string) $row['student_code'];
             $studentScores = [];
             $total = 0.0;
+            $courseworkTotal = 0.0;
+            $finalExamTotal = 0.0;
             foreach ($components as $component) {
                 $key = (string) $component['id'];
                 $value = $scores[$studentCode][$key] ?? null;
                 $studentScores[$key] = $value;
                 $total += $value ?? 0;
+                if ($component['category'] === 'final_exam') {
+                    $finalExamTotal += $value ?? 0;
+                } else {
+                    $courseworkTotal += $value ?? 0;
+                }
             }
+            $hasStructuredRatio = $scorebook !== null && $this->scoreRatio($scorebook) !== null;
             $studentRows[] = [
                 'student_code' => $studentCode,
                 'full_name' => (string) $row['student_name'],
                 'group_code' => (string) $row['group_code'],
                 'group_name' => (string) $row['group_name'],
                 'scores' => $studentScores,
+                'coursework_score' => round($courseworkTotal, 2),
+                'final_exam_score' => $hasStructuredRatio ? round($finalExamTotal, 2) : null,
                 'total' => round($total, 2),
                 'note' => $notes[$studentCode] ?? null,
             ];
@@ -194,6 +214,9 @@ final readonly class LearningScorebookService
                 'created_by' => (string) $scorebook->created_by,
                 'can_edit' => $viewer->role !== 'teacher' || (int) $scorebook->created_by === (int) $viewer->id,
                 'group' => (string) $scorebook->group_code,
+                'score_ratio' => $this->scoreRatio($scorebook),
+                'coursework_weight' => $scorebook->coursework_weight === null ? null : (int) $scorebook->coursework_weight,
+                'final_exam_weight' => $scorebook->final_exam_weight === null ? null : (int) $scorebook->final_exam_weight,
                 'components' => $components,
                 'maximum_score' => round(array_sum(array_column($components, 'max_score')), 2),
             ],
@@ -246,12 +269,12 @@ final readonly class LearningScorebookService
                 'subject_code' => 'ไม่พบรายวิชาที่ลงทะเบียนในขอบเขตครูและภาคเรียนที่เลือก',
             ]);
         }
-        $this->assertComponentTotal($values['components']);
+        [$courseworkWeight, $finalExamWeight] = $this->assertScoreStructure($values['score_ratio'], $values['components']);
         $group = trim((string) ($values['group'] ?? ''));
         $connection = $this->database->connection();
 
         try {
-            $id = $connection->transaction(function () use ($connection, $viewer, $districtId, $values, $subject, $group, $ipAddress): int {
+            $id = $connection->transaction(function () use ($connection, $viewer, $districtId, $values, $subject, $group, $courseworkWeight, $finalExamWeight, $ipAddress): int {
                 $existing = $connection->table('learning_scorebooks')
                     ->where('district_id', $districtId)
                     ->where('academic_term', $values['term'])
@@ -271,12 +294,15 @@ final readonly class LearningScorebookService
                     'subject_name' => $subject['name'],
                     'education_level' => (int) $values['level'],
                     'group_code' => $group,
+                    'coursework_weight' => $courseworkWeight,
+                    'final_exam_weight' => $finalExamWeight,
                     'created_at' => now(),
                     'updated_at' => now(),
                 ]);
                 $this->replaceComponents($scorebookId, $values['components']);
                 $this->audit($viewer, $districtId, 'learning.scorebook.created', $scorebookId, $ipAddress, [
                     'term' => $values['term'], 'subject_code' => $values['subject_code'], 'level' => (int) $values['level'], 'group' => $group,
+                    'score_ratio' => $values['score_ratio'],
                 ]);
 
                 return $scorebookId;
@@ -285,31 +311,50 @@ final readonly class LearningScorebookService
             throw ValidationException::withMessages(['subject_code' => 'มีสมุดคะแนนสำหรับรายวิชาและกลุ่มนี้แล้ว']);
         }
 
-        return ['id' => (string) $id, 'components' => $this->components($id)];
+        return [
+            'id' => (string) $id,
+            'score_ratio' => $values['score_ratio'],
+            'coursework_weight' => $courseworkWeight,
+            'final_exam_weight' => $finalExamWeight,
+            'components' => $this->components($id),
+        ];
     }
 
     /** @param list<array<string, mixed>> $components
      * @return array<string, mixed>
      */
-    public function updateStructure(User $viewer, int $districtId, int $scorebookId, array $components, ?string $ipAddress): array
+    public function updateStructure(User $viewer, int $districtId, int $scorebookId, string $scoreRatio, array $components, ?string $ipAddress): array
     {
         $scorebook = $this->ownedScorebook($viewer, $districtId, $scorebookId);
         $this->assertCurrentScorebookScope($viewer, $districtId, $scorebook);
-        $this->assertComponentTotal($components);
+        [$courseworkWeight, $finalExamWeight] = $this->assertScoreStructure($scoreRatio, $components);
         $this->assertUniqueComponentIds($components);
         $this->assertScoresFitStructure($scorebookId, $components);
-        $this->database->connection()->transaction(function () use ($viewer, $districtId, $scorebookId, $components, $ipAddress): void {
+        $this->database->connection()->transaction(function () use ($viewer, $districtId, $scorebookId, $scoreRatio, $courseworkWeight, $finalExamWeight, $components, $ipAddress): void {
             $before = $this->components($scorebookId);
             $this->replaceComponents($scorebookId, $components);
+            $this->database->connection()->table('learning_scorebooks')->where('id', $scorebookId)->update([
+                'coursework_weight' => $courseworkWeight,
+                'final_exam_weight' => $finalExamWeight,
+                'updated_at' => now(),
+            ]);
             $this->audit($viewer, $districtId, 'learning.scorebook.structure_updated', $scorebookId, $ipAddress, [
                 'before_components' => $before,
                 'after_components' => $this->components($scorebookId),
+                'score_ratio' => $scoreRatio,
             ]);
         });
 
         $result = $this->components($scorebookId);
 
-        return ['id' => (string) $scorebookId, 'components' => $result, 'maximum_score' => round(array_sum(array_column($result, 'max_score')), 2)];
+        return [
+            'id' => (string) $scorebookId,
+            'score_ratio' => $scoreRatio,
+            'coursework_weight' => $courseworkWeight,
+            'final_exam_weight' => $finalExamWeight,
+            'components' => $result,
+            'maximum_score' => round(array_sum(array_column($result, 'max_score')), 2),
+        ];
     }
 
     /** @param list<array<string, mixed>> $studentValues
@@ -509,7 +554,7 @@ final readonly class LearningScorebookService
         return $scorebook;
     }
 
-    /** @return list<array{id: string, key: string, title: string, max_score: float, position: int}> */
+    /** @return list<array{id: string, key: string, category: string, title: string, max_score: float, position: int}> */
     private function components(int $scorebookId): array
     {
         return $this->database->connection()->table('learning_score_components')
@@ -517,6 +562,7 @@ final readonly class LearningScorebookService
             ->map(static fn (object $row): array => [
                 'id' => (string) $row->id,
                 'key' => (string) $row->id,
+                'category' => (string) ($row->category ?: 'coursework'),
                 'title' => (string) $row->title,
                 'max_score' => (float) $row->max_score,
                 'position' => (int) $row->position,
@@ -538,13 +584,36 @@ final readonly class LearningScorebookService
         return [$scores, $notes];
     }
 
-    /** @param list<array<string, mixed>> $components */
-    private function assertComponentTotal(array $components): void
+    /** @param list<array<string, mixed>> $components @return array{int, int} */
+    private function assertScoreStructure(string $scoreRatio, array $components): array
     {
-        $total = array_sum(array_map(static fn (array $component): float => (float) $component['max_score'], $components));
-        if ($total > 100.0) {
-            throw ValidationException::withMessages(['components' => 'คะแนนเต็มรวมทุกช่องต้องไม่เกิน 100 คะแนน']);
+        [$courseworkWeight, $finalExamWeight] = match ($scoreRatio) {
+            '60:40' => [60, 40],
+            '70:30' => [70, 30],
+            '80:20' => [80, 20],
+            default => throw ValidationException::withMessages(['score_ratio' => 'โครงสร้างคะแนนต้องเป็น 60:40, 70:30 หรือ 80:20']),
+        };
+        $courseworkTotal = 0.0;
+        $finalExamTotal = 0.0;
+        $finalExamComponents = 0;
+        foreach ($components as $component) {
+            if (($component['category'] ?? null) === 'final_exam') {
+                $finalExamTotal += (float) $component['max_score'];
+                $finalExamComponents++;
+            } else {
+                $courseworkTotal += (float) $component['max_score'];
+            }
         }
+        if ($finalExamComponents !== 1) {
+            throw ValidationException::withMessages(['components' => 'ต้องมีช่องคะแนนสอบปลายภาคหนึ่งช่อง']);
+        }
+        if (abs($courseworkTotal - $courseworkWeight) > 0.001 || abs($finalExamTotal - $finalExamWeight) > 0.001) {
+            throw ValidationException::withMessages([
+                'components' => "คะแนนเก็บต้องรวม {$courseworkWeight} คะแนน และคะแนนสอบปลายภาคต้องรวม {$finalExamWeight} คะแนน",
+            ]);
+        }
+
+        return [$courseworkWeight, $finalExamWeight];
     }
 
     /** @param list<array<string, mixed>> $components */
@@ -557,7 +626,7 @@ final readonly class LearningScorebookService
 
         foreach (array_values($components) as $position => $component) {
             $id = isset($component['id']) ? (int) $component['id'] : 0;
-            $values = ['title' => $component['title'], 'max_score' => $component['max_score'], 'position' => $position, 'updated_at' => now()];
+            $values = ['category' => $component['category'], 'title' => $component['title'], 'max_score' => $component['max_score'], 'position' => $position, 'updated_at' => now()];
             if ($id > 0 && in_array($id, $existingIds, true)) {
                 $connection->table('learning_score_components')->where('scorebook_id', $scorebookId)->where('id', $id)->update($values);
                 $keptIds[] = $id;
@@ -647,6 +716,15 @@ final readonly class LearningScorebookService
             3 => 'มัธยมศึกษาตอนปลาย',
             default => 'ไม่ระบุระดับ',
         };
+    }
+
+    private function scoreRatio(object $scorebook): ?string
+    {
+        if ($scorebook->coursework_weight === null || $scorebook->final_exam_weight === null) {
+            return null;
+        }
+
+        return (int) $scorebook->coursework_weight.':'.(int) $scorebook->final_exam_weight;
     }
 
     /** @return array<string, mixed> */

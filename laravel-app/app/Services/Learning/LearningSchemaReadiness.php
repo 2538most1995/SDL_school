@@ -21,8 +21,8 @@ final class LearningSchemaReadiness
         'learning_resources' => ['district_id', 'uploaded_by', 'title', 'description', 'subject_code', 'education_level', 'resource_type', 'storage_disk', 'storage_path', 'external_url', 'visibility', 'target_group', 'created_at', 'updated_at'],
         'learning_lesson_plans' => ['district_id', 'teacher_id', 'subject_code', 'education_level', 'academic_term', 'title', 'objectives', 'activities', 'assessment', 'status', 'created_at', 'updated_at'],
         'learning_calendar_events' => ['district_id', 'created_by', 'title', 'description', 'event_type', 'starts_at', 'ends_at', 'location', 'target_type', 'target_value', 'image_path', 'image_updated_at', 'daily_schedule', 'external_url', 'featured_on_dashboard', 'created_at', 'updated_at'],
-        'learning_scorebooks' => ['district_id', 'created_by', 'academic_term', 'subject_code', 'subject_name', 'education_level', 'group_code', 'created_at', 'updated_at'],
-        'learning_score_components' => ['scorebook_id', 'title', 'max_score', 'position', 'created_at', 'updated_at'],
+        'learning_scorebooks' => ['district_id', 'created_by', 'academic_term', 'subject_code', 'subject_name', 'education_level', 'group_code', 'coursework_weight', 'final_exam_weight', 'created_at', 'updated_at'],
+        'learning_score_components' => ['scorebook_id', 'category', 'title', 'max_score', 'position', 'created_at', 'updated_at'],
         'learning_score_entries' => ['scorebook_id', 'component_id', 'student_code', 'score', 'updated_by', 'created_at', 'updated_at'],
         'learning_score_notes' => ['scorebook_id', 'student_code', 'note', 'updated_by', 'created_at', 'updated_at'],
         'audit_logs' => ['user_id', 'district_id', 'event', 'auditable_type', 'auditable_id', 'ip_address', 'request_id', 'before', 'after', 'context', 'created_at'],
@@ -446,6 +446,8 @@ final class LearningSchemaReadiness
                 $table->string('subject_name', 220);
                 $table->unsignedTinyInteger('education_level')->index();
                 $table->string('group_code', 120)->default('')->index();
+                $table->unsignedTinyInteger('coursework_weight')->nullable();
+                $table->unsignedTinyInteger('final_exam_weight')->nullable();
                 $table->timestamps();
             });
         } else {
@@ -456,6 +458,8 @@ final class LearningSchemaReadiness
             $this->addMissingColumn($schema, 'learning_scorebooks', 'subject_name', fn (Blueprint $table) => $table->string('subject_name', 220)->nullable());
             $this->addMissingColumn($schema, 'learning_scorebooks', 'education_level', fn (Blueprint $table) => $table->unsignedTinyInteger('education_level')->nullable());
             $this->addMissingColumn($schema, 'learning_scorebooks', 'group_code', fn (Blueprint $table) => $table->string('group_code', 120)->default(''));
+            $this->addMissingColumn($schema, 'learning_scorebooks', 'coursework_weight', fn (Blueprint $table) => $table->unsignedTinyInteger('coursework_weight')->nullable());
+            $this->addMissingColumn($schema, 'learning_scorebooks', 'final_exam_weight', fn (Blueprint $table) => $table->unsignedTinyInteger('final_exam_weight')->nullable());
             $this->addTimestamps($schema, 'learning_scorebooks');
         }
 
@@ -463,6 +467,7 @@ final class LearningSchemaReadiness
             $schema->create('learning_score_components', function (Blueprint $table): void {
                 $table->id();
                 $table->unsignedBigInteger('scorebook_id')->index();
+                $table->string('category', 20)->default('coursework');
                 $table->string('title', 120);
                 $table->decimal('max_score', 7, 2);
                 $table->unsignedSmallInteger('position')->default(0);
@@ -470,6 +475,7 @@ final class LearningSchemaReadiness
             });
         } else {
             $this->addMissingColumn($schema, 'learning_score_components', 'scorebook_id', fn (Blueprint $table) => $table->unsignedBigInteger('scorebook_id')->nullable());
+            $this->addMissingColumn($schema, 'learning_score_components', 'category', fn (Blueprint $table) => $table->string('category', 20)->default('coursework'));
             $this->addMissingColumn($schema, 'learning_score_components', 'title', fn (Blueprint $table) => $table->string('title', 120)->nullable());
             $this->addMissingColumn($schema, 'learning_score_components', 'max_score', fn (Blueprint $table) => $table->decimal('max_score', 7, 2)->nullable());
             $this->addMissingColumn($schema, 'learning_score_components', 'position', fn (Blueprint $table) => $table->unsignedSmallInteger('position')->default(0));

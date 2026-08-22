@@ -35,4 +35,12 @@ class RoleMiddlewareTest extends TestCase
             ->assertOk()
             ->assertJsonPath('data.allowed', true);
     }
+
+    public function test_student_is_denied_from_district_report_routes(): void
+    {
+        Sanctum::actingAs(User::factory()->create(['role' => 'student']));
+
+        $this->getJson('/api/v1/reports/new-students')->assertForbidden();
+        $this->getJson('/api/v1/reports/students/exam-attendance')->assertForbidden();
+    }
 }

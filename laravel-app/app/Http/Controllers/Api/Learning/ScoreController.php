@@ -60,7 +60,9 @@ final class ScoreController extends Controller
             'subject_code' => ['required', 'string', 'max:32'],
             'level' => ['required', 'integer', Rule::in([1, 2, 3])],
             'group' => ['nullable', 'string', 'max:120'],
+            'score_ratio' => ['required', 'string', Rule::in(['60:40', '70:30', '80:20'])],
             'components' => ['required', 'array', 'min:1', 'max:20'],
+            'components.*.category' => ['required', 'string', Rule::in(['coursework', 'final_exam'])],
             'components.*.title' => ['required', 'string', 'max:120'],
             'components.*.max_score' => ['required', 'numeric', 'gt:0', 'max:100'],
         ]);
@@ -74,8 +76,10 @@ final class ScoreController extends Controller
     {
         $this->assertWriteEnabled();
         $values = $request->validate([
+            'score_ratio' => ['required', 'string', Rule::in(['60:40', '70:30', '80:20'])],
             'components' => ['required', 'array', 'min:1', 'max:20'],
             'components.*.id' => ['nullable', 'integer', 'min:1', 'distinct'],
+            'components.*.category' => ['required', 'string', Rule::in(['coursework', 'final_exam'])],
             'components.*.title' => ['required', 'string', 'max:120'],
             'components.*.max_score' => ['required', 'numeric', 'gt:0', 'max:100'],
         ]);
@@ -85,6 +89,7 @@ final class ScoreController extends Controller
                 $request->user(),
                 $this->districtId($request),
                 $scorebook,
+                $values['score_ratio'],
                 $values['components'],
                 $request->ip(),
             ),

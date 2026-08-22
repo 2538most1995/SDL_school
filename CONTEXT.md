@@ -35,7 +35,8 @@ District scope is resolved by `ResolveDistrictContext`; role checks are enforced
 6. Import creates and validates a new batch before replacing old district batches; writes are disabled by default.
 7. Only `super_admin` can register a district. A new district becomes an explicit selectable scope, and its users/imports remain isolated by `district_id`.
 8. Learning writes require teacher/admin/super-admin role and teacher ownership/district checks.
-9. คะแนนเก็บใช้รายวิชาลงทะเบียนจากชุด import ล่าสุดใน district และจำกัดนักศึกษาตามกลุ่มที่ครูรับผิดชอบ; นักศึกษาอ่านได้เฉพาะคะแนนของตนเอง
+9. คะแนนใช้รายวิชาลงทะเบียนจากชุด import ล่าสุดใน district และจำกัดนักศึกษาตามกลุ่มที่ครูรับผิดชอบ; ครูเลือกโครงสร้างคะแนนเก็บต่อสอบปลายภาคได้เฉพาะ 60:40, 70:30 หรือ 80:20 และนักศึกษาอ่านได้เฉพาะคะแนนของตนเอง สมุดคะแนนเดิมที่ยังไม่มีสัดส่วนยังอ่านได้โดยไม่เดาหรือเปลี่ยนคะแนนย้อนหลัง
+   ตารางข้อมูลทั่วไปส่งออก XLSX ตามแถวและค่าที่แสดงอยู่ในหน้าปัจจุบัน ส่วนสมุดคะแนนส่งออกนักศึกษาทั้งชุดที่ workspace โหลดตามรายวิชา/กลุ่ม พร้อมแผ่นโครงสร้างคะแนน ข้อความทุกค่าเขียนเป็น text เพื่อไม่ให้สูตรจากข้อมูลผู้ใช้ทำงาน
 10. คลังสื่อแบบไฟล์เก็บใน private storage และต้องดาวน์โหลดผ่าน endpoint ที่ตรวจ district, กลุ่ม และระดับการศึกษา
 11. Student login derives district scope from one unique citizen-ID match across current-term rosters in active districts; client-supplied district values are ignored and ambiguous matches fail closed.
 12. Calendar activities, per-day schedules, external links and private images are visible only within the event district and `all`/assigned-group target; only teacher/admin/super-admin roles can create or change them, teacher writes remain creator/group scoped, and only admin/super-admin may choose the single district activity featured on the student dashboard.

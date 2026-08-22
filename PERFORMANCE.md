@@ -75,7 +75,7 @@
 
 1. `users`: พิจารณา (`district_id`, `role`, `first_name`) หาก user directory ใช้ filter/sort นี้บ่อยและ cardinality เหมาะสม
 2. `learning_resources`: พิจารณา (`district_id`, `created_at`) สำหรับ district filter + newest ordering
-3. คะแนนเก็บใช้ index ตาม course scope (`district_id`, `academic_term`, `subject_code`, `education_level`) และ unique key ราย scorebook/component/student; roster โหลดจากชุด import ล่าสุดแบบ join เดียว ไม่ query แยกรายคน
+3. คะแนนใช้ index ตาม course scope (`district_id`, `academic_term`, `subject_code`, `education_level`) และ unique key ราย scorebook/component/student; การแยกคะแนนเก็บกับปลายภาคอ่าน component ของสมุดคะแนนเป็นชุดเดิม และ roster โหลดจากชุด import ล่าสุดแบบ join เดียว ไม่เพิ่ม query รายคน
 3. `exam_rooms`: migration ล่าสุดมี (`district_id`, `term`, `subject_code`) แล้ว; ตรวจว่า wildcard-term query ใช้ prefix นี้ได้ตามข้อมูลจริง
 4. import batch/history joins: ตรวจ FK/index ของ `import_history_id`, (`district_id`, `batch_key`) และ ordering latest batch
 
