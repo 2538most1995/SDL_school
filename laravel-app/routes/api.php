@@ -105,6 +105,7 @@ Route::prefix('v1')->group(function (): void {
         Route::get('/learning/schedule', ScheduleController::class)->middleware('learning.schema');
         Route::get('/learning/scores', ScoreController::class)->middleware('learning.schema');
         Route::get('/learning/scores/workspace', [ScoreController::class, 'workspace'])->middleware(['learning.schema', 'role:teacher,admin,super_admin']);
+        Route::get('/learning/scores/templates', [ScoreController::class, 'templates'])->middleware(['learning.schema', 'role:teacher,admin,super_admin']);
         Route::get('/learning/exam-schedule/signed-url', [ExamScheduleDocumentController::class, 'signedUrl']);
         Route::get('/my-learning', [CurrentStudentController::class, 'profile']);
         Route::get('/grades', [CurrentStudentController::class, 'grades']);
@@ -174,6 +175,8 @@ Route::prefix('v1')->group(function (): void {
             Route::patch('/learning/{kind}/{content}', [LearningContentController::class, 'update'])->middleware('learning.schema')->whereIn('kind', ['resources', 'lesson-plans', 'calendar'])->whereNumber('content');
             Route::delete('/learning/{kind}/{content}', [LearningContentController::class, 'destroy'])->middleware('learning.schema')->whereIn('kind', ['resources', 'lesson-plans', 'calendar'])->whereNumber('content');
             Route::post('/learning/scores/scorebooks', [ScoreController::class, 'store'])->middleware('learning.schema');
+            Route::post('/learning/scores/templates', [ScoreController::class, 'storeTemplate'])->middleware('learning.schema');
+            Route::delete('/learning/scores/templates/{template}', [ScoreController::class, 'destroyTemplate'])->middleware('learning.schema')->whereNumber('template');
             Route::put('/learning/scores/scorebooks/{scorebook}/structure', [ScoreController::class, 'structure'])->middleware('learning.schema')->whereNumber('scorebook');
             Route::put('/learning/scores/scorebooks/{scorebook}/entries', [ScoreController::class, 'entries'])->middleware('learning.schema')->whereNumber('scorebook');
         });

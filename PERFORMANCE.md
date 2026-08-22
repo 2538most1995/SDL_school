@@ -76,8 +76,9 @@
 1. `users`: พิจารณา (`district_id`, `role`, `first_name`) หาก user directory ใช้ filter/sort นี้บ่อยและ cardinality เหมาะสม
 2. `learning_resources`: พิจารณา (`district_id`, `created_at`) สำหรับ district filter + newest ordering
 3. คะแนนใช้ index ตาม course scope (`district_id`, `academic_term`, `subject_code`, `education_level`) และ unique key ราย scorebook/component/student; การแยกคะแนนเก็บกับปลายภาคอ่าน component ของสมุดคะแนนเป็นชุดเดิม และ roster โหลดจากชุด import ล่าสุดแบบ join เดียว ไม่เพิ่ม query รายคน
-3. `exam_rooms`: migration ล่าสุดมี (`district_id`, `term`, `subject_code`) แล้ว; ตรวจว่า wildcard-term query ใช้ prefix นี้ได้ตามข้อมูลจริง
-4. import batch/history joins: ตรวจ FK/index ของ `import_history_id`, (`district_id`, `batch_key`) และ ordering latest batch
+4. ต้นแบบโครงสร้างคะแนนอ่านด้วย `district_id` index และจำกัดสูงสุด 200 รายการต่อ request; การกรองต้นแบบทุกรายวิชา/เฉพาะบางวิชาทำใน memory จาก JSON ขนาดเล็กเพื่อให้ทำงานเหมือนกันทั้ง MySQL และ SQLite โดยไม่เกิด query รายต้นแบบ
+5. `exam_rooms`: migration ล่าสุดมี (`district_id`, `term`, `subject_code`) แล้ว; ตรวจว่า wildcard-term query ใช้ prefix นี้ได้ตามข้อมูลจริง
+6. import batch/history joins: ตรวจ FK/index ของ `import_history_id`, (`district_id`, `batch_key`) และ ordering latest batch
 
 ผลของ index ต่อ INSERT/UPDATE/DELETE และ execution plan จริง: `Not verified`.
 

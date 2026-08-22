@@ -299,6 +299,76 @@ final class LearningScorebookTest extends TestCase
         ])->assertUnprocessable()->assertJsonValidationErrors('components');
     }
 
+    public function test_teacher_creates_reuses_and_deletes_district_score_templates_with_subject_scope(): void
+    {
+        $teacher = $this->teacher(['SENA-M3-A']);
+        Sanctum::actingAs($teacher);
+        $components = [
+            ['category' => 'coursework', 'title' => 'งานระหว่างภาค', 'max_score' => 70],
+            ['category' => 'final_exam', 'title' => 'สอบปลายภาค', 'max_score' => 30],
+        ];
+
+        $allTemplate = $this->postJson('/api/v1/learning/scores/templates', [
+            'name' => 'ต้นแบบทุกวิชา 70:30',
+            'score_ratio' => '70:30',
+            'applies_to_all' => true,
+            'subject_codes' => [],
+            'components' => $components,
+        ])->assertCreated()
+            ->assertJsonPath('data.applies_to_all', true)
+            ->assertJsonPath('data.components.0.title', 'งานระหว่างภาค');
+        $allTemplateId = (int) $allTemplate->json('data.id');
+
+        $specificTemplate = $this->postJson('/api/v1/learning/scores/templates', [
+            'name' => 'ต้นแบบวิทยาศาสตร์',
+            'score_ratio' => '70:30',
+            'applies_to_all' => false,
+            'subject_codes' => ['พว31001'],
+            'components' => $components,
+        ])->assertCreated()
+            ->assertJsonPath('data.applies_to_all', false)
+            ->assertJsonPath('data.subject_codes.0', 'พว31001');
+
+        $this->getJson('/api/v1/learning/scores/templates')
+            ->assertOk()
+            ->assertJsonCount(2, 'data');
+
+        $this->postJson('/api/v1/learning/scores/templates', [
+            'name' => 'ต้นแบบนอกขอบเขต',
+            'score_ratio' => '70:30',
+            'applies_to_all' => false,
+            'subject_codes' => ['OUTSIDE'],
+            'components' => $components,
+        ])->assertUnprocessable()->assertJsonValidationErrors('subject_codes.0');
+
+        $coTeacher = $this->teacher(['SENA-M3-A']);
+        Sanctum::actingAs($coTeacher);
+        $this->getJson('/api/v1/learning/scores/templates')
+            ->assertOk()
+            ->assertJsonPath('data.0.can_delete', false);
+        $this->deleteJson("/api/v1/learning/scores/templates/{$allTemplateId}")->assertNotFound();
+
+        Sanctum::actingAs($teacher);
+        $specificTemplateId = (int) $specificTemplate->json('data.id');
+        $this->deleteJson("/api/v1/learning/scores/templates/{$specificTemplateId}")
+            ->assertOk()
+            ->assertJsonPath('data.deleted', true);
+        $this->assertDatabaseMissing('learning_score_templates', ['id' => $specificTemplateId]);
+        $this->assertDatabaseHas('audit_logs', [
+            'district_id' => $this->district->id,
+            'event' => 'learning.score_template.deleted',
+            'auditable_id' => $specificTemplateId,
+        ]);
+
+        $otherDistrict = District::create(['name' => 'อำเภออื่น', 'code' => 'other', 'is_active' => true]);
+        Sanctum::actingAs(User::factory()->create([
+            'role' => 'teacher',
+            'district_id' => $otherDistrict->id,
+            'assigned_groups' => ['SENA-M3-A'],
+        ]));
+        $this->getJson('/api/v1/learning/scores/templates')->assertOk()->assertJsonCount(0, 'data');
+    }
+
     public function test_student_cannot_open_scorebook_workspace_or_write_scores(): void
     {
         Sanctum::actingAs(User::factory()->create([
@@ -309,6 +379,7 @@ final class LearningScorebookTest extends TestCase
         ]));
 
         $this->getJson('/api/v1/learning/scores/workspace')->assertForbidden();
+        $this->getJson('/api/v1/learning/scores/templates')->assertForbidden();
         $this->postJson('/api/v1/learning/scores/scorebooks', [])->assertForbidden();
     }
 
@@ -364,6 +435,7 @@ final class LearningScorebookTest extends TestCase
 
     public function test_git_only_learning_readiness_repairs_scorebook_tables_and_indexes(): void
     {
+        Schema::drop('learning_score_templates');
         Schema::drop('learning_score_notes');
         Schema::drop('learning_score_entries');
         Schema::drop('learning_score_components');
@@ -375,7 +447,7 @@ final class LearningScorebookTest extends TestCase
             ->assertOk()
             ->assertJsonPath('meta.read_only', true);
 
-        foreach (['learning_scorebooks', 'learning_score_components', 'learning_score_entries', 'learning_score_notes'] as $table) {
+        foreach (['learning_scorebooks', 'learning_score_components', 'learning_score_entries', 'learning_score_notes', 'learning_score_templates'] as $table) {
             $this->assertTrue(Schema::hasTable($table));
         }
         $this->assertTrue(Schema::hasIndex('learning_scorebooks', 'learning_scorebooks_course_scope_unique'));
@@ -384,6 +456,8 @@ final class LearningScorebookTest extends TestCase
         $this->assertTrue(Schema::hasIndex('learning_score_notes', 'learning_score_notes_scorebook_id_student_code_unique'));
         $this->assertTrue(Schema::hasColumns('learning_scorebooks', ['coursework_weight', 'final_exam_weight']));
         $this->assertTrue(Schema::hasColumn('learning_score_components', 'category'));
+        $this->assertTrue(Schema::hasTable('learning_score_templates'));
+        $this->assertTrue(Schema::hasIndex('learning_score_templates', 'learning_score_templates_district_name_unique'));
 
         Schema::table('learning_score_entries', function ($table): void {
             $table->dropUnique('learning_score_entries_unique');

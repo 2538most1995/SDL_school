@@ -255,6 +255,100 @@ final readonly class LearningScorebookService
         ];
     }
 
+    /** @return list<array<string, mixed>> */
+    public function templates(User $viewer, int $districtId): array
+    {
+        abort_unless(in_array($viewer->role, ['teacher', 'admin', 'super_admin'], true), 403);
+
+        return $this->database->connection()->table('learning_score_templates')
+            ->where('district_id', $districtId)
+            ->orderBy('name')
+            ->limit(200)
+            ->get()
+            ->map(function (object $template) use ($viewer): array {
+                $subjectCodes = json_decode((string) ($template->subject_codes ?? '[]'), true);
+                $components = json_decode((string) ($template->components ?? '[]'), true);
+
+                return [
+                    'id' => (string) $template->id,
+                    'name' => (string) $template->name,
+                    'score_ratio' => (string) $template->score_ratio,
+                    'applies_to_all' => (bool) $template->applies_to_all,
+                    'subject_codes' => is_array($subjectCodes) ? array_values($subjectCodes) : [],
+                    'components' => is_array($components) ? array_values($components) : [],
+                    'can_delete' => $viewer->role !== 'teacher' || (int) $template->created_by === (int) $viewer->id,
+                ];
+            })
+            ->all();
+    }
+
+    /** @param array<string, mixed> $values @return array<string, mixed> */
+    public function createTemplate(User $viewer, int $districtId, array $values, ?string $ipAddress): array
+    {
+        $this->assertScoreStructure($values['score_ratio'], $values['components']);
+        $appliesToAll = (bool) $values['applies_to_all'];
+        $subjectCodes = $appliesToAll ? [] : array_values(array_unique(array_map(
+            static fn (mixed $code): string => trim((string) $code),
+            $values['subject_codes'] ?? [],
+        )));
+        if (! $appliesToAll) {
+            $available = array_fill_keys(array_column($this->assignmentCatalog($viewer, $districtId)['subjects'], 'code'), true);
+            foreach ($subjectCodes as $index => $subjectCode) {
+                if (! isset($available[$subjectCode])) {
+                    throw ValidationException::withMessages(["subject_codes.{$index}" => 'รายวิชาอยู่นอกขอบเขตของครูหรือไม่มีการลงทะเบียนในภาคเรียนปัจจุบัน']);
+                }
+            }
+        }
+        $components = array_values(array_map(static fn (array $component, int $position): array => [
+            'category' => (string) $component['category'],
+            'title' => trim((string) $component['title']),
+            'max_score' => (float) $component['max_score'],
+            'position' => $position,
+        ], $values['components'], array_keys($values['components'])));
+
+        try {
+            $templateId = (int) $this->database->connection()->table('learning_score_templates')->insertGetId([
+                'district_id' => $districtId,
+                'created_by' => (int) $viewer->id,
+                'name' => trim((string) $values['name']),
+                'score_ratio' => $values['score_ratio'],
+                'applies_to_all' => $appliesToAll,
+                'subject_codes' => $appliesToAll ? null : json_encode($subjectCodes, JSON_UNESCAPED_UNICODE | JSON_THROW_ON_ERROR),
+                'components' => json_encode($components, JSON_UNESCAPED_UNICODE | JSON_THROW_ON_ERROR),
+                'created_at' => now(),
+                'updated_at' => now(),
+            ]);
+        } catch (UniqueConstraintViolationException) {
+            throw ValidationException::withMessages(['name' => 'มีชื่อต้นแบบนี้ในอำเภอแล้ว']);
+        }
+
+        $this->auditTemplate($viewer, $districtId, 'learning.score_template.created', $templateId, $ipAddress, [
+            'name' => trim((string) $values['name']),
+            'score_ratio' => $values['score_ratio'],
+            'applies_to_all' => $appliesToAll,
+            'subject_codes' => $subjectCodes,
+        ]);
+
+        return collect($this->templates($viewer, $districtId))->firstWhere('id', (string) $templateId) ?? [];
+    }
+
+    public function deleteTemplate(User $viewer, int $districtId, int $templateId, ?string $ipAddress): void
+    {
+        $query = $this->database->connection()->table('learning_score_templates')
+            ->where('id', $templateId)
+            ->where('district_id', $districtId);
+        if ($viewer->role === 'teacher') {
+            $query->where('created_by', (int) $viewer->id);
+        }
+        $template = $query->first();
+        abort_unless($template !== null, 404);
+
+        $this->database->connection()->table('learning_score_templates')->where('id', $templateId)->delete();
+        $this->auditTemplate($viewer, $districtId, 'learning.score_template.deleted', $templateId, $ipAddress, [
+            'name' => (string) $template->name,
+        ]);
+    }
+
     /**
      * @param  array<string, mixed>  $values
      * @return array<string, mixed>
@@ -675,6 +769,21 @@ final readonly class LearningScorebookService
             'event' => $event,
             'auditable_type' => 'system_learning_scorebook',
             'auditable_id' => $scorebookId,
+            'ip_address' => $ipAddress,
+            'context' => json_encode($context, JSON_UNESCAPED_UNICODE | JSON_THROW_ON_ERROR),
+            'created_at' => now(),
+        ]);
+    }
+
+    /** @param array<string, mixed> $context */
+    private function auditTemplate(User $viewer, int $districtId, string $event, int $templateId, ?string $ipAddress, array $context): void
+    {
+        $this->database->connection()->table('audit_logs')->insert([
+            'user_id' => $viewer->id,
+            'district_id' => $districtId,
+            'event' => $event,
+            'auditable_type' => 'system_learning_score_template',
+            'auditable_id' => $templateId,
             'ip_address' => $ipAddress,
             'context' => json_encode($context, JSON_UNESCAPED_UNICODE | JSON_THROW_ON_ERROR),
             'created_at' => now(),

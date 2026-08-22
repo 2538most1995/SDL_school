@@ -25,6 +25,7 @@ final class LearningSchemaReadiness
         'learning_score_components' => ['scorebook_id', 'category', 'title', 'max_score', 'position', 'created_at', 'updated_at'],
         'learning_score_entries' => ['scorebook_id', 'component_id', 'student_code', 'score', 'updated_by', 'created_at', 'updated_at'],
         'learning_score_notes' => ['scorebook_id', 'student_code', 'note', 'updated_by', 'created_at', 'updated_at'],
+        'learning_score_templates' => ['district_id', 'created_by', 'name', 'score_ratio', 'applies_to_all', 'subject_codes', 'components', 'created_at', 'updated_at'],
         'audit_logs' => ['user_id', 'district_id', 'event', 'auditable_type', 'auditable_id', 'ip_address', 'request_id', 'before', 'after', 'context', 'created_at'],
     ];
 
@@ -36,6 +37,7 @@ final class LearningSchemaReadiness
         'learning_score_components' => ['learning_score_components_scorebook_id_position_unique'],
         'learning_score_entries' => ['learning_score_entries_unique'],
         'learning_score_notes' => ['learning_score_notes_scorebook_id_student_code_unique'],
+        'learning_score_templates' => ['learning_score_templates_district_name_unique'],
     ];
 
     public function __construct(private readonly DatabaseManager $database) {}
@@ -127,6 +129,7 @@ final class LearningSchemaReadiness
         $this->ensureLessonPlans($schema);
         $this->ensureCalendar($schema);
         $this->ensureScorebooks($schema);
+        $this->ensureScoreTemplates($schema);
         $this->ensureAuditLogs($schema);
     }
 
@@ -562,6 +565,40 @@ final class LearningSchemaReadiness
                     $unique ? $table->unique($columns, $name) : $table->index($columns, $name);
                 });
             }
+        }
+    }
+
+    private function ensureScoreTemplates(Builder $schema): void
+    {
+        if (! $schema->hasTable('learning_score_templates')) {
+            $schema->create('learning_score_templates', function (Blueprint $table): void {
+                $table->id();
+                $table->unsignedBigInteger('district_id')->index();
+                $table->unsignedBigInteger('created_by')->index();
+                $table->string('name', 120);
+                $table->string('score_ratio', 5);
+                $table->boolean('applies_to_all')->default(true)->index();
+                $table->json('subject_codes')->nullable();
+                $table->json('components');
+                $table->timestamps();
+                $table->unique(['district_id', 'name'], 'learning_score_templates_district_name_unique');
+            });
+
+            return;
+        }
+
+        $this->addMissingColumn($schema, 'learning_score_templates', 'district_id', fn (Blueprint $table) => $table->unsignedBigInteger('district_id')->nullable());
+        $this->addMissingColumn($schema, 'learning_score_templates', 'created_by', fn (Blueprint $table) => $table->unsignedBigInteger('created_by')->nullable());
+        $this->addMissingColumn($schema, 'learning_score_templates', 'name', fn (Blueprint $table) => $table->string('name', 120)->nullable());
+        $this->addMissingColumn($schema, 'learning_score_templates', 'score_ratio', fn (Blueprint $table) => $table->string('score_ratio', 5)->nullable());
+        $this->addMissingColumn($schema, 'learning_score_templates', 'applies_to_all', fn (Blueprint $table) => $table->boolean('applies_to_all')->default(true));
+        $this->addMissingColumn($schema, 'learning_score_templates', 'subject_codes', fn (Blueprint $table) => $table->json('subject_codes')->nullable());
+        $this->addMissingColumn($schema, 'learning_score_templates', 'components', fn (Blueprint $table) => $table->json('components')->nullable());
+        $this->addTimestamps($schema, 'learning_score_templates');
+        if (! $schema->hasIndex('learning_score_templates', 'learning_score_templates_district_name_unique')) {
+            $schema->table('learning_score_templates', function (Blueprint $table): void {
+                $table->unique(['district_id', 'name'], 'learning_score_templates_district_name_unique');
+            });
         }
     }
 

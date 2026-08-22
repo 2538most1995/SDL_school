@@ -73,6 +73,15 @@ type ScoreRatio = '60:40' | '70:30' | '80:20';
 type ComponentDraft = { id?: string; clientKey: string; category: 'coursework' | 'final_exam'; title: string; maxScore: string };
 type StudentDraft = Record<string, { scores: Record<string, string>; note: string }>;
 type ScoreTab = 'scores' | 'structure';
+type ScoreTemplate = {
+    id: string;
+    name: string;
+    score_ratio: ScoreRatio;
+    applies_to_all: boolean;
+    subject_codes: string[];
+    components: Array<{ category: 'coursework' | 'final_exam'; title: string; max_score: number; position: number }>;
+    can_delete: boolean;
+};
 
 const emptyWorkspace: ScoreWorkspace = {
     terms: [],
@@ -132,6 +141,10 @@ function TeacherScorebook() {
     const [components, setComponents] = useState<ComponentDraft[]>(() => defaultComponents('60:40'));
     const [studentValues, setStudentValues] = useState<StudentDraft>({});
     const [scoresDirty, setScoresDirty] = useState(false);
+    const [selectedTemplateId, setSelectedTemplateId] = useState('');
+    const [templateName, setTemplateName] = useState('');
+    const [templateAppliesToAll, setTemplateAppliesToAll] = useState(true);
+    const [templateSubjectCodes, setTemplateSubjectCodes] = useState<string[]>([]);
 
     const workspace = useQuery({
         queryKey: ['learning', 'scorebook', term, selected, group],
@@ -139,6 +152,12 @@ function TeacherScorebook() {
         refetchOnWindowFocus: false,
     });
     const data = workspace.data?.data;
+    const templates = useQuery({
+        queryKey: ['learning', 'score-templates'],
+        queryFn: ({ signal }) => getFeatureDataWithDemo<ScoreTemplate[]>('/api/v1/learning/scores/templates', [], signal),
+        refetchOnWindowFocus: false,
+    });
+    const templateRows = templates.data?.data ?? [];
 
     useEffect(() => {
         if (!data) return;
@@ -179,6 +198,9 @@ function TeacherScorebook() {
     const finalExamTotal = useMemo(() => components.filter((component) => component.category === 'final_exam').reduce((sum, component) => sum + (Number(component.maxScore) || 0), 0), [components]);
     const selectedSubject = data?.selected_subject;
     const scorebook = data?.scorebook;
+    const availableSubjects = useMemo(() => Array.from(new Map((data?.subjects ?? []).map((subject) => [subject.code, subject])).values()), [data?.subjects]);
+    const applicableTemplates = useMemo(() => templateRows.filter((template) => template.applies_to_all
+        || (selectedSubject !== null && selectedSubject !== undefined && template.subject_codes.includes(selectedSubject.code))), [selectedSubject, templateRows]);
     const readOnly = workspace.data?.meta.read_only === true;
     const canEdit = !readOnly && (scorebook?.can_edit ?? true);
     const groupOptions = selectedSubject?.groups ?? [];
@@ -187,6 +209,9 @@ function TeacherScorebook() {
         && components.filter((component) => component.category === 'final_exam').length === 1
         && Math.abs(courseworkTotal - courseworkWeight) < 0.001
         && Math.abs(finalExamTotal - finalExamWeight) < 0.001;
+    const selectedTemplate = applicableTemplates.find((template) => template.id === selectedTemplateId);
+    const canCreateTemplate = canEdit && canSaveStructure && templateName.trim() !== ''
+        && (templateAppliesToAll || templateSubjectCodes.length > 0);
 
     const applyScoreRatio = (nextRatio: ScoreRatio) => {
         const [nextCoursework, nextFinalExam] = ratioWeights(nextRatio);
@@ -271,6 +296,53 @@ function TeacherScorebook() {
         },
     });
 
+    const createTemplate = useMutation({
+        mutationFn: () => sendFeatureData('/api/v1/learning/scores/templates', 'POST', {
+            name: templateName.trim(),
+            score_ratio: scoreRatio,
+            applies_to_all: templateAppliesToAll,
+            subject_codes: templateAppliesToAll ? [] : templateSubjectCodes,
+            components: components.map((component) => ({
+                category: component.category,
+                title: component.title.trim(),
+                max_score: Number(component.maxScore),
+            })),
+        }),
+        onSuccess: async () => {
+            setTemplateName('');
+            await queryClient.invalidateQueries({ queryKey: ['learning', 'score-templates'] });
+            showSuccessAlert('บันทึกต้นแบบโครงสร้างคะแนนแล้ว');
+        },
+    });
+
+    const deleteTemplate = useMutation({
+        mutationFn: (templateId: string) => sendFeatureData(`/api/v1/learning/scores/templates/${templateId}`, 'DELETE'),
+        onSuccess: async () => {
+            setSelectedTemplateId('');
+            await queryClient.invalidateQueries({ queryKey: ['learning', 'score-templates'] });
+            showSuccessAlert('ลบต้นแบบแล้ว');
+        },
+    });
+
+    const applyTemplate = () => {
+        const template = applicableTemplates.find((item) => item.id === selectedTemplateId);
+        if (!template) return;
+        setScoreRatio(template.score_ratio);
+        setComponents(template.components.map((component, index) => ({
+            clientKey: `template-${template.id}-${index}-${Date.now()}`,
+            category: component.category,
+            title: component.title,
+            maxScore: formatScore(component.max_score),
+        })));
+        showSuccessAlert('นำต้นแบบมาใช้แล้ว กรุณาตรวจสอบและกดบันทึกโครงสร้าง');
+    };
+
+    const toggleTemplateSubject = (subjectCode: string) => {
+        setTemplateSubjectCodes((current) => current.includes(subjectCode)
+            ? current.filter((code) => code !== subjectCode)
+            : [...current, subjectCode]);
+    };
+
     const changeSubject = (value: string) => {
         setScoresDirty(false);
         setStudentValues({});
@@ -345,7 +417,7 @@ function TeacherScorebook() {
         ]);
     };
 
-    const mutationError = createScorebook.error ?? saveStructure.error ?? saveScores.error;
+    const mutationError = createScorebook.error ?? saveStructure.error ?? saveScores.error ?? createTemplate.error ?? deleteTemplate.error;
     const invalidScores = (data?.students ?? []).flatMap((student) => (scorebook?.components ?? []).filter((component) => {
         const raw = studentValues[student.student_code]?.scores[component.id] ?? '';
         return raw !== '' && Number(raw) > component.max_score;
@@ -398,6 +470,38 @@ function TeacherScorebook() {
             </nav>
 
             {tab === 'structure' && <Panel title="โครงสร้างคะแนน" description="เลือกสัดส่วนคะแนนเก็บต่อคะแนนสอบปลายภาค คะแนนรวมต้องครบ 100 คะแนน" action={<div className={`rounded-xl px-3 py-2 text-sm font-black ${canSaveStructure ? 'bg-brand-50 text-brand-800' : 'bg-rose-50 text-rose-800'}`}>รวม {formatScore(componentTotal)} / 100</div>}>
+                <div className="mb-5 rounded-xl border border-violet-200 bg-violet-50/60 p-4">
+                    <div className="grid gap-3 lg:grid-cols-[minmax(0,1fr)_auto_auto] lg:items-end">
+                        <Field label="เลือกต้นแบบโครงสร้างคะแนน">
+                            <Select value={selectedTemplateId} onChange={(_, option) => setSelectedTemplateId(option.value)} size="large" disabled={templates.isPending || applicableTemplates.length === 0}>
+                                <option value="">{applicableTemplates.length === 0 ? 'ยังไม่มีต้นแบบสำหรับรายวิชานี้' : 'เลือกต้นแบบ'}</option>
+                                {applicableTemplates.map((template) => <option key={template.id} value={template.id}>{template.name} ({template.score_ratio}) · {template.applies_to_all ? 'ทุกรายวิชา' : 'เฉพาะบางวิชา'}</option>)}
+                            </Select>
+                        </Field>
+                        <Button type="button" appearance="primary" onClick={applyTemplate} disabled={!selectedTemplate || !canEdit}>ใช้ต้นแบบ</Button>
+                        <Button type="button" appearance="outline" onClick={() => { if (selectedTemplate && window.confirm(`ยืนยันลบต้นแบบ “${selectedTemplate.name}”?`)) deleteTemplate.mutate(selectedTemplate.id); }} disabled={!selectedTemplate?.can_delete || deleteTemplate.isPending}>ลบต้นแบบ</Button>
+                    </div>
+                    <div className="mt-4 border-t border-violet-200 pt-4">
+                        <p className="font-black text-violet-950">สร้างต้นแบบจากโครงสร้างที่กำลังแก้ไข</p>
+                        <div className="mt-3 grid gap-3 lg:grid-cols-[minmax(220px,0.8fr)_minmax(0,1.2fr)_auto] lg:items-end">
+                            <Field label="ชื่อต้นแบบ"><Input value={templateName} onChange={(_, value) => setTemplateName(value.value)} maxLength={120} placeholder="เช่น แบบมาตรฐาน 70:30" size="large" disabled={!canEdit} /></Field>
+                            <div>
+                                <label className="inline-flex min-h-10 cursor-pointer items-center gap-2 rounded-lg border border-violet-200 bg-white px-3 text-sm font-bold text-violet-950">
+                                    <input type="checkbox" checked={templateAppliesToAll} onChange={(event) => { setTemplateAppliesToAll(event.target.checked); if (event.target.checked) setTemplateSubjectCodes([]); }} disabled={!canEdit} />
+                                    ใช้ได้กับทุกรายวิชา
+                                </label>
+                                {!templateAppliesToAll && <div className="mt-2 flex max-h-32 flex-wrap gap-2 overflow-y-auto rounded-lg border border-violet-200 bg-white p-2">
+                                    {availableSubjects.map((subject) => <label key={subject.code} className="inline-flex cursor-pointer items-center gap-2 rounded-md bg-slate-50 px-2 py-1 text-xs font-bold text-slate-700">
+                                        <input type="checkbox" checked={templateSubjectCodes.includes(subject.code)} onChange={() => toggleTemplateSubject(subject.code)} disabled={!canEdit} />
+                                        {subject.code} {subject.name}
+                                    </label>)}
+                                </div>}
+                            </div>
+                            <Button type="button" appearance="outline" icon={<FloppyDisk size={18} weight="bold" />} onClick={() => createTemplate.mutate()} disabled={!canCreateTemplate || createTemplate.isPending}>บันทึกเป็นต้นแบบ</Button>
+                        </div>
+                        {!templateAppliesToAll && templateSubjectCodes.length === 0 && <p className="mt-2 text-xs font-bold text-amber-800">กรุณาเลือกอย่างน้อย 1 รายวิชา</p>}
+                    </div>
+                </div>
                 <div className="mb-5 grid gap-3 rounded-xl border border-brand-200 bg-brand-50 p-4 sm:grid-cols-[minmax(0,1fr)_220px] sm:items-end">
                     <div><p className="font-black text-brand-950">สัดส่วนคะแนนเก็บ : คะแนนสอบปลายภาค</p><p className="mt-1 text-sm text-brand-800">คะแนนเก็บรวม {courseworkWeight} คะแนน และสอบปลายภาค {finalExamWeight} คะแนน</p></div>
                     <Field label="เลือกโครงสร้างคะแนน"><Select value={scoreRatio} onChange={(_, option) => applyScoreRatio(option.value as ScoreRatio)} size="large" disabled={!canEdit}><option value="60:40">60 : 40</option><option value="70:30">70 : 30</option><option value="80:20">80 : 20</option></Select></Field>

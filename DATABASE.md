@@ -44,6 +44,7 @@ Domain classes under `app/Domain/Students/Models/` (`Student`, `Grade`, `Registe
 - `learning_score_components`: ช่องคะแนนและคะแนนเต็มเรียงตามลำดับ พร้อม `category` (`coursework` หรือ `final_exam`); UNIQUE (`scorebook_id`, `position`)
 - `learning_score_entries`: คะแนนรายนักศึกษาและช่องคะแนน โดยใช้ `student_code` snapshot แทน foreign key ไปตาราง DBF แบบ dynamic; UNIQUE (`scorebook_id`, `component_id`, `student_code`); เก็บเฉพาะช่องที่มีคะแนน การบันทึกใหม่ของนักศึกษาแทนค่าทั้งชุดและลบแถวของช่องว่าง/ช่องที่ไม่ส่งมาเพื่อไม่ให้คะแนนเก่าค้าง
 - `learning_score_notes`: หมายเหตุรายนักศึกษาในสมุดคะแนน; UNIQUE (`scorebook_id`, `student_code`); หมายเหตุว่างจะลบแถวเดิม
+- `learning_score_templates`: ต้นแบบโครงสร้างคะแนนใช้ร่วมกันภายใน district เก็บชื่อ ผู้สร้าง สัดส่วน `score_ratio`, flag `applies_to_all`, JSON `subject_codes` และ JSON `components`; UNIQUE (`district_id`, `name`) ป้องกันชื่อซ้ำในอำเภอ โดยครูลบได้เฉพาะต้นแบบของตนและผู้ดูแลลบได้ทุกต้นแบบใน district
 - `exam_rooms`: latest repair migration uses `term`, `subject_code`, `assignment_type`, `start_val`, `end_val`, `room_name`, district/import batch and timestamps; index (`district_id`, `term`, `subject_code`)
 
 Column names from older migration definitions (`academic_term`, `room_code`, `student_code`, `seat_number`) are migrated by `2026_08_07_000014_fix_import_and_exam_room_schema.php`; do not write new code against the old shape.

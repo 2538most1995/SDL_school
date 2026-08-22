@@ -72,6 +72,41 @@ final class ScoreController extends Controller
         ], 201);
     }
 
+    public function templates(Request $request, LearningScorebookService $scorebooks): JsonResponse
+    {
+        return response()->json([
+            'data' => $scorebooks->templates($request->user(), $this->districtId($request)),
+        ]);
+    }
+
+    public function storeTemplate(Request $request, LearningScorebookService $scorebooks): JsonResponse
+    {
+        $this->assertWriteEnabled();
+        $values = $request->validate([
+            'name' => ['required', 'string', 'max:120'],
+            'score_ratio' => ['required', 'string', Rule::in(['60:40', '70:30', '80:20'])],
+            'applies_to_all' => ['required', 'boolean'],
+            'subject_codes' => ['required_if:applies_to_all,false', 'array', 'max:100'],
+            'subject_codes.*' => ['required', 'string', 'max:32', 'distinct'],
+            'components' => ['required', 'array', 'min:1', 'max:20'],
+            'components.*.category' => ['required', 'string', Rule::in(['coursework', 'final_exam'])],
+            'components.*.title' => ['required', 'string', 'max:120'],
+            'components.*.max_score' => ['required', 'numeric', 'gt:0', 'max:100'],
+        ]);
+
+        return response()->json([
+            'data' => $scorebooks->createTemplate($request->user(), $this->districtId($request), $values, $request->ip()),
+        ], 201);
+    }
+
+    public function destroyTemplate(Request $request, int $template, LearningScorebookService $scorebooks): JsonResponse
+    {
+        $this->assertWriteEnabled();
+        $scorebooks->deleteTemplate($request->user(), $this->districtId($request), $template, $request->ip());
+
+        return response()->json(['data' => ['deleted' => true]]);
+    }
+
     public function structure(Request $request, int $scorebook, LearningScorebookService $scorebooks): JsonResponse
     {
         $this->assertWriteEnabled();
