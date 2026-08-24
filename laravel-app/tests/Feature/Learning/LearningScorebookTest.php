@@ -130,6 +130,17 @@ final class LearningScorebookTest extends TestCase
             ->assertJsonPath('data.courses.0.components.4.score', null);
     }
 
+    public function test_scorebook_workspace_orders_students_by_student_code(): void
+    {
+        Sanctum::actingAs($this->teacher(['SENA-M2-A']));
+
+        $this->getJson('/api/v1/learning/scores/workspace?term=2/2568&subject_code=%E0%B8%9E%E0%B8%A721001&level=2&group=SENA-M2-A')
+            ->assertOk()
+            ->assertJsonCount(2, 'data.students')
+            ->assertJsonPath('data.students.0.student_code', '6650200003')
+            ->assertJsonPath('data.students.1.student_code', '6650200004');
+    }
+
     public function test_scorebook_writes_fail_closed_for_scope_and_score_limits(): void
     {
         $teacher = $this->teacher(['SENA-M3-A']);

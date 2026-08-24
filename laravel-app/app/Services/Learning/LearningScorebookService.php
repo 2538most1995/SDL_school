@@ -198,11 +198,17 @@ final readonly class LearningScorebookService
                 'note' => $notes[$studentCode] ?? null,
             ];
         }
-        usort($studentRows, static fn (array $left, array $right): int => [
-            $left['group_name'], $left['full_name'], $left['student_code'],
-        ] <=> [
-            $right['group_name'], $right['full_name'], $right['student_code'],
-        ]);
+        usort($studentRows, static function (array $left, array $right): int {
+            $comparison = strnatcasecmp((string) $left['student_code'], (string) $right['student_code']);
+            if ($comparison === 0) {
+                $comparison = strnatcasecmp((string) $left['group_name'], (string) $right['group_name']);
+            }
+            if ($comparison === 0) {
+                $comparison = strnatcasecmp((string) $left['full_name'], (string) $right['full_name']);
+            }
+
+            return $comparison;
+        });
 
         return [
             'terms' => $source['terms'],
