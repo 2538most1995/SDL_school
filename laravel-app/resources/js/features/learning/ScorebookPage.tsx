@@ -10,7 +10,7 @@ import {
     Users,
 } from '@phosphor-icons/react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState, type KeyboardEvent as ReactKeyboardEvent } from 'react';
 import { Button, Field, Input, Select } from '../../components/MaterialUI';
 import { PageHeader } from '../../components/PageHeader';
 import { Panel } from '../../components/Panel';
@@ -19,6 +19,7 @@ import { useDemoRole } from '../../context/DemoRoleContext';
 import { showSuccessAlert } from '../../lib/feedback';
 import { downloadExcel } from '../../lib/excel';
 import { getFeatureDataWithDemo, sendFeatureData } from '../api';
+import { isScoreGridNavigationKey, nextScoreGridPosition, scoreGridCellKey } from './scoreGridNavigation';
 
 type ScoreComponent = {
     id: string;
@@ -133,6 +134,7 @@ export function ScorebookPage() {
 
 function TeacherScorebook() {
     const queryClient = useQueryClient();
+    const scoreInputRefs = useRef(new Map<string, HTMLInputElement>());
     const [term, setTerm] = useState('');
     const [selected, setSelected] = useState('');
     const [group, setGroup] = useState('');
@@ -392,6 +394,25 @@ function TeacherScorebook() {
         }));
     };
 
+    const handleScoreKeyDown = (event: ReactKeyboardEvent<HTMLInputElement>, rowIndex: number, columnIndex: number) => {
+        if (!isScoreGridNavigationKey(event.key)) return;
+        const next = nextScoreGridPosition(
+            event.key,
+            rowIndex,
+            columnIndex,
+            data?.students.length ?? 0,
+            scorebook?.components.length ?? 0,
+        );
+
+        event.preventDefault();
+        if (!next) return;
+
+        const nextInput = scoreInputRefs.current.get(scoreGridCellKey(next.row, next.column));
+        if (!nextInput || nextInput.disabled) return;
+        nextInput.focus({ preventScroll: true });
+        nextInput.scrollIntoView({ block: 'nearest', inline: 'nearest' });
+    };
+
     const studentTotal = (studentCode: string): number => (scorebook?.components ?? []).reduce((sum, component) => {
         const raw = studentValues[studentCode]?.scores[component.id] ?? '';
         return sum + (raw === '' ? 0 : Number(raw) || 0);
@@ -567,7 +588,7 @@ function TeacherScorebook() {
                 </div>
             </Panel>}
 
-            {tab === 'scores' && scorebook && <Panel title="บันทึกคะแนนรายคน" description={`${selectedSubject.code} ${selectedSubject.name}, ${data.students.length} คน`} action={<div className="inline-flex items-center gap-2 text-sm font-bold text-slate-600"><Users size={18} /> {data.students.length} คน</div>}>
+            {tab === 'scores' && scorebook && <Panel title="บันทึกคะแนนรายคน" description={`${selectedSubject.code} ${selectedSubject.name}, ${data.students.length} คน ใช้ปุ่มลูกศรเพื่อย้ายช่องกรอกคะแนน`} action={<div className="inline-flex items-center gap-2 text-sm font-bold text-slate-600"><Users size={18} /> {data.students.length} คน</div>}>
                 {data.students.length === 0 ? <div className="grid min-h-48 place-items-center rounded-xl border border-dashed border-slate-300 bg-slate-50 text-center text-sm text-slate-600">ไม่พบนักศึกษาที่ลงทะเบียนวิชานี้ในกลุ่มที่เลือก</div> : <div className="overflow-x-auto rounded-xl border border-slate-200">
                     <table className="w-full border-collapse text-sm" style={{ minWidth: `${760 + (scorebook.components.length * 155)}px` }}>
                         <thead className="bg-slate-50 text-slate-700">
@@ -587,7 +608,7 @@ function TeacherScorebook() {
                                 return <tr key={student.student_code} className="bg-white hover:bg-slate-50/70">
                                     <td className="border-b border-r border-slate-200 px-3 py-3 text-center font-bold text-slate-500">{index + 1}</td>
                                     <td className="border-b border-r border-slate-200 px-4 py-3"><p className="font-black text-slate-950">{student.full_name}</p><p className="mt-1 text-xs text-slate-500">{student.student_code} / {student.group_name || student.group_code}</p></td>
-                                    {scorebook.components.map((component) => <td key={component.id} className="border-b border-r border-slate-200 p-2 text-center"><input aria-label={`${component.title} ของ ${student.full_name}`} type="number" min="0" max={component.max_score} step="0.01" value={studentValues[student.student_code]?.scores[component.id] ?? ''} onChange={(event) => updateScore(student.student_code, component.id, event.target.value)} disabled={!canEdit} className="h-10 w-full rounded-lg border border-slate-300 bg-white px-2 text-center font-mono font-bold text-slate-900 outline-none focus:border-brand-600 focus:ring-2 focus:ring-brand-100 disabled:bg-slate-100 disabled:text-slate-500" /></td>)}
+                                    {scorebook.components.map((component, componentIndex) => <td key={component.id} className="border-b border-r border-slate-200 p-2 text-center"><input ref={(input) => { const key = scoreGridCellKey(index, componentIndex); if (input) scoreInputRefs.current.set(key, input); else scoreInputRefs.current.delete(key); }} aria-label={`${component.title} ของ ${student.full_name}`} aria-keyshortcuts="ArrowLeft ArrowRight ArrowUp ArrowDown" type="number" min="0" max={component.max_score} step="0.01" value={studentValues[student.student_code]?.scores[component.id] ?? ''} onChange={(event) => updateScore(student.student_code, component.id, event.target.value)} onKeyDown={(event) => handleScoreKeyDown(event, index, componentIndex)} disabled={!canEdit} className="h-10 w-full rounded-lg border border-slate-300 bg-white px-2 text-center font-mono font-bold text-slate-900 outline-none focus:border-brand-600 focus:ring-2 focus:ring-brand-100 disabled:bg-slate-100 disabled:text-slate-500" /></td>)}
                                     <td className="border-b border-r border-slate-200 bg-sky-50/50 px-3 py-3 text-center font-mono font-black text-sky-800">{formatScore(studentCategoryTotal(student.student_code, 'coursework'))}</td>
                                     <td className="border-b border-r border-slate-200 bg-amber-50/50 px-3 py-3 text-center font-mono font-black text-amber-800">{formatScore(studentCategoryTotal(student.student_code, 'final_exam'))}</td>
                                     <td className={`border-b border-r border-slate-200 px-3 py-3 text-center font-mono text-base font-black ${total > scorebook.maximum_score ? 'text-rose-700' : 'text-brand-800'}`}>{formatScore(total)}</td>
