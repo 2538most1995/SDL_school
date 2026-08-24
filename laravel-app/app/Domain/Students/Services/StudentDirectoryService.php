@@ -19,17 +19,27 @@ final readonly class StudentDirectoryService
     {
         $allAccessible = $this->accessibleStudents($viewer);
         $filtered = $this->applyFilters($allAccessible, $filters);
-        $sort = (string) ($filters['sort'] ?? 'name');
+        $sort = (string) ($filters['sort'] ?? 'code');
         $direction = (string) ($filters['direction'] ?? 'asc');
 
         usort($filtered, function (Student $left, Student $right) use ($sort, $direction): int {
             $comparison = match ($sort) {
-                'code' => $left->code <=> $right->code,
+                'code' => strnatcasecmp($left->code, $right->code),
                 'gpax' => $left->gpax <=> $right->gpax,
                 'credits' => $left->creditsEarned <=> $right->creditsEarned,
                 'kpch_hours' => $left->kpchHours <=> $right->kpchHours,
                 default => strnatcasecmp($left->fullName(), $right->fullName()),
             };
+
+            if ($comparison === 0) {
+                $comparison = strnatcasecmp($left->code, $right->code);
+            }
+            if ($comparison === 0) {
+                $comparison = $left->level <=> $right->level;
+            }
+            if ($comparison === 0) {
+                $comparison = strnatcasecmp($left->fullName(), $right->fullName());
+            }
 
             return $direction === 'desc' ? -$comparison : $comparison;
         });

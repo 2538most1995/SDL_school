@@ -73,6 +73,27 @@ final class StudentApiTest extends TestCase
             ->assertJsonMissingPath('data.0.citizen_id');
     }
 
+    public function test_student_directory_defaults_to_student_code_order(): void
+    {
+        Sanctum::actingAs($this->viewer('admin'));
+
+        $this->getJson('/api/v1/students?per_page=50')
+            ->assertOk()
+            ->assertJsonPath('data.0.code', '6650100001')
+            ->assertJsonPath('data.1.code', '6650100002')
+            ->assertJsonPath('data.2.code', '6650200003')
+            ->assertJsonPath('data.3.code', '6650200004')
+            ->assertJsonPath('data.4.code', '6650200008')
+            ->assertJsonPath('data.5.code', '6650300005')
+            ->assertJsonPath('data.6.code', '6650300006')
+            ->assertJsonPath('data.7.code', '6650300007');
+
+        $this->getJson('/api/v1/students?sort=code&direction=desc&per_page=50')
+            ->assertOk()
+            ->assertJsonPath('data.0.code', '6650300007')
+            ->assertJsonPath('data.7.code', '6650100001');
+    }
+
     public function test_super_admin_requires_an_explicit_district_context(): void
     {
         Sanctum::actingAs($this->viewer('admin'));
