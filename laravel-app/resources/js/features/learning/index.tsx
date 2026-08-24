@@ -453,7 +453,7 @@ function ExamSchedulePage() {
             student: { code: studentCode, name: '', level: '', group: '', district: '' },
             term: '', rows: [], source_ready: false,
         }, signal),
-        enabled: !isStudent && studentCode !== '',
+        enabled: studentCode !== '',
     });
     const groupOptions = useMemo(() => {
         const unique = new Map<string, { value: string; label: string; level: number }>();
@@ -638,7 +638,7 @@ function ExamSchedulePage() {
             </>}
         </div>}
         </Panel>
-        {!isStudent && scope === 'student' && studentCode !== '' && <Panel title="ตารางสอบจากฐานข้อมูลระบบ" description={`${selectedStudentName || studentCode} · ภาคเรียน ${schedule.data?.data.term || '-'}`}>
+        {scope === 'student' && studentCode !== '' && <Panel title="ตารางสอบจากฐานข้อมูลระบบ" description={`${selectedStudentName || studentCode} · ภาคเรียน ${schedule.data?.data.term || '-'}`}>
             {schedule.isPending && <QuerySkeleton rows={5} />}
             {schedule.isError && <QueryError onRetry={() => schedule.refetch()} />}
             {!schedule.isPending && scheduleRows.length === 0 && <p role="status" className="rounded-xl border border-amber-200 bg-amber-50 p-4 text-center text-sm font-bold leading-6 text-amber-950">{EXAM_SCHEDULE_EMPTY_MESSAGE}</p>}
