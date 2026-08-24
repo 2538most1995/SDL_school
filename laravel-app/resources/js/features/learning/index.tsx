@@ -427,6 +427,7 @@ function resolveExamDocumentUrl(value: string): string {
 
 function ExamSchedulePage() {
     const { role } = useDemoRole();
+    const isStudent = role === 'student';
     const [params, setParams] = useSearchParams();
     const [search, setSearch] = useState('');
     const [scope, setScope] = useState<ExamPrintScope>('student');
@@ -442,7 +443,9 @@ function ExamSchedulePage() {
         queryKey: ['exam-schedule', 'students'],
         queryFn: ({ signal }) => getFeatureDataWithDemo<ExamStudentOption[]>('/api/v1/students?per_page=1000&status=studying', [], signal),
     });
-    const studentCode = params.get('student') ?? '';
+    const requestedStudentCode = params.get('student') ?? '';
+    const selfStudentCode = isStudent && students.data?.data.length === 1 ? students.data.data[0].code : '';
+    const studentCode = isStudent ? selfStudentCode : requestedStudentCode;
     const autoGenerate = params.get('auto') === '1' && studentCode !== '';
     const schedule = useQuery({
         queryKey: ['exam-schedule', 'preview', studentCode],
@@ -450,7 +453,7 @@ function ExamSchedulePage() {
             student: { code: studentCode, name: '', level: '', group: '', district: '' },
             term: '', rows: [], source_ready: false,
         }, signal),
-        enabled: studentCode !== '',
+        enabled: !isStudent && studentCode !== '',
     });
     const groupOptions = useMemo(() => {
         const unique = new Map<string, { value: string; label: string; level: number }>();
@@ -482,8 +485,16 @@ function ExamSchedulePage() {
         return list;
     }, [students.data?.data, level, group, needle, studentCode, schedule.data?.data.student]);
     useEffect(() => {
-        if (studentCode === '' && students.data?.data.length === 1) setParams({ student: students.data.data[0].code }, { replace: true });
-    }, [setParams, studentCode, students.data?.data]);
+        if (isStudent) {
+            if (selfStudentCode !== '' && requestedStudentCode !== selfStudentCode) {
+                setParams({ student: selfStudentCode }, { replace: true });
+            }
+            return;
+        }
+        if (requestedStudentCode === '' && students.data?.data.length === 1) {
+            setParams({ student: students.data.data[0].code }, { replace: true });
+        }
+    }, [isStudent, requestedStudentCode, selfStudentCode, setParams, students.data?.data]);
     useEffect(() => {
         if (group !== '' && !groupOptions.some((item) => item.value === group)) setGroup('');
     }, [group, groupOptions]);
@@ -581,10 +592,10 @@ function ExamSchedulePage() {
     ], []);
 
     return <div>
-        <PageHeader category="learning" title="ตารางสอบ" description={autoGenerate ? 'ตรวจสอบตารางสอบของนักศึกษารายนี้ และเปิดหน้าเอกสารสำหรับพิมพ์หรือดาวน์โหลด' : 'สร้างไฟล์ PDF ด้วย mPDF และฟอนต์ TH Sarabun New แบบรายคน รายกลุ่ม หรือรายระดับชั้น'} icon={Clock} />
+        <PageHeader category="learning" title="ตารางสอบ" description={isStudent ? 'เปิดดูตารางสอบของคุณจากข้อมูลภาคเรียนปัจจุบัน' : autoGenerate ? 'ตรวจสอบตารางสอบของนักศึกษารายนี้ และเปิดหน้าเอกสารสำหรับพิมพ์หรือดาวน์โหลด' : 'สร้างไฟล์ PDF ด้วย mPDF และฟอนต์ TH Sarabun New แบบรายคน รายกลุ่ม หรือรายระดับชั้น'} icon={Clock} />
 
-        <Panel title={autoGenerate ? 'ตารางสอบรายบุคคล' : 'ตัวกรองและขอบเขตการพิมพ์'} description={autoGenerate ? `รหัสนักศึกษา ${studentCode}` : 'รายชื่อและกลุ่มเรียนถูกจำกัดตามอำเภอและขอบเขตที่บัญชีของคุณรับผิดชอบ'}>
-            {autoGenerate ? (
+        <Panel title={isStudent ? 'ตารางสอบของฉัน' : autoGenerate ? 'ตารางสอบรายบุคคล' : 'ตัวกรองและขอบเขตการพิมพ์'} description={isStudent ? 'ระบบเลือกข้อมูลจากบัญชีนักศึกษาที่เข้าสู่ระบบให้อัตโนมัติ' : autoGenerate ? `รหัสนักศึกษา ${studentCode}` : 'รายชื่อและกลุ่มเรียนถูกจำกัดตามอำเภอและขอบเขตที่บัญชีของคุณรับผิดชอบ'}>
+            {!isStudent && (autoGenerate ? (
                 <div className="flex items-center gap-3 rounded-xl border border-sky-200 bg-sky-50 p-4 text-sky-950">
                     <span className="grid size-10 shrink-0 place-items-center rounded-lg bg-white text-sky-700 shadow-sm"><Printer size={20} weight="bold" aria-hidden="true" /></span>
                     <div className="min-w-0">
@@ -593,17 +604,17 @@ function ExamSchedulePage() {
                     </div>
                 </div>
             ) : <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
-                <Field label="รูปแบบการพิมพ์"><Select value={scope} onChange={(_, data) => changeScope(data.value as ExamPrintScope)} size="large"><option value="student">รายนักศึกษา</option>{role !== 'student' && <><option value="group">ทั้งกลุ่มเรียน</option><option value="level">ทั้งระดับชั้น</option></>}</Select></Field>
+                <Field label="รูปแบบการพิมพ์"><Select value={scope} onChange={(_, data) => changeScope(data.value as ExamPrintScope)} size="large"><option value="student">รายนักศึกษา</option><option value="group">ทั้งกลุ่มเรียน</option><option value="level">ทั้งระดับชั้น</option></Select></Field>
                 <Field label="ระดับชั้น" required={scope === 'group' || scope === 'level'}><Select value={level} onChange={(_, data) => { clearPreview(); setLevel(data.value); }} required={scope === 'group' || scope === 'level'} size="large"><option value="">{scope === 'group' || scope === 'level' ? 'เลือกระดับชั้น' : 'ทุกระดับชั้น'}</option><option value="1">ประถมศึกษา</option><option value="2">มัธยมศึกษาตอนต้น</option><option value="3">มัธยมศึกษาตอนปลาย</option></Select></Field>
                 <Field label="กลุ่มเรียน" required={scope === 'group'}><Select value={group} onChange={(_, data) => { clearPreview(); setGroup(data.value); }} required={scope === 'group'} disabled={scope === 'level' || (scope === 'group' && level === '')} size="large"><option value="">{scope === 'group' ? (level === '' ? 'เลือกระดับชั้นก่อน' : 'เลือกกลุ่มเรียน') : 'ทุกกลุ่มเรียน'}</option>{groupOptions.map((item) => <option key={item.value} value={item.value}>{item.label}</option>)}</Select></Field>
                 {scope === 'student' && <Field label="ค้นหานักศึกษา"><Input value={search} onChange={(_, data) => setSearch(data.value)} placeholder="ชื่อ รหัส หรือกลุ่ม" size="large" /></Field>}
                 {scope === 'student' && <Field label="นักศึกษา" className="md:col-span-2 xl:col-span-4"><Select value={studentCode} onChange={(_, data) => { clearPreview(); setParams(data.value ? { student: data.value } : {}, { replace: true }); }} size="large"><option value="">เลือกนักศึกษา</option>{options.map((student) => <option key={student.code} value={student.code}>{student.code} · {student.full_name} · {student.level.label} · {student.group.name}</option>)}</Select></Field>}
-            </div>}
-            {!autoGenerate && students.isPending && <QuerySkeleton rows={2} />}
-            {!autoGenerate && students.isError && <QueryError onRetry={() => students.refetch()} />}
+            </div>)}
+            {!isStudent && !autoGenerate && students.isPending && <QuerySkeleton rows={2} />}
+            {students.isError && <QueryError onRetry={() => students.refetch()} />}
             {pdfError && <p role="alert" className="mt-4 rounded-xl border border-rose-200 bg-rose-50 p-3 text-sm font-bold text-rose-800">{pdfError}</p>}
-        {/* Mobile/LINE: use a standalone HTML page in the same tab; PDF viewers and new tabs are unreliable in in-app browsers. */}
-        <div className="mt-5 lg:hidden">
+        {/* Students use the standalone document on every screen; mobile/LINE also avoids blocked PDF viewers and popups. */}
+        <div className={`${isStudent ? '' : 'mt-5 lg:hidden'}`}>
             <Button
                 type="button"
                 onClick={() => void openStandaloneSchedule()}
@@ -611,30 +622,30 @@ function ExamSchedulePage() {
                 size="large"
                 icon={<ArrowSquareOut size={18} weight="bold" />}
                 className="w-full justify-center text-sm font-bold shadow-sm"
-                disabled={!canGenerate || scheduleOpening || signedUrlQuery.isFetching}
+                disabled={!canGenerate || students.isPending || scheduleOpening || signedUrlQuery.isFetching}
             >
-                {scheduleOpening || signedUrlQuery.isFetching ? 'กำลังเตรียมตารางสอบ' : 'เปิดตารางสอบ'}
+                {students.isPending ? 'กำลังโหลดข้อมูลนักศึกษา' : scheduleOpening || signedUrlQuery.isFetching ? 'กำลังเตรียมตารางสอบ' : 'เปิดตารางสอบ'}
             </Button>
-            <p className="mt-2 text-center text-xs leading-5 text-slate-500">รองรับ LINE Browser และสามารถพิมพ์หรือดาวน์โหลด PDF จากหน้าถัดไป</p>
+            {!isStudent && <p className="mt-2 text-center text-xs leading-5 text-slate-500">รองรับ LINE Browser และสามารถพิมพ์หรือดาวน์โหลด PDF จากหน้าถัดไป</p>}
         </div>
 
         {/* Desktop Action Buttons */}
-        <div className="mt-5 hidden flex-wrap justify-end gap-2 lg:flex">
+        {!isStudent && <div className="mt-5 hidden flex-wrap justify-end gap-2 lg:flex">
             <Button type="button" appearance="primary" size="large" icon={<DownloadSimple size={18} weight="bold" />} onClick={generatePdf} disabled={!canGenerate || pdfLoading}>{pdfLoading ? 'กำลังสร้าง PDF' : autoGenerate ? 'สร้าง PDF ใหม่' : 'สร้างและแสดงตัวอย่าง PDF'}</Button>
             {pdfUrl && <>
                 <Button as="a" href={signedPdfDownloadUrl || pdfUrl} download={pdfName} appearance="outline" size="large" icon={<DownloadSimple size={18} weight="bold" />}>ดาวน์โหลด PDF</Button>
                 <Button as="a" href={standaloneScheduleUrl || pdfUrl} target="_blank" rel="noopener noreferrer" appearance="outline" size="large" icon={<Printer size={18} weight="bold" />}>เปิดเพื่อพิมพ์</Button>
             </>}
-        </div>
+        </div>}
         </Panel>
-        {scope === 'student' && studentCode !== '' && <Panel title="ตารางสอบจากฐานข้อมูลระบบ" description={`${selectedStudentName || studentCode} · ภาคเรียน ${schedule.data?.data.term || '-'}`}>
+        {!isStudent && scope === 'student' && studentCode !== '' && <Panel title="ตารางสอบจากฐานข้อมูลระบบ" description={`${selectedStudentName || studentCode} · ภาคเรียน ${schedule.data?.data.term || '-'}`}>
             {schedule.isPending && <QuerySkeleton rows={5} />}
             {schedule.isError && <QueryError onRetry={() => schedule.refetch()} />}
             {!schedule.isPending && scheduleRows.length === 0 && <p role="status" className="rounded-xl border border-amber-200 bg-amber-50 p-4 text-center text-sm font-bold leading-6 text-amber-950">{EXAM_SCHEDULE_EMPTY_MESSAGE}</p>}
             {schedule.data?.data.sources?.field === false && scheduleRows.length > 0 && <p role="alert" className="mb-4 rounded-xl border border-sky-200 bg-sky-50 p-3 text-sm font-bold text-sky-900">ยังไม่มีข้อมูลสนามสอบในชุดข้อมูลปัจจุบัน ระบบจึงใช้ชื่ออำเภอแทนชื่อสนามสอบชั่วคราว</p>}
             {scheduleRows.length > 0 && <DataTable data={scheduleRows} columns={scheduleColumns} minWidth="wide" responsiveMode="cards" />}
         </Panel>}
-        <div className="hidden lg:block">
+        {!isStudent && <div className="hidden lg:block">
             <Panel title="ตัวอย่างไฟล์ PDF" description={pdfUrl ? 'ตัวอย่างนี้เป็นไฟล์เดียวกับที่ดาวน์โหลดและพิมพ์ ตำแหน่งจึงตรงกันทุกจุด' : autoGenerate ? 'ระบบกำลังสร้างตารางสอบของนักศึกษารายนี้' : 'เลือกขอบเขตแล้วกดสร้าง PDF เพื่อแสดงตัวอย่าง'}>
                 {pdfLoading && <QuerySkeleton rows={8} />}
                 {pdfUrl ? (
@@ -643,6 +654,6 @@ function ExamSchedulePage() {
                     !pdfLoading && <div className="grid min-h-72 place-items-center rounded-xl border border-dashed border-slate-300 bg-slate-50 text-center text-sm text-slate-500">ยังไม่ได้สร้างตัวอย่าง PDF</div>
                 )}
             </Panel>
-        </div>
+        </div>}
     </div>;
 }
