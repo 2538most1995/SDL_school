@@ -6,7 +6,7 @@ use Illuminate\Database\Eloquent\Attributes\Fillable;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 
-#[Fillable(['name', 'code', 'login_title', 'login_subtitle', 'portal_name', 'welcome_message', 'primary_color', 'logo_path', 'logo_updated_at', 'login_hero_path', 'login_hero_updated_at', 'dashboard_hero_path', 'dashboard_hero_updated_at', 'nnet_exam_date', 'nnet_exam_time', 'nnet_exam_location', 'nnet_exam_notes', 'is_active'])]
+#[Fillable(['name', 'code', 'school_code', 'login_title', 'login_subtitle', 'portal_name', 'welcome_message', 'primary_color', 'logo_path', 'logo_updated_at', 'login_hero_path', 'login_hero_updated_at', 'dashboard_hero_path', 'dashboard_hero_updated_at', 'nnet_exam_date', 'nnet_exam_time', 'nnet_exam_location', 'nnet_exam_notes', 'is_active'])]
 class District extends Model
 {
     protected function casts(): array

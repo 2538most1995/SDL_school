@@ -14,7 +14,7 @@
 
 ### `districts`
 
-`id` BIGINT PK, `name` string NOT NULL, `code` string(40) UNIQUE NOT NULL, login/branding fields nullable, `is_active` boolean DEFAULT true indexed, NNET schedule fields nullable, timestamps. มี `District::users()` → `users.district_id`.
+`id` BIGINT PK, `name` string NOT NULL, `code` string(40) UNIQUE NOT NULL, `school_code` string(20) nullable สำหรับรหัสสถานศึกษาบนเอกสาร, login/branding fields nullable, `is_active` boolean DEFAULT true indexed, NNET schedule fields nullable, timestamps. มี `District::users()` → `users.district_id`. `code` เป็นรหัสระบบที่คงที่ ส่วนผู้ดูแลสูงสุดแก้ `name` และ `school_code` ได้พร้อม audit โดยไม่เปลี่ยน district/import scope.
 
 ### `users`
 
@@ -75,6 +75,8 @@ Successful ZIP/DBF imports create physical names such as `db_import_{timestamp}_
 Existing indexes cover the main district/status/date filters and exam-room district/term/subject lookup. Additional index proposals are recorded in [`PERFORMANCE.md`](PERFORMANCE.md); none are added based on column names alone. Live `SHOW INDEX` and `EXPLAIN` are `Not verified`.
 
 ## Migration history
+
+Migration `2026_08_24_000028_add_school_code_to_districts.php` เพิ่ม `districts.school_code` แบบ nullable/additive สำหรับหัวเอกสารตารางสอบ โดยไม่เปลี่ยน `districts.code` หรือข้อมูลนำเข้าเดิม
 
 Migration `2026_08_21_000026_add_score_structure_to_learning_scorebooks.php` เพิ่มน้ำหนักและประเภทช่องคะแนนแบบ additive โดยไม่แก้หรือลบคะแนนเดิม
 

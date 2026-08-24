@@ -18,6 +18,12 @@ final class LegacyExamScheduleService
     /** @var array<string, array<string, string>> */
     private array $fieldMaps = [];
 
+    /** @var array<int, string|null> */
+    private array $districtSchoolCodes = [];
+
+    /** @var array<string, list<array{group_code: string, group_name: string, school_code: string, advisor: string}>> */
+    private array $groupCatalogs = [];
+
     /** @var array<string, list<object>> */
     private array $examRoomsByTerm = [];
 
@@ -67,6 +73,8 @@ final class LegacyExamScheduleService
         $fields = $this->fieldMap($batchKey);
         $groupFields = $this->groupFieldMap($batchKey);
         $studentGroupFld = $groupFields[trim((string) $student->groupCode)] ?? '';
+        $groupMetadata = $this->groupMetadata($batchKey, (string) $student->groupCode, (string) $student->groupName);
+        $schoolCode = $this->districtSchoolCode($student->districtId) ?? $groupMetadata['school_code'];
 
         $rows = [];
         if ($scheduleTable !== null && $subjects !== []) {
@@ -124,6 +132,8 @@ final class LegacyExamScheduleService
                 'level' => $student->levelLabel,
                 'group' => $student->groupName ?: $student->groupCode,
                 'district' => $student->districtName,
+                'school_code' => $schoolCode ?: '-',
+                'advisor' => $groupMetadata['advisor'] ?: '-',
             ],
             'term' => $student->currentTerm,
             'rows' => $rows,
@@ -378,6 +388,83 @@ final class LegacyExamScheduleService
         }
 
         return $this->fieldMaps[$cacheKey] = $map;
+    }
+
+    /** @return array{school_code: string, advisor: string} */
+    private function groupMetadata(?string $batchKey, string $groupCode, string $groupName): array
+    {
+        $empty = ['school_code' => '', 'advisor' => ''];
+        if ($batchKey === null) {
+            return $empty;
+        }
+
+        $groupCode = trim($groupCode);
+        $groupName = trim($groupName);
+        $cacheKey = 'groupMetadata|'.$batchKey.'|'.$groupCode.'|'.$groupName;
+        if (isset($this->fieldMaps[$cacheKey])) {
+            return $this->fieldMaps[$cacheKey];
+        }
+
+        $catalog = $this->groupCatalog($batchKey);
+        $matches = array_values(array_filter(
+            $catalog,
+            static fn (array $item): bool => $groupCode !== '' && $item['group_code'] === $groupCode,
+        ));
+        if ($matches === [] && $groupName !== '') {
+            $matches = array_values(array_filter(
+                $catalog,
+                static fn (array $item): bool => $item['group_name'] === $groupName,
+            ));
+        }
+        if (count($matches) === 1) {
+            return $this->fieldMaps[$cacheKey] = [
+                'school_code' => $matches[0]['school_code'],
+                'advisor' => $matches[0]['advisor'],
+            ];
+        }
+
+        return $this->fieldMaps[$cacheKey] = $empty;
+    }
+
+    /** @return list<array{group_code: string, group_name: string, school_code: string, advisor: string}> */
+    private function groupCatalog(string $batchKey): array
+    {
+        if (array_key_exists($batchKey, $this->groupCatalogs)) {
+            return $this->groupCatalogs[$batchKey];
+        }
+
+        $catalog = [];
+        $prefix = 'db_'.$batchKey.'_';
+        foreach ($this->tablesFor($batchKey, 'group') as $table) {
+            $schoolCode = '';
+            if (preg_match('/^'.preg_quote($prefix, '/').'([0-9]{2,20})_group$/', $table, $matches) === 1) {
+                $schoolCode = $matches[1];
+            }
+            foreach ($this->database->connection()->table($table)->get() as $record) {
+                $row = (array) $record;
+                $catalog[] = [
+                    'group_code' => trim((string) ($row['grp_code'] ?? '')),
+                    'group_name' => trim((string) ($row['grp_name'] ?? '')),
+                    'school_code' => $schoolCode,
+                    'advisor' => trim((string) ($row['grp_advis'] ?? $row['advisor'] ?? $row['teacher_name'] ?? '')),
+                ];
+            }
+        }
+
+        return $this->groupCatalogs[$batchKey] = $catalog;
+    }
+
+    private function districtSchoolCode(int $districtId): ?string
+    {
+        if (array_key_exists($districtId, $this->districtSchoolCodes)) {
+            return $this->districtSchoolCodes[$districtId];
+        }
+
+        $value = trim((string) ($this->database->connection()->table('districts')
+            ->where('id', $districtId)
+            ->value('school_code') ?? ''));
+
+        return $this->districtSchoolCodes[$districtId] = $value === '' ? null : $value;
     }
 
     /** @return array<string, string> */

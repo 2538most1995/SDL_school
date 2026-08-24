@@ -314,6 +314,13 @@
                         <td class="value">{{ $document['term'] ?? '-' }}</td>
                     </tr>
                     <tr>
+                        <td class="label">รหัสสถานศึกษา:</td>
+                        <td class="value">{{ $document['student']['school_code'] ?? '-' }}</td>
+                        <td class="spacer"></td>
+                        <td class="label">ครูประจำกลุ่ม:</td>
+                        <td class="value">{{ $document['student']['advisor'] ?? '-' }}</td>
+                    </tr>
+                    <tr>
                         <td class="label">ชื่อ-สกุล:</td>
                         <td class="value">{{ $document['student']['name'] ?? '-' }}</td>
                         <td class="spacer"></td>

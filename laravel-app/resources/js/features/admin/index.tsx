@@ -87,41 +87,50 @@ type DistrictRegistryItem = {
     id: number;
     name: string;
     code: string;
+    school_code: string | null;
     is_active: boolean;
     users_count: number;
     created_at: string | null;
 };
-type DistrictDraft = { name: string; code: string };
-const blankDistrict: DistrictDraft = { name: '', code: '' };
+type DistrictDraft = { name: string; code: string; school_code: string };
+const blankDistrict: DistrictDraft = { name: '', code: '', school_code: '' };
 
 export function SuperAdminDistrictsPage() {
     const queryClient = useQueryClient();
     const [creating, setCreating] = useState(false);
+    const [editing, setEditing] = useState<DistrictRegistryItem | null>(null);
     const [draft, setDraft] = useState<DistrictDraft>(blankDistrict);
     const districts = useQuery({
         queryKey: ['super-admin', 'districts'],
         queryFn: ({ signal }) => getFeatureData<DistrictRegistryItem[]>('/api/v1/super-admin/districts', signal),
     });
     const save = useMutation({
-        meta: { notification: { success: 'เพิ่มอำเภอใหม่เรียบร้อยแล้ว' } },
-        mutationFn: () => sendFeatureData<DistrictRegistryItem>('/api/v1/super-admin/districts', 'POST', draft),
+        meta: { notification: { success: editing ? 'แก้ไขทะเบียนอำเภอเรียบร้อยแล้ว' : 'เพิ่มอำเภอใหม่เรียบร้อยแล้ว' } },
+        mutationFn: () => editing
+            ? sendFeatureData<DistrictRegistryItem>(`/api/v1/super-admin/districts/${editing.id}`, 'PATCH', { name: draft.name, school_code: draft.school_code })
+            : sendFeatureData<DistrictRegistryItem>('/api/v1/super-admin/districts', 'POST', draft),
         onSuccess: async () => {
             setCreating(false);
+            setEditing(null);
             setDraft(blankDistrict);
             await Promise.all([
                 queryClient.invalidateQueries({ queryKey: ['super-admin', 'districts'] }),
                 queryClient.invalidateQueries({ queryKey: ['auth', 'me'] }),
                 queryClient.invalidateQueries({ queryKey: ['auth', 'districts'] }),
+                queryClient.invalidateQueries({ queryKey: ['auth', 'branding'] }),
+                queryClient.invalidateQueries({ queryKey: ['exam-schedule'] }),
+                queryClient.invalidateQueries({ queryKey: ['exam-schedule-signed-url'] }),
             ]);
         },
     });
+    const readOnly = districts.data?.meta.read_only === true;
     const columns = useMemo<ColumnDef<DistrictRegistryItem>[]>(() => [
-        { accessorKey: 'name', header: 'ชื่อพื้นที่', size: 260, meta: { compactSize: 145 }, cell: ({ row }) => <div><p className="font-bold text-slate-950">{row.original.name}</p><p className="mt-0.5 text-xs text-slate-500">รหัส {row.original.code}</p></div> },
+        { accessorKey: 'name', header: 'ชื่อพื้นที่', size: 260, meta: { compactSize: 145 }, cell: ({ row }) => <div><p className="font-bold text-slate-950">{row.original.name}</p><p className="mt-0.5 text-xs text-slate-500">รหัสระบบ {row.original.code}</p>{row.original.school_code && <p className="mt-0.5 text-xs text-slate-500">รหัสสถานศึกษา {row.original.school_code}</p>}</div> },
         { accessorKey: 'users_count', header: 'ผู้ใช้งาน', size: 120, meta: { compactSize: 70, compactTextAlign: 'center' }, cell: ({ getValue }) => Number(getValue()).toLocaleString('th-TH') },
         { accessorKey: 'is_active', header: 'สถานะ', size: 120, meta: { compactSize: 72, compactTextAlign: 'center' }, cell: ({ getValue }) => <StatusBadge tone={getValue<boolean>() ? 'success' : 'neutral'}>{getValue<boolean>() ? 'เปิดใช้งาน' : 'ปิดใช้งาน'}</StatusBadge> },
         { accessorKey: 'created_at', header: 'วันที่เพิ่ม', size: 150, meta: { compactSize: 90 }, cell: ({ getValue }) => { const value = getValue<string | null>(); return value ? new Intl.DateTimeFormat('th-TH', { dateStyle: 'medium' }).format(new Date(value)) : '-'; } },
-    ], []);
-    const readOnly = districts.data?.meta.read_only === true;
+        { id: 'actions', header: '', size: 90, meta: { compactSize: 60, compactTextAlign: 'center' }, cell: ({ row }) => <button type="button" onClick={() => { setCreating(false); setEditing(row.original); setDraft({ name: row.original.name, code: row.original.code, school_code: row.original.school_code ?? '' }); save.reset(); }} disabled={readOnly} className={secondaryButton} aria-label={`แก้ไข ${row.original.name}`}><PencilSimple size={16} weight="bold" /> แก้ไข</button> },
+    ], [readOnly]);
 
     return (
         <div>
@@ -136,12 +145,13 @@ export function SuperAdminDistrictsPage() {
                 {districts.isError && <QueryError onRetry={() => districts.refetch()} />}
                 {districts.data && <DataTable data={districts.data.data} columns={columns} />}
             </Panel>
-            {creating && <Modal title="เพิ่มอำเภอใหม่" description="ระบบจะสร้างพื้นที่ว่างที่ยังไม่มีข้อมูลนักศึกษา การนำเข้าครั้งแรกจะผูกกับอำเภอนี้เท่านั้น" onClose={() => setCreating(false)}><form onSubmit={(event) => { event.preventDefault(); save.mutate(); }} className="grid gap-4 sm:grid-cols-2">
+            {(creating || editing) && <Modal title={editing ? 'แก้ไขทะเบียนอำเภอ' : 'เพิ่มอำเภอใหม่'} description={editing ? 'แก้ไขชื่อที่แสดงในระบบและรหัสสถานศึกษาบนหัวตารางสอบ โดยรหัสระบบและขอบเขตข้อมูลจะไม่เปลี่ยน' : 'ระบบจะสร้างพื้นที่ว่างที่ยังไม่มีข้อมูลนักศึกษา การนำเข้าครั้งแรกจะผูกกับอำเภอนี้เท่านั้น'} onClose={() => { setCreating(false); setEditing(null); }}><form onSubmit={(event) => { event.preventDefault(); save.mutate(); }} className="grid gap-4 sm:grid-cols-2">
                 <Field label="ชื่ออำเภอ" hint="ตัวอย่าง: อำเภอบางปะอิน"><input required maxLength={255} value={draft.name} onChange={(event) => setDraft({ ...draft, name: event.target.value })} className={inputClass} placeholder="อำเภอบางปะอิน" /></Field>
-                <Field label="รหัสอำเภอ" hint="ใช้ a-z, 0-9, - หรือ _ เช่น bang-pa-in"><input required minLength={2} maxLength={40} pattern="[a-z0-9]+(?:[-_][a-z0-9]+)*" value={draft.code} onChange={(event) => setDraft({ ...draft, code: event.target.value.toLocaleLowerCase('en-US') })} className={inputClass} placeholder="bang-pa-in" /></Field>
-                <div className="rounded-2xl border border-sky-200 bg-sky-50 p-4 text-sm leading-6 text-sky-950 sm:col-span-2"><strong className="block">หลังบันทึก</strong>เลือกอำเภอใหม่นี้จากเมนูด้านบน → ไปที่ “ผู้ใช้งาน” เพื่อสร้าง admin ประจำอำเภอ → ไปที่ “นำเข้าข้อมูล” เพื่ออัปโหลด ZIP/DBF</div>
+                {editing ? <Field label="รหัสระบบ" hint="รหัสนี้ผูกกับข้อมูลเดิม จึงไม่สามารถแก้ไขได้"><input value={draft.code} readOnly className={inputClass} /></Field> : <Field label="รหัสอำเภอ" hint="ใช้ a-z, 0-9, - หรือ _ เช่น bang-pa-in"><input required minLength={2} maxLength={40} pattern="[a-z0-9]+(?:[-_][a-z0-9]+)*" value={draft.code} onChange={(event) => setDraft({ ...draft, code: event.target.value.toLocaleLowerCase('en-US') })} className={inputClass} placeholder="bang-pa-in" /></Field>}
+                <Field label="รหัสสถานศึกษา" hint="ตัวเลขที่แสดงบนหัวตารางสอบ เช่น 1214120000"><input inputMode="numeric" maxLength={20} pattern="[0-9]*" value={draft.school_code} onChange={(event) => setDraft({ ...draft, school_code: event.target.value.replace(/\D/g, '') })} className={inputClass} placeholder="1214120000" /></Field>
+                {!editing && <div className="rounded-2xl border border-sky-200 bg-sky-50 p-4 text-sm leading-6 text-sky-950 sm:col-span-2"><strong className="block">หลังบันทึก</strong>เลือกอำเภอใหม่นี้จากเมนูด้านบน → ไปที่ “ผู้ใช้งาน” เพื่อสร้าง admin ประจำอำเภอ → ไปที่ “นำเข้าข้อมูล” เพื่ออัปโหลด ZIP/DBF</div>}
                 <div className="sm:col-span-2"><MutationError error={save.error} /></div>
-                <div className="flex justify-end gap-2 sm:col-span-2"><button type="button" onClick={() => setCreating(false)} className={secondaryButton}>ยกเลิก</button><button type="submit" disabled={save.isPending} className={primaryButton}><FloppyDisk size={17} weight="bold" />{save.isPending ? 'กำลังเพิ่มอำเภอ' : 'บันทึกอำเภอ'}</button></div>
+                <div className="flex justify-end gap-2 sm:col-span-2"><button type="button" onClick={() => { setCreating(false); setEditing(null); }} className={secondaryButton}>ยกเลิก</button><button type="submit" disabled={save.isPending} className={primaryButton}><FloppyDisk size={17} weight="bold" />{save.isPending ? 'กำลังบันทึก' : 'บันทึกอำเภอ'}</button></div>
             </form></Modal>}
         </div>
     );

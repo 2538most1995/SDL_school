@@ -31,9 +31,11 @@ final class DistrictManagementTest extends TestCase
         $response = $this->postJson('/api/v1/super-admin/districts', [
             'name' => ' อำเภอบางปะอิน ',
             'code' => ' BANG-PA-IN ',
+            'school_code' => '1214120000',
         ])->assertCreated()
             ->assertJsonPath('data.name', 'อำเภอบางปะอิน')
             ->assertJsonPath('data.code', 'bang-pa-in')
+            ->assertJsonPath('data.school_code', '1214120000')
             ->assertJsonPath('data.is_active', true)
             ->assertJsonPath('data.users_count', 0);
 
@@ -42,6 +44,7 @@ final class DistrictManagementTest extends TestCase
             'id' => $districtId,
             'name' => 'อำเภอบางปะอิน',
             'code' => 'bang-pa-in',
+            'school_code' => '1214120000',
             'is_active' => true,
         ]);
         $this->assertDatabaseHas('audit_logs', [
@@ -60,6 +63,60 @@ final class DistrictManagementTest extends TestCase
             ->assertJsonFragment(['id' => $districtId, 'code' => 'bang-pa-in']);
     }
 
+    public function test_super_admin_can_rename_a_district_without_changing_its_system_code(): void
+    {
+        $district = District::create([
+            'name' => 'อำเภอชื่อเดิม',
+            'code' => 'stable-system-code',
+            'school_code' => null,
+        ]);
+        $superAdmin = User::factory()->create(['role' => 'super_admin', 'district_id' => null]);
+        Sanctum::actingAs($superAdmin);
+
+        $this->patchJson("/api/v1/super-admin/districts/{$district->id}", [
+            'name' => ' อำเภอชื่อใหม่ ',
+            'school_code' => '1214120000',
+            'code' => 'attempted-change',
+        ])->assertOk()
+            ->assertJsonPath('data.name', 'อำเภอชื่อใหม่')
+            ->assertJsonPath('data.code', 'stable-system-code')
+            ->assertJsonPath('data.school_code', '1214120000');
+
+        $this->assertDatabaseHas('districts', [
+            'id' => $district->id,
+            'name' => 'อำเภอชื่อใหม่',
+            'code' => 'stable-system-code',
+            'school_code' => '1214120000',
+        ]);
+        $audit = (array) \DB::table('audit_logs')
+            ->where('event', 'super_admin.district.updated')
+            ->where('auditable_id', $district->id)
+            ->first();
+        $this->assertSame('อำเภอชื่อเดิม', json_decode((string) $audit['before'], true, flags: JSON_THROW_ON_ERROR)['name']);
+        $this->assertSame('อำเภอชื่อใหม่', json_decode((string) $audit['after'], true, flags: JSON_THROW_ON_ERROR)['name']);
+    }
+
+    public function test_name_only_patch_preserves_the_existing_school_code(): void
+    {
+        $district = District::create([
+            'name' => 'อำเภอชื่อเดิม',
+            'code' => 'stable-code',
+            'school_code' => '1214120000',
+        ]);
+        Sanctum::actingAs(User::factory()->create(['role' => 'super_admin', 'district_id' => null]));
+
+        $this->patchJson("/api/v1/super-admin/districts/{$district->id}", [
+            'name' => 'อำเภอชื่อใหม่',
+        ])->assertOk()
+            ->assertJsonPath('data.name', 'อำเภอชื่อใหม่')
+            ->assertJsonPath('data.school_code', '1214120000');
+
+        $this->assertDatabaseHas('districts', [
+            'id' => $district->id,
+            'school_code' => '1214120000',
+        ]);
+    }
+
     public function test_district_admin_cannot_register_or_list_other_districts(): void
     {
         $district = District::create(['name' => 'อำเภอเดิม', 'code' => 'existing']);
@@ -69,6 +126,10 @@ final class DistrictManagementTest extends TestCase
         $this->postJson('/api/v1/super-admin/districts', [
             'name' => 'อำเภอที่ห้ามสร้าง',
             'code' => 'forbidden',
+        ])->assertForbidden();
+        $this->patchJson("/api/v1/super-admin/districts/{$district->id}", [
+            'name' => 'อำเภอที่ห้ามแก้',
+            'school_code' => '1214120000',
         ])->assertForbidden();
         $this->assertDatabaseMissing('districts', ['code' => 'forbidden']);
     }
@@ -82,11 +143,23 @@ final class DistrictManagementTest extends TestCase
             'name' => 'อำเภอซ้ำ',
             'code' => 'EXISTING',
         ])->assertUnprocessable()->assertJsonValidationErrors('code');
+        $this->patchJson('/api/v1/super-admin/districts/1', [
+            'name' => 'อำเภอเดิม',
+            'school_code' => '12A4120000',
+        ])->assertUnprocessable()->assertJsonValidationErrors('school_code');
+        $this->patchJson('/api/v1/super-admin/districts/1', [
+            'name' => '   ',
+            'school_code' => '1214120000',
+        ])->assertUnprocessable()->assertJsonValidationErrors('name');
 
         config()->set('system_data.write_enabled', false);
         $this->postJson('/api/v1/super-admin/districts', [
             'name' => 'อำเภอปิดเขียน',
             'code' => 'disabled',
+        ])->assertServiceUnavailable();
+        $this->patchJson('/api/v1/super-admin/districts/1', [
+            'name' => 'อำเภอปิดเขียน',
+            'school_code' => '1214120000',
         ])->assertServiceUnavailable();
     }
 

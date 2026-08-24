@@ -8,11 +8,11 @@
         .sheet { width: 100%; padding: 3mm 0 2mm; background: #fff; }
         h1 { margin: 0 0 8mm; text-align: center; font-size: 26pt; line-height: 1; font-weight: bold; }
         .info { width: 180mm; border-collapse: separate; border-spacing: 0 2.5mm; margin: 0 0 7mm; table-layout: fixed; font-size: 17pt; }
-        .info .label-cell { width: 22mm; padding: 0 2mm 1.2mm 0; vertical-align: bottom; white-space: nowrap; font-weight: bold; }
-        .info .value-cell { width: 62mm; height: 8mm; padding: 0 2mm 0.8mm; vertical-align: bottom; overflow: hidden; font-weight: bold; border-bottom: 0.35mm dotted #64748b; }
+        .info .label-cell { width: 31mm; padding: 0 2mm 1.2mm 0; vertical-align: bottom; white-space: nowrap; font-weight: bold; }
+        .info .value-cell { width: 53mm; height: 8mm; padding: 0 2mm 0.8mm; vertical-align: bottom; overflow: hidden; font-weight: bold; border-bottom: 0.35mm dotted #64748b; }
         .info .spacer-cell { width: 12mm; }
-        .info .right-label { width: 24mm; }
-        .info .right-value { width: 60mm; }
+        .info .right-label { width: 31mm; }
+        .info .right-value { width: 53mm; }
         .exam-table { width: 180mm; border-collapse: collapse; table-layout: fixed; font-size: 15pt; }
         .exam-table th, .exam-table td { border: 0.3mm solid #1e293b; padding: 2.2mm 1.3mm; text-align: center; vertical-align: middle; }
         .exam-table th { background: #f8fafc; font-weight: bold; font-size: 16pt; }
@@ -34,6 +34,10 @@
             <tr>
                 <td class="label-cell">สถานศึกษา</td><td class="value-cell">{!! $pdfText($document['student']['district']) !!}</td>
                 <td class="spacer-cell"></td><td class="label-cell right-label">ภาคเรียน</td><td class="value-cell right-value">{!! $pdfText($document['term']) !!}</td>
+            </tr>
+            <tr>
+                <td class="label-cell">รหัสสถานศึกษา</td><td class="value-cell">{!! $pdfText($document['student']['school_code'] ?? '-') !!}</td>
+                <td class="spacer-cell"></td><td class="label-cell right-label">ครูประจำกลุ่ม</td><td class="value-cell right-value">{!! $pdfText($document['student']['advisor'] ?? '-') !!}</td>
             </tr>
             <tr>
                 <td class="label-cell">ชื่อ-สกุล</td><td class="value-cell">{!! $pdfText($document['student']['name']) !!}</td>

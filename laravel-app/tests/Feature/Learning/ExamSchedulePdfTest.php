@@ -148,6 +148,36 @@ final class ExamSchedulePdfTest extends TestCase
         $pdfResponse->assertNotFound();
     }
 
+    public function test_print_views_show_school_code_and_group_advisor_with_escaped_values(): void
+    {
+        $selection = [
+            'documents' => [[
+                'student' => [
+                    'district' => 'อำเภอทดสอบ',
+                    'school_code' => '1214120000',
+                    'advisor' => '<script>alert(1)</script>',
+                    'name' => 'นักศึกษา ทดสอบ',
+                    'code' => '6650100001',
+                    'level' => 'มัธยมศึกษาตอนต้น',
+                    'group' => 'กลุ่มทดสอบ',
+                ],
+                'term' => '1/2569',
+                'rows' => [],
+            ]],
+            'scope' => 'student',
+            'count' => 1,
+        ];
+
+        foreach (['print.exam-schedule-view', 'pdf.exam-schedules'] as $view) {
+            $html = view($view, $selection)->render();
+            $this->assertStringContainsString('รหัสสถานศึกษา', $html);
+            $this->assertStringContainsString('1214120000', $html);
+            $this->assertStringContainsString('ครูประจำกลุ่ม', $html);
+            $this->assertStringContainsString('&lt;script&gt;alert(1)&lt;/script&gt;', $html);
+            $this->assertStringNotContainsString('<script>alert(1)</script>', $html);
+        }
+    }
+
     /** @param list<string> $groups */
     private function viewer(string $role, array $groups = [], ?string $username = null): User
     {

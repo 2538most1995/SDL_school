@@ -88,6 +88,7 @@ Route::prefix('v1')->group(function (): void {
         ->group(function (): void {
             Route::get('/districts', [DistrictController::class, 'index']);
             Route::post('/districts', [DistrictController::class, 'store']);
+            Route::patch('/districts/{district}', [DistrictController::class, 'update'])->whereNumber('district');
         });
 
     Route::middleware(['auth:sanctum', 'active', 'district'])->group(function (): void {

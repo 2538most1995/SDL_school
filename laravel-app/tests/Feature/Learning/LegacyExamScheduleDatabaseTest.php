@@ -80,6 +80,31 @@ final class LegacyExamScheduleDatabaseTest extends TestCase
             'fld_name' => 'สนามสอบ กศน.อำเภอเสนา',
         ]);
 
+        $groupTable = 'db_'.$batch.'_1214120000_group';
+        Schema::create($groupTable, function (Blueprint $table): void {
+            $table->id();
+            $table->string('grp_code');
+            $table->string('grp_name');
+            $table->string('grp_advis')->nullable();
+        });
+        DB::table($groupTable)->insert([
+            'grp_code' => '220001',
+            'grp_name' => 'กลุ่มเสนา 1',
+            'grp_advis' => 'นางสาวครูประจำ กลุ่มเรียน',
+        ]);
+        $otherGroupTable = 'db_'.$batch.'_1260090000_group';
+        Schema::create($otherGroupTable, function (Blueprint $table): void {
+            $table->id();
+            $table->string('grp_code');
+            $table->string('grp_name');
+            $table->string('grp_advis')->nullable();
+        });
+        DB::table($otherGroupTable)->insert([
+            'grp_code' => 'OTHER',
+            'grp_name' => 'กลุ่มพื้นที่อื่น',
+            'grp_advis' => 'ครูพื้นที่อื่น',
+        ]);
+
         $gradeTable = 'db_'.$batch.'_2_grade';
         Schema::create($gradeTable, function (Blueprint $table): void {
             $table->id();
@@ -130,6 +155,9 @@ final class LegacyExamScheduleDatabaseTest extends TestCase
         $this->assertTrue($result['source_ready']);
         $this->assertTrue($result['sources']['schedule']);
         $this->assertTrue($result['sources']['field']);
+        $this->assertTrue($result['sources']['group']);
+        $this->assertSame('1214120000', $result['student']['school_code']);
+        $this->assertSame('นางสาวครูประจำ กลุ่มเรียน', $result['student']['advisor']);
         $this->assertCount(1, $result['rows']);
         $this->assertSame('1/2569', $result['rows'][0]['term']);
         $this->assertSame('16 ส.ค. 2569', $result['rows'][0]['exam_date_display']);
