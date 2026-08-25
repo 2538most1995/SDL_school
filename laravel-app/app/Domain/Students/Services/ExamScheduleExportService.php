@@ -28,10 +28,7 @@ final readonly class ExamScheduleExportService
         }
 
         abort_if($viewer->role === 'student', 403, 'ไม่มีสิทธิ์สร้างตารางสอบแบบกลุ่ม');
-        $students = array_values(array_filter(
-            $this->directory->accessibleStudents($viewer),
-            static fn ($student): bool => $student->status === 'studying',
-        ));
+        $students = $this->directory->accessibleStudents($viewer);
         $level = isset($filters['level']) ? (int) $filters['level'] : null;
         $group = trim((string) ($filters['group'] ?? ''));
         $students = array_values(array_filter($students, static function ($student) use ($scope, $level, $group): bool {

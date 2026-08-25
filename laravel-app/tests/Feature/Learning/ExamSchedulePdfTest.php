@@ -49,6 +49,19 @@ final class ExamSchedulePdfTest extends TestCase
         $this->get('/api/v1/learning/exam-schedule/pdf?scope=level&level=2')->assertNotFound();
     }
 
+    public function test_admin_bulk_scope_includes_students_of_every_status(): void
+    {
+        Sanctum::actingAs($this->viewer('admin'));
+
+        $this->get('/api/v1/learning/exam-schedule/pdf?scope=group&group=SENA-M2-A&level=2')
+            ->assertOk()
+            ->assertHeader('Content-Disposition', 'inline; filename="exam-schedule-group-2.pdf"');
+
+        $this->get('/api/v1/learning/exam-schedule/pdf?scope=group&group=SENA-M3-B&level=3')
+            ->assertOk()
+            ->assertHeader('Content-Disposition', 'inline; filename="exam-schedule-group-2.pdf"');
+    }
+
     public function test_student_can_export_only_self_and_cannot_use_bulk_scope(): void
     {
         Sanctum::actingAs($this->viewer('student', [], '6650100001'));
