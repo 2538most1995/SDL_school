@@ -67,6 +67,7 @@
 - Student aggregates ใช้ SQL `SUM`, `GROUP BY`, `EXISTS` และ cache ต่อ immutable batch
 - Student directory ยัง sort/filter/paginate ใน memory หลัง repository สร้าง active roster; ปัจจุบันเป็น contract-compatible แต่จะกิน memory ตามจำนวน active students
 - API collections ส่วนใหญ่จำกัด `250` แถว; directory จำกัด `per_page` สูงสุด `1000` และยังไม่ใช่ DB pagination
+- Student Data Integration API จำกัด `per_page` สูงสุด `100`, คืนหน้าว่างเมื่อขอเกินหน้าสุดท้าย และ rate limit แยกต่อ API client ค่าเริ่มต้น `60` request/นาที แต่ยัง reuse directory ที่โหลด roster และ aggregates ทั้งอำเภอก่อน paginate; live memory, response time และ MySQL plan ยัง `Not verified`
 - ไม่พบ `Model::all()` ใน application path ที่ตรวจ และไม่พบ controller query ที่ชัดเจนอยู่ใน `foreach`; พบ full-table reads ของ DBF/field/group ที่เป็น legacy file/domain behavior
 
 ## Index recommendations

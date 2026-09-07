@@ -15,10 +15,15 @@ final readonly class StudentDirectoryService
      * @param  array<string, mixed>  $filters
      * @return array{items: list<Student>, meta: array<string, mixed>}
      */
-    public function paginate(User $viewer, array $filters): array
+    public function paginate(
+        User $viewer,
+        array $filters,
+        bool $includeCitizenIdInSearch = true,
+        bool $clampPage = true,
+    ): array
     {
         $allAccessible = $this->accessibleStudents($viewer);
-        $filtered = $this->applyFilters($allAccessible, $filters);
+        $filtered = $this->applyFilters($allAccessible, $filters, $includeCitizenIdInSearch);
         $sort = (string) ($filters['sort'] ?? 'code');
         $direction = (string) ($filters['direction'] ?? 'asc');
 
@@ -48,18 +53,21 @@ final readonly class StudentDirectoryService
         $perPage = min(1000, max(1, (int) ($filters['per_page'] ?? 25)));
         $total = count($filtered);
         $lastPage = max(1, (int) ceil($total / $perPage));
-        $page = min($page, $lastPage);
+        if ($clampPage) {
+            $page = min($page, $lastPage);
+        }
+        $items = array_values(array_slice($filtered, ($page - 1) * $perPage, $perPage));
 
         return [
-            'items' => array_values(array_slice($filtered, ($page - 1) * $perPage, $perPage)),
+            'items' => $items,
             'meta' => [
                 'pagination' => [
                     'current_page' => $page,
                     'per_page' => $perPage,
                     'total' => $total,
                     'last_page' => $lastPage,
-                    'from' => $total === 0 ? null : (($page - 1) * $perPage) + 1,
-                    'to' => $total === 0 ? null : min($page * $perPage, $total),
+                    'from' => $items === [] ? null : (($page - 1) * $perPage) + 1,
+                    'to' => $items === [] ? null : min($page * $perPage, $total),
                 ],
                 'filter_options' => $this->filterOptions($allAccessible),
                 'summary' => $this->summary($filtered),
@@ -200,18 +208,18 @@ final readonly class StudentDirectoryService
      * @param  array<string, mixed>  $filters
      * @return list<Student>
      */
-    public function applyFilters(array $students, array $filters): array
+    public function applyFilters(array $students, array $filters, bool $includeCitizenIdInSearch = true): array
     {
         $search = mb_strtolower(trim((string) ($filters['search'] ?? '')));
 
-        return array_values(array_filter($students, static function (Student $student) use ($filters, $search): bool {
+        return array_values(array_filter($students, static function (Student $student) use ($filters, $includeCitizenIdInSearch, $search): bool {
             if ($search !== '') {
                 $haystack = mb_strtolower(implode(' ', [
                     $student->code,
                     $student->fullName(),
                     $student->groupCode,
                     $student->groupName,
-                    $student->citizenId ?? '',
+                    $includeCitizenIdInSearch ? ($student->citizenId ?? '') : '',
                 ]));
 
                 if (! str_contains($haystack, $search)) {
@@ -229,6 +237,14 @@ final readonly class StudentDirectoryService
 
             if (isset($filters['group']) && $filters['group'] !== ''
                 && ! in_array((string) $filters['group'], [$student->groupCode, $student->groupName], true)) {
+                return false;
+            }
+
+            if (($filters['kpch_status'] ?? null) === 'complete' && $student->kpchHours < 200) {
+                return false;
+            }
+
+            if (($filters['kpch_status'] ?? null) === 'incomplete' && $student->kpchHours >= 200) {
                 return false;
             }
 

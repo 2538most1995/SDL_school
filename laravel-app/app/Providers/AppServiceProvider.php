@@ -8,9 +8,12 @@ use App\Domain\Students\Repositories\StudentRepository;
 use App\Support\ApplicationBasePath;
 use App\Support\LegacyFptMemoReader;
 use App\Support\ThaiAdministrativeAreaLookup;
+use Illuminate\Cache\RateLimiting\Limit;
 use Illuminate\Contracts\Foundation\Application;
+use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Http;
+use Illuminate\Support\Facades\RateLimiter;
 use Illuminate\Support\Facades\Vite;
 use Illuminate\Support\ServiceProvider;
 
@@ -45,6 +48,13 @@ class AppServiceProvider extends ServiceProvider
      */
     public function boot(): void
     {
+        RateLimiter::for('student-data-api', static function (Request $request): Limit {
+            $clientId = (int) $request->attributes->get('student_api_client_id', 0);
+
+            return Limit::perMinute((int) config('system_data.student_api_rate_limit_per_minute', 60))
+                ->by($clientId > 0 ? "student-data-client:{$clientId}" : 'student-data-client:unauthenticated:'.$request->ip());
+        });
+
         // Production data is intentionally self-contained. Any future use of
         // Laravel's HTTP client must be explicitly reviewed instead of silently
         // turning a page request into an external data dependency.

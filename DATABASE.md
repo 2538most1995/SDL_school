@@ -56,6 +56,8 @@ Column names from older migration definitions (`academic_term`, `room_code`, `st
 - `raw_import_tables`: import batch, education level, data type, physical table, row count/schema hash/status; UNIQUE physical table and batch/type identity
 - `active_import_batches`: district PK → active import batch, activation metadata
 - `audit_logs`: optional user/district, event, auditable identity, request/IP, before/after/context JSON and time indexes
+- `student_api_clients`: credential แบบ read-only สำหรับ Student Data Integration API เก็บ owner `user_id`, ขอบเขต `district_id`, ชื่อ client, SHA-256 `token_hash`, JSON abilities, วันหมดอายุ/เพิกถอน/ใช้ล่าสุด; token plaintext แสดงเฉพาะครั้งสร้างและไม่เก็บในฐาน
+- `personal_access_tokens`: ตารางมาตรฐานของ Sanctum เพื่อให้ Bearer token ที่ส่งผิด namespace ถูกตรวจและปฏิเสธเป็น 401 แทน database error; Student Data Integration API ไม่ใช้ตารางนี้และไม่ออก Sanctum PAT ให้บัญชีผู้ดูแล
 - `jobs`, `job_batches`, `failed_jobs`, `cache`, `cache_locks`, `sessions`, `password_reset_tokens`: Laravel infrastructure tables
 
 ## Dynamic import tables
@@ -75,6 +77,8 @@ Successful ZIP/DBF imports create physical names such as `db_import_{timestamp}_
 Existing indexes cover the main district/status/date filters and exam-room district/term/subject lookup. Additional index proposals are recorded in [`PERFORMANCE.md`](PERFORMANCE.md); none are added based on column names alone. Live `SHOW INDEX` and `EXPLAIN` are `Not verified`.
 
 ## Migration history
+
+Migrations `2026_09_01_000029_create_student_api_clients_table.php` และ `2026_09_01_000030_create_personal_access_tokens_table.php` เพิ่ม credential store แบบ hash สำหรับ Student Data Integration API และเติมตาราง Sanctum มาตรฐานแบบ additive โดยไม่แตะข้อมูลนำเข้าหรือตารางนักศึกษาเดิม
 
 Migration `2026_08_24_000028_add_school_code_to_districts.php` เพิ่ม `districts.school_code` แบบ nullable/additive สำหรับหัวเอกสารตารางสอบ โดยไม่เปลี่ยน `districts.code` หรือข้อมูลนำเข้าเดิม
 

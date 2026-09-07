@@ -146,6 +146,26 @@ final class StudentApiTest extends TestCase
             ->assertJsonFragment(['value' => 'เสนา ม.ปลาย B', 'label' => 'เสนา ม.ปลาย B']);
     }
 
+    public function test_admin_can_filter_students_by_kpch_completion_status(): void
+    {
+        Sanctum::actingAs($this->viewer('admin'));
+
+        $this->getJson('/api/v1/students?kpch_status=complete&per_page=50')
+            ->assertOk()
+            ->assertJsonCount(1, 'data')
+            ->assertJsonPath('data.0.code', '6650200004')
+            ->assertJsonPath('data.0.academic.kpch_hours', 204)
+            ->assertJsonPath('meta.pagination.total', 1)
+            ->assertJsonPath('meta.applied_filters.kpch_status', 'complete');
+
+        $this->getJson('/api/v1/students?kpch_status=incomplete&per_page=50')
+            ->assertOk()
+            ->assertJsonCount(7, 'data')
+            ->assertJsonMissing(['code' => '6650200004'])
+            ->assertJsonPath('meta.pagination.total', 7)
+            ->assertJsonPath('meta.applied_filters.kpch_status', 'incomplete');
+    }
+
     public function test_student_only_sees_own_record_and_private_identifiers_are_absent(): void
     {
         Sanctum::actingAs($this->viewer('student', $this->sena->id, [], '6650100001'));
@@ -297,6 +317,7 @@ final class StudentApiTest extends TestCase
             ->assertOk()
             ->assertJsonPath('meta.pagination.per_page', 1000);
         $this->getJson('/api/v1/students?per_page=1001')->assertUnprocessable();
+        $this->getJson('/api/v1/students?kpch_status=unknown')->assertUnprocessable();
         $this->getJson('/api/v1/students/6650100001/grades?term=2568/2')->assertUnprocessable();
     }
 

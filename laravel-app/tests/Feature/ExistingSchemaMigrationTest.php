@@ -193,4 +193,49 @@ final class ExistingSchemaMigrationTest extends TestCase
             DB::connection('existing_schema_test')->table('districts')->where('id', 10)->value('code'),
         );
     }
+
+    public function test_migrate_repairs_partial_api_credential_tables_without_dropping_existing_rows(): void
+    {
+        $schema = Schema::connection('existing_schema_test');
+        $schema->create('student_api_clients', function (Blueprint $table): void {
+            $table->id();
+        });
+        $schema->create('personal_access_tokens', function (Blueprint $table): void {
+            $table->id();
+        });
+        DB::connection('existing_schema_test')->table('student_api_clients')->insert(['id' => 41]);
+        DB::connection('existing_schema_test')->table('personal_access_tokens')->insert(['id' => 42]);
+
+        $exitCode = Artisan::call('migrate', [
+            '--database' => 'existing_schema_test',
+            '--force' => true,
+        ]);
+
+        $this->assertSame(0, $exitCode, Artisan::output());
+        $this->assertTrue($schema->hasColumns('student_api_clients', [
+            'name', 'user_id', 'district_id', 'token_hash', 'abilities',
+            'expires_at', 'revoked_at', 'last_used_at', 'created_at', 'updated_at',
+        ]));
+        $this->assertTrue($schema->hasIndex('student_api_clients', 'student_api_client_token_hash_unique'));
+        $this->assertTrue($schema->hasIndex('student_api_clients', 'student_api_client_scope'));
+        $this->assertSame(1, DB::connection('existing_schema_test')->table('student_api_clients')->where('id', 41)->count());
+
+        $this->assertTrue($schema->hasColumns('personal_access_tokens', [
+            'tokenable_type', 'tokenable_id', 'name', 'token', 'abilities',
+            'last_used_at', 'expires_at', 'created_at', 'updated_at',
+        ]));
+        $this->assertTrue($schema->hasIndex('personal_access_tokens', 'personal_access_tokens_token_unique'));
+        $this->assertSame(1, DB::connection('existing_schema_test')->table('personal_access_tokens')->where('id', 42)->count());
+
+        $originalConnection = DB::getDefaultConnection();
+        DB::setDefaultConnection('existing_schema_test');
+        (require database_path('migrations/2026_09_01_000030_create_personal_access_tokens_table.php'))->down();
+        (require database_path('migrations/2026_09_01_000029_create_student_api_clients_table.php'))->down();
+        DB::setDefaultConnection($originalConnection);
+
+        $this->assertTrue($schema->hasTable('student_api_clients'));
+        $this->assertTrue($schema->hasTable('personal_access_tokens'));
+        $this->assertSame(1, DB::connection('existing_schema_test')->table('student_api_clients')->where('id', 41)->count());
+        $this->assertSame(1, DB::connection('existing_schema_test')->table('personal_access_tokens')->where('id', 42)->count());
+    }
 }

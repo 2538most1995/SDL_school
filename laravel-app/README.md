@@ -72,6 +72,8 @@ SYSTEM_STUDENT_DATA_ENABLED=true
 SYSTEM_WRITES_ENABLED=true
 SYSTEM_IMPORT_QUEUE_CONNECTION=database
 SYSTEM_DATABASE_SESSIONS=true
+STUDENT_DATA_API_AUTH_RATE_LIMIT_PER_MINUTE=20
+STUDENT_DATA_API_RATE_LIMIT_PER_MINUTE=60
 ```
 
 หลังแก้ `.env` ให้รัน:
@@ -160,6 +162,12 @@ npm run typecheck
 vendor/bin/pint --test app routes config database/migrations database/seeders tests bootstrap/app.php
 npm run build
 ```
+
+## Student Data Integration API
+
+ระบบมี API แบบ read-only สำหรับให้ backend ของเว็บไซต์อื่นอ่านข้อมูลนักศึกษา เกรด กพช. คุณธรรม และรายวิชาที่ลงทะเบียน โดยใช้ Bearer token แยกเฉพาะอำเภอ Response ไม่ส่งเลขบัตรประชาชนทั้งแบบเต็ม/ปิดบางส่วน วันเกิด ที่อยู่ เบอร์โทร อีเมล ผู้ปกครอง หรือ social profile
+
+หลัง deploy ให้รัน `php artisan migrate --force` ก่อนออก token ด้วย `php artisan system:create-student-api-token` รายละเอียด endpoint, การหมุน/เพิกถอน token และตัวอย่าง `curl` อยู่ที่ [`docs/student-data-api.md`](docs/student-data-api.md)
 
 ## Production safety
 

@@ -1162,22 +1162,24 @@ function StaffStudentMetricPage({ kind }: { kind: MetricKind }) {
     const [search, setSearch] = useState('');
     const [level, setLevel] = useState('');
     const [group, setGroup] = useState('');
+    const [kpchStatus, setKpchStatus] = useState('');
     const [page, setPage] = useState(1);
     const [perPage, setPerPage] = useState(25);
     const [selectedStudent, setSelectedStudent] = useState<StaffMetricStudent | null>(null);
     const deferredSearch = useDeferredValue(search);
     const canFilterGroups = role === 'teacher' || role === 'admin' || role === 'super_admin';
-    useEffect(() => setPage(1), [deferredSearch, group, level, perPage]);
+    useEffect(() => setPage(1), [deferredSearch, group, kpchStatus, level, perPage]);
     useEffect(() => { if (!canFilterGroups && group !== '') setGroup(''); }, [canFilterGroups, group]);
     const params = useMemo(() => {
         const query = new URLSearchParams({ page: String(page), per_page: String(perPage) });
         if (deferredSearch) query.set('search', deferredSearch);
         if (level) query.set('level', level);
         if (canFilterGroups && group) query.set('group', group);
+        if (kind === 'kpch' && kpchStatus) query.set('kpch_status', kpchStatus);
         return query.toString();
-    }, [canFilterGroups, deferredSearch, group, level, page, perPage]);
+    }, [canFilterGroups, deferredSearch, group, kind, kpchStatus, level, page, perPage]);
     const directory = useQuery({
-        queryKey: ['student-metric-directory', kind, deferredSearch, level, group, page, perPage],
+        queryKey: ['student-metric-directory', kind, deferredSearch, level, group, kpchStatus, page, perPage],
         queryFn: async ({ signal }) => {
             type ApiStudent = {
                 code: string; full_name: string; level: { label: string }; group: { code: string; name: string };
@@ -1221,10 +1223,11 @@ function StaffStudentMetricPage({ kind }: { kind: MetricKind }) {
                 <StatTile label="กลุ่มเรียน" value={meta?.summary.groups ?? 0} detail="กลุ่มในผลลัพธ์ปัจจุบัน" icon={UsersThree} />
             </div>
             <Panel title="รายชื่อนักศึกษา" description={pagination ? `แสดง ${pagination.from ?? 0}-${pagination.to ?? 0} จาก ${pagination.total} คน` : 'กำลังโหลดข้อมูล'}>
-                <div className={`mb-5 grid gap-3 ${canFilterGroups ? 'md:grid-cols-3' : 'md:grid-cols-2'}`}>
+                <div className={`mb-5 grid gap-3 ${kind === 'kpch' ? (canFilterGroups ? 'md:grid-cols-2 xl:grid-cols-4' : 'md:grid-cols-3') : (canFilterGroups ? 'md:grid-cols-3' : 'md:grid-cols-2')}`}>
                     <Field label="ค้นหา"><Input value={search} onChange={(_, data) => setSearch(data.value)} contentBefore={<MagnifyingGlass size={18} aria-hidden="true" />} placeholder="ชื่อ รหัส หรือกลุ่ม" size="large" /></Field>
                     <Field label="ระดับการศึกษา"><Select value={level} onChange={(_, data) => setLevel(data.value)} size="large"><option value="">ทุกระดับ</option><option value="1">ประถมศึกษา</option><option value="2">มัธยมศึกษาตอนต้น</option><option value="3">มัธยมศึกษาตอนปลาย</option></Select></Field>
                     {canFilterGroups && <Field label="กลุ่มเรียน"><Select value={group} onChange={(_, data) => setGroup(data.value)} size="large"><option value="">ทุกกลุ่มเรียน</option>{(meta?.filter_options.groups ?? []).map((option) => <option key={String(option.value)} value={String(option.value)}>{option.label}</option>)}</Select></Field>}
+                    {kind === 'kpch' && <Field label="ผล กพช."><Select value={kpchStatus} onChange={(_, data) => setKpchStatus(data.value)} size="large"><option value="">ทั้งหมด</option><option value="complete">ครบ 200 ชั่วโมง</option><option value="incomplete">ไม่ครบ 200 ชั่วโมง</option></Select></Field>}
                 </div>
                 {directory.isPending && <QuerySkeleton />}
                 {directory.isError && <QueryError onRetry={() => directory.refetch()} />}

@@ -1,5 +1,6 @@
 <?php
 
+use App\Http\Middleware\AuthenticateStudentDataClient;
 use App\Http\Middleware\EnsureActiveUser;
 use App\Http\Middleware\EnsureLearningSchema;
 use App\Http\Middleware\EnsureRole;
@@ -9,6 +10,7 @@ use Illuminate\Foundation\Application;
 use Illuminate\Foundation\Configuration\Exceptions;
 use Illuminate\Foundation\Configuration\Middleware;
 use Illuminate\Http\Request;
+use Illuminate\Routing\Middleware\ThrottleRequests;
 
 return Application::configure(basePath: dirname(__DIR__))
     ->withRouting(
@@ -20,8 +22,10 @@ return Application::configure(basePath: dirname(__DIR__))
     ->withMiddleware(function (Middleware $middleware): void {
         $middleware->statefulApi();
         $middleware->append(SecurityHeaders::class);
+        $middleware->prependToPriorityList(ThrottleRequests::class, AuthenticateStudentDataClient::class);
         $middleware->alias([
             'active' => EnsureActiveUser::class,
+            'student-data-client' => AuthenticateStudentDataClient::class,
             'role' => EnsureRole::class,
             'district' => ResolveDistrictContext::class,
             'learning.schema' => EnsureLearningSchema::class,

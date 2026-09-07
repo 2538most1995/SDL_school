@@ -46,6 +46,7 @@ District scope is resolved by `ResolveDistrictContext`; role checks are enforced
 16. หน้าตารางสอบบนมือถือและ LINE in-app browser เปิดเอกสาร HTML แบบ standalone ผ่าน signed URL ในแท็บเดิม เพื่อไม่พึ่ง PDF blob, iframe หรือ popup ที่ browser ภายในแอปอาจบล็อก; สำหรับ role `student` ส่วนควบคุมซ่อนตัวกรองและตัวเลือกนักศึกษาทั้งหมด เหลือปุ่มเปิดตารางสอบ แต่ยังแสดงตารางสอบจากฐานข้อมูลด้านล่าง และบังคับใช้รหัสนักศึกษาจากบัญชีตนเองแม้ URL ระบุรหัสอื่น; URL ของหน้าเอกสารและ PDF ต้องรักษา deployment base path เช่น `/SDL_school` จาก `ApplicationBasePath`; การพิมพ์และดาวน์โหลด PDF ยังใช้ลิงก์ signed แยกกันและรักษา user/district/role scope เดิม
 17. ผู้ดูแลสูงสุดแก้ชื่ออำเภอและรหัสสถานศึกษาที่แสดงบนเอกสารได้โดยไม่เปลี่ยน `districts.code` ซึ่งเป็นรหัสระบบ; หัวตารางสอบแสดงรหัสสถานศึกษาจากทะเบียนอำเภอ และ fallback ไปยังรหัสตัวเลขในชื่อตาราง GROUP ของชุด import ปัจจุบัน พร้อมชื่อครูประจำกลุ่มจาก `grp_advis` ที่ตรงกับกลุ่มนักศึกษา หากข้อมูลกลุ่มกำกวมระบบไม่เดาค่า
 18. การสร้างตารางสอบแบบทั้งกลุ่มเรียนหรือทั้งระดับชั้นรวมผู้เรียนทุกสถานะที่อยู่ใน roster และขอบเขตสิทธิ์ปัจจุบัน ไม่จำกัดเฉพาะสถานะกำลังศึกษา; การส่งออกรายบุคคลและขอบเขต district/กลุ่มของผู้ใช้ยังตรวจตามเดิม
+19. Student Data Integration API เป็น read-only namespace แยกสำหรับ backend ของเว็บไซต์อื่น ใช้ credential ที่เก็บเฉพาะ token hash และผูกอำเภอถาวร ไม่ใช้ session/Sanctum token ของผู้ดูแล; resource เป็น explicit allowlist และไม่ส่งเลขบัตรประชาชนทั้งแบบเต็ม/ปิดบางส่วน วันเกิด ที่อยู่ โทรศัพท์ อีเมล ผู้ปกครอง social profile หรือ source payload การค้นหาไม่ใช้เลขบัตรประชาชน และ credential นี้ใช้กับ route ภายใน/admin อื่นไม่ได้
 
 ## Request/data flow
 
@@ -69,6 +70,7 @@ Request → route → Sanctum/auth + active + district/role middleware
 
 - `/api/v1/portal` → `Api\PortalController`
 - `/api/v1/students*` and `/api/v1/reports/*` → `Api\Students\*`
+- `/api/v1/integrations/student-data/students*` → `Api\Integrations\StudentDataController` ผ่าน district-scoped Student API client
 - `/api/v1/learning/*` → `Api\Learning\*`
 - `/api/v1/admin/*` → `Api\Admin\*`
 - Student source → `StudentRepository`, `DemoStudentRepository` or imported-DBF repository
