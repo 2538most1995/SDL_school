@@ -19,7 +19,6 @@ function Brand({ branding }: { branding?: PublicBranding }) {
             </span>
             <span className="leading-tight text-white">
                 <strong className="block text-[17px] font-bold tracking-[-0.02em]">{branding?.portalName ?? 'SDL School'}</strong>
-                <span className="text-[12px] font-semibold text-brand-100">{branding?.districtName ?? 'Digital Campus'}</span>
             </span>
         </Link>
     );
