@@ -5,7 +5,7 @@ DirectoryIndex index.php
     RewriteEngine On
 
     # Serve only Laravel's public assets from the application subdirectory.
-    RewriteRule ^(build|storage)/(.*)$ laravel-app/public/$1/$2 [L]
+    RewriteRule ^(?:SDL_school/)?(build|storage)/(.*)$ laravel-app/public/$1/$2 [END]
 
     # Keep the project-level front controller as the visible PHP entry point.
     # This lets Laravel detect /SDL_school as its base URL correctly.

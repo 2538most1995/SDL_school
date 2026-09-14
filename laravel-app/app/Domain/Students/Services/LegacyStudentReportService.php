@@ -5,6 +5,7 @@ namespace App\Domain\Students\Services;
 use App\Domain\Students\Support\AcademicTerm;
 use App\Domain\Students\Support\LegacyStudentStatus;
 use App\Domain\Students\Support\LegacyTableSet;
+use App\Domain\Students\Support\RegistrationStatistics;
 use App\Models\User;
 use Illuminate\Database\DatabaseManager;
 use InvalidArgumentException;
@@ -484,6 +485,65 @@ final readonly class LegacyStudentReportService
             'selected_term' => $selectedTerm,
             'rows' => $rows,
         ];
+    }
+
+    /**
+     * @param  array<string, mixed>  $filters
+     * @return array<string, mixed>
+     */
+    public function registrationStatistics(User $viewer, int $districtId, array $filters): array
+    {
+        $category = (string) ($filters['category'] ?? 'target_group');
+        $sets = $this->filteredSets($this->sets($districtId), $filters);
+        $terms = $this->registeredSubjectTerms($viewer, $sets, $filters);
+        $selectedTerm = $this->selectedTerm($filters, $terms);
+        $counts = [];
+
+        if ($selectedTerm === null) {
+            return RegistrationStatistics::payload($category, $counts, $terms, null);
+        }
+
+        foreach ($sets as $set) {
+            [$groupJoin, $groupName] = $this->groupJoin($set, 'st');
+            [$scopeSql, $scopeBindings] = $this->scope($viewer, $set, 'st', $groupJoin !== '');
+            $variants = AcademicTerm::variants($selectedTerm);
+            $conditions = [
+                $scopeSql,
+                'TRIM(g._perf_semestry) IN ('.implode(',', array_fill(0, count($variants), '?')).')',
+            ];
+            $bindings = [...$scopeBindings, ...$variants];
+            $this->appendGroupAndSearchFilters($conditions, $bindings, $filters, $groupJoin !== '', 'st', $groupName);
+
+            $column = match ($category) {
+                'gender' => $this->firstExistingColumn($set->student, ['gender']),
+                'occupation' => $this->firstExistingColumn($set->student, ['occp']),
+                'nationality' => $this->firstExistingColumn($set->student, ['nation']),
+                'target_group' => $this->firstExistingColumn($set->student, ['occtyp']),
+                default => null,
+            };
+            $categorySql = $category === 'level'
+                ? (string) $set->level
+                : ($column === null ? "''" : 'st.'.$this->identifier($column));
+            $student = $this->identifier($set->student);
+            $grade = $this->identifier($set->grade);
+
+            foreach ($this->rows(
+                "SELECT DISTINCT st._perf_id10 AS student_code, {$categorySql} AS category_code
+                 FROM {$grade} g
+                 INNER JOIN {$student} st ON st._perf_id10 = g._perf_std10
+                 {$groupJoin}
+                 WHERE ".implode(' AND ', array_filter($conditions)),
+                $bindings,
+            ) as $row) {
+                if (trim((string) ($row['student_code'] ?? '')) === '') {
+                    continue;
+                }
+                $code = trim((string) ($row['category_code'] ?? ''));
+                $counts[$code] = ($counts[$code] ?? 0) + 1;
+            }
+        }
+
+        return RegistrationStatistics::payload($category, $counts, $terms, $selectedTerm);
     }
 
     /** @param array<string, mixed> $filters */

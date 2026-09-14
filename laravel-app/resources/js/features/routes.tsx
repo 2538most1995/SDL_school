@@ -10,6 +10,7 @@ const MyLearningPage = lazyWithReload(async () => ({ default: (await import('./s
 const GradesPage = lazyWithReload(async () => ({ default: (await import('./students')).GradesPage }));
 const AchievementPage = lazyWithReload(async () => ({ default: (await import('./students')).AchievementPage }));
 const ReportPage = lazyWithReload(async () => ({ default: (await import('./reports')).ReportPage }));
+const RegistrationStatisticsPage = lazyWithReload(async () => ({ default: (await import('./reports/RegistrationStatisticsPage')).RegistrationStatisticsPage }));
 const LearningHomePage = lazyWithReload(async () => ({ default: (await import('./learning')).LearningHomePage }));
 const LearningListPage = lazyWithReload(async () => ({ default: (await import('./learning')).LearningListPage }));
 const AdminUsersPage = lazyWithReload(async () => ({ default: (await import('./admin')).AdminUsersPage }));
@@ -38,6 +39,7 @@ export const featureRouteCatalog: FeatureRoute[] = [
     { path: '/kpch', label: 'กิจกรรม กพช.', roles: ['student', 'teacher', 'admin', 'super_admin'], element: <AchievementPage kind="kpch" /> },
     { path: '/moral', label: 'คุณธรรม', roles: ['student', 'teacher', 'admin', 'super_admin'], element: <AchievementPage kind="moral" /> },
 
+    { path: '/reports/registration-statistics', label: 'สถิตินักศึกษาลงทะเบียน', roles: ['teacher', 'admin', 'super_admin'], element: <RegistrationStatisticsPage /> },
     { path: '/reports/new-students', label: 'นักศึกษาใหม่', roles: ['teacher', 'admin', 'super_admin'], element: <ReportPage kind="new-students" /> },
     { path: '/reports/graduates', label: 'ผู้จบหลักสูตร', roles: ['teacher', 'admin', 'super_admin'], element: <ReportPage kind="graduates" /> },
     { path: '/reports/expected-graduates', label: 'นักศึกษาคาดว่าจะจบ', roles: ['teacher', 'admin', 'super_admin'], element: <ReportPage kind="expected-graduates" /> },

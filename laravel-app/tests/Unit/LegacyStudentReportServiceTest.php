@@ -11,6 +11,68 @@ use Tests\TestCase;
 
 final class LegacyStudentReportServiceTest extends TestCase
 {
+    public function test_registration_statistics_use_itw51_target_group_and_keep_teacher_scope(): void
+    {
+        $batch = 'import_1700000001_statistics';
+        $queries = [];
+        $connection = Mockery::mock(ConnectionInterface::class);
+        $connection->shouldReceive('selectOne')
+            ->once()
+            ->andReturn((object) ['batch_key' => $batch]);
+        $connection->shouldReceive('select')->andReturnUsing(
+            function (string $query, array $bindings = [], bool $useReadPdo = true) use ($batch, &$queries): array {
+                $queries[] = compact('query', 'bindings', 'useReadPdo');
+
+                return match (true) {
+                    str_contains($query, 'INFORMATION_SCHEMA.TABLES') => array_map(
+                        static fn (string $table): object => (object) ['table_name' => $table],
+                        [
+                            "db_{$batch}_1_student",
+                            "db_{$batch}_1_grade",
+                            "db_{$batch}_1_subject",
+                            "db_{$batch}_1214120000_group",
+                        ],
+                    ),
+                    str_contains($query, 'INFORMATION_SCHEMA.COLUMNS') => [
+                        (object) ['column_name' => 'occtyp'],
+                    ],
+                    str_contains($query, 'SELECT DISTINCT g._perf_semestry AS raw_term') => [
+                        (object) ['raw_term' => '69/1'],
+                    ],
+                    str_contains($query, 'SELECT DISTINCT st._perf_id10 AS student_code') => [
+                        (object) ['student_code' => '6911000001', 'category_code' => '07'],
+                        (object) ['student_code' => '6911000002', 'category_code' => '09'],
+                    ],
+                    default => [],
+                };
+            },
+        );
+
+        $database = Mockery::mock(DatabaseManager::class);
+        $database->shouldReceive('connection')->andReturn($connection);
+        $service = new LegacyStudentReportService($database);
+        $teacher = new User([
+            'role' => 'teacher',
+            'district_id' => 1,
+            'assigned_groups' => ['กลุ่มครู ก'],
+        ]);
+
+        $result = $service->registrationStatistics($teacher, 1, ['category' => 'target_group']);
+
+        $this->assertSame('1/2569', $result['selected_term']);
+        $this->assertSame(2, $result['summary']['registered_students']);
+        $this->assertSame('ผู้ต้องขัง', collect($result['items'])->firstWhere('code', '07')['label']);
+        $this->assertSame('ผู้ใช้แรงงาน', collect($result['items'])->firstWhere('code', '09')['label']);
+
+        $statisticsQuery = collect($queries)->first(
+            static fn (array $entry): bool => str_contains($entry['query'], 'SELECT DISTINCT st._perf_id10 AS student_code'),
+        );
+        $this->assertNotNull($statisticsQuery);
+        $this->assertStringContainsString('st.`occtyp` AS category_code', $statisticsQuery['query']);
+        $this->assertStringContainsString('st.grp_code IN', $statisticsQuery['query']);
+        $this->assertContains('กลุ่มครู ก', $statisticsQuery['bindings']);
+    }
+
     public function test_registered_subjects_start_from_historical_grades_and_keep_teacher_group_scope(): void
     {
         $batch = 'import_1700000000_history';

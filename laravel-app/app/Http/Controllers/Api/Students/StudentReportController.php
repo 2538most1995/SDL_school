@@ -81,6 +81,16 @@ final class StudentReportController extends StudentsApiController
         return $this->reportResponse($request, $data, false);
     }
 
+    public function registrationStatistics(Request $request): JsonResponse
+    {
+        $filters = $this->filters($request);
+        $data = config('system_data.student_enabled')
+            ? $this->legacyReports->registrationStatistics($request->user(), (int) $request->attributes->get('district_id'), $filters)
+            : $this->reports->registrationStatistics($request->user(), $filters);
+
+        return $this->reportResponse($request, $data, false);
+    }
+
     public function examAttendance(Request $request): JsonResponse
     {
         $filters = $this->filters($request);
@@ -103,6 +113,7 @@ final class StudentReportController extends StudentsApiController
             'subject' => ['nullable', 'string', 'max:30'],
             'view' => ['nullable', Rule::in(['subject', 'student'])],
             'exam_status' => ['nullable', 'string', Rule::in(['taken', 'not_taken'])],
+            'category' => ['nullable', Rule::in(['target_group', 'gender', 'level', 'occupation', 'nationality'])],
         ]);
     }
 

@@ -1,0 +1,193 @@
+import { CalendarBlank, ChartBar, StackSimple, Trophy, UsersThree } from '@phosphor-icons/react';
+import { keepPreviousData, useQuery } from '@tanstack/react-query';
+import { useEffect, useMemo, useState } from 'react';
+import { EmptyState, QueryError, QuerySkeleton } from '../../components/QueryState';
+import { PageHeader } from '../../components/PageHeader';
+import { Panel } from '../../components/Panel';
+import { StatGrid } from '../../components/StatGrid';
+import { StatTile } from '../../components/StatTile';
+import { getFeatureDataWithDemo } from '../api';
+
+type CategoryKey = 'target_group' | 'gender' | 'level' | 'occupation' | 'nationality';
+
+type StatisticItem = {
+    key: string;
+    code: string;
+    label: string;
+    count: number;
+    percentage: number;
+};
+
+type RegistrationStatisticsPayload = {
+    categories: Array<{ key: CategoryKey; label: string }>;
+    selected_category: CategoryKey;
+    selected_category_label: string;
+    terms: string[];
+    selected_term: string | null;
+    summary: {
+        registered_students: number;
+        category_count: number;
+        largest_category: StatisticItem | null;
+    };
+    items: StatisticItem[];
+};
+
+const categoryOptions: RegistrationStatisticsPayload['categories'] = [
+    { key: 'target_group', label: 'กลุ่มเป้าหมาย' },
+    { key: 'gender', label: 'เพศ' },
+    { key: 'level', label: 'ระดับชั้น' },
+    { key: 'occupation', label: 'อาชีพ' },
+    { key: 'nationality', label: 'สัญชาติ' },
+];
+
+const emptyPayload: RegistrationStatisticsPayload = {
+    categories: categoryOptions,
+    selected_category: 'target_group',
+    selected_category_label: 'กลุ่มเป้าหมาย',
+    terms: [],
+    selected_term: null,
+    summary: { registered_students: 0, category_count: 0, largest_category: null },
+    items: [],
+};
+
+function compareAcademicTermsDescending(left: string, right: string): number {
+    const parse = (value: string) => {
+        const match = value.match(/^([1-4])\/(25\d{2})$/);
+        return match ? [Number(match[2]), Number(match[1])] : [0, 0];
+    };
+    const [leftYear, leftSemester] = parse(left);
+    const [rightYear, rightSemester] = parse(right);
+
+    return rightYear - leftYear || rightSemester - leftSemester || right.localeCompare(left, 'th');
+}
+
+const barTones = ['bg-brand-600', 'bg-emerald-600', 'bg-amber-500', 'bg-sky-600', 'bg-violet-600'];
+
+export function RegistrationStatisticsPage() {
+    const [category, setCategory] = useState<CategoryKey>('target_group');
+    const [term, setTerm] = useState('');
+    const statistics = useQuery({
+        queryKey: ['registration-statistics', category, term],
+        queryFn: ({ signal }) => {
+            const params = new URLSearchParams({ category });
+            if (term) params.set('term', term);
+
+            return getFeatureDataWithDemo<RegistrationStatisticsPayload>(
+                `/api/v1/reports/students/registration-statistics?${params.toString()}`,
+                emptyPayload,
+                signal,
+            );
+        },
+        placeholderData: keepPreviousData,
+    });
+    const payload = statistics.data?.data;
+    const termOptions = useMemo(
+        () => Array.from(new Set([...(term ? [term] : []), ...(payload?.terms ?? [])])).sort(compareAcademicTermsDescending),
+        [payload?.terms, term],
+    );
+
+    useEffect(() => {
+        if (term !== '') return;
+        const latestTerm = [...(payload?.terms ?? [])].sort(compareAcademicTermsDescending)[0] ?? payload?.selected_term;
+        if (latestTerm) setTerm(latestTerm);
+    }, [payload?.selected_term, payload?.terms, term]);
+
+    const selectedCategoryLabel = categoryOptions.find((option) => option.key === category)?.label ?? 'กลุ่มเป้าหมาย';
+    const largest = payload?.summary.largest_category;
+
+    return (
+        <div>
+            <PageHeader
+                category="รายงานสถิติ"
+                title="สถิตินักศึกษาลงทะเบียน"
+                description="ดูจำนวนนักศึกษาที่ลงทะเบียนในแต่ละภาคเรียน แยกตามกลุ่มเป้าหมาย เพศ ระดับชั้น อาชีพ และสัญชาติ"
+                icon={ChartBar}
+                actions={(
+                    <label className="flex items-center gap-2 text-sm font-bold text-slate-700">
+                        <span>ภาคเรียน</span>
+                        <select
+                            value={term}
+                            onChange={(event) => setTerm(event.target.value)}
+                            className="h-10 rounded-xl border border-slate-300 bg-white px-3 text-sm"
+                            aria-label="เลือกภาคเรียน"
+                        >
+                            {termOptions.length === 0 && <option value="">ไม่มีข้อมูลภาคเรียน</option>}
+                            {termOptions.map((option) => <option key={option} value={option}>{option}</option>)}
+                        </select>
+                    </label>
+                )}
+            />
+
+            {payload && (
+                <StatGrid>
+                    <StatTile label="นักศึกษาที่ลงทะเบียน" value={`${payload.summary.registered_students.toLocaleString('th-TH')} คน`} detail={`ภาคเรียน ${payload.selected_term ?? '-'}`} icon={UsersThree} tone="sky" />
+                    <StatTile label={`จำนวนประเภท${payload.selected_category_label}`} value={payload.summary.category_count.toLocaleString('th-TH')} detail="นับเฉพาะประเภทที่พบในข้อมูล" icon={StackSimple} tone="emerald" />
+                    <StatTile label="ประเภทที่มีจำนวนสูงสุด" value={largest ? `${largest.count.toLocaleString('th-TH')} คน` : '-'} detail={largest?.label ?? 'ยังไม่มีข้อมูล'} icon={Trophy} tone="amber" />
+                    <StatTile label="ภาคเรียนที่แสดง" value={payload.selected_term ?? '-'} detail="เปลี่ยนภาคเรียนได้จากด้านบน" icon={CalendarBlank} tone="rose" />
+                </StatGrid>
+            )}
+
+            <Panel
+                title={`แยกตาม${selectedCategoryLabel}`}
+                description="ข้อมูลถูกจำกัดตามอำเภอ และสำหรับครูจะเห็นเฉพาะกลุ่มเรียนที่ได้รับมอบหมาย"
+            >
+                <div className="mb-6 grid grid-cols-2 gap-2 sm:grid-cols-3 lg:grid-cols-5" role="group" aria-label="เลือกประเภทข้อมูลสถิติ">
+                    {categoryOptions.map((option) => (
+                        <button
+                            key={option.key}
+                            type="button"
+                            onClick={() => setCategory(option.key)}
+                            aria-pressed={category === option.key}
+                            className={`min-h-11 rounded-xl border px-3 py-2 text-sm font-bold transition ${category === option.key ? 'border-brand-700 bg-brand-700 text-white shadow-sm' : 'border-slate-200 bg-white text-slate-700 hover:border-brand-300 hover:bg-brand-50'}`}
+                        >
+                            {option.label}
+                        </button>
+                    ))}
+                </div>
+
+                {statistics.isPending && <QuerySkeleton rows={6} />}
+                {statistics.isError && <QueryError onRetry={() => statistics.refetch()} />}
+                {payload && payload.items.length === 0 && (
+                    <EmptyState title="ไม่พบข้อมูลการลงทะเบียน" description="ยังไม่มีรายการลงทะเบียนในภาคเรียนที่เลือก" />
+                )}
+                {payload && payload.items.length > 0 && (
+                    <div className="overflow-hidden rounded-2xl border border-slate-200">
+                        <div className="hidden grid-cols-[minmax(0,1fr)_150px_120px] gap-4 bg-slate-50 px-5 py-3 text-xs font-bold text-slate-500 sm:grid">
+                            <span>{payload.selected_category_label}</span>
+                            <span className="text-right">สัดส่วน</span>
+                            <span className="text-right">จำนวน</span>
+                        </div>
+                        <ol className="divide-y divide-slate-200">
+                            {payload.items.map((item, index) => (
+                                <li key={item.key} className="grid gap-3 px-4 py-4 sm:grid-cols-[minmax(0,1fr)_150px_120px] sm:items-center sm:px-5">
+                                    <div className="min-w-0">
+                                        <div className="flex items-start gap-3">
+                                            <span className="grid size-8 shrink-0 place-items-center rounded-lg bg-slate-100 text-xs font-black text-slate-600">{index + 1}</span>
+                                            <div className="min-w-0">
+                                                <p className="font-bold leading-6 text-slate-950">{item.label}</p>
+                                                {item.code && <p className="mt-0.5 text-xs text-slate-500">รหัส {item.code}</p>}
+                                            </div>
+                                        </div>
+                                    </div>
+                                    <div>
+                                        <div className="mb-1.5 flex items-center justify-between text-xs font-bold text-slate-600 sm:justify-end">
+                                            <span className="sm:hidden">สัดส่วน</span>
+                                            <span>{item.percentage.toLocaleString('th-TH')}%</span>
+                                        </div>
+                                        <div className="h-2 overflow-hidden rounded-full bg-slate-100" aria-hidden="true">
+                                            <div className={`h-full rounded-full ${barTones[index % barTones.length]}`} style={{ width: `${Math.min(100, Math.max(0, item.percentage))}%` }} />
+                                        </div>
+                                    </div>
+                                    <div className="flex items-baseline justify-between gap-2 sm:block sm:text-right">
+                                        <span className="text-xs font-bold text-slate-500 sm:hidden">จำนวน</span>
+                                        <strong className="text-lg font-black text-slate-950">{item.count.toLocaleString('th-TH')} <span className="text-sm font-bold text-slate-500">คน</span></strong>
+                                    </div>
+                                </li>
+                            ))}
+                        </ol>
+                    </div>
+                )}
+            </Panel>
+        </div>
+    );
+}

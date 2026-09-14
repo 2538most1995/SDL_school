@@ -39,6 +39,8 @@ final class StudentApiTest extends TestCase
             Route::get('/reports/graduates', [StudentReportController::class, 'graduates']);
             Route::get('/reports/transfers', [StudentReportController::class, 'transfers']);
             Route::get('/reports/registered-subjects', [StudentReportController::class, 'registeredSubjects']);
+            Route::get('/reports/students/registration-statistics', [StudentReportController::class, 'registrationStatistics'])
+                ->middleware('role:teacher,admin,super_admin');
             Route::get('/reports/students/grades-above-two', [StudentReportController::class, 'gradesAboveTwo']);
             Route::get('/reports/students/exam-attendance', [StudentReportController::class, 'examAttendance']);
         });
@@ -307,6 +309,47 @@ final class StudentApiTest extends TestCase
             ->assertJsonPath('data.selected_term', '1/2568')
             ->assertJsonPath('data.terms.0', '2/2568')
             ->assertJsonFragment(['1/2568']);
+    }
+
+    public function test_registration_statistics_count_unique_registered_students_by_selected_category(): void
+    {
+        Sanctum::actingAs($this->viewer('admin'));
+
+        $this->getJson('/api/v1/reports/students/registration-statistics?term=2/2568&category=level')
+            ->assertOk()
+            ->assertJsonPath('data.selected_category', 'level')
+            ->assertJsonPath('data.selected_category_label', 'ระดับชั้น')
+            ->assertJsonPath('data.selected_term', '2/2568')
+            ->assertJsonPath('data.summary.registered_students', 8)
+            ->assertJsonPath('data.summary.category_count', 3)
+            ->assertJsonPath('data.items.0.code', '1')
+            ->assertJsonPath('data.items.0.count', 2)
+            ->assertJsonPath('data.items.1.code', '2')
+            ->assertJsonPath('data.items.1.count', 3)
+            ->assertJsonPath('data.items.2.code', '3')
+            ->assertJsonPath('data.items.2.count', 3);
+
+        $this->getJson('/api/v1/reports/students/registration-statistics?term=2/2568&category=gender')
+            ->assertOk()
+            ->assertJsonPath('data.summary.registered_students', 8)
+            ->assertJsonFragment(['label' => 'ชาย'])
+            ->assertJsonFragment(['label' => 'หญิง']);
+    }
+
+    public function test_registration_statistics_enforce_teacher_scope_role_and_category_validation(): void
+    {
+        Sanctum::actingAs($this->viewer('teacher', $this->sena->id, ['SENA-M3-B']));
+
+        $this->getJson('/api/v1/reports/students/registration-statistics?term=2/2568&category=target_group')
+            ->assertOk()
+            ->assertJsonPath('data.summary.registered_students', 2);
+
+        $this->getJson('/api/v1/reports/students/registration-statistics?category=unknown')
+            ->assertUnprocessable();
+
+        Sanctum::actingAs($this->viewer('student', $this->sena->id, [], '6650100001'));
+        $this->getJson('/api/v1/reports/students/registration-statistics')
+            ->assertForbidden();
     }
 
     public function test_invalid_term_and_page_size_are_rejected(): void

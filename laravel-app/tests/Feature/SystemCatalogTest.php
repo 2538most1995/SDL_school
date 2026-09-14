@@ -46,6 +46,7 @@ class SystemCatalogTest extends TestCase
 
         $this->assertTrue($items->contains('key', 'users'));
         $this->assertTrue($items->contains('key', 'branding'));
+        $this->assertTrue($items->contains('key', 'registration-statistics'));
         $this->assertFalse($items->contains('key', 'districts'));
     }
 
@@ -59,6 +60,7 @@ class SystemCatalogTest extends TestCase
         $this->assertNotNull($administration);
         $this->assertSame(['exam-rooms'], collect($administration['items'])->pluck('key')->values()->all());
         $this->assertSame('/admin/exam-rooms', $administration['items'][0]['route']);
+        $this->assertTrue(collect($response->json('data.groups'))->flatMap(fn (array $group) => $group['items'])->contains('key', 'registration-statistics'));
     }
 
     public function test_super_admin_catalog_includes_district_registry(): void

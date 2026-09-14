@@ -1,0 +1,1 @@
+import{l as e,nt as t}from"./api-shait7_9.js";var n=t(),r={success:`success`,warning:`warning`,danger:`danger`,info:`informative`,neutral:`subtle`};function i({children:t,tone:i=`neutral`}){return(0,n.jsx)(e,{appearance:`tint`,color:r[i],size:`medium`,className:`ui-status-badge whitespace-nowrap font-bold`,children:t})}export{i as t};

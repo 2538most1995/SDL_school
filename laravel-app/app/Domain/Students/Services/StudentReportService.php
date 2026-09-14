@@ -6,6 +6,7 @@ use App\Domain\Students\Models\Grade;
 use App\Domain\Students\Models\Student;
 use App\Domain\Students\Repositories\StudentRepository;
 use App\Domain\Students\Support\AcademicTerm;
+use App\Domain\Students\Support\RegistrationStatistics;
 use App\Models\User;
 
 final readonly class StudentReportService
@@ -203,6 +204,41 @@ final readonly class StudentReportService
             'selected_term' => $selectedTerm,
             'rows' => $rows,
         ];
+    }
+
+    /**
+     * @param  array<string, mixed>  $filters
+     * @return array<string, mixed>
+     */
+    public function registrationStatistics(User $viewer, array $filters = []): array
+    {
+        $category = (string) ($filters['category'] ?? 'target_group');
+        $students = $this->students($viewer, $filters);
+        $gradesByStudent = $this->repository->gradesForMany($students);
+        $terms = $this->academicTerms($gradesByStudent);
+        $selectedTerm = $this->selectedAcademicTerm($filters, $terms);
+        $counts = [];
+
+        foreach ($students as $student) {
+            $registered = array_filter(
+                $this->studentGrades($gradesByStudent, $student),
+                static fn (Grade $grade): bool => $selectedTerm !== null && $grade->term === $selectedTerm,
+            );
+            if ($registered === []) {
+                continue;
+            }
+
+            $code = match ($category) {
+                'gender' => str_starts_with($student->prefix, 'นาย') ? '1' : '2',
+                'level' => (string) $student->level,
+                'occupation' => ['00', '04', '05', '06'][(int) substr($student->code, -1) % 4],
+                'nationality' => '099',
+                default => ['09', '17', '19'][(int) substr($student->code, -1) % 3],
+            };
+            $counts[$code] = ($counts[$code] ?? 0) + 1;
+        }
+
+        return RegistrationStatistics::payload($category, $counts, $terms, $selectedTerm);
     }
 
     /** @param array<string, mixed> $filters

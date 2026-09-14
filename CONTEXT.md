@@ -19,7 +19,7 @@ District scope is resolved by `ResolveDistrictContext`; role checks are enforced
 
 - Authentication/profile/appearance and district branding
 - Student directory and current-student academic endpoints
-- Student reports: overview, new students, graduates, transfers, registrations, grade threshold and attendance
+- Student reports: overview, new students, graduates, transfers, registration statistics, registrations, grade threshold and attendance
 - Learning: assignments, resources, calendar activities with private images, schedules, lesson plans, scores and content writes
 - Admin: users, import status/safety, ZIP/DBF imports, exam rooms and branding
 - Super admin: district registry for adding a new active district before assigning its administrators and importing its first ZIP/DBF batch
@@ -47,6 +47,7 @@ District scope is resolved by `ResolveDistrictContext`; role checks are enforced
 17. ผู้ดูแลสูงสุดแก้ชื่ออำเภอและรหัสสถานศึกษาที่แสดงบนเอกสารได้โดยไม่เปลี่ยน `districts.code` ซึ่งเป็นรหัสระบบ; หัวตารางสอบแสดงรหัสสถานศึกษาจากทะเบียนอำเภอ และ fallback ไปยังรหัสตัวเลขในชื่อตาราง GROUP ของชุด import ปัจจุบัน พร้อมชื่อครูประจำกลุ่มจาก `grp_advis` ที่ตรงกับกลุ่มนักศึกษา หากข้อมูลกลุ่มกำกวมระบบไม่เดาค่า
 18. การสร้างตารางสอบแบบทั้งกลุ่มเรียนหรือทั้งระดับชั้นรวมผู้เรียนทุกสถานะที่อยู่ใน roster และขอบเขตสิทธิ์ปัจจุบัน ไม่จำกัดเฉพาะสถานะกำลังศึกษา; การส่งออกรายบุคคลและขอบเขต district/กลุ่มของผู้ใช้ยังตรวจตามเดิม
 19. Student Data Integration API เป็น read-only namespace แยกสำหรับ backend ของเว็บไซต์อื่น ใช้ credential ที่เก็บเฉพาะ token hash และผูกอำเภอถาวร ไม่ใช้ session/Sanctum token ของผู้ดูแล; resource เป็น explicit allowlist และไม่ส่งเลขบัตรประชาชนทั้งแบบเต็ม/ปิดบางส่วน วันเกิด ที่อยู่ โทรศัพท์ อีเมล ผู้ปกครอง social profile หรือ source payload การค้นหาไม่ใช้เลขบัตรประชาชน และ credential นี้ใช้กับ route ภายใน/admin อื่นไม่ได้
+20. สถิตินักศึกษาลงทะเบียนนับนักศึกษาไม่ซ้ำที่มีรายการเกรด/ลงทะเบียนในภาคเรียนที่เลือกจาก batch ล่าสุดของอำเภอ แยกได้ตาม `occtyp` (กลุ่มเป้าหมาย), `gender`, ระดับตาราง 1–3, `occp` (อาชีพ) และ `nation` (สัญชาติ); ครูเห็นเฉพาะกลุ่มที่ได้รับมอบหมาย และนักศึกษาไม่มีสิทธิ์เข้ารายงานนี้
 
 ## Request/data flow
 
