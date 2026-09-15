@@ -6,7 +6,7 @@ use Illuminate\Database\Eloquent\Attributes\Fillable;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 
-#[Fillable(['district_id', 'created_by', 'title', 'message', 'button_label', 'button_url', 'is_active'])]
+#[Fillable(['district_id', 'created_by', 'title', 'message', 'button_label', 'button_url', 'image_path', 'show_exam_link', 'is_active'])]
 final class Announcement extends Model
 {
     /** @return array<string, string> */
@@ -14,6 +14,7 @@ final class Announcement extends Model
     {
         return [
             'is_active' => 'boolean',
+            'show_exam_link' => 'boolean',
         ];
     }
 

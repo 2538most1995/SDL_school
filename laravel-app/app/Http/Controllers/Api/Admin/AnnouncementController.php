@@ -6,7 +6,9 @@ use App\Http\Controllers\Controller;
 use App\Models\Announcement;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
+use Illuminate\Http\Response;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Storage;
 
 final class AnnouncementController extends Controller
 {
@@ -20,7 +22,7 @@ final class AnnouncementController extends Controller
             ->orderByDesc('updated_at')
             ->limit(100)
             ->get()
-            ->map(fn (Announcement $announcement): array => $this->payload($announcement))
+            ->map(fn (Announcement $announcement): array => $this->payload($announcement, $request))
             ->values();
 
         return response()->json([
@@ -37,6 +39,7 @@ final class AnnouncementController extends Controller
     {
         $districtId = $this->districtId($request);
         $validated = $this->validatedPayload($request);
+        $imageFile = $this->validatedImage($request);
 
         $announcement = DB::transaction(function () use ($districtId, $request, $validated): Announcement {
             $this->lockDistrict($districtId);
@@ -58,8 +61,12 @@ final class AnnouncementController extends Controller
             return $announcement;
         });
 
+        if ($imageFile !== null) {
+            $this->storeImage($announcement, $imageFile);
+        }
+
         return response()->json([
-            'data' => $this->payload($announcement->load('creator:id,name')),
+            'data' => $this->payload($announcement->load('creator:id,name'), $request),
             'meta' => ['source' => 'system_database'],
         ], 201);
     }
@@ -68,6 +75,8 @@ final class AnnouncementController extends Controller
     {
         $districtId = $this->districtId($request);
         $validated = $this->validatedPayload($request);
+        $imageFile = $this->validatedImage($request);
+        $removeImage = filter_var($request->input('remove_image'), FILTER_VALIDATE_BOOLEAN);
 
         $updated = DB::transaction(function () use ($announcement, $districtId, $request, $validated): Announcement {
             $this->lockDistrict($districtId);
@@ -88,8 +97,17 @@ final class AnnouncementController extends Controller
             return $model;
         });
 
+        if ($removeImage && ! $imageFile) {
+            $this->deleteImage($updated);
+        }
+
+        if ($imageFile !== null) {
+            $this->deleteImage($updated);
+            $this->storeImage($updated, $imageFile);
+        }
+
         return response()->json([
-            'data' => $this->payload($updated->load('creator:id,name')),
+            'data' => $this->payload($updated->load('creator:id,name'), $request),
             'meta' => ['source' => 'system_database'],
         ]);
     }
@@ -127,7 +145,7 @@ final class AnnouncementController extends Controller
         });
 
         return response()->json([
-            'data' => $this->payload($updated->load('creator:id,name')),
+            'data' => $this->payload($updated->load('creator:id,name'), $request),
             'meta' => ['source' => 'system_database'],
         ]);
     }
@@ -147,13 +165,31 @@ final class AnnouncementController extends Controller
             return $model;
         });
 
+        $this->deleteImage($deleted);
+
         return response()->json([
             'data' => ['id' => (int) $deleted->id],
             'meta' => ['source' => 'system_database'],
         ]);
     }
 
-    /** @return array{title: string, message: string, button_label: string|null, button_url: string|null, is_active: bool} */
+    public function image(Request $request, int $announcement): Response
+    {
+        $districtId = $this->districtId($request);
+        $model = $this->scopedAnnouncement($districtId, $announcement);
+
+        abort_unless(filled($model->image_path) && Storage::disk('local')->exists($model->image_path), 404, 'ไม่พบรูปภาพประกาศ');
+
+        $mime = Storage::disk('local')->mimeType($model->image_path) ?: 'image/jpeg';
+
+        return response(Storage::disk('local')->get($model->image_path), 200, [
+            'Content-Type' => $mime,
+            'Cache-Control' => 'private, max-age=3600',
+            'X-Content-Type-Options' => 'nosniff',
+        ]);
+    }
+
+    /** @return array{title: string, message: string, button_label: string|null, button_url: string|null, show_exam_link: bool, is_active: bool} */
     private function validatedPayload(Request $request): array
     {
         $request->merge([
@@ -168,6 +204,7 @@ final class AnnouncementController extends Controller
             'message' => ['required', 'string', 'max:4000'],
             'button_label' => ['nullable', 'string', 'max:60', 'required_with:button_url'],
             'button_url' => ['nullable', 'string', 'max:2048', 'url:http,https'],
+            'show_exam_link' => ['sometimes', 'boolean'],
             'is_active' => ['sometimes', 'boolean'],
         ], [
             'title.required' => 'กรุณาระบุหัวข้อประกาศ',
@@ -183,8 +220,49 @@ final class AnnouncementController extends Controller
             'message' => (string) $validated['message'],
             'button_label' => $buttonUrl === null ? null : (string) $validated['button_label'],
             'button_url' => $buttonUrl,
+            'show_exam_link' => (bool) ($validated['show_exam_link'] ?? false),
             'is_active' => (bool) ($validated['is_active'] ?? false),
         ];
+    }
+
+    /** @return \Illuminate\Http\UploadedFile|null */
+    private function validatedImage(Request $request): ?\Illuminate\Http\UploadedFile
+    {
+        if (! $request->hasFile('image')) {
+            return null;
+        }
+
+        $validated = $request->validate([
+            'image' => ['file', 'image', 'mimes:jpg,jpeg,png,webp', 'max:4096', 'dimensions:min_width=200,min_height=100,max_width=6000,max_height=6000'],
+        ], [
+            'image.image' => 'ไฟล์ต้องเป็นรูปภาพเท่านั้น',
+            'image.mimes' => 'รองรับเฉพาะไฟล์ JPG, PNG หรือ WebP',
+            'image.max' => 'ขนาดรูปภาพต้องไม่เกิน 4 MB',
+            'image.dimensions' => 'ขนาดรูปภาพต้องไม่ต่ำกว่า 200×100 px และไม่เกิน 6000×6000 px',
+        ]);
+
+        return $validated['image'];
+    }
+
+    private function storeImage(Announcement $announcement, \Illuminate\Http\UploadedFile $file): void
+    {
+        $path = $file->store("announcements/districts/{$announcement->district_id}", 'local');
+
+        abort_if($path === false, 500, 'ไม่สามารถบันทึกรูปภาพประกาศได้');
+
+        $announcement->update(['image_path' => $path]);
+    }
+
+    private function deleteImage(Announcement $announcement): void
+    {
+        $path = (string) $announcement->image_path;
+
+        if ($path === '' || ! str_starts_with($path, 'announcements/')) {
+            return;
+        }
+
+        Storage::disk('local')->delete($path);
+        $announcement->updateQuietly(['image_path' => null]);
     }
 
     private function districtId(Request $request): int
@@ -214,15 +292,23 @@ final class AnnouncementController extends Controller
         return $query->firstOrFail();
     }
 
-    /** @return array{id: int, title: string, message: string, button_label: string|null, button_url: string|null, is_active: bool, created_by_name: string|null, created_at: string|null, updated_at: string|null} */
-    private function payload(Announcement $announcement): array
+    /** @return array{id: int, title: string, message: string, button_label: string|null, button_url: string|null, image_url: string|null, show_exam_link: bool, is_active: bool, created_by_name: string|null, created_at: string|null, updated_at: string|null} */
+    private function payload(Announcement $announcement, Request $request): array
     {
+        $imageUrl = null;
+        if (filled($announcement->image_path)) {
+            $basePath = rtrim((string) $request->getBasePath(), '/');
+            $imageUrl = "{$basePath}/api/v1/admin/announcements/{$announcement->id}/image";
+        }
+
         return [
             'id' => (int) $announcement->id,
             'title' => (string) $announcement->title,
             'message' => (string) $announcement->message,
             'button_label' => filled($announcement->button_label) ? (string) $announcement->button_label : null,
             'button_url' => filled($announcement->button_url) ? (string) $announcement->button_url : null,
+            'image_url' => $imageUrl,
+            'show_exam_link' => (bool) $announcement->show_exam_link,
             'is_active' => (bool) $announcement->is_active,
             'created_by_name' => $announcement->creator?->displayName(),
             'created_at' => $announcement->created_at?->toIso8601String(),
@@ -255,6 +341,8 @@ final class AnnouncementController extends Controller
             'message' => (string) $announcement->message,
             'button_label' => filled($announcement->button_label) ? (string) $announcement->button_label : null,
             'button_url' => filled($announcement->button_url) ? (string) $announcement->button_url : null,
+            'image_path' => filled($announcement->image_path) ? (string) $announcement->image_path : null,
+            'show_exam_link' => (bool) $announcement->show_exam_link,
             'is_active' => (bool) $announcement->is_active,
         ];
     }

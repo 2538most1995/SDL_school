@@ -128,7 +128,8 @@ Route::prefix('v1')->group(function (): void {
         Route::get('/grades', [CurrentStudentController::class, 'grades']);
         Route::get('/kpch', [CurrentStudentController::class, 'kpch']);
         Route::get('/moral', [CurrentStudentController::class, 'moral']);
-        Route::get('/student/announcements/active', StudentAnnouncementController::class)->middleware('role:student');
+        Route::get('/student/announcements/active', [StudentAnnouncementController::class, 'active'])->middleware('role:student');
+        Route::get('/student/announcements/image', [StudentAnnouncementController::class, 'image'])->middleware('role:student');
         Route::get('/students', [StudentDirectoryController::class, 'index']);
         Route::get('/students.php', [StudentDirectoryController::class, 'index']);
         Route::get('/students/{student}', [StudentDirectoryController::class, 'show']);
@@ -167,6 +168,7 @@ Route::prefix('v1')->group(function (): void {
             Route::patch('/admin/announcements/{announcement}', [AnnouncementController::class, 'update'])->whereNumber('announcement');
             Route::patch('/admin/announcements/{announcement}/status', [AnnouncementController::class, 'updateStatus'])->whereNumber('announcement');
             Route::delete('/admin/announcements/{announcement}', [AnnouncementController::class, 'destroy'])->whereNumber('announcement');
+            Route::get('/admin/announcements/{announcement}/image', [AnnouncementController::class, 'image'])->whereNumber('announcement');
         });
 
     Route::middleware(['auth:sanctum', 'active', 'district', 'role:admin,super_admin'])

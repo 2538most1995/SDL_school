@@ -6,6 +6,8 @@ use App\Models\Announcement;
 use App\Models\District;
 use App\Models\User;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Http\UploadedFile;
+use Illuminate\Support\Facades\Storage;
 use Laravel\Sanctum\Sanctum;
 use Tests\TestCase;
 
@@ -229,5 +231,137 @@ final class AnnouncementTest extends TestCase
             'is_active' => true,
         ])->assertUnprocessable()
             ->assertJsonValidationErrors('button_label');
+    }
+
+    public function test_admin_can_create_announcement_with_image(): void
+    {
+        Storage::fake('local');
+        Sanctum::actingAs($this->admin);
+
+        $response = $this->post('/api/v1/admin/announcements', [
+            'title' => 'ประกาศพร้อมรูป',
+            'message' => 'ข้อความทดสอบ',
+            'button_label' => '',
+            'button_url' => '',
+            'show_exam_link' => '0',
+            'is_active' => '1',
+            'image' => UploadedFile::fake()->image('test-banner.jpg', 800, 600)->size(1024),
+        ], ['Content-Type' => 'multipart/form-data']);
+
+        $response->assertCreated()
+            ->assertJsonPath('data.show_exam_link', false);
+
+        $announcementId = (int) $response->json('data.id');
+        $announcement = Announcement::query()->find($announcementId);
+        $this->assertNotNull($announcement);
+        $this->assertNotNull($announcement->image_path);
+        Storage::disk('local')->assertExists($announcement->image_path);
+
+        // Verify image endpoint works
+        $this->getJson("/api/v1/admin/announcements/{$announcementId}/image")
+            ->assertOk()
+            ->assertHeader('Content-Type', 'image/jpeg');
+    }
+
+    public function test_admin_can_create_announcement_with_exam_link(): void
+    {
+        Sanctum::actingAs($this->admin);
+
+        $response = $this->postJson('/api/v1/admin/announcements', [
+            'title' => 'แจ้งตารางสอบ',
+            'message' => 'นักศึกษาสามารถดูตารางสอบได้',
+            'button_label' => '',
+            'button_url' => '',
+            'show_exam_link' => true,
+            'is_active' => true,
+        ]);
+
+        $response->assertCreated()
+            ->assertJsonPath('data.show_exam_link', true);
+
+        $this->assertDatabaseHas('announcements', [
+            'id' => (int) $response->json('data.id'),
+            'show_exam_link' => true,
+        ]);
+    }
+
+    public function test_student_sees_exam_schedule_url_when_show_exam_link_is_enabled(): void
+    {
+        Announcement::query()->create([
+            'district_id' => $this->district->id,
+            'created_by' => $this->admin->id,
+            'title' => 'แจ้งตารางสอบ',
+            'message' => 'ดูตารางสอบของคุณได้เลย',
+            'show_exam_link' => true,
+            'is_active' => true,
+        ]);
+
+        $student = User::factory()->create([
+            'role' => 'student',
+            'district_id' => $this->district->id,
+            'username' => '6401001',
+            'student_code' => '6401001',
+        ]);
+
+        Sanctum::actingAs($student);
+        $response = $this->getJson('/api/v1/student/announcements/active')
+            ->assertOk()
+            ->assertJsonPath('data.show_exam_link', true);
+
+        $examUrl = $response->json('data.exam_schedule_url');
+        $this->assertNotNull($examUrl);
+        $this->assertStringContainsString('scope=student', $examUrl);
+        $this->assertStringContainsString('student=6401001', $examUrl);
+        $this->assertStringContainsString('signature=', $examUrl);
+    }
+
+    public function test_student_does_not_see_exam_schedule_url_when_disabled(): void
+    {
+        Announcement::query()->create([
+            'district_id' => $this->district->id,
+            'created_by' => $this->admin->id,
+            'title' => 'ประกาศธรรมดา',
+            'message' => 'ไม่มีลิงก์ตารางสอบ',
+            'show_exam_link' => false,
+            'is_active' => true,
+        ]);
+
+        $student = User::factory()->create([
+            'role' => 'student',
+            'district_id' => $this->district->id,
+        ]);
+
+        Sanctum::actingAs($student);
+        $this->getJson('/api/v1/student/announcements/active')
+            ->assertOk()
+            ->assertJsonPath('data.show_exam_link', false)
+            ->assertJsonPath('data.exam_schedule_url', null);
+    }
+
+    public function test_deleting_announcement_removes_image_file(): void
+    {
+        Storage::fake('local');
+        Sanctum::actingAs($this->admin);
+
+        // Create with image
+        $response = $this->post('/api/v1/admin/announcements', [
+            'title' => 'ประกาศที่จะลบพร้อมรูป',
+            'message' => 'ทดสอบ',
+            'button_label' => '',
+            'button_url' => '',
+            'is_active' => '1',
+            'image' => UploadedFile::fake()->image('delete-test.jpg', 800, 600),
+        ], ['Content-Type' => 'multipart/form-data']);
+
+        $response->assertCreated();
+        $announcementId = (int) $response->json('data.id');
+        $imagePath = Announcement::query()->find($announcementId)->image_path;
+        Storage::disk('local')->assertExists($imagePath);
+
+        // Delete the announcement
+        $this->deleteJson("/api/v1/admin/announcements/{$announcementId}")
+            ->assertOk();
+
+        Storage::disk('local')->assertMissing($imagePath);
     }
 }

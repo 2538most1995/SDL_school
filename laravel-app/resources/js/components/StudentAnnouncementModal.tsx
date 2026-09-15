@@ -1,7 +1,8 @@
 import { useEffect, useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
-import { ArrowSquareOut, Megaphone, X } from '@phosphor-icons/react';
+import { ArrowSquareOut, CalendarCheck, Megaphone, X } from '@phosphor-icons/react';
 import { apiGet } from '../lib/api';
+import { withAppBasePath } from '../lib/urls';
 
 type StudentAnnouncement = {
     id: number;
@@ -9,6 +10,9 @@ type StudentAnnouncement = {
     message: string;
     button_label: string | null;
     button_url: string | null;
+    image_url: string | null;
+    show_exam_link: boolean;
+    exam_schedule_url: string | null;
     updated_at: string | null;
 };
 
@@ -51,6 +55,9 @@ export function StudentAnnouncementModal() {
 
     if (!open || !announcement.data) return null;
 
+    const data = announcement.data;
+    const hasButtons = data.button_url || (data.show_exam_link && data.exam_schedule_url);
+
     return (
         <div className="fixed inset-0 z-[70] grid place-items-center overflow-y-auto bg-slate-950/60 p-4 backdrop-blur-sm" role="dialog" aria-modal="true" aria-labelledby="student-announcement-title" onMouseDown={(event) => { if (event.target === event.currentTarget) dismiss(); }}>
             <section className="relative my-auto w-full max-w-xl overflow-hidden rounded-[28px] border border-white/60 bg-white shadow-[0_30px_100px_rgb(2_6_23_/_0.34)]">
@@ -62,15 +69,37 @@ export function StudentAnnouncementModal() {
                         <button type="button" onClick={dismiss} className="grid size-9 shrink-0 place-items-center rounded-full bg-white/10 text-white transition hover:bg-white/20" aria-label="ปิดประกาศ" autoFocus><X size={18} weight="bold" /></button>
                     </div>
                     <p className="relative mt-5 text-xs font-bold tracking-wide text-brand-100">ประกาศสำหรับนักศึกษา</p>
-                    <h2 id="student-announcement-title" className="relative mt-1.5 text-balance text-2xl font-black leading-tight tracking-[-0.025em] sm:text-3xl">{announcement.data.title}</h2>
+                    <h2 id="student-announcement-title" className="relative mt-1.5 text-balance text-2xl font-black leading-tight tracking-[-0.025em] sm:text-3xl">{data.title}</h2>
                 </div>
                 <div className="px-6 py-6 sm:px-8 sm:py-7">
-                    <p className="max-h-[38vh] overflow-y-auto whitespace-pre-line pr-1 text-[15px] leading-7 text-slate-600">{announcement.data.message}</p>
+                    {/* Announcement image */}
+                    {data.image_url && (
+                        <img
+                            src={withAppBasePath(data.image_url)}
+                            alt="ภาพประกอบประกาศ"
+                            className="mb-5 w-full rounded-2xl border border-slate-200 object-cover shadow-sm"
+                            style={{ maxHeight: '260px' }}
+                        />
+                    )}
+
+                    <p className="max-h-[38vh] overflow-y-auto whitespace-pre-line pr-1 text-[15px] leading-7 text-slate-600">{data.message}</p>
+
                     <div className="mt-7 flex flex-col-reverse gap-2.5 sm:flex-row sm:justify-end">
                         <button type="button" onClick={dismiss} className="inline-flex min-h-11 items-center justify-center rounded-full border border-slate-200 bg-white px-5 text-sm font-bold text-slate-700 transition hover:border-slate-300 hover:bg-slate-50">รับทราบ</button>
-                        {announcement.data.button_url && (
-                            <a href={announcement.data.button_url} target="_blank" rel="noreferrer" onClick={dismiss} className="inline-flex min-h-11 items-center justify-center gap-2 rounded-full bg-brand-700 px-5 text-sm font-bold text-white shadow-lg shadow-brand-900/15 transition hover:bg-brand-800 active:scale-[0.98]">
-                                {announcement.data.button_label ?? 'ดูรายละเอียด'} <ArrowSquareOut size={17} weight="bold" />
+                        {data.show_exam_link && data.exam_schedule_url && (
+                            <a
+                                href={withAppBasePath(data.exam_schedule_url)}
+                                target="_blank"
+                                rel="noreferrer"
+                                onClick={dismiss}
+                                className="inline-flex min-h-11 items-center justify-center gap-2 rounded-full border-2 border-sky-200 bg-sky-50 px-5 text-sm font-bold text-sky-800 shadow-sm transition hover:border-sky-300 hover:bg-sky-100 active:scale-[0.98]"
+                            >
+                                <CalendarCheck size={18} weight="bold" /> ดูตารางสอบ
+                            </a>
+                        )}
+                        {data.button_url && (
+                            <a href={data.button_url} target="_blank" rel="noreferrer" onClick={dismiss} className="inline-flex min-h-11 items-center justify-center gap-2 rounded-full bg-brand-700 px-5 text-sm font-bold text-white shadow-lg shadow-brand-900/15 transition hover:bg-brand-800 active:scale-[0.98]">
+                                {data.button_label ?? 'ดูรายละเอียด'} <ArrowSquareOut size={17} weight="bold" />
                             </a>
                         )}
                     </div>
