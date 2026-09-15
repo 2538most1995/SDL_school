@@ -19,8 +19,7 @@ import { ApiError, apiGet, apiPost } from '../lib/api';
 import { publicAssetUrl, publicBrandingCssVariables, publicBrandingPath, type PublicBranding } from '../lib/publicBranding';
 import { withAppBasePath } from '../lib/urls';
 import { PublicHeroImage } from '../components/PublicHeroImage';
-
-type LoginType = 'staff' | 'student';
+import { DEFAULT_LOGIN_TYPE, LOGIN_TYPE_ORDER, type LoginType } from '../lib/loginDefaults';
 
 type LoginUser = {
     id: number;
@@ -40,7 +39,7 @@ type DistrictOption = {
 };
 
 export function LoginPage() {
-    const [loginType, setLoginType] = useState<LoginType>('staff');
+    const [loginType, setLoginType] = useState<LoginType>(DEFAULT_LOGIN_TYPE);
     const [identifier, setIdentifier] = useState('');
     const [password, setPassword] = useState('');
     const [showPassword, setShowPassword] = useState(false);
@@ -65,7 +64,12 @@ export function LoginPage() {
             } else {
                 window.localStorage.removeItem('sena-district-id');
             }
-            window.sessionStorage.setItem('sena-login-feedback', 'success');
+            if (response.data.role === 'student') {
+                window.sessionStorage.removeItem('sena-login-feedback');
+                window.sessionStorage.removeItem('sena-dismissed-announcement');
+            } else {
+                window.sessionStorage.setItem('sena-login-feedback', 'success');
+            }
             window.location.replace(withAppBasePath('/app'));
         },
     });
@@ -113,8 +117,9 @@ export function LoginPage() {
                         </div>
 
                         <TabList selectedValue={loginType} onTabSelect={(_, data) => switchType(data.value as LoginType)} appearance="subtle" size="large" className="login-tab-list mt-7" aria-label="ประเภทผู้ใช้งาน">
-                            <Tab value="staff" icon={<UserCircle size={20} weight="duotone" />} className="justify-center">ครูและผู้ดูแล</Tab>
-                            <Tab value="student" icon={<Student size={20} weight="duotone" />} className="justify-center">นักศึกษา</Tab>
+                            {LOGIN_TYPE_ORDER.map((type) => type === 'student'
+                                ? <Tab key={type} value={type} icon={<Student size={20} weight="duotone" />} className="justify-center">นักศึกษา</Tab>
+                                : <Tab key={type} value={type} icon={<UserCircle size={20} weight="duotone" />} className="justify-center">ครูและผู้ดูแล</Tab>)}
                         </TabList>
 
                         <form className="mt-6 space-y-5" onSubmit={(event) => { event.preventDefault(); login.mutate(); }}>

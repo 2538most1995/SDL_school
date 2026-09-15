@@ -5,6 +5,7 @@ import {
     buildRegistrationStatisticsSheets,
     canExportRegistrationStatistics,
     registrationStatisticsFileName,
+    registrationStatisticsFilterParameter,
 } from '../../resources/js/features/reports/registrationStatisticsExport.ts';
 import { createExcelFileBytes } from '../../resources/js/lib/excel.ts';
 
@@ -22,14 +23,14 @@ const payload = {
     selected_category_label: 'กลุ่มเป้าหมาย',
     filter_options: {
         target_group: [{ value: '30', label: 'เด็กออกกลางคัน', count: 3 }],
-        group: [{ value: 'SENA-M3-B', label: 'เสนา ม.ปลาย B', count: 3 }],
+        group: [{ value: 'เสนา ม.ปลาย B', label: 'เสนา ม.ปลาย B', count: 3 }],
         gender: [{ value: '1', label: 'ชาย', count: 3 }],
         level: [{ value: '3', label: 'มัธยมศึกษาตอนปลาย', count: 3 }],
         occupation: [],
         nationality: [],
         age: [],
     },
-    applied_filters: { group: 'SENA-M3-B', gender: '1', level: '3' },
+    applied_filters: { group: 'เสนา ม.ปลาย B', gender: '1', level: '3' },
     terms: ['2/2568'],
     selected_term: '2/2568',
     summary: { registered_students: 3, category_count: 1, largest_category: null },
@@ -41,6 +42,11 @@ test('only teacher and admin roles receive the registration statistics export ac
     assert.equal(canExportRegistrationStatistics('admin'), true);
     assert.equal(canExportRegistrationStatistics('student'), false);
     assert.equal(canExportRegistrationStatistics('super_admin'), false);
+});
+
+test('learning group filters use the level-independent group name parameter', () => {
+    assert.equal(registrationStatisticsFilterParameter('group'), 'group_name');
+    assert.equal(registrationStatisticsFilterParameter('level'), 'level');
 });
 
 test('registration statistics workbook contains typed totals and selected conditions', () => {
@@ -68,4 +74,18 @@ test('registration statistics workbook exports as a valid XLSX package', () => {
     assert.match(statisticsXml, /เด็กออกกลางคัน/);
     assert.match(statisticsXml, /<c r="F2" s="0"><v>3<\/v><\/c>/);
     assert.match(conditionsXml, /มัธยมศึกษาตอนปลาย/);
+});
+
+test('learning group export shows one merged group name without a redundant code', () => {
+    const groupPayload = {
+        ...payload,
+        selected_category: 'group',
+        selected_category_label: 'กลุ่มเรียน',
+        summary: { registered_students: 5, category_count: 1, largest_category: null },
+        items: [{ key: 'ศกร.ระดับตำบลเสนา', code: 'ศกร.ระดับตำบลเสนา', label: 'ศกร.ระดับตำบลเสนา', count: 5, percentage: 100 }],
+    };
+
+    assert.deepEqual(buildRegistrationStatisticsSheets(groupPayload)[0].rows[0], [
+        '2/2568', 'กลุ่มเรียน', 1, '', 'ศกร.ระดับตำบลเสนา', 5, 100,
+    ]);
 });

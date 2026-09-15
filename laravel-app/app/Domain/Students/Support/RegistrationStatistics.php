@@ -161,20 +161,25 @@ final class RegistrationStatistics
         }
 
         $itemLabels = [];
-        $normalizedRecords = array_map(static function (array $record) use (&$itemLabels): array {
+        $groupCodeAliases = [];
+        $normalizedRecords = array_map(static function (array $record) use (&$itemLabels, &$groupCodeAliases): array {
             foreach (array_keys(self::CATEGORY_LABELS) as $key) {
                 $record[$key] = self::normalizeCode($key, $record[$key] ?? '');
             }
 
             $groupCode = (string) $record['group'];
             $groupLabel = trim((string) ($record['group_label'] ?? ''));
-            if ($groupCode !== '' && $groupLabel !== '') {
-                $itemLabels['group'][$groupCode] = $groupLabel;
+            $groupKey = $groupLabel !== '' ? $groupLabel : $groupCode;
+            $record['group'] = $groupKey;
+            if ($groupCode !== '') {
+                $groupCodeAliases[$groupCode] ??= $groupKey;
+            }
+            if ($groupKey !== '') {
+                $itemLabels['group'][$groupKey] = $groupLabel !== '' ? $groupLabel : $groupKey;
             }
 
             return $record;
         }, $records);
-        $groupCodes = array_values(array_unique(array_filter(array_column($normalizedRecords, 'group'), static fn (mixed $code): bool => (string) $code !== '')));
 
         $filterOptions = [];
         foreach (array_keys(self::CATEGORY_LABELS) as $filterCategory) {
@@ -194,32 +199,25 @@ final class RegistrationStatistics
         }
 
         $appliedFilters = [];
-        $groupNameFilterCodes = null;
+        $groupNameFilter = trim((string) ($filters['group_name'] ?? ''));
         foreach (array_keys(self::CATEGORY_LABELS) as $key) {
-            if (! array_key_exists($key, $filters) || trim((string) $filters[$key]) === '') {
+            $rawValue = $key === 'group' && $groupNameFilter !== ''
+                ? $groupNameFilter
+                : ($filters[$key] ?? '');
+            if (trim((string) $rawValue) === '') {
                 continue;
             }
-            $value = self::normalizeCode($key, $filters[$key]);
-            if ($key === 'group' && ! in_array($value, $groupCodes, true)) {
-                $groupNameFilterCodes = array_keys(array_filter(
-                    $itemLabels['group'] ?? [],
-                    static fn (string $label): bool => $label === $value,
-                ));
+            $value = self::normalizeCode($key, $rawValue);
+            if ($key === 'group' && $groupNameFilter === '' && array_key_exists($value, $groupCodeAliases)) {
+                $value = $groupCodeAliases[$value];
             }
             $appliedFilters[$key] = $value;
         }
 
         $filteredRecords = array_values(array_filter(
             $normalizedRecords,
-            static function (array $record) use ($appliedFilters, $groupNameFilterCodes): bool {
+            static function (array $record) use ($appliedFilters): bool {
                 foreach ($appliedFilters as $key => $value) {
-                    if ($key === 'group' && $groupNameFilterCodes !== null) {
-                        if (! in_array((string) ($record[$key] ?? ''), $groupNameFilterCodes, true)) {
-                            return false;
-                        }
-
-                        continue;
-                    }
                     if ((string) ($record[$key] ?? '') !== $value) {
                         return false;
                     }

@@ -20,6 +20,10 @@
 
 Laravel users table มี `username`, `first_name`, `last_name`, `student_code`, `auth_source` (`local` สำหรับบัญชีที่ผู้ดูแลสร้าง และ `system_import` สำหรับ session account นักศึกษา), role/district/group, display/contact/appearance fields, avatar fields และ timestamps. การเข้าสู่ระบบนักศึกษาตรวจเลขบัตรประชาชนเพียงอย่างเดียวจากตาราง import ในฐานเดียวกัน โดยต้องตรงกับนักศึกษาปัจจุบันเพียงหนึ่งรายการ และไม่เก็บเลขบัตรซ้ำใน `users`; `student_code` ยังคงใช้ภายในเพื่อเชื่อมข้อมูลการเรียน. คอลัมน์ compatibility จาก migration เก่าอาจยังอยู่แต่ไม่ได้ใช้เชื่อมฐานภายนอก. `password`, `remember_token` ถูกซ่อนจาก model output; `contact_email` ถูก encrypt/cast ใน `User` model.
 
+### `announcements`
+
+ประกาศป๊อปอัปสำหรับนักศึกษา เก็บ `district_id`, ผู้สร้าง `created_by`, หัวข้อ, ข้อความ plain text, ชื่อ/URL ปุ่มแบบ optional, สถานะ `is_active` และ timestamps. มี index (`district_id`, `is_active`, `updated_at`) สำหรับอ่านประกาศล่าสุดของนักศึกษาและรายการจัดการ ผู้ดูแลอำเภอเปิดใช้งานได้ครั้งละหนึ่งรายการโดย transaction ล็อกแถวอำเภอก่อนปิดรายการเดิมและเปิดรายการใหม่; ทุกการสร้าง แก้ไข และเปลี่ยนสถานะมี audit. คอลัมน์อ้างอิงใช้ index โดยไม่เพิ่ม foreign key เพื่อรองรับ deployment ที่รับช่วงตาราง `districts`/`users` ซึ่งชนิด primary key อาจเป็น `INT` หรือ `BIGINT` ต่างกัน.
+
 ### Student canonical domain
 
 - `students`: district/import batch, student code, hashed/encrypted citizen ID, name, education level, group, enrollment/latest term, status และ source payload; UNIQUE (`district_id`, `student_code`) และ scope index (`district_id`, `education_level`, `group_code`, `status`)
@@ -78,6 +82,8 @@ Successful ZIP/DBF imports create physical names such as `db_import_{timestamp}_
 Existing indexes cover the main district/status/date filters and exam-room district/term/subject lookup. Additional index proposals are recorded in [`PERFORMANCE.md`](PERFORMANCE.md); none are added based on column names alone. Live `SHOW INDEX` and `EXPLAIN` are `Not verified`.
 
 ## Migration history
+
+Migration `2026_09_15_000031_create_announcements_table.php` เพิ่มตารางประกาศรายอำเภอแบบ additive โดยไม่แตะข้อมูลนักศึกษา ตาราง import หรือ learning เดิม
 
 Migrations `2026_09_01_000029_create_student_api_clients_table.php` และ `2026_09_01_000030_create_personal_access_tokens_table.php` เพิ่ม credential store แบบ hash สำหรับ Student Data Integration API และเติมตาราง Sanctum มาตรฐานแบบ additive โดยไม่แตะข้อมูลนำเข้าหรือตารางนักศึกษาเดิม
 

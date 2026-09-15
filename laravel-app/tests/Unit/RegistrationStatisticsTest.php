@@ -117,9 +117,9 @@ final class RegistrationStatisticsTest extends TestCase
         $this->assertSame('กลุ่มเรียน', $payload['selected_category_label']);
         $this->assertSame('เสนา ม.ปลาย B', $payload['applied_filters']['group']);
         $this->assertSame(2, $payload['summary']['registered_students']);
-        $this->assertSame('SENA-M3-B', $payload['items'][0]['code']);
+        $this->assertSame('เสนา ม.ปลาย B', $payload['items'][0]['code']);
         $this->assertSame('เสนา ม.ปลาย B', $payload['items'][0]['label']);
-        $this->assertSame('เสนา ม.ปลาย B', collect($payload['filter_options']['group'])->firstWhere('value', 'SENA-M3-B')['label']);
+        $this->assertSame(2, collect($payload['filter_options']['group'])->firstWhere('value', 'เสนา ม.ปลาย B')['count']);
     }
 
     public function test_group_filter_prefers_exact_code_and_supports_duplicate_names(): void
@@ -132,11 +132,14 @@ final class RegistrationStatisticsTest extends TestCase
         ];
 
         $byCode = RegistrationStatistics::fromRecords('group', $records, [], null, ['group' => 'B']);
-        $byName = RegistrationStatistics::fromRecords('group', $records, [], null, ['group' => 'ชื่อซ้ำ']);
+        $byName = RegistrationStatistics::fromRecords('group', $records, [], null, ['group_name' => 'ชื่อซ้ำ']);
 
         $this->assertSame(1, $byCode['summary']['registered_students']);
-        $this->assertSame('B', $byCode['items'][0]['code']);
+        $this->assertSame('กลุ่มบี', $byCode['items'][0]['code']);
         $this->assertSame(2, $byName['summary']['registered_students']);
-        $this->assertEqualsCanonicalizing(['C', 'D'], array_column($byName['items'], 'code'));
+        $this->assertSame(1, $byName['summary']['category_count']);
+        $this->assertSame('ชื่อซ้ำ', $byName['items'][0]['code']);
+        $this->assertSame(2, $byName['items'][0]['count']);
+        $this->assertSame(2, collect($byName['filter_options']['group'])->firstWhere('value', 'ชื่อซ้ำ')['count']);
     }
 }

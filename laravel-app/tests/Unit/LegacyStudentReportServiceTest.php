@@ -17,7 +17,7 @@ final class LegacyStudentReportServiceTest extends TestCase
         $queries = [];
         $connection = Mockery::mock(ConnectionInterface::class);
         $connection->shouldReceive('selectOne')
-            ->twice()
+            ->times(3)
             ->andReturn((object) ['batch_key' => $batch]);
         $connection->shouldReceive('select')->andReturnUsing(
             function (string $query, array $bindings = [], bool $useReadPdo = true) use ($batch, &$queries): array {
@@ -41,7 +41,10 @@ final class LegacyStudentReportServiceTest extends TestCase
                         (object) ['column_name' => 'age'],
                     ],
                     str_contains($query, 'SELECT DISTINCT g._perf_semestry AS raw_term') => [
-                        (object) ['raw_term' => '69/1'],
+                        (object) ['raw_term' => in_array('กลุ่มเฉพาะเก่า', $bindings, true) ? '68/2' : '69/1'],
+                    ],
+                    str_contains($query, 'SELECT DISTINCT st._perf_id10 AS student_code') && in_array('กลุ่มเฉพาะเก่า', $bindings, true) => [
+                        (object) ['student_code' => '6811000003', 'target_group' => '17', 'group_code' => 'G-OLD', 'group_label' => 'กลุ่มเฉพาะเก่า', 'gender' => '1', 'occupation' => '06', 'nationality' => '099', 'age' => '30'],
                     ],
                     str_contains($query, 'SELECT DISTINCT st._perf_id10 AS student_code') => [
                         (object) ['student_code' => '6911000001', 'target_group' => '07', 'group_code' => 'G-01', 'group_label' => 'กลุ่มครู ก', 'gender' => '1', 'occupation' => '05', 'nationality' => '099', 'age' => '35'],
@@ -80,8 +83,24 @@ final class LegacyStudentReportServiceTest extends TestCase
         $this->assertContains('กลุ่มครู ก', $statisticsQuery['bindings']);
 
         $groupResult = $service->registrationStatistics($teacher, 1, ['category' => 'group']);
-        $this->assertSame('G-01', $groupResult['items'][0]['code']);
+        $this->assertSame('กลุ่มครู ก', $groupResult['items'][0]['code']);
         $this->assertSame('กลุ่มครู ก', $groupResult['items'][0]['label']);
+
+        $admin = new User(['role' => 'admin', 'district_id' => 1]);
+        $olderGroup = $service->registrationStatistics($admin, 1, [
+            'category' => 'group',
+            'group_name' => 'กลุ่มเฉพาะเก่า',
+        ]);
+
+        $this->assertSame('2/2568', $olderGroup['selected_term']);
+        $this->assertSame(1, $olderGroup['summary']['registered_students']);
+        $this->assertSame('กลุ่มเฉพาะเก่า', $olderGroup['items'][0]['label']);
+        $olderTermQuery = collect($queries)->first(
+            static fn (array $entry): bool => str_contains($entry['query'], 'SELECT DISTINCT g._perf_semestry AS raw_term')
+                && in_array('กลุ่มเฉพาะเก่า', $entry['bindings'], true),
+        );
+        $this->assertNotNull($olderTermQuery);
+        $this->assertStringContainsString('COALESCE(NULLIF(TRIM(grp.grp_name)', $olderTermQuery['query']);
     }
 
     public function test_registered_subjects_start_from_historical_grades_and_keep_teacher_group_scope(): void

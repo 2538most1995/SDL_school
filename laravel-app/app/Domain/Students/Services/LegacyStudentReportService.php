@@ -495,7 +495,11 @@ final readonly class LegacyStudentReportService
     {
         $category = (string) ($filters['category'] ?? 'target_group');
         $sets = $this->filteredSets($this->sets($districtId), $filters);
-        $terms = $this->registeredSubjectTerms($viewer, $sets, $filters);
+        $queryFilters = $filters;
+        if (trim((string) ($filters['group_name'] ?? '')) !== '') {
+            $queryFilters['group'] = $filters['group_name'];
+        }
+        $terms = $this->registeredSubjectTerms($viewer, $sets, $queryFilters);
         $selectedTerm = $this->selectedTerm($filters, $terms);
         $records = [];
 
@@ -512,7 +516,7 @@ final readonly class LegacyStudentReportService
                 'TRIM(g._perf_semestry) IN ('.implode(',', array_fill(0, count($variants), '?')).')',
             ];
             $bindings = [...$scopeBindings, ...$variants];
-            $this->appendGroupAndSearchFilters($conditions, $bindings, $filters, $groupJoin !== '', 'st', $groupName);
+            $this->appendGroupAndSearchFilters($conditions, $bindings, $queryFilters, $groupJoin !== '', 'st', $groupName);
 
             $columns = [
                 'target_group' => $this->firstExistingColumn($set->student, ['occtyp']),

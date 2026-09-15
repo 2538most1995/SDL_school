@@ -13,6 +13,7 @@ import {
     buildRegistrationStatisticsSheets,
     canExportRegistrationStatistics,
     registrationStatisticsFileName,
+    registrationStatisticsFilterParameter,
     type CategoryKey,
     type RegistrationStatisticsPayload,
 } from './registrationStatisticsExport';
@@ -78,7 +79,7 @@ export function RegistrationStatisticsPage() {
             if (term) params.set('term', term);
             categoryOptions.forEach((option) => {
                 const value = filters[option.key];
-                if (value) params.set(option.key, value);
+                if (value) params.set(registrationStatisticsFilterParameter(option.key), value);
             });
 
             return getFeatureDataWithDemo<RegistrationStatisticsPayload>(
@@ -119,7 +120,7 @@ export function RegistrationStatisticsPage() {
             if (term) params.set('term', term);
             categoryOptions.forEach((option) => {
                 const value = filters[option.key];
-                if (value) params.set(option.key, value);
+                if (value) params.set(registrationStatisticsFilterParameter(option.key), value);
             });
             const response = await getFeatureDataWithDemo<RegistrationStatisticsPayload>(
                 `/api/v1/reports/students/registration-statistics/export-data?${params.toString()}`,
@@ -256,7 +257,7 @@ export function RegistrationStatisticsPage() {
                                             <span className="grid size-8 shrink-0 place-items-center rounded-lg bg-slate-100 text-xs font-black text-slate-600">{index + 1}</span>
                                             <div className="min-w-0">
                                                 <p className="font-bold leading-6 text-slate-950">{item.label}</p>
-                                                {item.code && <p className="mt-0.5 text-xs text-slate-500">รหัส {item.code}</p>}
+                                                {item.code && item.code !== item.label && <p className="mt-0.5 text-xs text-slate-500">รหัส {item.code}</p>}
                                             </div>
                                         </div>
                                     </div>

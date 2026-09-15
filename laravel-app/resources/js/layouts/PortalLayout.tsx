@@ -20,6 +20,7 @@ import {
     List,
     MagnifyingGlass,
     Medal,
+    Megaphone,
     Notebook,
     PaintBrush,
     Palette,
@@ -44,6 +45,7 @@ import { publicAssetUrl, publicBrandingPath, type PublicBranding } from '../lib/
 import { withAppBasePath } from '../lib/urls';
 import { queryClient } from '../query';
 import { useDemoRole, type DemoRole } from '../context/DemoRoleContext';
+import { StudentAnnouncementModal } from '../components/StudentAnnouncementModal';
 
 type CatalogItem = {
     key: string;
@@ -89,6 +91,7 @@ const icons = {
     heart: Heart,
     'user-plus': UserPlus,
     medal: Medal,
+    megaphone: Megaphone,
     arrows: TrendUp,
     books: Books,
     trend: TrendUp,
@@ -237,6 +240,7 @@ export function PortalLayout() {
 
     return (
         <div className="portal-shell">
+            {me.data.role === 'student' && <StudentAnnouncementModal />}
             {sidebarOpen && <button className="fixed inset-0 z-30 bg-slate-950/30 lg:hidden" onClick={() => setSidebarOpen(false)} aria-label="ปิดเมนู" />}
             <aside className={`portal-sidebar fixed inset-y-0 left-0 z-40 flex w-[282px] flex-col overflow-hidden text-white transition-transform lg:w-[266px] lg:translate-x-0 ${sidebarOpen ? 'translate-x-0' : '-translate-x-full'}`}>
                 <div className="flex h-[78px] items-center justify-between border-b border-white/10 px-4">

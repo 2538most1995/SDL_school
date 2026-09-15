@@ -213,7 +213,11 @@ final readonly class StudentReportService
     public function registrationStatistics(User $viewer, array $filters = []): array
     {
         $category = (string) ($filters['category'] ?? 'target_group');
-        $students = $this->students($viewer, $filters);
+        $studentFilters = $filters;
+        if (trim((string) ($filters['group_name'] ?? '')) !== '') {
+            $studentFilters['group'] = $filters['group_name'];
+        }
+        $students = $this->students($viewer, $studentFilters);
         $gradesByStudent = $this->repository->gradesForMany($students);
         $terms = $this->academicTerms($gradesByStudent);
         $selectedTerm = $this->selectedAcademicTerm($filters, $terms);

@@ -18,7 +18,7 @@ class CanonicalSchemaTest extends TestCase
             'raw_import_tables', 'active_import_batches', 'learning_assignments',
             'learning_submissions', 'learning_resources', 'learning_lesson_plans',
             'learning_calendar_events', 'learning_schedules', 'exam_rooms', 'audit_logs',
-            'student_api_clients', 'personal_access_tokens',
+            'announcements', 'student_api_clients', 'personal_access_tokens',
         ] as $table) {
             $this->assertTrue(Schema::hasTable($table), "Missing canonical table: {$table}");
         }

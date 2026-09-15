@@ -1,5 +1,6 @@
 <?php
 
+use App\Http\Controllers\Api\Admin\AnnouncementController;
 use App\Http\Controllers\Api\Admin\BrandingController;
 use App\Http\Controllers\Api\Admin\DistrictController;
 use App\Http\Controllers\Api\Admin\ExamRoomController;
@@ -25,6 +26,7 @@ use App\Http\Controllers\Api\Settings\AppearanceController;
 use App\Http\Controllers\Api\Settings\NnetScheduleController;
 use App\Http\Controllers\Api\Settings\ProfileController;
 use App\Http\Controllers\Api\Students\CurrentStudentController;
+use App\Http\Controllers\Api\Students\StudentAnnouncementController;
 use App\Http\Controllers\Api\Students\StudentDirectoryController;
 use App\Http\Controllers\Api\Students\StudentExamScheduleController;
 use App\Http\Controllers\Api\Students\StudentGradesController;
@@ -126,6 +128,7 @@ Route::prefix('v1')->group(function (): void {
         Route::get('/grades', [CurrentStudentController::class, 'grades']);
         Route::get('/kpch', [CurrentStudentController::class, 'kpch']);
         Route::get('/moral', [CurrentStudentController::class, 'moral']);
+        Route::get('/student/announcements/active', StudentAnnouncementController::class)->middleware('role:student');
         Route::get('/students', [StudentDirectoryController::class, 'index']);
         Route::get('/students.php', [StudentDirectoryController::class, 'index']);
         Route::get('/students/{student}', [StudentDirectoryController::class, 'show']);
@@ -156,6 +159,14 @@ Route::prefix('v1')->group(function (): void {
         Route::get('/settings/nnet-schedule', [NnetScheduleController::class, 'show']);
         Route::put('/settings/nnet-schedule', [NnetScheduleController::class, 'update']);
     });
+
+    Route::middleware(['auth:sanctum', 'active', 'district', 'role:admin'])
+        ->group(function (): void {
+            Route::get('/admin/announcements', [AnnouncementController::class, 'index']);
+            Route::post('/admin/announcements', [AnnouncementController::class, 'store']);
+            Route::patch('/admin/announcements/{announcement}', [AnnouncementController::class, 'update'])->whereNumber('announcement');
+            Route::patch('/admin/announcements/{announcement}/status', [AnnouncementController::class, 'updateStatus'])->whereNumber('announcement');
+        });
 
     Route::middleware(['auth:sanctum', 'active', 'district', 'role:admin,super_admin'])
         ->group(function (): void {

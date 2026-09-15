@@ -42,6 +42,10 @@ const categoryLabels: Record<CategoryKey, string> = {
     age: 'อายุ',
 };
 
+export function registrationStatisticsFilterParameter(key: CategoryKey): string {
+    return key === 'group' ? 'group_name' : key;
+}
+
 export function canExportRegistrationStatistics(role: string): boolean {
     return role === 'teacher' || role === 'admin';
 }
@@ -56,7 +60,7 @@ export function buildRegistrationStatisticsSheets(payload: RegistrationStatistic
         term,
         payload.selected_category_label,
         index + 1,
-        item.code,
+        payload.selected_category === 'group' && item.code === item.label ? '' : item.code,
         item.label,
         item.count,
         item.percentage,

@@ -80,6 +80,7 @@
 4. ต้นแบบโครงสร้างคะแนนอ่านด้วย `district_id` index และจำกัดสูงสุด 200 รายการต่อ request; การกรองต้นแบบทุกรายวิชา/เฉพาะบางวิชาทำใน memory จาก JSON ขนาดเล็กเพื่อให้ทำงานเหมือนกันทั้ง MySQL และ SQLite โดยไม่เกิด query รายต้นแบบ คำสั่งใช้กับทุกรายวิชาอ่าน roster ที่ถูก scope ครั้งเดียว แล้วตรวจ/สร้างสมุดคะแนนต่อ subject; ปริมาณวิชาจริงบน production และเวลารวมยัง `Not verified`
 5. `exam_rooms`: migration ล่าสุดมี (`district_id`, `term`, `subject_code`) แล้ว; ตรวจว่า wildcard-term query ใช้ prefix นี้ได้ตามข้อมูลจริง
 6. import batch/history joins: ตรวจ FK/index ของ `import_history_id`, (`district_id`, `batch_key`) และ ordering latest batch
+7. `announcements`: migration มี (`district_id`, `is_active`, `updated_at`) เพื่ออ่านประกาศที่เปิดล่าสุดโดยไม่สแกนข้ามอำเภอ และหน้า admin จำกัดผลลัพธ์ล่าสุดไว้ 100 รายการ; live cardinality และ MySQL plan ยัง `Not verified`
 
 ผลของ index ต่อ INSERT/UPDATE/DELETE และ execution plan จริง: `Not verified`.
 
