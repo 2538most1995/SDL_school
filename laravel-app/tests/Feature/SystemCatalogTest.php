@@ -73,7 +73,7 @@ class SystemCatalogTest extends TestCase
 
         $this->assertTrue($items->contains('key', 'districts'));
         $this->assertTrue($items->contains('route', '/super-admin/districts'));
-        $this->assertFalse($items->contains('key', 'announcements'));
+        $this->assertTrue($items->contains('key', 'announcements'));
     }
 
     public function test_query_string_cannot_escalate_catalog_role(): void

@@ -181,7 +181,31 @@ final class AnnouncementTest extends TestCase
         Sanctum::actingAs($superAdmin);
         $this->withHeader('X-District-Id', (string) $this->district->id)
             ->getJson('/api/v1/admin/announcements')
-            ->assertForbidden();
+            ->assertOk()
+            ->assertJsonCount(2, 'data');
+    }
+
+    public function test_admin_can_delete_announcement(): void
+    {
+        Sanctum::actingAs($this->admin);
+
+        $announcement = Announcement::query()->create([
+            'district_id' => $this->district->id,
+            'created_by' => $this->admin->id,
+            'title' => 'ประกาศที่จะลบ',
+            'message' => 'เนื้อหาที่จะลบ',
+            'is_active' => true,
+        ]);
+
+        $this->deleteJson("/api/v1/admin/announcements/{$announcement->id}")
+            ->assertOk()
+            ->assertJsonPath('data.id', $announcement->id);
+
+        $this->assertDatabaseMissing('announcements', ['id' => $announcement->id]);
+        $this->assertDatabaseHas('audit_logs', [
+            'event' => 'admin.announcement.deleted',
+            'auditable_id' => $announcement->id,
+        ]);
     }
 
     public function test_announcement_validation_rejects_unsafe_links_and_missing_content(): void

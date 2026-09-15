@@ -160,12 +160,13 @@ Route::prefix('v1')->group(function (): void {
         Route::put('/settings/nnet-schedule', [NnetScheduleController::class, 'update']);
     });
 
-    Route::middleware(['auth:sanctum', 'active', 'district', 'role:admin'])
+    Route::middleware(['auth:sanctum', 'active', 'district', 'role:admin,super_admin'])
         ->group(function (): void {
             Route::get('/admin/announcements', [AnnouncementController::class, 'index']);
             Route::post('/admin/announcements', [AnnouncementController::class, 'store']);
             Route::patch('/admin/announcements/{announcement}', [AnnouncementController::class, 'update'])->whereNumber('announcement');
             Route::patch('/admin/announcements/{announcement}/status', [AnnouncementController::class, 'updateStatus'])->whereNumber('announcement');
+            Route::delete('/admin/announcements/{announcement}', [AnnouncementController::class, 'destroy'])->whereNumber('announcement');
         });
 
     Route::middleware(['auth:sanctum', 'active', 'district', 'role:admin,super_admin'])

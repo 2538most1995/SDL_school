@@ -58,7 +58,7 @@ export const featureRouteCatalog: FeatureRoute[] = [
     { path: '/learning/scores', label: 'คะแนน', roles: ['student', 'teacher', 'admin', 'super_admin'], element: <LearningListPage kind="scores" /> },
 
     { path: '/admin/users', label: 'ผู้ใช้งาน', roles: ['admin', 'super_admin'], element: <AdminUsersPage /> },
-    { path: '/admin/announcements', label: 'ประกาศนักศึกษา', roles: ['admin'], element: <AdminAnnouncementsPage /> },
+    { path: '/admin/announcements', label: 'ประกาศป๊อปอัปนักศึกษา', roles: ['admin', 'super_admin'], element: <AdminAnnouncementsPage /> },
     { path: '/admin/exam-rooms', label: 'ห้องสอบ', roles: ['teacher', 'admin', 'super_admin'], element: <AdminExamRoomsPage /> },
     { path: '/admin/imports', label: 'นำเข้าข้อมูล', roles: ['admin', 'super_admin'], element: <AdminImportsPage /> },
     { path: '/admin/data-maintenance', label: 'ดูแลข้อมูล', roles: ['admin', 'super_admin'], element: <AdminDataMaintenancePage /> },

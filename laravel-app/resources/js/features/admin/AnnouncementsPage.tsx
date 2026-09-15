@@ -8,6 +8,7 @@ import {
     Megaphone,
     PencilSimple,
     Plus,
+    Trash,
     X,
 } from '@phosphor-icons/react';
 import { useState, type FormEvent } from 'react';
@@ -105,9 +106,28 @@ export function AdminAnnouncementsPage() {
             ]);
         },
     });
+    const deleteAnnouncement = useMutation({
+        meta: { notification: { success: 'ลบประกาศเรียบร้อยแล้ว' } },
+        mutationFn: (announcementId: number) => sendFeatureData<{ id: number }>(
+            `/api/v1/admin/announcements/${announcementId}`,
+            'DELETE',
+        ),
+        onSuccess: async () => {
+            await Promise.all([
+                queryClient.invalidateQueries({ queryKey: ['admin', 'announcements'] }),
+                queryClient.invalidateQueries({ queryKey: ['student', 'active-announcement'] }),
+            ]);
+        },
+    });
 
     const items = announcements.data?.data ?? [];
     const active = items.find((announcement) => announcement.is_active) ?? null;
+
+    function confirmDelete(announcement: Announcement) {
+        if (window.confirm(`ยืนยันลบประกาศ “${announcement.title}” ใช่หรือไม่?\n\nหากลบแล้ว นักศึกษาจะไม่เห็นประกาศนี้อีกต่อไป`)) {
+            deleteAnnouncement.mutate(announcement.id);
+        }
+    }
 
     function openCreate() {
         save.reset();
@@ -192,6 +212,17 @@ export function AdminAnnouncementsPage() {
                                             >
                                                 {announcement.is_active ? <EyeSlash size={16} weight="bold" /> : <Eye size={16} weight="bold" />}
                                                 {changingThis ? 'กำลังเปลี่ยน' : announcement.is_active ? 'ปิดประกาศ' : 'เปิดประกาศ'}
+                                            </button>
+                                            <button
+                                                type="button"
+                                                disabled={deleteAnnouncement.isPending}
+                                                onClick={() => confirmDelete(announcement)}
+                                                className="inline-flex items-center justify-center gap-1.5 whitespace-nowrap rounded-full border border-rose-200 bg-white px-3.5 py-2.5 text-sm font-bold text-rose-700 transition hover:border-rose-300 hover:bg-rose-50 disabled:cursor-not-allowed disabled:opacity-50 active:scale-[0.98]"
+                                                title="ลบประกาศ"
+                                                aria-label={`ลบประกาศ ${announcement.title}`}
+                                            >
+                                                <Trash size={16} weight="bold" />
+                                                <span className="hidden sm:inline">ลบ</span>
                                             </button>
                                         </div>
                                     </div>

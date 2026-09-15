@@ -132,6 +132,27 @@ final class AnnouncementController extends Controller
         ]);
     }
 
+    public function destroy(Request $request, int $announcement): JsonResponse
+    {
+        $districtId = $this->districtId($request);
+
+        $deleted = DB::transaction(function () use ($announcement, $districtId, $request): Announcement {
+            $this->lockDistrict($districtId);
+            $model = $this->scopedAnnouncement($districtId, $announcement, true);
+            $before = $this->auditPayload($model);
+
+            $model->delete();
+            $this->audit($request, $model, 'admin.announcement.deleted', $before);
+
+            return $model;
+        });
+
+        return response()->json([
+            'data' => ['id' => (int) $deleted->id],
+            'meta' => ['source' => 'system_database'],
+        ]);
+    }
+
     /** @return array{title: string, message: string, button_label: string|null, button_url: string|null, is_active: bool} */
     private function validatedPayload(Request $request): array
     {
