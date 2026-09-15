@@ -1,4 +1,4 @@
-import { CalendarBlank, ChartBar, StackSimple, Trophy, UsersThree } from '@phosphor-icons/react';
+import { CalendarBlank, ChartBar, FunnelSimple, StackSimple, Trophy, UsersThree, X } from '@phosphor-icons/react';
 import { keepPreviousData, useQuery } from '@tanstack/react-query';
 import { useEffect, useMemo, useState } from 'react';
 import { EmptyState, QueryError, QuerySkeleton } from '../../components/QueryState';
@@ -8,7 +8,13 @@ import { StatGrid } from '../../components/StatGrid';
 import { StatTile } from '../../components/StatTile';
 import { getFeatureDataWithDemo } from '../api';
 
-type CategoryKey = 'target_group' | 'gender' | 'level' | 'occupation' | 'nationality';
+type CategoryKey = 'target_group' | 'gender' | 'level' | 'occupation' | 'nationality' | 'age';
+
+type FilterOption = {
+    value: string;
+    label: string;
+    count: number;
+};
 
 type StatisticItem = {
     key: string;
@@ -22,6 +28,8 @@ type RegistrationStatisticsPayload = {
     categories: Array<{ key: CategoryKey; label: string }>;
     selected_category: CategoryKey;
     selected_category_label: string;
+    filter_options: Record<CategoryKey, FilterOption[]>;
+    applied_filters: Partial<Record<CategoryKey, string>>;
     terms: string[];
     selected_term: string | null;
     summary: {
@@ -38,12 +46,26 @@ const categoryOptions: RegistrationStatisticsPayload['categories'] = [
     { key: 'level', label: 'ระดับชั้น' },
     { key: 'occupation', label: 'อาชีพ' },
     { key: 'nationality', label: 'สัญชาติ' },
+    { key: 'age', label: 'อายุ' },
 ];
+
+const emptyFilters: Record<CategoryKey, string> = {
+    target_group: '',
+    gender: '',
+    level: '',
+    occupation: '',
+    nationality: '',
+    age: '',
+};
 
 const emptyPayload: RegistrationStatisticsPayload = {
     categories: categoryOptions,
     selected_category: 'target_group',
     selected_category_label: 'กลุ่มเป้าหมาย',
+    filter_options: {
+        target_group: [], gender: [], level: [], occupation: [], nationality: [], age: [],
+    },
+    applied_filters: {},
     terms: [],
     selected_term: null,
     summary: { registered_students: 0, category_count: 0, largest_category: null },
@@ -66,11 +88,17 @@ const barTones = ['bg-brand-600', 'bg-emerald-600', 'bg-amber-500', 'bg-sky-600'
 export function RegistrationStatisticsPage() {
     const [category, setCategory] = useState<CategoryKey>('target_group');
     const [term, setTerm] = useState('');
+    const [filters, setFilters] = useState<Record<CategoryKey, string>>(emptyFilters);
+    const filterKey = categoryOptions.map((option) => `${option.key}:${filters[option.key]}`).join('|');
     const statistics = useQuery({
-        queryKey: ['registration-statistics', category, term],
+        queryKey: ['registration-statistics', category, term, filterKey],
         queryFn: ({ signal }) => {
             const params = new URLSearchParams({ category });
             if (term) params.set('term', term);
+            categoryOptions.forEach((option) => {
+                const value = filters[option.key];
+                if (value) params.set(option.key, value);
+            });
 
             return getFeatureDataWithDemo<RegistrationStatisticsPayload>(
                 `/api/v1/reports/students/registration-statistics?${params.toString()}`,
@@ -94,13 +122,18 @@ export function RegistrationStatisticsPage() {
 
     const selectedCategoryLabel = categoryOptions.find((option) => option.key === category)?.label ?? 'กลุ่มเป้าหมาย';
     const largest = payload?.summary.largest_category;
+    const activeFilterCount = Object.values(filters).filter(Boolean).length;
+
+    const updateFilter = (key: CategoryKey, value: string) => {
+        setFilters((current) => ({ ...current, [key]: value }));
+    };
 
     return (
         <div>
             <PageHeader
                 category="รายงานสถิติ"
                 title="สถิตินักศึกษาลงทะเบียน"
-                description="ดูจำนวนนักศึกษาที่ลงทะเบียนในแต่ละภาคเรียน แยกตามกลุ่มเป้าหมาย เพศ ระดับชั้น อาชีพ และสัญชาติ"
+                description="ดูจำนวนนักศึกษาที่ลงทะเบียน เลือกกรองหลายเงื่อนไขพร้อมกัน และแยกผลตามกลุ่มเป้าหมาย เพศ ระดับชั้น อาชีพ สัญชาติ หรืออายุ"
                 icon={ChartBar}
                 actions={(
                     <label className="flex items-center gap-2 text-sm font-bold text-slate-700">
@@ -131,7 +164,48 @@ export function RegistrationStatisticsPage() {
                 title={`แยกตาม${selectedCategoryLabel}`}
                 description="ข้อมูลถูกจำกัดตามอำเภอ และสำหรับครูจะเห็นเฉพาะกลุ่มเรียนที่ได้รับมอบหมาย"
             >
-                <div className="mb-6 grid grid-cols-2 gap-2 sm:grid-cols-3 lg:grid-cols-5" role="group" aria-label="เลือกประเภทข้อมูลสถิติ">
+                <div className="mb-6 rounded-2xl border border-slate-200 bg-slate-50/70 p-4 sm:p-5">
+                    <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
+                        <div className="flex items-center gap-2">
+                            <FunnelSimple className="size-5 text-brand-700" weight="bold" />
+                            <div>
+                                <h3 className="font-black text-slate-950">กรองข้อมูลร่วมกัน</h3>
+                                <p className="text-xs text-slate-500">เลือกได้มากกว่าหนึ่งประเภท เช่น เพศ + ระดับชั้น + อายุ</p>
+                            </div>
+                        </div>
+                        {activeFilterCount > 0 && (
+                            <button
+                                type="button"
+                                onClick={() => setFilters(emptyFilters)}
+                                className="inline-flex h-9 items-center gap-1.5 rounded-xl border border-slate-300 bg-white px-3 text-xs font-bold text-slate-700 transition hover:border-rose-300 hover:text-rose-700"
+                            >
+                                <X className="size-4" weight="bold" />
+                                ล้างตัวกรอง ({activeFilterCount})
+                            </button>
+                        )}
+                    </div>
+                    <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
+                        {categoryOptions.map((option) => (
+                            <label key={option.key} className="grid gap-1.5 text-xs font-bold text-slate-600">
+                                <span>{option.label}</span>
+                                <select
+                                    value={filters[option.key]}
+                                    onChange={(event) => updateFilter(option.key, event.target.value)}
+                                    className="h-11 min-w-0 rounded-xl border border-slate-300 bg-white px-3 text-sm font-semibold text-slate-900"
+                                    aria-label={`กรองตาม${option.label}`}
+                                >
+                                    <option value="">ทั้งหมด</option>
+                                    {(payload?.filter_options[option.key] ?? []).filter((item) => item.value !== '').map((item) => (
+                                        <option key={item.value} value={item.value}>{item.label} ({item.count.toLocaleString('th-TH')})</option>
+                                    ))}
+                                </select>
+                            </label>
+                        ))}
+                    </div>
+                </div>
+
+                <p className="mb-2 text-xs font-bold uppercase tracking-[0.12em] text-slate-500">เลือกหัวข้อที่ใช้แยกผลในตาราง</p>
+                <div className="mb-6 grid grid-cols-2 gap-2 sm:grid-cols-3 lg:grid-cols-6" role="group" aria-label="เลือกประเภทข้อมูลสถิติ">
                     {categoryOptions.map((option) => (
                         <button
                             key={option.key}
@@ -185,6 +259,11 @@ export function RegistrationStatisticsPage() {
                                 </li>
                             ))}
                         </ol>
+                        <div className="grid gap-2 border-t-2 border-slate-300 bg-slate-50 px-4 py-4 sm:grid-cols-[minmax(0,1fr)_150px_120px] sm:items-center sm:px-5">
+                            <strong className="text-base font-black text-slate-950">รวมทั้งหมด</strong>
+                            <span className="text-sm font-black text-slate-700 sm:text-right">{payload.summary.registered_students > 0 ? '100%' : '0%'}</span>
+                            <strong className="text-lg font-black text-brand-800 sm:text-right">{payload.summary.registered_students.toLocaleString('th-TH')} <span className="text-sm">คน</span></strong>
+                        </div>
                     </div>
                 )}
             </Panel>

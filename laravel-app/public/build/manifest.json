@@ -1,6 +1,6 @@
 {
-  "_DataTable-Cwj9xgQ2.js": {
-    "file": "assets/DataTable-Cwj9xgQ2.js",
+  "_DataTable-D_RE7xXw.js": {
+    "file": "assets/DataTable-D_RE7xXw.js",
     "name": "DataTable",
     "imports": [
       "_rolldown-runtime-Bh1tDfsg.js",
@@ -243,7 +243,7 @@
     ]
   },
   "resources/css/app.css": {
-    "file": "assets/app-CEJqqDBD.css",
+    "file": "assets/app-DyNaV2AX.css",
     "name": "app",
     "names": [
       "app.css"
@@ -290,7 +290,7 @@
     ]
   },
   "resources/js/app.tsx": {
-    "file": "assets/app-B5ZvP6dn.js",
+    "file": "assets/app-lnchUZNZ.js",
     "name": "app",
     "src": "resources/js/app.tsx",
     "isEntry": true,
@@ -312,14 +312,14 @@
     ]
   },
   "resources/js/features/admin/index.tsx": {
-    "file": "assets/admin-C1LkCi5x.js",
+    "file": "assets/admin-19kaEeON.js",
     "name": "admin",
     "src": "resources/js/features/admin/index.tsx",
     "isDynamicEntry": true,
     "imports": [
       "_rolldown-runtime-Bh1tDfsg.js",
       "_api-shait7_9.js",
-      "_DataTable-Cwj9xgQ2.js",
+      "_DataTable-D_RE7xXw.js",
       "_api-sgnXZ2Qb.js",
       "_Plus.es-eDwKqTBX.js",
       "_PencilSimple.es-B2DrOfgN.js",
@@ -331,14 +331,14 @@
     ]
   },
   "resources/js/features/learning/index.tsx": {
-    "file": "assets/learning-OH7arNYD.js",
+    "file": "assets/learning-Doa06c6F.js",
     "name": "learning",
     "src": "resources/js/features/learning/index.tsx",
     "isDynamicEntry": true,
     "imports": [
       "_rolldown-runtime-Bh1tDfsg.js",
       "_api-shait7_9.js",
-      "_DataTable-Cwj9xgQ2.js",
+      "_DataTable-D_RE7xXw.js",
       "_api-sgnXZ2Qb.js",
       "_Printer.es-BX5UKu6e.js",
       "_Plus.es-eDwKqTBX.js",
@@ -350,7 +350,7 @@
     ]
   },
   "resources/js/features/reports/RegistrationStatisticsPage.tsx": {
-    "file": "assets/RegistrationStatisticsPage-Cj8anS5B.js",
+    "file": "assets/RegistrationStatisticsPage-COU_92kC.js",
     "name": "RegistrationStatisticsPage",
     "src": "resources/js/features/reports/RegistrationStatisticsPage.tsx",
     "isDynamicEntry": true,
@@ -364,14 +364,14 @@
     ]
   },
   "resources/js/features/reports/index.tsx": {
-    "file": "assets/reports-BBLTQAnV.js",
+    "file": "assets/reports-C0NKtQem.js",
     "name": "reports",
     "src": "resources/js/features/reports/index.tsx",
     "isDynamicEntry": true,
     "imports": [
       "_rolldown-runtime-Bh1tDfsg.js",
       "_api-shait7_9.js",
-      "_DataTable-Cwj9xgQ2.js",
+      "_DataTable-D_RE7xXw.js",
       "_api-sgnXZ2Qb.js",
       "resources/js/app.tsx",
       "_StatTile-BvPTXgPK.js",
@@ -380,7 +380,7 @@
     ]
   },
   "resources/js/features/settings/index.tsx": {
-    "file": "assets/settings-BgfFscZj.js",
+    "file": "assets/settings-znSXDSI2.js",
     "name": "settings",
     "src": "resources/js/features/settings/index.tsx",
     "isDynamicEntry": true,
@@ -395,14 +395,14 @@
     ]
   },
   "resources/js/features/students/index.tsx": {
-    "file": "assets/students-Bzgu-sBt.js",
+    "file": "assets/students-Cf3VoiVQ.js",
     "name": "students",
     "src": "resources/js/features/students/index.tsx",
     "isDynamicEntry": true,
     "imports": [
       "_rolldown-runtime-Bh1tDfsg.js",
       "_api-shait7_9.js",
-      "_DataTable-Cwj9xgQ2.js",
+      "_DataTable-D_RE7xXw.js",
       "_api-sgnXZ2Qb.js",
       "_Printer.es-BX5UKu6e.js",
       "_PencilSimple.es-B2DrOfgN.js",

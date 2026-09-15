@@ -497,10 +497,10 @@ final readonly class LegacyStudentReportService
         $sets = $this->filteredSets($this->sets($districtId), $filters);
         $terms = $this->registeredSubjectTerms($viewer, $sets, $filters);
         $selectedTerm = $this->selectedTerm($filters, $terms);
-        $counts = [];
+        $records = [];
 
         if ($selectedTerm === null) {
-            return RegistrationStatistics::payload($category, $counts, $terms, null);
+            return RegistrationStatistics::fromRecords($category, $records, $terms, null, $filters);
         }
 
         foreach ($sets as $set) {
@@ -514,21 +514,30 @@ final readonly class LegacyStudentReportService
             $bindings = [...$scopeBindings, ...$variants];
             $this->appendGroupAndSearchFilters($conditions, $bindings, $filters, $groupJoin !== '', 'st', $groupName);
 
-            $column = match ($category) {
+            $columns = [
+                'target_group' => $this->firstExistingColumn($set->student, ['occtyp']),
                 'gender' => $this->firstExistingColumn($set->student, ['gender']),
                 'occupation' => $this->firstExistingColumn($set->student, ['occp']),
                 'nationality' => $this->firstExistingColumn($set->student, ['nation']),
-                'target_group' => $this->firstExistingColumn($set->student, ['occtyp']),
-                default => null,
-            };
-            $categorySql = $category === 'level'
-                ? (string) $set->level
-                : ($column === null ? "''" : 'st.'.$this->identifier($column));
+                'age' => $this->firstExistingColumn($set->student, ['age']),
+            ];
+            $valueSql = fn (?string $column): string => $column === null ? "''" : 'st.'.$this->identifier($column);
+            $targetGroupSql = $valueSql($columns['target_group']);
+            $genderSql = $valueSql($columns['gender']);
+            $occupationSql = $valueSql($columns['occupation']);
+            $nationalitySql = $valueSql($columns['nationality']);
+            $ageSql = $valueSql($columns['age']);
             $student = $this->identifier($set->student);
             $grade = $this->identifier($set->grade);
 
             foreach ($this->rows(
-                "SELECT DISTINCT st._perf_id10 AS student_code, {$categorySql} AS category_code
+                "SELECT DISTINCT st._perf_id10 AS student_code,
+                        {$targetGroupSql} AS target_group,
+                        {$genderSql} AS gender,
+                        {$set->level} AS level,
+                        {$occupationSql} AS occupation,
+                        {$nationalitySql} AS nationality,
+                        {$ageSql} AS age
                  FROM {$grade} g
                  INNER JOIN {$student} st ON st._perf_id10 = g._perf_std10
                  {$groupJoin}
@@ -538,12 +547,18 @@ final readonly class LegacyStudentReportService
                 if (trim((string) ($row['student_code'] ?? '')) === '') {
                     continue;
                 }
-                $code = trim((string) ($row['category_code'] ?? ''));
-                $counts[$code] = ($counts[$code] ?? 0) + 1;
+                $records[$set->level.'|'.trim((string) $row['student_code'])] = [
+                    'target_group' => $row['target_group'] ?? '',
+                    'gender' => $row['gender'] ?? '',
+                    'level' => (string) $set->level,
+                    'occupation' => $row['occupation'] ?? '',
+                    'nationality' => $row['nationality'] ?? '',
+                    'age' => $row['age'] ?? '',
+                ];
             }
         }
 
-        return RegistrationStatistics::payload($category, $counts, $terms, $selectedTerm);
+        return RegistrationStatistics::fromRecords($category, array_values($records), $terms, $selectedTerm, $filters);
     }
 
     /** @param array<string, mixed> $filters */

@@ -334,6 +334,19 @@ final class StudentApiTest extends TestCase
             ->assertJsonPath('data.summary.registered_students', 8)
             ->assertJsonFragment(['label' => 'ชาย'])
             ->assertJsonFragment(['label' => 'หญิง']);
+
+        $this->getJson('/api/v1/reports/students/registration-statistics?term=2/2568&category=target_group&gender=1&level=3&target_group=30')
+            ->assertOk()
+            ->assertJsonPath('data.summary.registered_students', 1)
+            ->assertJsonPath('data.items.0.label', 'เด็กออกกลางคัน')
+            ->assertJsonPath('data.applied_filters.gender', '1')
+            ->assertJsonPath('data.applied_filters.level', '3')
+            ->assertJsonPath('data.applied_filters.target_group', '30');
+
+        $this->getJson('/api/v1/reports/students/registration-statistics?term=2/2568&category=age')
+            ->assertOk()
+            ->assertJsonPath('data.selected_category_label', 'อายุ')
+            ->assertJsonStructure(['data' => ['filter_options' => ['age'], 'items']]);
     }
 
     public function test_registration_statistics_enforce_teacher_scope_role_and_category_validation(): void

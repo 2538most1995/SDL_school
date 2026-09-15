@@ -217,7 +217,7 @@ final readonly class StudentReportService
         $gradesByStudent = $this->repository->gradesForMany($students);
         $terms = $this->academicTerms($gradesByStudent);
         $selectedTerm = $this->selectedAcademicTerm($filters, $terms);
-        $counts = [];
+        $records = [];
 
         foreach ($students as $student) {
             $registered = array_filter(
@@ -228,17 +228,18 @@ final readonly class StudentReportService
                 continue;
             }
 
-            $code = match ($category) {
+            $seed = (int) substr($student->code, -2);
+            $records[] = [
+                'target_group' => ['09', '17', '19', '30'][$seed % 4],
                 'gender' => str_starts_with($student->prefix, 'นาย') ? '1' : '2',
                 'level' => (string) $student->level,
-                'occupation' => ['00', '04', '05', '06'][(int) substr($student->code, -1) % 4],
+                'occupation' => ['00', '04', '05', '06'][$seed % 4],
                 'nationality' => '099',
-                default => ['09', '17', '19'][(int) substr($student->code, -1) % 3],
-            };
-            $counts[$code] = ($counts[$code] ?? 0) + 1;
+                'age' => (string) (18 + ($seed % 43)),
+            ];
         }
 
-        return RegistrationStatistics::payload($category, $counts, $terms, $selectedTerm);
+        return RegistrationStatistics::fromRecords($category, $records, $terms, $selectedTerm, $filters);
     }
 
     /** @param array<string, mixed> $filters

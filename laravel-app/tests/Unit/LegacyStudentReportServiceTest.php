@@ -35,13 +35,17 @@ final class LegacyStudentReportServiceTest extends TestCase
                     ),
                     str_contains($query, 'INFORMATION_SCHEMA.COLUMNS') => [
                         (object) ['column_name' => 'occtyp'],
+                        (object) ['column_name' => 'gender'],
+                        (object) ['column_name' => 'occp'],
+                        (object) ['column_name' => 'nation'],
+                        (object) ['column_name' => 'age'],
                     ],
                     str_contains($query, 'SELECT DISTINCT g._perf_semestry AS raw_term') => [
                         (object) ['raw_term' => '69/1'],
                     ],
                     str_contains($query, 'SELECT DISTINCT st._perf_id10 AS student_code') => [
-                        (object) ['student_code' => '6911000001', 'category_code' => '07'],
-                        (object) ['student_code' => '6911000002', 'category_code' => '09'],
+                        (object) ['student_code' => '6911000001', 'target_group' => '07', 'gender' => '1', 'occupation' => '05', 'nationality' => '099', 'age' => '35'],
+                        (object) ['student_code' => '6911000002', 'target_group' => '09', 'gender' => '2', 'occupation' => '04', 'nationality' => '099', 'age' => '42'],
                     ],
                     default => [],
                 };
@@ -68,7 +72,8 @@ final class LegacyStudentReportServiceTest extends TestCase
             static fn (array $entry): bool => str_contains($entry['query'], 'SELECT DISTINCT st._perf_id10 AS student_code'),
         );
         $this->assertNotNull($statisticsQuery);
-        $this->assertStringContainsString('st.`occtyp` AS category_code', $statisticsQuery['query']);
+        $this->assertStringContainsString('st.`occtyp` AS target_group', $statisticsQuery['query']);
+        $this->assertStringContainsString('st.`age` AS age', $statisticsQuery['query']);
         $this->assertStringContainsString('st.grp_code IN', $statisticsQuery['query']);
         $this->assertContains('กลุ่มครู ก', $statisticsQuery['bindings']);
     }
