@@ -297,7 +297,7 @@ final class AnnouncementController extends Controller
     {
         $imageUrl = null;
         if (filled($announcement->image_path)) {
-            $basePath = rtrim((string) $request->getBasePath(), '/');
+            $basePath = \App\Support\ApplicationBasePath::resolve($request);
             $imageUrl = "{$basePath}/api/v1/admin/announcements/{$announcement->id}/image";
         }
 
