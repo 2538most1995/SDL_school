@@ -349,6 +349,14 @@ final class StudentApiTest extends TestCase
             ->assertOk()
             ->assertJsonPath('data.selected_category_label', 'อายุ')
             ->assertJsonStructure(['data' => ['filter_options' => ['age'], 'items']]);
+
+        $this->getJson('/api/v1/reports/students/registration-statistics?term=2/2568&category=group&group=SENA-M3-B')
+            ->assertOk()
+            ->assertJsonPath('data.selected_category_label', 'กลุ่มเรียน')
+            ->assertJsonPath('data.summary.registered_students', 2)
+            ->assertJsonPath('data.summary.category_count', 1)
+            ->assertJsonPath('data.items.0.code', 'SENA-M3-B')
+            ->assertJsonPath('data.items.0.label', 'เสนา ม.ปลาย B');
     }
 
     public function test_registration_statistics_enforce_teacher_scope_role_and_category_validation(): void
@@ -358,6 +366,12 @@ final class StudentApiTest extends TestCase
         $this->getJson('/api/v1/reports/students/registration-statistics?term=2/2568&category=target_group')
             ->assertOk()
             ->assertJsonPath('data.summary.registered_students', 2);
+
+        $this->getJson('/api/v1/reports/students/registration-statistics?term=2/2568&category=group')
+            ->assertOk()
+            ->assertJsonPath('data.summary.registered_students', 2)
+            ->assertJsonPath('data.summary.category_count', 1)
+            ->assertJsonPath('data.items.0.code', 'SENA-M3-B');
 
         $this->getJson('/api/v1/reports/students/registration-statistics?category=unknown')
             ->assertUnprocessable();
@@ -378,9 +392,11 @@ final class StudentApiTest extends TestCase
             ->assertJsonPath('data.summary.registered_students', 2);
 
         Sanctum::actingAs($this->viewer('admin'));
-        $this->getJson('/api/v1/reports/students/registration-statistics/export-data?term=2/2568&category=level')
+        $this->getJson('/api/v1/reports/students/registration-statistics/export-data?term=2/2568&category=group&group=SENA-M3-B')
             ->assertOk()
-            ->assertJsonPath('data.summary.registered_students', 8);
+            ->assertJsonPath('data.summary.registered_students', 2)
+            ->assertJsonPath('data.items.0.code', 'SENA-M3-B')
+            ->assertJsonPath('data.items.0.label', 'เสนา ม.ปลาย B');
 
         Sanctum::actingAs($this->viewer('super_admin', $this->sena->id));
         $this->getJson('/api/v1/reports/students/registration-statistics/export-data')

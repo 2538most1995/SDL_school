@@ -231,6 +231,8 @@ final readonly class StudentReportService
             $seed = (int) substr($student->code, -2);
             $records[] = [
                 'target_group' => ['09', '17', '19', '30'][$seed % 4],
+                'group' => $student->groupCode,
+                'group_label' => $student->groupName,
                 'gender' => str_starts_with($student->prefix, 'นาย') ? '1' : '2',
                 'level' => (string) $student->level,
                 'occupation' => ['00', '04', '05', '06'][$seed % 4],

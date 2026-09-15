@@ -19,6 +19,7 @@ import {
 
 const categoryOptions: RegistrationStatisticsPayload['categories'] = [
     { key: 'target_group', label: 'กลุ่มเป้าหมาย' },
+    { key: 'group', label: 'กลุ่มเรียน' },
     { key: 'gender', label: 'เพศ' },
     { key: 'level', label: 'ระดับชั้น' },
     { key: 'occupation', label: 'อาชีพ' },
@@ -28,6 +29,7 @@ const categoryOptions: RegistrationStatisticsPayload['categories'] = [
 
 const emptyFilters: Record<CategoryKey, string> = {
     target_group: '',
+    group: '',
     gender: '',
     level: '',
     occupation: '',
@@ -40,7 +42,7 @@ const emptyPayload: RegistrationStatisticsPayload = {
     selected_category: 'target_group',
     selected_category_label: 'กลุ่มเป้าหมาย',
     filter_options: {
-        target_group: [], gender: [], level: [], occupation: [], nationality: [], age: [],
+        target_group: [], group: [], gender: [], level: [], occupation: [], nationality: [], age: [],
     },
     applied_filters: {},
     terms: [],
@@ -139,7 +141,7 @@ export function RegistrationStatisticsPage() {
             <PageHeader
                 category="รายงานสถิติ"
                 title="สถิตินักศึกษาลงทะเบียน"
-                description="ดูจำนวนนักศึกษาที่ลงทะเบียน เลือกกรองหลายเงื่อนไขพร้อมกัน และแยกผลตามกลุ่มเป้าหมาย เพศ ระดับชั้น อาชีพ สัญชาติ หรืออายุ"
+                description="ดูจำนวนนักศึกษาที่ลงทะเบียน เลือกกรองหลายเงื่อนไขพร้อมกัน และแยกผลตามกลุ่มเรียน กลุ่มเป้าหมาย เพศ ระดับชั้น อาชีพ สัญชาติ หรืออายุ"
                 icon={ChartBar}
                 actions={<div className="flex flex-wrap items-center justify-end gap-2">
                     <label className="flex items-center gap-2 text-sm font-bold text-slate-700">
@@ -199,9 +201,9 @@ export function RegistrationStatisticsPage() {
                             </button>
                         )}
                     </div>
-                    <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
-                        {categoryOptions.map((option) => (
-                            <label key={option.key} className="grid gap-1.5 text-xs font-bold text-slate-600">
+                    <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
+                        {categoryOptions.map((option, index) => (
+                            <label key={option.key} className={`grid gap-1.5 text-xs font-bold text-slate-600 ${index === categoryOptions.length - 1 ? 'sm:col-span-2 xl:col-span-1' : ''}`}>
                                 <span>{option.label}</span>
                                 <select
                                     value={filters[option.key]}
@@ -220,14 +222,14 @@ export function RegistrationStatisticsPage() {
                 </div>
 
                 <p className="mb-2 text-xs font-bold uppercase tracking-[0.12em] text-slate-500">เลือกหัวข้อที่ใช้แยกผลในตาราง</p>
-                <div className="mb-6 grid grid-cols-2 gap-2 sm:grid-cols-3 lg:grid-cols-6" role="group" aria-label="เลือกประเภทข้อมูลสถิติ">
-                    {categoryOptions.map((option) => (
+                <div className="mb-6 grid grid-cols-2 gap-2 sm:grid-cols-4 xl:grid-cols-7" role="group" aria-label="เลือกประเภทข้อมูลสถิติ">
+                    {categoryOptions.map((option, index) => (
                         <button
                             key={option.key}
                             type="button"
                             onClick={() => setCategory(option.key)}
                             aria-pressed={category === option.key}
-                            className={`min-h-11 rounded-xl border px-3 py-2 text-sm font-bold transition ${category === option.key ? 'border-brand-700 bg-brand-700 text-white shadow-sm' : 'border-slate-200 bg-white text-slate-700 hover:border-brand-300 hover:bg-brand-50'}`}
+                            className={`min-h-11 rounded-xl border px-3 py-2 text-sm font-bold transition ${index === categoryOptions.length - 1 ? 'col-span-2 sm:col-span-1' : ''} ${category === option.key ? 'border-brand-700 bg-brand-700 text-white shadow-sm' : 'border-slate-200 bg-white text-slate-700 hover:border-brand-300 hover:bg-brand-50'}`}
                         >
                             {option.label}
                         </button>

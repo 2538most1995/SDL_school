@@ -79,9 +79,9 @@ final class RegistrationStatisticsTest extends TestCase
     public function test_records_can_be_filtered_by_multiple_dimensions_and_include_filter_options(): void
     {
         $records = [
-            ['target_group' => '30', 'gender' => '1', 'level' => '3', 'occupation' => '05', 'nationality' => '099', 'age' => '20'],
-            ['target_group' => '30', 'gender' => '2', 'level' => '3', 'occupation' => '05', 'nationality' => '099', 'age' => '21'],
-            ['target_group' => '09', 'gender' => '1', 'level' => '2', 'occupation' => '04', 'nationality' => '057', 'age' => '20'],
+            ['target_group' => '30', 'group' => 'SENA-M3-B', 'group_label' => 'เสนา ม.ปลาย B', 'gender' => '1', 'level' => '3', 'occupation' => '05', 'nationality' => '099', 'age' => '20'],
+            ['target_group' => '30', 'group' => 'SENA-M3-B', 'group_label' => 'เสนา ม.ปลาย B', 'gender' => '2', 'level' => '3', 'occupation' => '05', 'nationality' => '099', 'age' => '21'],
+            ['target_group' => '09', 'group' => 'SENA-M2-A', 'group_label' => 'เสนา ม.ต้น A', 'gender' => '1', 'level' => '2', 'occupation' => '04', 'nationality' => '057', 'age' => '20'],
         ];
 
         $payload = RegistrationStatistics::fromRecords(
@@ -96,5 +96,47 @@ final class RegistrationStatisticsTest extends TestCase
         $this->assertSame(['gender' => '1', 'age' => '20'], $payload['applied_filters']);
         $this->assertSame('เด็กออกกลางคัน', collect($payload['items'])->firstWhere('code', '30')['label']);
         $this->assertCount(2, $payload['filter_options']['age']);
+    }
+
+    public function test_group_category_uses_group_code_and_readable_name_for_filtering(): void
+    {
+        $records = [
+            ['group' => 'SENA-M3-A', 'group_label' => 'เสนา ม.ปลาย A'],
+            ['group' => 'SENA-M3-B', 'group_label' => 'เสนา ม.ปลาย B'],
+            ['group' => 'SENA-M3-B', 'group_label' => 'เสนา ม.ปลาย B'],
+        ];
+
+        $payload = RegistrationStatistics::fromRecords(
+            'group',
+            $records,
+            ['2/2568'],
+            '2/2568',
+            ['group' => 'เสนา ม.ปลาย B'],
+        );
+
+        $this->assertSame('กลุ่มเรียน', $payload['selected_category_label']);
+        $this->assertSame('เสนา ม.ปลาย B', $payload['applied_filters']['group']);
+        $this->assertSame(2, $payload['summary']['registered_students']);
+        $this->assertSame('SENA-M3-B', $payload['items'][0]['code']);
+        $this->assertSame('เสนา ม.ปลาย B', $payload['items'][0]['label']);
+        $this->assertSame('เสนา ม.ปลาย B', collect($payload['filter_options']['group'])->firstWhere('value', 'SENA-M3-B')['label']);
+    }
+
+    public function test_group_filter_prefers_exact_code_and_supports_duplicate_names(): void
+    {
+        $records = [
+            ['group' => 'A', 'group_label' => 'B'],
+            ['group' => 'B', 'group_label' => 'กลุ่มบี'],
+            ['group' => 'C', 'group_label' => 'ชื่อซ้ำ'],
+            ['group' => 'D', 'group_label' => 'ชื่อซ้ำ'],
+        ];
+
+        $byCode = RegistrationStatistics::fromRecords('group', $records, [], null, ['group' => 'B']);
+        $byName = RegistrationStatistics::fromRecords('group', $records, [], null, ['group' => 'ชื่อซ้ำ']);
+
+        $this->assertSame(1, $byCode['summary']['registered_students']);
+        $this->assertSame('B', $byCode['items'][0]['code']);
+        $this->assertSame(2, $byName['summary']['registered_students']);
+        $this->assertEqualsCanonicalizing(['C', 'D'], array_column($byName['items'], 'code'));
     }
 }

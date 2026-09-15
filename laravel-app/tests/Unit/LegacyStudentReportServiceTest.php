@@ -17,7 +17,7 @@ final class LegacyStudentReportServiceTest extends TestCase
         $queries = [];
         $connection = Mockery::mock(ConnectionInterface::class);
         $connection->shouldReceive('selectOne')
-            ->once()
+            ->twice()
             ->andReturn((object) ['batch_key' => $batch]);
         $connection->shouldReceive('select')->andReturnUsing(
             function (string $query, array $bindings = [], bool $useReadPdo = true) use ($batch, &$queries): array {
@@ -44,8 +44,8 @@ final class LegacyStudentReportServiceTest extends TestCase
                         (object) ['raw_term' => '69/1'],
                     ],
                     str_contains($query, 'SELECT DISTINCT st._perf_id10 AS student_code') => [
-                        (object) ['student_code' => '6911000001', 'target_group' => '07', 'gender' => '1', 'occupation' => '05', 'nationality' => '099', 'age' => '35'],
-                        (object) ['student_code' => '6911000002', 'target_group' => '09', 'gender' => '2', 'occupation' => '04', 'nationality' => '099', 'age' => '42'],
+                        (object) ['student_code' => '6911000001', 'target_group' => '07', 'group_code' => 'G-01', 'group_label' => 'กลุ่มครู ก', 'gender' => '1', 'occupation' => '05', 'nationality' => '099', 'age' => '35'],
+                        (object) ['student_code' => '6911000002', 'target_group' => '09', 'group_code' => 'G-01', 'group_label' => 'กลุ่มครู ก', 'gender' => '2', 'occupation' => '04', 'nationality' => '099', 'age' => '42'],
                     ],
                     default => [],
                 };
@@ -73,9 +73,15 @@ final class LegacyStudentReportServiceTest extends TestCase
         );
         $this->assertNotNull($statisticsQuery);
         $this->assertStringContainsString('st.`occtyp` AS target_group', $statisticsQuery['query']);
+        $this->assertStringContainsString('st.grp_code AS group_code', $statisticsQuery['query']);
+        $this->assertStringContainsString('AS group_label', $statisticsQuery['query']);
         $this->assertStringContainsString('st.`age` AS age', $statisticsQuery['query']);
         $this->assertStringContainsString('st.grp_code IN', $statisticsQuery['query']);
         $this->assertContains('กลุ่มครู ก', $statisticsQuery['bindings']);
+
+        $groupResult = $service->registrationStatistics($teacher, 1, ['category' => 'group']);
+        $this->assertSame('G-01', $groupResult['items'][0]['code']);
+        $this->assertSame('กลุ่มครู ก', $groupResult['items'][0]['label']);
     }
 
     public function test_registered_subjects_start_from_historical_grades_and_keep_teacher_group_scope(): void

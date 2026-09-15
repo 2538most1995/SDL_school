@@ -1,6 +1,6 @@
 import type { ExcelSheet } from '../../lib/excel';
 
-export type CategoryKey = 'target_group' | 'gender' | 'level' | 'occupation' | 'nationality' | 'age';
+export type CategoryKey = 'target_group' | 'group' | 'gender' | 'level' | 'occupation' | 'nationality' | 'age';
 
 export type FilterOption = {
     value: string;
@@ -34,6 +34,7 @@ export type RegistrationStatisticsPayload = {
 
 const categoryLabels: Record<CategoryKey, string> = {
     target_group: 'กลุ่มเป้าหมาย',
+    group: 'กลุ่มเรียน',
     gender: 'เพศ',
     level: 'ระดับชั้น',
     occupation: 'อาชีพ',

@@ -7,6 +7,7 @@ final class RegistrationStatistics
     /** @var array<string, string> */
     private const CATEGORY_LABELS = [
         'target_group' => 'กลุ่มเป้าหมาย',
+        'group' => 'กลุ่มเรียน',
         'gender' => 'เพศ',
         'level' => 'ระดับชั้น',
         'occupation' => 'อาชีพ',
@@ -159,13 +160,21 @@ final class RegistrationStatistics
             $category = 'target_group';
         }
 
-        $normalizedRecords = array_map(static function (array $record): array {
+        $itemLabels = [];
+        $normalizedRecords = array_map(static function (array $record) use (&$itemLabels): array {
             foreach (array_keys(self::CATEGORY_LABELS) as $key) {
                 $record[$key] = self::normalizeCode($key, $record[$key] ?? '');
             }
 
+            $groupCode = (string) $record['group'];
+            $groupLabel = trim((string) ($record['group_label'] ?? ''));
+            if ($groupCode !== '' && $groupLabel !== '') {
+                $itemLabels['group'][$groupCode] = $groupLabel;
+            }
+
             return $record;
         }, $records);
+        $groupCodes = array_values(array_unique(array_filter(array_column($normalizedRecords, 'group'), static fn (mixed $code): bool => (string) $code !== '')));
 
         $filterOptions = [];
         foreach (array_keys(self::CATEGORY_LABELS) as $filterCategory) {
@@ -180,22 +189,37 @@ final class RegistrationStatistics
                     'label' => $item['label'],
                     'count' => $item['count'],
                 ],
-                self::items($filterCategory, $optionCounts),
+                self::items($filterCategory, $optionCounts, null, $itemLabels[$filterCategory] ?? []),
             );
         }
 
         $appliedFilters = [];
+        $groupNameFilterCodes = null;
         foreach (array_keys(self::CATEGORY_LABELS) as $key) {
             if (! array_key_exists($key, $filters) || trim((string) $filters[$key]) === '') {
                 continue;
             }
-            $appliedFilters[$key] = self::normalizeCode($key, $filters[$key]);
+            $value = self::normalizeCode($key, $filters[$key]);
+            if ($key === 'group' && ! in_array($value, $groupCodes, true)) {
+                $groupNameFilterCodes = array_keys(array_filter(
+                    $itemLabels['group'] ?? [],
+                    static fn (string $label): bool => $label === $value,
+                ));
+            }
+            $appliedFilters[$key] = $value;
         }
 
         $filteredRecords = array_values(array_filter(
             $normalizedRecords,
-            static function (array $record) use ($appliedFilters): bool {
+            static function (array $record) use ($appliedFilters, $groupNameFilterCodes): bool {
                 foreach ($appliedFilters as $key => $value) {
+                    if ($key === 'group' && $groupNameFilterCodes !== null) {
+                        if (! in_array((string) ($record[$key] ?? ''), $groupNameFilterCodes, true)) {
+                            return false;
+                        }
+
+                        continue;
+                    }
                     if ((string) ($record[$key] ?? '') !== $value) {
                         return false;
                     }
@@ -212,7 +236,7 @@ final class RegistrationStatistics
         }
 
         return [
-            ...self::payload($category, $counts, $terms, $selectedTerm),
+            ...self::payload($category, $counts, $terms, $selectedTerm, $itemLabels[$category] ?? []),
             'filter_options' => $filterOptions,
             'applied_filters' => $appliedFilters,
         ];
@@ -223,14 +247,14 @@ final class RegistrationStatistics
      * @param  list<string>  $terms
      * @return array<string, mixed>
      */
-    public static function payload(string $category, array $counts, array $terms, ?string $selectedTerm): array
+    public static function payload(string $category, array $counts, array $terms, ?string $selectedTerm, array $itemLabels = []): array
     {
         if (! array_key_exists($category, self::CATEGORY_LABELS)) {
             $category = 'target_group';
         }
 
         $total = array_sum($counts);
-        $items = self::items($category, $counts, $total);
+        $items = self::items($category, $counts, $total, $itemLabels);
 
         $largestCategory = collect($items)->sortByDesc('count')->first();
 
@@ -253,7 +277,7 @@ final class RegistrationStatistics
      * @param  array<string, int>  $counts
      * @return list<array{key: string, code: string, label: string, count: int, percentage: float}>
      */
-    private static function items(string $category, array $counts, ?int $total = null): array
+    private static function items(string $category, array $counts, ?int $total = null, array $itemLabels = []): array
     {
         $total ??= array_sum($counts);
         $items = [];
@@ -262,7 +286,7 @@ final class RegistrationStatistics
             $items[] = [
                 'key' => $code === '' ? 'unknown' : $code,
                 'code' => $code,
-                'label' => self::itemLabel($category, $code),
+                'label' => $itemLabels[$code] ?? self::itemLabel($category, $code),
                 'count' => $count,
                 'percentage' => $total > 0 ? round(($count / $total) * 100, 1) : 0.0,
             ];

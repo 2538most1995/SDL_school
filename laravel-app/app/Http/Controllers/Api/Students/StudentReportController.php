@@ -113,7 +113,7 @@ final class StudentReportController extends StudentsApiController
             'subject' => ['nullable', 'string', 'max:30'],
             'view' => ['nullable', Rule::in(['subject', 'student'])],
             'exam_status' => ['nullable', 'string', Rule::in(['taken', 'not_taken'])],
-            'category' => ['nullable', Rule::in(['target_group', 'gender', 'level', 'occupation', 'nationality', 'age'])],
+            'category' => ['nullable', Rule::in(['target_group', 'group', 'gender', 'level', 'occupation', 'nationality', 'age'])],
             'target_group' => ['nullable', 'string', 'max:10'],
             'gender' => ['nullable', 'string', 'max:10'],
             'occupation' => ['nullable', 'string', 'max:10'],

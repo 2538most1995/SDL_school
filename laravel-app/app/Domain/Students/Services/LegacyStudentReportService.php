@@ -533,6 +533,8 @@ final readonly class LegacyStudentReportService
             foreach ($this->rows(
                 "SELECT DISTINCT st._perf_id10 AS student_code,
                         {$targetGroupSql} AS target_group,
+                        st.grp_code AS group_code,
+                        {$groupName} AS group_label,
                         {$genderSql} AS gender,
                         {$set->level} AS level,
                         {$occupationSql} AS occupation,
@@ -549,6 +551,8 @@ final readonly class LegacyStudentReportService
                 }
                 $records[$set->level.'|'.trim((string) $row['student_code'])] = [
                     'target_group' => $row['target_group'] ?? '',
+                    'group' => $row['group_code'] ?? '',
+                    'group_label' => $row['group_label'] ?? '',
                     'gender' => $row['gender'] ?? '',
                     'level' => (string) $set->level,
                     'occupation' => $row['occupation'] ?? '',

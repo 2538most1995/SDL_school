@@ -11,6 +11,7 @@ import { createExcelFileBytes } from '../../resources/js/lib/excel.ts';
 const payload = {
     categories: [
         { key: 'target_group', label: 'กลุ่มเป้าหมาย' },
+        { key: 'group', label: 'กลุ่มเรียน' },
         { key: 'gender', label: 'เพศ' },
         { key: 'level', label: 'ระดับชั้น' },
         { key: 'occupation', label: 'อาชีพ' },
@@ -21,13 +22,14 @@ const payload = {
     selected_category_label: 'กลุ่มเป้าหมาย',
     filter_options: {
         target_group: [{ value: '30', label: 'เด็กออกกลางคัน', count: 3 }],
+        group: [{ value: 'SENA-M3-B', label: 'เสนา ม.ปลาย B', count: 3 }],
         gender: [{ value: '1', label: 'ชาย', count: 3 }],
         level: [{ value: '3', label: 'มัธยมศึกษาตอนปลาย', count: 3 }],
         occupation: [],
         nationality: [],
         age: [],
     },
-    applied_filters: { gender: '1', level: '3' },
+    applied_filters: { group: 'SENA-M3-B', gender: '1', level: '3' },
     terms: ['2/2568'],
     selected_term: '2/2568',
     summary: { registered_students: 3, category_count: 1, largest_category: null },
@@ -50,6 +52,7 @@ test('registration statistics workbook contains typed totals and selected condit
     assert.deepEqual(sheets[1].rows, [
         ['ภาคเรียน', '2/2568'],
         ['หัวข้อที่ใช้แยกผล', 'กลุ่มเป้าหมาย'],
+        ['กลุ่มเรียน', 'เสนา ม.ปลาย B'],
         ['เพศ', 'ชาย'],
         ['ระดับชั้น', 'มัธยมศึกษาตอนปลาย'],
     ]);
