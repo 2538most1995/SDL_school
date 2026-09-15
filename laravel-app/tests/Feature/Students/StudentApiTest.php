@@ -41,6 +41,8 @@ final class StudentApiTest extends TestCase
             Route::get('/reports/registered-subjects', [StudentReportController::class, 'registeredSubjects']);
             Route::get('/reports/students/registration-statistics', [StudentReportController::class, 'registrationStatistics'])
                 ->middleware('role:teacher,admin,super_admin');
+            Route::get('/reports/students/registration-statistics/export-data', [StudentReportController::class, 'registrationStatistics'])
+                ->middleware('role:teacher,admin');
             Route::get('/reports/students/grades-above-two', [StudentReportController::class, 'gradesAboveTwo']);
             Route::get('/reports/students/exam-attendance', [StudentReportController::class, 'examAttendance']);
         });
@@ -362,6 +364,30 @@ final class StudentApiTest extends TestCase
 
         Sanctum::actingAs($this->viewer('student', $this->sena->id, [], '6650100001'));
         $this->getJson('/api/v1/reports/students/registration-statistics')
+            ->assertForbidden();
+    }
+
+    public function test_registration_statistics_export_data_is_available_only_to_teacher_and_admin(): void
+    {
+        $this->getJson('/api/v1/reports/students/registration-statistics/export-data')
+            ->assertUnauthorized();
+
+        Sanctum::actingAs($this->viewer('teacher', $this->sena->id, ['SENA-M3-B']));
+        $this->getJson('/api/v1/reports/students/registration-statistics/export-data?term=2/2568&category=target_group')
+            ->assertOk()
+            ->assertJsonPath('data.summary.registered_students', 2);
+
+        Sanctum::actingAs($this->viewer('admin'));
+        $this->getJson('/api/v1/reports/students/registration-statistics/export-data?term=2/2568&category=level')
+            ->assertOk()
+            ->assertJsonPath('data.summary.registered_students', 8);
+
+        Sanctum::actingAs($this->viewer('super_admin', $this->sena->id));
+        $this->getJson('/api/v1/reports/students/registration-statistics/export-data')
+            ->assertForbidden();
+
+        Sanctum::actingAs($this->viewer('student', $this->sena->id, [], '6650100001'));
+        $this->getJson('/api/v1/reports/students/registration-statistics/export-data')
             ->assertForbidden();
     }
 

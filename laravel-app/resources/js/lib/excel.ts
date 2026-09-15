@@ -106,9 +106,7 @@ function workbookFiles(sheets: ExcelSheet[]): Record<string, Uint8Array> {
 }
 
 export function downloadExcel(fileName: string, sheets: ExcelSheet[]): void {
-    const usableSheets = sheets.filter((sheet) => sheet.columns.length > 0);
-    if (usableSheets.length === 0) throw new Error('ไม่มีข้อมูลสำหรับส่งออก');
-    const bytes = zipSync(workbookFiles(usableSheets), { level: 6 });
+    const bytes = createExcelFileBytes(sheets);
     const blob = new Blob([new Uint8Array(bytes).buffer], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' });
     const url = URL.createObjectURL(blob);
     const anchor = document.createElement('a');
@@ -118,6 +116,13 @@ export function downloadExcel(fileName: string, sheets: ExcelSheet[]): void {
     anchor.click();
     anchor.remove();
     URL.revokeObjectURL(url);
+}
+
+export function createExcelFileBytes(sheets: ExcelSheet[]): Uint8Array {
+    const usableSheets = sheets.filter((sheet) => sheet.columns.length > 0);
+    if (usableSheets.length === 0) throw new Error('ไม่มีข้อมูลสำหรับส่งออก');
+
+    return zipSync(workbookFiles(usableSheets), { level: 6 });
 }
 
 export function excelValue(value: unknown): ExcelCell {

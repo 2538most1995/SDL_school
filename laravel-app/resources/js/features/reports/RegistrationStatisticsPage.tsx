@@ -1,4 +1,4 @@
-import { CalendarBlank, ChartBar, FunnelSimple, StackSimple, Trophy, UsersThree, X } from '@phosphor-icons/react';
+import { CalendarBlank, ChartBar, FileXls, FunnelSimple, StackSimple, Trophy, UsersThree, X } from '@phosphor-icons/react';
 import { keepPreviousData, useQuery } from '@tanstack/react-query';
 import { useEffect, useMemo, useState } from 'react';
 import { EmptyState, QueryError, QuerySkeleton } from '../../components/QueryState';
@@ -6,39 +6,16 @@ import { PageHeader } from '../../components/PageHeader';
 import { Panel } from '../../components/Panel';
 import { StatGrid } from '../../components/StatGrid';
 import { StatTile } from '../../components/StatTile';
+import { useDemoRole } from '../../context/DemoRoleContext';
+import { showErrorAlert } from '../../lib/feedback';
 import { getFeatureDataWithDemo } from '../api';
-
-type CategoryKey = 'target_group' | 'gender' | 'level' | 'occupation' | 'nationality' | 'age';
-
-type FilterOption = {
-    value: string;
-    label: string;
-    count: number;
-};
-
-type StatisticItem = {
-    key: string;
-    code: string;
-    label: string;
-    count: number;
-    percentage: number;
-};
-
-type RegistrationStatisticsPayload = {
-    categories: Array<{ key: CategoryKey; label: string }>;
-    selected_category: CategoryKey;
-    selected_category_label: string;
-    filter_options: Record<CategoryKey, FilterOption[]>;
-    applied_filters: Partial<Record<CategoryKey, string>>;
-    terms: string[];
-    selected_term: string | null;
-    summary: {
-        registered_students: number;
-        category_count: number;
-        largest_category: StatisticItem | null;
-    };
-    items: StatisticItem[];
-};
+import {
+    buildRegistrationStatisticsSheets,
+    canExportRegistrationStatistics,
+    registrationStatisticsFileName,
+    type CategoryKey,
+    type RegistrationStatisticsPayload,
+} from './registrationStatisticsExport';
 
 const categoryOptions: RegistrationStatisticsPayload['categories'] = [
     { key: 'target_group', label: 'กลุ่มเป้าหมาย' },
@@ -86,9 +63,11 @@ function compareAcademicTermsDescending(left: string, right: string): number {
 const barTones = ['bg-brand-600', 'bg-emerald-600', 'bg-amber-500', 'bg-sky-600', 'bg-violet-600'];
 
 export function RegistrationStatisticsPage() {
+    const { role } = useDemoRole();
     const [category, setCategory] = useState<CategoryKey>('target_group');
     const [term, setTerm] = useState('');
     const [filters, setFilters] = useState<Record<CategoryKey, string>>(emptyFilters);
+    const [isExporting, setIsExporting] = useState(false);
     const filterKey = categoryOptions.map((option) => `${option.key}:${filters[option.key]}`).join('|');
     const statistics = useQuery({
         queryKey: ['registration-statistics', category, term, filterKey],
@@ -123,9 +102,36 @@ export function RegistrationStatisticsPage() {
     const selectedCategoryLabel = categoryOptions.find((option) => option.key === category)?.label ?? 'กลุ่มเป้าหมาย';
     const largest = payload?.summary.largest_category;
     const activeFilterCount = Object.values(filters).filter(Boolean).length;
+    const canExport = canExportRegistrationStatistics(role);
 
     const updateFilter = (key: CategoryKey, value: string) => {
         setFilters((current) => ({ ...current, [key]: value }));
+    };
+
+    const exportStatistics = async () => {
+        if (!canExport || isExporting) return;
+
+        setIsExporting(true);
+        try {
+            const params = new URLSearchParams({ category });
+            if (term) params.set('term', term);
+            categoryOptions.forEach((option) => {
+                const value = filters[option.key];
+                if (value) params.set(option.key, value);
+            });
+            const response = await getFeatureDataWithDemo<RegistrationStatisticsPayload>(
+                `/api/v1/reports/students/registration-statistics/export-data?${params.toString()}`,
+                emptyPayload,
+            );
+            if (response.data.items.length === 0) throw new Error('ไม่มีข้อมูลสำหรับส่งออก');
+
+            const { downloadExcel } = await import('../../lib/excel');
+            downloadExcel(registrationStatisticsFileName(response.data), buildRegistrationStatisticsSheets(response.data));
+        } catch (error) {
+            showErrorAlert(error instanceof Error ? error.message : 'ไม่สามารถส่งออก Excel ได้ กรุณาลองใหม่');
+        } finally {
+            setIsExporting(false);
+        }
     };
 
     return (
@@ -135,7 +141,7 @@ export function RegistrationStatisticsPage() {
                 title="สถิตินักศึกษาลงทะเบียน"
                 description="ดูจำนวนนักศึกษาที่ลงทะเบียน เลือกกรองหลายเงื่อนไขพร้อมกัน และแยกผลตามกลุ่มเป้าหมาย เพศ ระดับชั้น อาชีพ สัญชาติ หรืออายุ"
                 icon={ChartBar}
-                actions={(
+                actions={<div className="flex flex-wrap items-center justify-end gap-2">
                     <label className="flex items-center gap-2 text-sm font-bold text-slate-700">
                         <span>ภาคเรียน</span>
                         <select
@@ -148,7 +154,16 @@ export function RegistrationStatisticsPage() {
                             {termOptions.map((option) => <option key={option} value={option}>{option}</option>)}
                         </select>
                     </label>
-                )}
+                    {canExport && <button
+                        type="button"
+                        disabled={isExporting || !payload || payload.items.length === 0}
+                        onClick={() => void exportStatistics()}
+                        className="inline-flex h-10 items-center gap-2 rounded-xl border border-brand-700 bg-white px-3 text-sm font-bold text-brand-800 transition hover:bg-brand-50 disabled:cursor-not-allowed disabled:border-slate-200 disabled:text-slate-400"
+                    >
+                        <FileXls size={18} weight="bold" />
+                        {isExporting ? 'กำลังส่งออก...' : 'ส่งออก Excel'}
+                    </button>}
+                </div>}
             />
 
             {payload && (

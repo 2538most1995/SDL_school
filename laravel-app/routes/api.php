@@ -135,6 +135,8 @@ Route::prefix('v1')->group(function (): void {
         Route::get('/students/{student}/moral', StudentMoralController::class);
         Route::get('/students/{student}/subjects', StudentSubjectsController::class);
         Route::patch('/students/{student}/social', [StudentSocialProfileController::class, 'update']);
+        Route::get('/reports/students/registration-statistics/export-data', [StudentReportController::class, 'registrationStatistics'])
+            ->middleware('role:teacher,admin');
         Route::middleware('role:teacher,admin,super_admin')->group(function (): void {
             Route::get('/reports/students/overview', [StudentReportController::class, 'overview']);
             Route::get('/reports/new-students', [StudentReportController::class, 'newStudents']);
