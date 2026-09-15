@@ -366,12 +366,27 @@ export function AdminAnnouncementsPage() {
                                 <div className="rounded-2xl border border-brand-100 bg-brand-50/50 p-4">
                                     <p className="text-xs font-bold text-brand-700">ตัวอย่างป๊อปอัป</p>
                                     {previewImageUrl && <img src={previewImageUrl} alt="" className="mt-2 h-32 w-full rounded-xl object-cover" />}
-                                    <h3 className="mt-2 text-lg font-black text-slate-950">{draft.title || 'หัวข้อประกาศ'}</h3>
-                                    <p className="mt-1 whitespace-pre-line text-sm leading-6 text-slate-600">{draft.message || 'รายละเอียดประกาศจะแสดงตรงนี้'}</p>
-                                    <div className="mt-3 flex flex-wrap gap-2">
-                                        {draft.button_url && <span className="inline-flex items-center gap-1.5 rounded-full bg-brand-700 px-4 py-2 text-sm font-bold text-white"><ArrowSquareOut size={15} /> {draft.button_label || 'ดูรายละเอียด'}</span>}
-                                        {draft.show_exam_link && <span className="inline-flex items-center gap-1.5 rounded-full border border-sky-300 bg-sky-100 px-4 py-2 text-sm font-bold text-sky-800"><CalendarCheck size={15} weight="bold" /> ดูตารางสอบ</span>}
+                                    
+                                    <div className="mt-3 flex flex-col gap-2">
+                                        {draft.button_url && (
+                                            <span className="inline-flex min-h-10 items-center justify-center gap-1.5 rounded-xl bg-brand-700 px-3 py-2 text-xs font-bold text-white">
+                                                <ArrowSquareOut size={15} /> {draft.button_label || 'ดูรายละเอียด'}
+                                            </span>
+                                        )}
+                                        <div className={`grid gap-2 ${draft.show_exam_link ? 'grid-cols-2' : 'grid-cols-1'}`}>
+                                            {draft.show_exam_link && (
+                                                <span className="inline-flex min-h-10 items-center justify-center gap-1.5 rounded-xl border border-sky-300 bg-sky-100 px-3 py-2 text-xs font-bold text-sky-800">
+                                                    <CalendarCheck size={15} weight="bold" /> ดูตารางสอบ
+                                                </span>
+                                            )}
+                                            <span className="inline-flex min-h-10 items-center justify-center rounded-xl border border-slate-200 bg-white px-3 py-2 text-xs font-bold text-slate-700 shadow-sm">
+                                                รับทราบ
+                                            </span>
+                                        </div>
                                     </div>
+
+                                    <h3 className="mt-3 text-lg font-black text-slate-950">{draft.title || 'หัวข้อประกาศ'}</h3>
+                                    <p className="mt-1 whitespace-pre-line text-sm leading-6 text-slate-600">{draft.message || 'รายละเอียดประกาศจะแสดงตรงนี้'}</p>
                                 </div>
                                 {save.error && <p role="alert" className="rounded-xl border border-rose-200 bg-rose-50 p-3 text-sm font-bold text-rose-800">{save.error.message}</p>}
                             </div>

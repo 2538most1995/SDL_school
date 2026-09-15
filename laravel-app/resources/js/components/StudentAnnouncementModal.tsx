@@ -77,32 +77,49 @@ export function StudentAnnouncementModal() {
                         <img
                             src={withAppBasePath(data.image_url)}
                             alt="ภาพประกอบประกาศ"
-                            className="mb-5 w-full rounded-2xl border border-slate-200 object-cover shadow-sm"
+                            className="mb-4 w-full rounded-2xl border border-slate-200 object-cover shadow-sm"
                             style={{ maxHeight: '260px' }}
                         />
                     )}
 
-                    <p className="max-h-[38vh] overflow-y-auto whitespace-pre-line pr-1 text-[15px] leading-7 text-slate-600">{data.message}</p>
-
-                    <div className="mt-7 flex flex-col-reverse gap-2.5 sm:flex-row sm:justify-end">
-                        <button type="button" onClick={dismiss} className="inline-flex min-h-11 items-center justify-center rounded-full border border-slate-200 bg-white px-5 text-sm font-bold text-slate-700 transition hover:border-slate-300 hover:bg-slate-50">รับทราบ</button>
-                        {data.show_exam_link && data.exam_schedule_url && (
+                    {/* Action buttons row - above announcement text */}
+                    <div className="mb-5 flex flex-col gap-2.5">
+                        {data.button_url && (
                             <a
-                                href={withAppBasePath(data.exam_schedule_url)}
+                                href={data.button_url}
                                 target="_blank"
                                 rel="noreferrer"
                                 onClick={dismiss}
-                                className="inline-flex min-h-11 items-center justify-center gap-2 rounded-full border-2 border-sky-200 bg-sky-50 px-5 text-sm font-bold text-sky-800 shadow-sm transition hover:border-sky-300 hover:bg-sky-100 active:scale-[0.98]"
+                                className="inline-flex min-h-11 w-full items-center justify-center gap-2 rounded-2xl bg-brand-700 px-4 text-center text-sm font-bold text-white shadow-sm transition hover:bg-brand-800 active:scale-[0.98]"
                             >
-                                <CalendarCheck size={18} weight="bold" /> ดูตารางสอบ
-                            </a>
-                        )}
-                        {data.button_url && (
-                            <a href={data.button_url} target="_blank" rel="noreferrer" onClick={dismiss} className="inline-flex min-h-11 items-center justify-center gap-2 rounded-full bg-brand-700 px-5 text-sm font-bold text-white shadow-lg shadow-brand-900/15 transition hover:bg-brand-800 active:scale-[0.98]">
                                 {data.button_label ?? 'ดูรายละเอียด'} <ArrowSquareOut size={17} weight="bold" />
                             </a>
                         )}
+
+                        <div className={`grid gap-2.5 ${data.show_exam_link && data.exam_schedule_url ? 'grid-cols-2' : 'grid-cols-1'}`}>
+                            {data.show_exam_link && data.exam_schedule_url && (
+                                <a
+                                    href={withAppBasePath(data.exam_schedule_url)}
+                                    target="_blank"
+                                    rel="noreferrer"
+                                    onClick={dismiss}
+                                    className="inline-flex min-h-11 items-center justify-center gap-2 rounded-2xl border-2 border-sky-300 bg-sky-50 px-3 text-center text-sm font-bold text-sky-800 shadow-sm transition hover:border-sky-400 hover:bg-sky-100 active:scale-[0.98]"
+                                >
+                                    <CalendarCheck size={18} weight="bold" className="shrink-0 text-sky-700" />
+                                    <span>ดูตารางสอบ</span>
+                                </a>
+                            )}
+                            <button
+                                type="button"
+                                onClick={dismiss}
+                                className="inline-flex min-h-11 items-center justify-center rounded-2xl border border-slate-200 bg-white px-3 text-center text-sm font-bold text-slate-700 shadow-sm transition hover:border-slate-300 hover:bg-slate-50 active:scale-[0.98]"
+                            >
+                                รับทราบ
+                            </button>
+                        </div>
                     </div>
+
+                    <p className="max-h-[38vh] overflow-y-auto whitespace-pre-line pr-1 text-[15px] leading-7 text-slate-600">{data.message}</p>
                 </div>
             </section>
         </div>
