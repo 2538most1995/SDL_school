@@ -63,6 +63,9 @@ Route::prefix('v1')->group(function (): void {
         Route::get('/students/{student}/kpch', [StudentDataController::class, 'kpch']);
         Route::get('/students/{student}/moral', [StudentDataController::class, 'moral']);
         Route::get('/students/{student}/subjects', [StudentDataController::class, 'subjects']);
+        Route::get('/subjects', [StudentDataController::class, 'subjectCatalog']);
+        Route::get('/subjects/{subject}/class-groups', [StudentDataController::class, 'subjectClassGroups']);
+        Route::get('/class-groups/{group}/students', [StudentDataController::class, 'classGroupStudents']);
     });
 
     Route::middleware(['auth:sanctum', 'active'])->group(function (): void {

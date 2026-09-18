@@ -152,4 +152,88 @@ final readonly class StudentAcademicService
             ],
         ];
     }
+
+    /**
+     * Build the read-only subject/group roster used by trusted OMR clients.
+     * Academic rows are loaded in one repository batch to avoid an API call or
+     * database query per student.
+     *
+     * @return array{subjects: list<array<string, mixed>>, groups: array<string, list<array<string, mixed>>>, rosters: array<string, array<string, list<array<string, mixed>>>>}
+     */
+    public function registrationCatalog(User $viewer, ?string $term = null): array
+    {
+        $students = $this->directory->accessibleStudents($viewer);
+        $gradesByStudent = $this->repository->gradesForMany($students);
+        $subjects = [];
+        $groups = [];
+        $rosters = [];
+
+        foreach ($students as $student) {
+            $studentKey = "{$student->districtId}|{$student->level}|{$student->code}";
+            foreach ($gradesByStudent[$studentKey] ?? [] as $grade) {
+                if ($term !== null && $grade->term !== $term) {
+                    continue;
+                }
+
+                $subjectCode = trim($grade->subjectCode);
+                $groupCode = trim($student->groupCode);
+                if ($subjectCode === '' || $groupCode === '') {
+                    continue;
+                }
+
+                $subjects[$subjectCode] ??= [
+                    'code' => $subjectCode,
+                    'name' => trim($grade->subjectName) ?: $subjectCode,
+                    '_students' => [],
+                ];
+                $subjects[$subjectCode]['_students'][$studentKey] = true;
+
+                $groups[$subjectCode][$groupCode] ??= [
+                    'id' => $groupCode,
+                    'code' => $groupCode,
+                    'name' => trim($student->groupName) ?: $groupCode,
+                    '_students' => [],
+                ];
+                $groups[$subjectCode][$groupCode]['_students'][$studentKey] = true;
+
+                $rosters[$subjectCode][$groupCode][$studentKey] = [
+                    'code' => $student->code,
+                    'full_name' => $student->fullName(),
+                ];
+            }
+        }
+
+        $subjectRows = [];
+        foreach ($subjects as $subject) {
+            $studentCount = count($subject['_students']);
+            unset($subject['_students']);
+            $subject['student_count'] = $studentCount;
+            $subjectRows[] = $subject;
+        }
+        usort($subjectRows, static fn (array $left, array $right): int => strnatcasecmp($left['code'], $right['code']));
+
+        $groupRows = [];
+        foreach ($groups as $subjectCode => $subjectGroups) {
+            foreach ($subjectGroups as $group) {
+                $studentCount = count($group['_students']);
+                unset($group['_students']);
+                $group['student_count'] = $studentCount;
+                $groupRows[$subjectCode][] = $group;
+            }
+            usort($groupRows[$subjectCode], static fn (array $left, array $right): int => strnatcasecmp($left['code'], $right['code']));
+        }
+
+        $rosterRows = [];
+        foreach ($rosters as $subjectCode => $subjectGroups) {
+            foreach ($subjectGroups as $groupCode => $studentRows) {
+                $rosterRows[$subjectCode][$groupCode] = array_values($studentRows);
+                usort(
+                    $rosterRows[$subjectCode][$groupCode],
+                    static fn (array $left, array $right): int => strnatcasecmp($left['code'], $right['code']),
+                );
+            }
+        }
+
+        return ['subjects' => $subjectRows, 'groups' => $groupRows, 'rosters' => $rosterRows];
+    }
 }

@@ -83,6 +83,65 @@ final class StudentDataController extends StudentsApiController
         return $this->academicResponse($request, $student, 'subjects', RegisteredSubjectResource::class);
     }
 
+    public function subjectCatalog(Request $request): JsonResponse
+    {
+        $filters = $this->catalogFilters($request);
+        $catalog = $this->academics->registrationCatalog($request->user(), $filters['term'] ?? null);
+
+        return $this->respond([
+            'data' => $catalog['subjects'],
+            'meta' => $this->integrationMeta([
+                'term' => $filters['term'] ?? 'all',
+                'total' => count($catalog['subjects']),
+            ]),
+        ]);
+    }
+
+    public function subjectClassGroups(Request $request, string $subject): JsonResponse
+    {
+        $filters = $this->catalogFilters($request);
+        $catalog = $this->academics->registrationCatalog($request->user(), $filters['term'] ?? null);
+        $groups = $catalog['groups'][$subject] ?? [];
+
+        return $this->respond([
+            'data' => $groups,
+            'meta' => $this->integrationMeta([
+                'term' => $filters['term'] ?? 'all',
+                'subject_code' => $subject,
+                'total' => count($groups),
+            ]),
+        ]);
+    }
+
+    public function classGroupStudents(Request $request, string $group): JsonResponse
+    {
+        $filters = $request->validate([
+            'term' => ['nullable', 'regex:/^[12]\/25\d{2}$/'],
+            'subject_code' => ['required', 'string', 'max:64'],
+        ]);
+        $subjectCode = (string) $filters['subject_code'];
+        $catalog = $this->academics->registrationCatalog($request->user(), $filters['term'] ?? null);
+        $students = $catalog['rosters'][$subjectCode][$group] ?? [];
+
+        return $this->respond([
+            'data' => $students,
+            'meta' => $this->integrationMeta([
+                'term' => $filters['term'] ?? 'all',
+                'subject_code' => $subjectCode,
+                'group_code' => $group,
+                'total' => count($students),
+            ]),
+        ]);
+    }
+
+    /** @return array{term?: string} */
+    private function catalogFilters(Request $request): array
+    {
+        return $request->validate([
+            'term' => ['nullable', 'regex:/^[12]\/25\d{2}$/'],
+        ]);
+    }
+
     /** @param class-string $resourceClass */
     private function academicResponse(
         Request $request,
