@@ -77,6 +77,18 @@ final class StudentDataOmrCatalogApiTest extends TestCase
             ->assertJsonPath('meta.total', 2);
 
         self::assertStringNotContainsString('citizen_id', json_encode($response->json(), JSON_THROW_ON_ERROR));
+
+        $subjectRoster = $this->withHeaders($headers)
+            ->getJson('/api/v1/integrations/student-data/subjects/TH1001/students?term=1/2569')
+            ->assertOk()
+            ->assertJsonPath('data.0.code', 'STU001')
+            ->assertJsonPath('data.0.group_id', 'GROUP-A')
+            ->assertJsonPath('data.0.group_name', 'กลุ่ม A')
+            ->assertJsonPath('data.1.code', 'STU002')
+            ->assertJsonPath('meta.total', 2)
+            ->assertJsonPath('meta.groups', 1);
+
+        self::assertStringNotContainsString('citizen_id', json_encode($subjectRoster->json(), JSON_THROW_ON_ERROR));
     }
 
     public function test_omr_catalog_stays_protected_and_validates_filters(): void

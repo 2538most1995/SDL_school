@@ -134,6 +134,51 @@ final class StudentDataController extends StudentsApiController
         ]);
     }
 
+    public function subjectStudents(Request $request, string $subject): JsonResponse
+    {
+        $filters = $this->catalogFilters($request);
+        $catalog = $this->academics->registrationCatalog($request->user(), $filters['term'] ?? null);
+        $groups = [];
+        foreach ($catalog['groups'][$subject] ?? [] as $group) {
+            $groups[(string) $group['id']] = $group;
+        }
+
+        $students = [];
+        foreach ($catalog['rosters'][$subject] ?? [] as $groupId => $roster) {
+            $group = $groups[(string) $groupId] ?? [
+                'id' => (string) $groupId,
+                'code' => (string) $groupId,
+                'name' => (string) $groupId,
+            ];
+            foreach ($roster as $student) {
+                $students[] = [
+                    ...$student,
+                    'group_id' => (string) $group['id'],
+                    'group_code' => (string) $group['code'],
+                    'group_name' => (string) $group['name'],
+                ];
+            }
+        }
+
+        usort($students, static fn (array $left, array $right): int => [
+            $left['group_name'],
+            $left['code'],
+        ] <=> [
+            $right['group_name'],
+            $right['code'],
+        ]);
+
+        return $this->respond([
+            'data' => $students,
+            'meta' => $this->integrationMeta([
+                'term' => $filters['term'] ?? 'all',
+                'subject_code' => $subject,
+                'total' => count($students),
+                'groups' => count($groups),
+            ]),
+        ]);
+    }
+
     /** @return array{term?: string} */
     private function catalogFilters(Request $request): array
     {
