@@ -36,7 +36,13 @@ final class AuthenticateStudentDataClient
             );
         }
 
+        // Some managed hosting proxies do not forward Authorization to PHP-FPM.
+        // Keep Bearer auth as the primary contract and accept a dedicated
+        // server-to-server header as a transport-safe fallback.
         $plainToken = trim((string) $request->bearerToken());
+        if ($plainToken === '') {
+            $plainToken = trim((string) $request->headers->get('X-Student-Data-Token'));
+        }
         if ($plainToken === '') {
             $this->rejectInvalidCredential($attemptKey);
         }
