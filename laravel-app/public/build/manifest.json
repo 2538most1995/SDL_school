@@ -1,94 +1,102 @@
 {
-  "_DataTable-HmhNn_Fs.js": {
-    "file": "assets/DataTable-HmhNn_Fs.js",
+  "_DataTable-CX2TkSuh.js": {
+    "file": "assets/DataTable-CX2TkSuh.js",
     "name": "DataTable",
     "imports": [
       "_rolldown-runtime-QTnfLwEv.js",
-      "_api-6qrZpRIH.js",
-      "_FileXls.es-B_8tVA-s.js",
+      "_api-C0LWuwfQ.js",
+      "_FileXls.es-BYGMLFih.js",
       "resources/js/app.tsx",
       "_excel-Dt2tgLEe.js"
     ]
   },
-  "_FileXls.es-B_8tVA-s.js": {
-    "file": "assets/FileXls.es-B_8tVA-s.js",
+  "_FileXls.es-BYGMLFih.js": {
+    "file": "assets/FileXls.es-BYGMLFih.js",
     "name": "FileXls.es",
     "imports": [
       "_rolldown-runtime-QTnfLwEv.js",
       "resources/js/app.tsx"
     ]
   },
-  "_ImageSquare.es-BKBrvKVb.js": {
-    "file": "assets/ImageSquare.es-BKBrvKVb.js",
+  "_FunnelSimple.es-BXn3AjL-.js": {
+    "file": "assets/FunnelSimple.es-BXn3AjL-.js",
+    "name": "FunnelSimple.es",
+    "imports": [
+      "_rolldown-runtime-QTnfLwEv.js",
+      "resources/js/app.tsx"
+    ]
+  },
+  "_ImageSquare.es-DFRJjPRd.js": {
+    "file": "assets/ImageSquare.es-DFRJjPRd.js",
     "name": "ImageSquare.es",
     "imports": [
       "_rolldown-runtime-QTnfLwEv.js",
       "resources/js/app.tsx"
     ]
   },
-  "_PencilSimple.es-Bo847hhf.js": {
-    "file": "assets/PencilSimple.es-Bo847hhf.js",
+  "_PencilSimple.es-BqD56zdv.js": {
+    "file": "assets/PencilSimple.es-BqD56zdv.js",
     "name": "PencilSimple.es",
     "imports": [
       "_rolldown-runtime-QTnfLwEv.js",
       "resources/js/app.tsx"
     ]
   },
-  "_Plus.es-DcpDKuYi.js": {
-    "file": "assets/Plus.es-DcpDKuYi.js",
+  "_Plus.es-Coulyh9_.js": {
+    "file": "assets/Plus.es-Coulyh9_.js",
     "name": "Plus.es",
     "imports": [
       "_rolldown-runtime-QTnfLwEv.js",
       "resources/js/app.tsx"
     ]
   },
-  "_Printer.es-DlLVTbxJ.js": {
-    "file": "assets/Printer.es-DlLVTbxJ.js",
+  "_Printer.es-B5yBUivR.js": {
+    "file": "assets/Printer.es-B5yBUivR.js",
     "name": "Printer.es",
     "imports": [
       "_rolldown-runtime-QTnfLwEv.js",
       "resources/js/app.tsx"
     ]
   },
-  "_ShieldCheck.es-_AVFaFV_.js": {
-    "file": "assets/ShieldCheck.es-_AVFaFV_.js",
+  "_ShieldCheck.es-D_XzWJyZ.js": {
+    "file": "assets/ShieldCheck.es-D_XzWJyZ.js",
     "name": "ShieldCheck.es",
     "imports": [
       "_rolldown-runtime-QTnfLwEv.js",
       "resources/js/app.tsx"
     ]
   },
-  "_StatGrid-Dhhnjd-H.js": {
-    "file": "assets/StatGrid-Dhhnjd-H.js",
+  "_StatGrid-DvcanxzG.js": {
+    "file": "assets/StatGrid-DvcanxzG.js",
     "name": "StatGrid",
     "imports": [
       "resources/js/app.tsx"
     ]
   },
-  "_StatTile-_T0ATl46.js": {
-    "file": "assets/StatTile-_T0ATl46.js",
+  "_StatTile-DDTwI46q.js": {
+    "file": "assets/StatTile-DDTwI46q.js",
     "name": "StatTile",
     "imports": [
       "resources/js/app.tsx"
     ]
   },
-  "_StatusBadge-B2cd_oLZ.js": {
-    "file": "assets/StatusBadge-B2cd_oLZ.js",
+  "_StatusBadge-ODPdwaQD.js": {
+    "file": "assets/StatusBadge-ODPdwaQD.js",
     "name": "StatusBadge",
     "imports": [
       "resources/js/app.tsx"
     ]
   },
-  "_Trash.es-BNLZRiCJ.js": {
-    "file": "assets/Trash.es-BNLZRiCJ.js",
+  "_Trash.es-aGNHWzi4.js": {
+    "file": "assets/Trash.es-aGNHWzi4.js",
     "name": "Trash.es",
     "imports": [
       "_rolldown-runtime-QTnfLwEv.js",
       "resources/js/app.tsx"
     ]
   },
-  "_api-6qrZpRIH.js": {
-    "file": "assets/api-6qrZpRIH.js",
+  "_api-C0LWuwfQ.js": {
+    "file": "assets/api-C0LWuwfQ.js",
     "name": "api",
     "imports": [
       "_rolldown-runtime-QTnfLwEv.js",
@@ -260,7 +268,7 @@
     ]
   },
   "resources/css/app.css": {
-    "file": "assets/app-D3PM7aEx.css",
+    "file": "assets/app-QNT6Z43m.css",
     "name": "app",
     "names": [
       "app.css"
@@ -307,7 +315,7 @@
     ]
   },
   "resources/js/app.tsx": {
-    "file": "assets/app-CVzL3iVA.js",
+    "file": "assets/app-jrzmpX46.js",
     "name": "app",
     "src": "resources/js/app.tsx",
     "isEntry": true,
@@ -318,6 +326,7 @@
       "resources/js/features/students/index.tsx",
       "resources/js/features/reports/index.tsx",
       "resources/js/features/reports/RegistrationStatisticsPage.tsx",
+      "resources/js/features/reports/ExamEligibleStudentsPage.tsx",
       "resources/js/features/learning/index.tsx",
       "resources/js/features/admin/index.tsx",
       "resources/js/features/admin/AnnouncementsPage.tsx",
@@ -329,121 +338,137 @@
     ]
   },
   "resources/js/features/admin/AnnouncementsPage.tsx": {
-    "file": "assets/AnnouncementsPage-CnZ8rk5L.js",
+    "file": "assets/AnnouncementsPage-CCENYckk.js",
     "name": "AnnouncementsPage",
     "src": "resources/js/features/admin/AnnouncementsPage.tsx",
     "isDynamicEntry": true,
     "imports": [
       "_rolldown-runtime-QTnfLwEv.js",
-      "_api-6qrZpRIH.js",
-      "_Plus.es-DcpDKuYi.js",
-      "_PencilSimple.es-Bo847hhf.js",
-      "_Trash.es-BNLZRiCJ.js",
+      "_api-C0LWuwfQ.js",
+      "_Plus.es-Coulyh9_.js",
+      "_PencilSimple.es-BqD56zdv.js",
+      "_Trash.es-aGNHWzi4.js",
       "resources/js/app.tsx",
-      "_StatTile-_T0ATl46.js",
-      "_StatusBadge-B2cd_oLZ.js"
+      "_StatTile-DDTwI46q.js",
+      "_StatusBadge-ODPdwaQD.js"
     ]
   },
   "resources/js/features/admin/index.tsx": {
-    "file": "assets/admin-CtwandHF.js",
+    "file": "assets/admin-CBoSBRa2.js",
     "name": "admin",
     "src": "resources/js/features/admin/index.tsx",
     "isDynamicEntry": true,
     "imports": [
       "_rolldown-runtime-QTnfLwEv.js",
-      "_DataTable-HmhNn_Fs.js",
-      "_api-6qrZpRIH.js",
-      "_Plus.es-DcpDKuYi.js",
-      "_ImageSquare.es-BKBrvKVb.js",
-      "_PencilSimple.es-Bo847hhf.js",
-      "_ShieldCheck.es-_AVFaFV_.js",
-      "_Trash.es-BNLZRiCJ.js",
+      "_DataTable-CX2TkSuh.js",
+      "_api-C0LWuwfQ.js",
+      "_Plus.es-Coulyh9_.js",
+      "_ImageSquare.es-DFRJjPRd.js",
+      "_PencilSimple.es-BqD56zdv.js",
+      "_ShieldCheck.es-D_XzWJyZ.js",
+      "_Trash.es-aGNHWzi4.js",
       "resources/js/app.tsx",
-      "_StatTile-_T0ATl46.js",
-      "_StatusBadge-B2cd_oLZ.js"
+      "_StatTile-DDTwI46q.js",
+      "_StatusBadge-ODPdwaQD.js"
     ]
   },
   "resources/js/features/learning/index.tsx": {
-    "file": "assets/learning-iyGoC4tV.js",
+    "file": "assets/learning-Bzq1K9X1.js",
     "name": "learning",
     "src": "resources/js/features/learning/index.tsx",
     "isDynamicEntry": true,
     "imports": [
       "_rolldown-runtime-QTnfLwEv.js",
-      "_DataTable-HmhNn_Fs.js",
-      "_api-6qrZpRIH.js",
-      "_FileXls.es-B_8tVA-s.js",
-      "_Plus.es-DcpDKuYi.js",
-      "_ImageSquare.es-BKBrvKVb.js",
-      "_PencilSimple.es-Bo847hhf.js",
-      "_Printer.es-DlLVTbxJ.js",
-      "_Trash.es-BNLZRiCJ.js",
+      "_DataTable-CX2TkSuh.js",
+      "_api-C0LWuwfQ.js",
+      "_FileXls.es-BYGMLFih.js",
+      "_Plus.es-Coulyh9_.js",
+      "_ImageSquare.es-DFRJjPRd.js",
+      "_PencilSimple.es-BqD56zdv.js",
+      "_Printer.es-B5yBUivR.js",
+      "_Trash.es-aGNHWzi4.js",
       "resources/js/app.tsx",
-      "_StatTile-_T0ATl46.js",
-      "_StatusBadge-B2cd_oLZ.js",
+      "_StatTile-DDTwI46q.js",
+      "_StatusBadge-ODPdwaQD.js",
       "_excel-Dt2tgLEe.js"
     ]
   },
+  "resources/js/features/reports/ExamEligibleStudentsPage.tsx": {
+    "file": "assets/ExamEligibleStudentsPage-BxknKKhN.js",
+    "name": "ExamEligibleStudentsPage",
+    "src": "resources/js/features/reports/ExamEligibleStudentsPage.tsx",
+    "isDynamicEntry": true,
+    "imports": [
+      "_rolldown-runtime-QTnfLwEv.js",
+      "_DataTable-CX2TkSuh.js",
+      "_api-C0LWuwfQ.js",
+      "_FunnelSimple.es-BXn3AjL-.js",
+      "resources/js/app.tsx",
+      "_StatTile-DDTwI46q.js",
+      "_StatGrid-DvcanxzG.js"
+    ]
+  },
   "resources/js/features/reports/RegistrationStatisticsPage.tsx": {
-    "file": "assets/RegistrationStatisticsPage-CoHwF8n8.js",
+    "file": "assets/RegistrationStatisticsPage-DfD1vZPw.js",
     "name": "RegistrationStatisticsPage",
     "src": "resources/js/features/reports/RegistrationStatisticsPage.tsx",
     "isDynamicEntry": true,
     "imports": [
       "_rolldown-runtime-QTnfLwEv.js",
-      "_api-6qrZpRIH.js",
-      "_FileXls.es-B_8tVA-s.js",
+      "_api-C0LWuwfQ.js",
+      "_FileXls.es-BYGMLFih.js",
+      "_FunnelSimple.es-BXn3AjL-.js",
       "resources/js/app.tsx",
-      "_StatTile-_T0ATl46.js",
-      "_StatGrid-Dhhnjd-H.js"
+      "_StatTile-DDTwI46q.js",
+      "_StatGrid-DvcanxzG.js"
     ],
     "dynamicImports": [
       "_excel-Dt2tgLEe.js"
     ]
   },
   "resources/js/features/reports/index.tsx": {
-    "file": "assets/reports-DHr-eBzr.js",
+    "file": "assets/reports-DY3vtUSv.js",
     "name": "reports",
     "src": "resources/js/features/reports/index.tsx",
     "isDynamicEntry": true,
     "imports": [
       "_rolldown-runtime-QTnfLwEv.js",
-      "_DataTable-HmhNn_Fs.js",
-      "_api-6qrZpRIH.js",
+      "_DataTable-CX2TkSuh.js",
+      "_api-C0LWuwfQ.js",
       "resources/js/app.tsx",
-      "_StatTile-_T0ATl46.js",
-      "_StatusBadge-B2cd_oLZ.js",
-      "_StatGrid-Dhhnjd-H.js"
+      "_StatTile-DDTwI46q.js",
+      "_StatusBadge-ODPdwaQD.js",
+      "_StatGrid-DvcanxzG.js"
     ]
   },
   "resources/js/features/settings/index.tsx": {
-    "file": "assets/settings-Ctx9HJyD.js",
+    "file": "assets/settings-BkNM0Mwx.js",
     "name": "settings",
     "src": "resources/js/features/settings/index.tsx",
     "isDynamicEntry": true,
     "imports": [
       "_rolldown-runtime-QTnfLwEv.js",
-      "_api-6qrZpRIH.js",
-      "_ShieldCheck.es-_AVFaFV_.js",
-      "_Trash.es-BNLZRiCJ.js",
+      "_api-C0LWuwfQ.js",
+      "_ShieldCheck.es-D_XzWJyZ.js",
+      "_Trash.es-aGNHWzi4.js",
       "resources/js/app.tsx",
-      "_StatusBadge-B2cd_oLZ.js"
+      "_StatusBadge-ODPdwaQD.js"
     ]
   },
   "resources/js/features/students/index.tsx": {
-    "file": "assets/students-Cw-mwUbI.js",
+    "file": "assets/students-DDi6rSJd.js",
     "name": "students",
     "src": "resources/js/features/students/index.tsx",
     "isDynamicEntry": true,
     "imports": [
       "_rolldown-runtime-QTnfLwEv.js",
-      "_DataTable-HmhNn_Fs.js",
-      "_api-6qrZpRIH.js",
-      "_PencilSimple.es-Bo847hhf.js",
-      "_Printer.es-DlLVTbxJ.js",
+      "_DataTable-CX2TkSuh.js",
+      "_api-C0LWuwfQ.js",
+      "_PencilSimple.es-BqD56zdv.js",
+      "_Printer.es-B5yBUivR.js",
       "resources/js/app.tsx",
-      "_StatTile-_T0ATl46.js",
-      "_StatusBadge-B2cd_oLZ.js"
+      "_StatTile-DDTwI46q.js",
+      "_StatusBadge-ODPdwaQD.js"
     ]
   }
 }

@@ -11,6 +11,7 @@ const GradesPage = lazyWithReload(async () => ({ default: (await import('./stude
 const AchievementPage = lazyWithReload(async () => ({ default: (await import('./students')).AchievementPage }));
 const ReportPage = lazyWithReload(async () => ({ default: (await import('./reports')).ReportPage }));
 const RegistrationStatisticsPage = lazyWithReload(async () => ({ default: (await import('./reports/RegistrationStatisticsPage')).RegistrationStatisticsPage }));
+const ExamEligibleStudentsPage = lazyWithReload(async () => ({ default: (await import('./reports/ExamEligibleStudentsPage')).ExamEligibleStudentsPage }));
 const LearningHomePage = lazyWithReload(async () => ({ default: (await import('./learning')).LearningHomePage }));
 const LearningListPage = lazyWithReload(async () => ({ default: (await import('./learning')).LearningListPage }));
 const AdminUsersPage = lazyWithReload(async () => ({ default: (await import('./admin')).AdminUsersPage }));
@@ -48,6 +49,7 @@ export const featureRouteCatalog: FeatureRoute[] = [
     { path: '/reports/registered-subjects', label: 'วิชาลงทะเบียน', roles: ['teacher', 'admin', 'super_admin'], element: <ReportPage kind="registered-subjects" /> },
     { path: '/reports/grade-threshold', label: 'สถิติเกรด 2 ขึ้นไป', roles: ['teacher', 'admin', 'super_admin'], element: <ReportPage kind="grade-threshold" /> },
     { path: '/reports/exam-attendance', label: 'สถิติการเข้าสอบ', roles: ['teacher', 'admin', 'super_admin'], element: <ReportPage kind="exam-attendance" /> },
+    { path: '/reports/exam-eligible', label: 'นักศึกษามีสิทธิ์สอบ', roles: ['teacher', 'admin', 'super_admin'], element: <ExamEligibleStudentsPage /> },
 
     { path: '/learning', label: 'พื้นที่การเรียนรู้', roles: ['student', 'teacher', 'admin', 'super_admin'], element: <LearningHomePage /> },
     { path: '/learning/assignments', label: 'งานและการส่งงาน', roles: ['student', 'teacher', 'admin', 'super_admin'], element: <LearningListPage kind="assignments" /> },

@@ -341,6 +341,81 @@ final readonly class StudentReportService
         ];
     }
 
+    /**
+     * List students who remain eligible to sit examinations in the selected term.
+     *
+     * Numeric grades are deliberately ignored here. The imported grade field also
+     * carries exam-eligibility status tokens, and only those status tokens can
+     * disqualify a student.
+     *
+     * @param  array<string, mixed>  $filters
+     * @return array<string, mixed>
+     */
+    public function examEligibleStudents(User $viewer, array $filters = []): array
+    {
+        $students = $this->students($viewer, $filters);
+        $gradesByStudent = $this->repository->gradesForMany($students);
+        $terms = $this->academicTerms($gradesByStudent);
+        $selectedTerm = $this->selectedAcademicTerm($filters, $terms);
+        $eligible = [];
+        $totalStudents = 0;
+
+        foreach ($students as $student) {
+            $registrations = array_values(array_filter(
+                $this->studentGrades($gradesByStudent, $student),
+                static fn (Grade $grade): bool => $selectedTerm !== null
+                    && AcademicTerm::normalize($grade->term) === $selectedTerm,
+            ));
+
+            if ($registrations === []) {
+                continue;
+            }
+
+            $totalStudents++;
+            $disqualified = false;
+            foreach ($registrations as $registration) {
+                if ($this->isDisqualifyingExamStatus($registration->grade)) {
+                    $disqualified = true;
+                    break;
+                }
+            }
+            if ($disqualified) {
+                continue;
+            }
+
+            $eligible[] = [
+                'student' => [
+                    'code' => $student->code,
+                    'full_name' => $student->fullName(),
+                    'level' => ['id' => $student->level, 'label' => $student->levelLabel],
+                    'group' => ['code' => $student->groupCode, 'name' => $student->groupName],
+                ],
+                'term' => $selectedTerm,
+                'exam_status' => 'eligible',
+            ];
+        }
+
+        usort($eligible, static fn (array $left, array $right): int => strnatcasecmp(
+            (string) $left['student']['full_name'],
+            (string) $right['student']['full_name'],
+        ));
+
+        return [
+            'items' => $eligible,
+            'summary' => [
+                'total_students' => $totalStudents,
+                'eligible_students' => count($eligible),
+                'disqualified_students' => $totalStudents - count($eligible),
+                'group_count' => count(array_unique(array_map(
+                    static fn (array $item): string => $item['student']['level']['id'].'|'.$item['student']['group']['code'].'|'.$item['student']['group']['name'],
+                    $eligible,
+                ))),
+            ],
+            'terms' => $terms,
+            'selected_term' => $selectedTerm,
+        ];
+    }
+
     /** @param array<string, mixed> $filters
      * @return list<Student>
      */
@@ -565,6 +640,11 @@ final readonly class StudentReportService
     private function studentGrades(array $gradesByStudent, Student $student): array
     {
         return $gradesByStudent["{$student->districtId}|{$student->level}|{$student->code}"] ?? [];
+    }
+
+    private function isDisqualifyingExamStatus(?string $status): bool
+    {
+        return in_array(trim((string) $status), ['ม', 'มส'], true);
     }
 
     /**

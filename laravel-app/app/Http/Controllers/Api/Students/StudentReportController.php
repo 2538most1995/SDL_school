@@ -101,6 +101,17 @@ final class StudentReportController extends StudentsApiController
         return $this->reportResponse($request, $data);
     }
 
+    public function examEligibleStudents(Request $request): JsonResponse
+    {
+        $filters = $this->filters($request);
+        $data = config('system_data.student_enabled')
+            ? $this->legacyReports->examEligibleStudents($request->user(), (int) $request->attributes->get('district_id'), $filters)
+            : $this->reports->examEligibleStudents($request->user(), $filters);
+
+        return $this->reportResponse($request, $data)
+            ->header('Cache-Control', 'no-store, private');
+    }
+
     /** @return array<string, mixed> */
     private function filters(Request $request): array
     {

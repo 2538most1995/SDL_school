@@ -45,6 +45,8 @@ final class StudentApiTest extends TestCase
                 ->middleware('role:teacher,admin');
             Route::get('/reports/students/grades-above-two', [StudentReportController::class, 'gradesAboveTwo']);
             Route::get('/reports/students/exam-attendance', [StudentReportController::class, 'examAttendance']);
+            Route::get('/reports/students/exam-eligible', [StudentReportController::class, 'examEligibleStudents'])
+                ->middleware('role:teacher,admin,super_admin');
         });
 
         $this->sena = District::query()->create([
@@ -296,6 +298,55 @@ final class StudentApiTest extends TestCase
             ->assertJsonPath('data.summary.students_complete', 6);
     }
 
+    public function test_exam_eligible_report_uses_status_tokens_and_supports_filters(): void
+    {
+        Sanctum::actingAs($this->viewer('admin'));
+
+        $this->getJson('/api/v1/reports/students/exam-eligible?term=2/2568')
+            ->assertOk()
+            ->assertHeader('Cache-Control', 'no-store, private')
+            ->assertJsonPath('data.selected_term', '2/2568')
+            ->assertJsonPath('data.summary.total_students', 8)
+            ->assertJsonPath('data.summary.eligible_students', 6)
+            ->assertJsonPath('data.summary.disqualified_students', 2)
+            ->assertJsonCount(6, 'data.items')
+            ->assertJsonMissing(['code' => '6650200003'])
+            ->assertJsonMissing(['code' => '6650200008'])
+            ->assertJsonMissingPath('data.items.0.grade_value')
+            ->assertJsonStructure(['data' => ['items' => [['student' => ['code', 'full_name', 'level', 'group'], 'term', 'exam_status']]]]);
+
+        $this->getJson('/api/v1/reports/students/exam-eligible?term=2/2568&level=3&group=SENA-M3-B&search='.rawurlencode('กัญญารัตน์'))
+            ->assertOk()
+            ->assertJsonPath('data.summary.total_students', 1)
+            ->assertJsonPath('data.summary.eligible_students', 1)
+            ->assertJsonPath('data.items.0.student.code', '6650300006')
+            ->assertJsonPath('data.items.0.student.level.id', 3)
+            ->assertJsonPath('data.items.0.student.group.code', 'SENA-M3-B');
+    }
+
+    public function test_exam_eligible_report_enforces_teacher_group_scope_and_rejects_students(): void
+    {
+        Sanctum::actingAs($this->viewer('teacher', $this->sena->id, ['SENA-M3-B']));
+
+        $this->getJson('/api/v1/reports/students/exam-eligible?term=2/2568')
+            ->assertOk()
+            ->assertJsonPath('data.summary.total_students', 2)
+            ->assertJsonPath('data.summary.eligible_students', 2)
+            ->assertJsonCount(2, 'data.items')
+            ->assertJsonPath('data.items.0.student.group.code', 'SENA-M3-B')
+            ->assertJsonPath('data.items.1.student.group.code', 'SENA-M3-B');
+
+        Sanctum::actingAs($this->viewer('teacher', $this->sena->id, []));
+        $this->getJson('/api/v1/reports/students/exam-eligible?term=2/2568')
+            ->assertOk()
+            ->assertJsonPath('data.summary.total_students', 0)
+            ->assertJsonPath('data.summary.eligible_students', 0)
+            ->assertJsonCount(0, 'data.items');
+
+        Sanctum::actingAs($this->viewer('student', $this->sena->id, [], '6650100001'));
+        $this->getJson('/api/v1/reports/students/exam-eligible')->assertForbidden();
+    }
+
     public function test_registered_subjects_default_to_latest_term_and_expose_all_term_options(): void
     {
         Sanctum::actingAs($this->viewer('admin'));
@@ -417,6 +468,8 @@ final class StudentApiTest extends TestCase
         $this->getJson('/api/v1/students?per_page=1001')->assertUnprocessable();
         $this->getJson('/api/v1/students?kpch_status=unknown')->assertUnprocessable();
         $this->getJson('/api/v1/students/6650100001/grades?term=2568/2')->assertUnprocessable();
+        $this->getJson('/api/v1/reports/students/exam-eligible?term=2569/1')->assertUnprocessable();
+        $this->getJson('/api/v1/reports/students/exam-eligible?level=4')->assertUnprocessable();
     }
 
     public function test_teacher_can_update_student_social_profile(): void

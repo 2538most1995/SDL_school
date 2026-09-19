@@ -155,6 +155,7 @@ Route::prefix('v1')->group(function (): void {
             Route::get('/reports/students/registration-statistics', [StudentReportController::class, 'registrationStatistics']);
             Route::get('/reports/students/grades-above-two', [StudentReportController::class, 'gradesAboveTwo']);
             Route::get('/reports/students/exam-attendance', [StudentReportController::class, 'examAttendance']);
+            Route::get('/reports/students/exam-eligible', [StudentReportController::class, 'examEligibleStudents']);
         });
         Route::get('/settings/profile', [ProfileController::class, 'show']);
         Route::patch('/settings/profile', [ProfileController::class, 'update']);

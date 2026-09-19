@@ -11,6 +11,68 @@ use Tests\TestCase;
 
 final class LegacyStudentReportServiceTest extends TestCase
 {
+    public function test_exam_eligible_students_use_status_tokens_and_deduplicate_registrations(): void
+    {
+        $batch = 'import_1700000002_exam';
+        $queries = [];
+        $connection = Mockery::mock(ConnectionInterface::class);
+        $connection->shouldReceive('selectOne')
+            ->once()
+            ->andReturn((object) ['batch_key' => $batch]);
+        $connection->shouldReceive('select')->andReturnUsing(
+            function (string $query, array $bindings = [], bool $useReadPdo = true) use ($batch, &$queries): array {
+                $queries[] = compact('query', 'bindings', 'useReadPdo');
+
+                return match (true) {
+                    str_contains($query, 'INFORMATION_SCHEMA.TABLES') => array_map(
+                        static fn (string $table): object => (object) ['table_name' => $table],
+                        [
+                            "db_{$batch}_1_student",
+                            "db_{$batch}_1_grade",
+                            "db_{$batch}_1_subject",
+                            "db_{$batch}_1214120000_group",
+                        ],
+                    ),
+                    str_contains($query, 'SELECT DISTINCT g._perf_semestry AS raw_term') => [
+                        (object) ['raw_term' => '69/1'],
+                    ],
+                    str_contains($query, 'SELECT g._id AS row_id') => [
+                        (object) ['row_id' => 1, 'student_code' => '6911000001', 'subject_code' => 'พท11001', 'raw_term' => '69/1', 'grade_value' => 'ม', 'typ_code' => '', 'subject_name' => 'ภาษาไทย', 'subject_credit' => '3', 'subject_type' => '1', 'prename' => 'นาย', 'first_name' => 'ถูกตัดสิทธิ์', 'last_name' => 'ทดสอบ', 'group_code' => 'G-01', 'group_name' => 'กลุ่มครู ก'],
+                        (object) ['row_id' => 2, 'student_code' => '6911000001', 'subject_code' => 'พค11001', 'raw_term' => '1/2569', 'grade_value' => 'ม', 'typ_code' => '', 'subject_name' => 'คณิตศาสตร์', 'subject_credit' => '3', 'subject_type' => '1', 'prename' => 'นาย', 'first_name' => 'ถูกตัดสิทธิ์', 'last_name' => 'ทดสอบ', 'group_code' => 'G-01', 'group_name' => 'กลุ่มครู ก'],
+                        (object) ['row_id' => 3, 'student_code' => '6911000002', 'subject_code' => 'พท11001', 'raw_term' => '69/1', 'grade_value' => '0', 'typ_code' => '', 'subject_name' => 'ภาษาไทย', 'subject_credit' => '3', 'subject_type' => '1', 'prename' => 'นางสาว', 'first_name' => 'คะแนนศูนย์', 'last_name' => 'ยังมีสิทธิ์', 'group_code' => 'G-01', 'group_name' => 'กลุ่มครู ก'],
+                        (object) ['row_id' => 4, 'student_code' => '6911000003', 'subject_code' => 'พท11001', 'raw_term' => '69/1', 'grade_value' => '', 'typ_code' => '', 'subject_name' => 'ภาษาไทย', 'subject_credit' => '3', 'subject_type' => '1', 'prename' => 'นาย', 'first_name' => 'ไม่มีคะแนน', 'last_name' => 'ยังมีสิทธิ์', 'group_code' => 'G-01', 'group_name' => 'กลุ่มครู ก'],
+                    ],
+                    default => [],
+                };
+            },
+        );
+
+        $database = Mockery::mock(DatabaseManager::class);
+        $database->shouldReceive('connection')->andReturn($connection);
+        $service = new LegacyStudentReportService($database);
+        $teacher = new User([
+            'role' => 'teacher',
+            'district_id' => 1,
+            'assigned_groups' => ['กลุ่มครู ก'],
+        ]);
+
+        $result = $service->examEligibleStudents($teacher, 1, ['term' => '1/2569']);
+
+        $this->assertSame('1/2569', $result['selected_term']);
+        $this->assertSame(3, $result['summary']['total_students']);
+        $this->assertSame(2, $result['summary']['eligible_students']);
+        $this->assertSame(1, $result['summary']['disqualified_students']);
+        $this->assertCount(2, $result['items']);
+        $this->assertSame(['6911000002', '6911000003'], collect($result['items'])->pluck('student.code')->all());
+
+        $registrationQuery = collect($queries)->first(
+            static fn (array $entry): bool => str_contains($entry['query'], 'SELECT g._id AS row_id'),
+        );
+        $this->assertNotNull($registrationQuery);
+        $this->assertStringContainsString('st.grp_code IN', $registrationQuery['query']);
+        $this->assertContains('กลุ่มครู ก', $registrationQuery['bindings']);
+    }
+
     public function test_registration_statistics_use_itw51_target_group_and_keep_teacher_scope(): void
     {
         $batch = 'import_1700000001_statistics';

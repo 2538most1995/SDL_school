@@ -42,5 +42,6 @@ class RoleMiddlewareTest extends TestCase
 
         $this->getJson('/api/v1/reports/new-students')->assertForbidden();
         $this->getJson('/api/v1/reports/students/exam-attendance')->assertForbidden();
+        $this->getJson('/api/v1/reports/students/exam-eligible')->assertForbidden();
     }
 }

@@ -581,6 +581,80 @@ final readonly class LegacyStudentReportService
         return $this->historicalAcademicReport($viewer, $districtId, $filters, 'exam-attendance');
     }
 
+    /**
+     * Return the current-term exam roster after excluding students whose imported
+     * registration status is marked as disqualified. Numeric grades are not used.
+     *
+     * @param  array<string, mixed>  $filters
+     * @return array<string, mixed>
+     */
+    public function examEligibleStudents(User $viewer, int $districtId, array $filters): array
+    {
+        $sets = $this->sets($districtId);
+        $terms = $this->registeredSubjectTerms($viewer, $sets, $filters);
+        $selectedTerm = $this->selectedTerm($filters, $terms);
+        $students = [];
+
+        if ($selectedTerm !== null) {
+            $rowFilters = $filters;
+            $rowFilters['view'] = 'student';
+            foreach ($this->registeredSubjectRows($viewer, $sets, $rowFilters, $selectedTerm) as $registration) {
+                $key = $registration['level'].'|'.$registration['student_code'];
+                $students[$key] ??= [
+                    'student' => [
+                        'code' => $registration['student_code'],
+                        'full_name' => $registration['student_name'],
+                        'level' => [
+                            'id' => $registration['level'],
+                            'label' => $this->levelLabel((int) $registration['level']),
+                        ],
+                        'group' => [
+                            'code' => $registration['group_code'],
+                            'name' => $registration['group_name'],
+                        ],
+                    ],
+                    'term' => $selectedTerm,
+                    'exam_status' => 'eligible',
+                    '_disqualified' => false,
+                ];
+
+                if ($this->isDisqualifyingExamStatus($registration['grade_value'] ?? null)) {
+                    $students[$key]['_disqualified'] = true;
+                }
+            }
+        }
+
+        $totalStudents = count($students);
+        $eligible = array_values(array_filter(
+            $students,
+            static fn (array $student): bool => ! $student['_disqualified'],
+        ));
+        $eligible = array_map(static function (array $student): array {
+            unset($student['_disqualified']);
+
+            return $student;
+        }, $eligible);
+        usort($eligible, static fn (array $left, array $right): int => strnatcasecmp(
+            (string) $left['student']['full_name'],
+            (string) $right['student']['full_name'],
+        ));
+
+        return [
+            'items' => $eligible,
+            'summary' => [
+                'total_students' => $totalStudents,
+                'eligible_students' => count($eligible),
+                'disqualified_students' => $totalStudents - count($eligible),
+                'group_count' => count(array_unique(array_map(
+                    static fn (array $item): string => $item['student']['level']['id'].'|'.$item['student']['group']['code'].'|'.$item['student']['group']['name'],
+                    $eligible,
+                ))),
+            ],
+            'terms' => $terms,
+            'selected_term' => $selectedTerm,
+        ];
+    }
+
     /** @return list<LegacyTableSet> */
     private function sets(int $districtId): array
     {
@@ -1219,6 +1293,11 @@ final readonly class LegacyStudentReportService
         return match ($level) {
             1 => 'ประถมศึกษา', 2 => 'มัธยมศึกษาตอนต้น', 3 => 'มัธยมศึกษาตอนปลาย', default => 'ไม่ทราบระดับ',
         };
+    }
+
+    private function isDisqualifyingExamStatus(mixed $status): bool
+    {
+        return in_array(trim((string) $status), ['ม', 'มส'], true);
     }
 
     /** @param list<array<string, string>> $rows @param list<string> $terms */
