@@ -730,6 +730,13 @@ final readonly class LegacyStudentReportService
     /** @return array{string, list<string>} */
     private function scope(User $viewer, LegacyTableSet $set, string $studentAlias, bool $hasGroupJoin): array
     {
+        if ($viewer->role === 'student') {
+            $studentCode = trim((string) $viewer->student_code);
+
+            return $studentCode === ''
+                ? ['1 = 0', []]
+                : ["{$studentAlias}._perf_id10 = ?", [$studentCode]];
+        }
         if ($viewer->role !== 'teacher') {
             return ['1 = 1', []];
         }

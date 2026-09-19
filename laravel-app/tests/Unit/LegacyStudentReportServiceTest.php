@@ -300,4 +300,66 @@ final class LegacyStudentReportServiceTest extends TestCase
         $this->assertSame(1, $attendanceReport['summary']['absent_records']);
         $this->assertSame(66.7, $attendanceReport['summary']['attendance_rate']);
     }
+
+    public function test_scorebook_registration_source_scopes_student_to_their_own_code(): void
+    {
+        $batch = 'import_1700000003_studentscope';
+        $queries = [];
+        $connection = Mockery::mock(ConnectionInterface::class);
+        $connection->shouldReceive('selectOne')->once()->andReturn((object) ['batch_key' => $batch]);
+        $connection->shouldReceive('select')->andReturnUsing(
+            function (string $query, array $bindings = [], bool $useReadPdo = true) use ($batch, &$queries): array {
+                $queries[] = compact('query', 'bindings', 'useReadPdo');
+
+                return match (true) {
+                    str_contains($query, 'INFORMATION_SCHEMA.TABLES') => array_map(
+                        static fn (string $table): object => (object) ['table_name' => $table],
+                        [
+                            "db_{$batch}_1_student",
+                            "db_{$batch}_1_grade",
+                            "db_{$batch}_1_subject",
+                        ],
+                    ),
+                    str_contains($query, 'SELECT DISTINCT g._perf_semestry AS raw_term') => [(object) ['raw_term' => '69/1']],
+                    str_contains($query, 'SELECT g._id AS row_id') => [(object) [
+                        'row_id' => 1,
+                        'student_code' => '6911000099',
+                        'subject_code' => 'พท11001',
+                        'raw_term' => '69/1',
+                        'grade_value' => '',
+                        'typ_code' => '',
+                        'subject_name' => 'ภาษาไทย',
+                        'subject_credit' => '3',
+                        'subject_type' => '1',
+                        'prename' => 'นาย',
+                        'first_name' => 'นักศึกษา',
+                        'last_name' => 'ทดสอบ',
+                        'group_code' => 'G-01',
+                        'group_name' => 'กลุ่ม 1',
+                    ]],
+                    default => [],
+                };
+            },
+        );
+
+        $database = Mockery::mock(DatabaseManager::class);
+        $database->shouldReceive('connection')->andReturn($connection);
+        $service = new LegacyStudentReportService($database);
+        $student = new User([
+            'role' => 'student',
+            'district_id' => 1,
+            'student_code' => '6911000099',
+        ]);
+
+        $result = $service->scorebookRegistrations($student, 1, ['term' => '1/2569']);
+
+        $this->assertCount(1, $result['rows']);
+        $this->assertSame('6911000099', $result['rows'][0]['student_code']);
+        $scopedQueries = collect($queries)->filter(static fn (array $entry): bool => str_contains($entry['query'], 'g._perf_semestry'));
+        $this->assertNotEmpty($scopedQueries);
+        $this->assertTrue($scopedQueries->every(
+            static fn (array $entry): bool => str_contains($entry['query'], 'st._perf_id10 = ?')
+                && in_array('6911000099', $entry['bindings'], true),
+        ));
+    }
 }

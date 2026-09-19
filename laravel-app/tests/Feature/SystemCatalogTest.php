@@ -35,6 +35,7 @@ class SystemCatalogTest extends TestCase
         $scoreItem = collect($response->json('data.groups'))
             ->firstWhere('key', 'learning')['items'];
         $this->assertSame('คะแนน', collect($scoreItem)->firstWhere('key', 'scores')['label']);
+        $this->assertTrue(collect($response->json('data.groups'))->flatMap(fn (array $group) => $group['items'])->contains('key', 'exam-attendance-check'));
     }
 
     public function test_admin_catalog_includes_administration_and_own_district_branding(): void

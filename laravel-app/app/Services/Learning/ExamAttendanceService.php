@@ -27,7 +27,7 @@ final readonly class ExamAttendanceService
     /** @param array<string, mixed> $filters @return array<string, mixed> */
     public function workspace(User $viewer, int $districtId, array $filters): array
     {
-        $this->assertStaff($viewer);
+        $this->assertCanView($viewer);
         $source = $this->registrationSource($viewer, $districtId, $filters);
         $rows = $this->eligibleRegistrations($source['rows']);
         $level = isset($filters['level']) ? (int) $filters['level'] : null;
@@ -37,11 +37,14 @@ final readonly class ExamAttendanceService
 
         $subjects = $this->subjects($rows);
         $studentOptions = $this->studentOptions($rows);
-        $view = (string) ($filters['view'] ?? 'subject');
+        $studentReadOnly = $viewer->role === 'student';
+        $view = $studentReadOnly ? 'my-subjects' : (string) ($filters['view'] ?? 'subject');
         $selectedSubject = $view === 'subject'
             ? $this->selectedSubject($subjects, (string) ($filters['subject_code'] ?? ''), $level)
             : null;
-        $items = $view === 'student'
+        $items = $studentReadOnly
+            ? $rows
+            : ($view === 'student'
             ? array_map(static fn (array $student): array => [
                 'level' => $student['level'],
                 'student_code' => $student['student_code'],
@@ -53,7 +56,7 @@ final readonly class ExamAttendanceService
             ], $studentOptions)
             : array_values(array_filter($rows, static fn (array $row): bool => $selectedSubject !== null
                 && (string) $row['subject_code'] === (string) $selectedSubject['code']
-                && (int) $row['level'] === (int) $selectedSubject['level']));
+                && (int) $row['level'] === (int) $selectedSubject['level'])));
         $search = mb_strtolower(trim((string) ($filters['search'] ?? '')));
         if ($search !== '') {
             $items = array_values(array_filter($items, static fn (array $row): bool => str_contains(mb_strtolower(implode(' ', [
@@ -80,12 +83,16 @@ final readonly class ExamAttendanceService
                 'checked_at' => $attendance?->checked_at,
             ];
         }, $items);
-        usort($items, static fn (array $left, array $right): int => strnatcasecmp($left['student_code'], $right['student_code']));
+        usort($items, static fn (array $left, array $right): int => $studentReadOnly
+            ? strnatcasecmp($left['subject_code'], $right['subject_code'])
+            : strnatcasecmp($left['student_code'], $right['student_code']));
         $attended = count(array_filter($items, static fn (array $item): bool => $item['attended']));
+        $recordedAbsent = count(array_filter($items, static fn (array $item): bool => $item['recorded'] && ! $item['attended']));
         $total = count($items);
 
         return [
             'view' => $view,
+            'read_only' => $studentReadOnly,
             'terms' => $source['terms'],
             'selected_term' => $source['selected_term'],
             'subjects' => $subjects,
@@ -95,7 +102,8 @@ final readonly class ExamAttendanceService
             'summary' => [
                 'registered_students' => $total,
                 'attended_students' => $attended,
-                'absent_students' => $total - $attended,
+                'absent_students' => $studentReadOnly ? $recordedAbsent : $total - $attended,
+                'pending_records' => $studentReadOnly ? $total - $attended - $recordedAbsent : 0,
                 'attendance_rate' => $total > 0 ? round(($attended / $total) * 100, 1) : 0.0,
             ],
         ];
@@ -279,5 +287,10 @@ final readonly class ExamAttendanceService
     private function assertStaff(User $viewer): void
     {
         abort_unless(in_array($viewer->role, ['teacher', 'admin', 'super_admin'], true), 403);
+    }
+
+    private function assertCanView(User $viewer): void
+    {
+        abort_unless(in_array($viewer->role, ['student', 'teacher', 'admin', 'super_admin'], true), 403);
     }
 }

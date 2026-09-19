@@ -92,10 +92,21 @@ final class ExamAttendanceCheckTest extends TestCase
     public function test_attendance_excludes_disqualified_students_and_rejects_out_of_scope_writes(): void
     {
         Sanctum::actingAs($this->teacher(['SENA-M2-A']));
-        $this->getJson('/api/v1/learning/exam-attendance/workspace?view=subject&term=2/2568&level=2&group=SENA-M2-A&subject_code='.rawurlencode('พว21001'))
+        $eligible = $this->getJson('/api/v1/learning/exam-attendance/workspace?view=subject&term=2/2568&level=2&group=SENA-M2-A&subject_code='.rawurlencode('พว21001'))
             ->assertOk()
             ->assertJsonCount(1, 'data.items')
             ->assertJsonPath('data.items.0.student_code', '6650200004');
+
+        $eligibleItem = $eligible->json('data.items.0');
+        $this->putJson('/api/v1/learning/exam-attendance', [
+            'term' => '2/2568',
+            'records' => [[
+                'student_code' => $eligibleItem['student_code'],
+                'subject_code' => $eligibleItem['subject_code'],
+                'level' => $eligibleItem['level'],
+                'attended' => true,
+            ]],
+        ])->assertOk();
 
         $this->putJson('/api/v1/learning/exam-attendance', [
             'term' => '2/2568',
@@ -103,8 +114,32 @@ final class ExamAttendanceCheckTest extends TestCase
         ])->assertUnprocessable()->assertJsonValidationErrors('records.0');
 
         Sanctum::actingAs(User::factory()->create(['role' => 'student', 'district_id' => $this->district->id, 'student_code' => '6650200004']));
-        $this->getJson('/api/v1/learning/exam-attendance/workspace')->assertForbidden();
-        $this->putJson('/api/v1/learning/exam-attendance', ['term' => '2/2568', 'records' => []])->assertForbidden();
+        $studentWorkspace = $this->getJson('/api/v1/learning/exam-attendance/workspace?term=2/2568')
+            ->assertOk()
+            ->assertJsonPath('data.view', 'my-subjects')
+            ->assertJsonPath('data.read_only', true)
+            ->assertJsonPath('data.summary.attended_students', 1)
+            ->assertJsonPath('data.summary.absent_students', 0)
+            ->assertJsonPath('data.items.0.student_code', '6650200004')
+            ->assertJsonFragment([
+                'subject_code' => 'พว21001',
+                'attended' => true,
+                'recorded' => true,
+            ]);
+
+        $this->assertTrue(collect($studentWorkspace->json('data.items'))->every(
+            static fn (array $item): bool => $item['student_code'] === '6650200004'
+                && $item['subject_code'] !== '__overall__',
+        ));
+        $this->putJson('/api/v1/learning/exam-attendance', [
+            'term' => '2/2568',
+            'records' => [[
+                'student_code' => '6650200004',
+                'subject_code' => 'พว21001',
+                'level' => 2,
+                'attended' => false,
+            ]],
+        ])->assertForbidden();
     }
 
     /** @param list<string> $groups */
