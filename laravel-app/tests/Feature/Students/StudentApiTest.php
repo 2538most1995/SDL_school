@@ -309,11 +309,30 @@ final class StudentApiTest extends TestCase
             ->assertJsonPath('data.summary.total_students', 8)
             ->assertJsonPath('data.summary.eligible_students', 6)
             ->assertJsonPath('data.summary.disqualified_students', 2)
+            ->assertJsonPath('data.summary.group_count', 4)
             ->assertJsonCount(6, 'data.items')
+            ->assertJsonCount(4, 'data.group_statistics')
             ->assertJsonMissing(['code' => '6650200003'])
             ->assertJsonMissing(['code' => '6650200008'])
             ->assertJsonMissingPath('data.items.0.grade_value')
-            ->assertJsonStructure(['data' => ['items' => [['student' => ['code', 'full_name', 'level', 'group'], 'term', 'exam_status']]]]);
+            ->assertJsonFragment([
+                'group_name' => 'เสนา ประถม A',
+                'primary_students' => 2,
+                'lower_secondary_students' => 0,
+                'upper_secondary_students' => 0,
+                'total_students' => 2,
+            ])
+            ->assertJsonFragment([
+                'group_name' => 'เสนา ม.ปลาย B',
+                'primary_students' => 0,
+                'lower_secondary_students' => 0,
+                'upper_secondary_students' => 2,
+                'total_students' => 2,
+            ])
+            ->assertJsonStructure(['data' => [
+                'items' => [['student' => ['code', 'full_name', 'level', 'group'], 'term', 'exam_status']],
+                'group_statistics' => [['group_name', 'primary_students', 'lower_secondary_students', 'upper_secondary_students', 'total_students']],
+            ]]);
 
         $this->getJson('/api/v1/reports/students/exam-eligible?term=2/2568&level=3&group=SENA-M3-B&search='.rawurlencode('กัญญารัตน์'))
             ->assertOk()
@@ -321,7 +340,10 @@ final class StudentApiTest extends TestCase
             ->assertJsonPath('data.summary.eligible_students', 1)
             ->assertJsonPath('data.items.0.student.code', '6650300006')
             ->assertJsonPath('data.items.0.student.level.id', 3)
-            ->assertJsonPath('data.items.0.student.group.code', 'SENA-M3-B');
+            ->assertJsonPath('data.items.0.student.group.code', 'SENA-M3-B')
+            ->assertJsonPath('data.group_statistics.0.group_name', 'เสนา ม.ปลาย B')
+            ->assertJsonPath('data.group_statistics.0.upper_secondary_students', 1)
+            ->assertJsonPath('data.group_statistics.0.total_students', 1);
     }
 
     public function test_exam_eligible_report_enforces_teacher_group_scope_and_rejects_students(): void

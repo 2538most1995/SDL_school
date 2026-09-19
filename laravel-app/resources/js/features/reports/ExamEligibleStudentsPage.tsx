@@ -24,8 +24,17 @@ type ExamEligibleItem = {
     exam_status: 'eligible';
 };
 
+type ExamEligibilityGroupStatistic = {
+    group_name: string;
+    primary_students: number;
+    lower_secondary_students: number;
+    upper_secondary_students: number;
+    total_students: number;
+};
+
 type ExamEligiblePayload = {
     items: ExamEligibleItem[];
+    group_statistics: ExamEligibilityGroupStatistic[];
     summary: {
         total_students: number;
         eligible_students: number;
@@ -38,6 +47,7 @@ type ExamEligiblePayload = {
 
 const emptyPayload: ExamEligiblePayload = {
     items: [],
+    group_statistics: [],
     summary: { total_students: 0, eligible_students: 0, disqualified_students: 0, group_count: 0 },
     terms: [],
     selected_term: null,
@@ -137,6 +147,42 @@ export function ExamEligibleStudentsPage() {
             size: 220,
         },
     ], []);
+    const groupStatisticColumns = useMemo<ColumnDef<ExamEligibilityGroupStatistic>[]>(() => [
+        {
+            accessorKey: 'group_name',
+            header: 'กลุ่มเรียน',
+            size: 340,
+            cell: ({ row }) => <p className="font-bold text-slate-950">{row.original.group_name}</p>,
+        },
+        {
+            accessorKey: 'primary_students',
+            header: 'ประถมศึกษา',
+            size: 135,
+            meta: { compactHeader: 'ประถม', compactSize: 80, compactTextAlign: 'center' },
+            cell: ({ row }) => <span className="font-semibold tabular-nums">{row.original.primary_students.toLocaleString('th-TH')} คน</span>,
+        },
+        {
+            accessorKey: 'lower_secondary_students',
+            header: 'มัธยมศึกษาตอนต้น',
+            size: 165,
+            meta: { compactHeader: 'ม.ต้น', compactSize: 80, compactTextAlign: 'center' },
+            cell: ({ row }) => <span className="font-semibold tabular-nums">{row.original.lower_secondary_students.toLocaleString('th-TH')} คน</span>,
+        },
+        {
+            accessorKey: 'upper_secondary_students',
+            header: 'มัธยมศึกษาตอนปลาย',
+            size: 165,
+            meta: { compactHeader: 'ม.ปลาย', compactSize: 80, compactTextAlign: 'center' },
+            cell: ({ row }) => <span className="font-semibold tabular-nums">{row.original.upper_secondary_students.toLocaleString('th-TH')} คน</span>,
+        },
+        {
+            accessorKey: 'total_students',
+            header: 'รวม',
+            size: 120,
+            meta: { compactSize: 70, compactTextAlign: 'center' },
+            cell: ({ row }) => <strong className="font-black tabular-nums text-brand-800">{row.original.total_students.toLocaleString('th-TH')} คน</strong>,
+        },
+    ], []);
 
     const clearFilters = () => {
         setSearch('');
@@ -176,8 +222,8 @@ export function ExamEligibleStudentsPage() {
                 </StatGrid>
             )}
 
-            <Panel title="รายชื่อผู้มีสิทธิ์สอบ" description="ข้อมูลถูกจำกัดตามอำเภอ และครูจะเห็นเฉพาะกลุ่มเรียนที่ได้รับมอบหมาย">
-                <div className="mb-5 rounded-2xl border border-slate-200 bg-slate-50/70 p-4 sm:p-5">
+            <Panel title="ตัวกรองรายงาน" description="ตัวกรองเดียวกันใช้กับทั้งสถิติรายกลุ่มและรายชื่อนักศึกษา">
+                <div className="rounded-2xl border border-slate-200 bg-slate-50/70 p-4 sm:p-5">
                     <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
                         <div className="flex items-center gap-2">
                             <FunnelSimple className="size-5 text-brand-700" weight="bold" aria-hidden="true" />
@@ -236,9 +282,26 @@ export function ExamEligibleStudentsPage() {
                         </label>
                     </div>
                 </div>
+            </Panel>
 
+            <Panel title="สถิติผู้มีสิทธิ์สอบรายกลุ่มเรียน" description="รวมชื่อกลุ่มเดียวกันข้ามระดับ และแยกจำนวนตามระดับการศึกษา">
                 {report.isPending && <QuerySkeleton rows={7} />}
                 {report.isError && <QueryError onRetry={() => report.refetch()} />}
+                {payload && (
+                    <DataTable
+                        data={payload.group_statistics}
+                        columns={groupStatisticColumns}
+                        pageSize={25}
+                        responsiveMode="cards"
+                        disableExport
+                        emptyTitle="ไม่พบสถิติรายกลุ่มเรียน"
+                        emptyDescription="ลองเปลี่ยนภาคเรียน ระดับชั้น กลุ่มเรียน หรือคำค้นหา"
+                    />
+                )}
+            </Panel>
+
+            <Panel title="รายชื่อผู้มีสิทธิ์สอบ" description="ข้อมูลถูกจำกัดตามอำเภอ และครูจะเห็นเฉพาะกลุ่มเรียนที่ได้รับมอบหมาย">
+                {report.isPending && <QuerySkeleton rows={7} />}
                 {payload && (
                     <DataTable
                         data={payload.items}

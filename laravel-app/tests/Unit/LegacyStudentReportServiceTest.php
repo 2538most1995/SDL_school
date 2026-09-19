@@ -63,6 +63,9 @@ final class LegacyStudentReportServiceTest extends TestCase
         $this->assertSame(2, $result['summary']['eligible_students']);
         $this->assertSame(1, $result['summary']['disqualified_students']);
         $this->assertCount(2, $result['items']);
+        $this->assertSame(1, $result['summary']['group_count']);
+        $this->assertSame(2, $result['group_statistics'][0]['primary_students']);
+        $this->assertSame(2, $result['group_statistics'][0]['total_students']);
         $this->assertSame(['6911000002', '6911000003'], collect($result['items'])->pluck('student.code')->all());
 
         $registrationQuery = collect($queries)->first(

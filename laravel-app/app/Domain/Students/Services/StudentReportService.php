@@ -6,6 +6,7 @@ use App\Domain\Students\Models\Grade;
 use App\Domain\Students\Models\Student;
 use App\Domain\Students\Repositories\StudentRepository;
 use App\Domain\Students\Support\AcademicTerm;
+use App\Domain\Students\Support\ExamEligibilityStatistics;
 use App\Domain\Students\Support\RegistrationStatistics;
 use App\Models\User;
 
@@ -399,17 +400,16 @@ final readonly class StudentReportService
             (string) $left['student']['full_name'],
             (string) $right['student']['full_name'],
         ));
+        $groupStatistics = ExamEligibilityStatistics::byGroup($eligible);
 
         return [
             'items' => $eligible,
+            'group_statistics' => $groupStatistics,
             'summary' => [
                 'total_students' => $totalStudents,
                 'eligible_students' => count($eligible),
                 'disqualified_students' => $totalStudents - count($eligible),
-                'group_count' => count(array_unique(array_map(
-                    static fn (array $item): string => $item['student']['level']['id'].'|'.$item['student']['group']['code'].'|'.$item['student']['group']['name'],
-                    $eligible,
-                ))),
+                'group_count' => count($groupStatistics),
             ],
             'terms' => $terms,
             'selected_term' => $selectedTerm,
