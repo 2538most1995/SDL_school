@@ -15,6 +15,8 @@ use Illuminate\Validation\ValidationException;
 
 final readonly class ExamAttendanceService
 {
+    private const OVERALL_SUBJECT = '__overall__';
+
     public function __construct(
         private DatabaseManager $database,
         private LegacyStudentReportService $legacyReports,
@@ -36,19 +38,22 @@ final readonly class ExamAttendanceService
         $subjects = $this->subjects($rows);
         $studentOptions = $this->studentOptions($rows);
         $view = (string) ($filters['view'] ?? 'subject');
-        $selectedSubject = $this->selectedSubject($subjects, (string) ($filters['subject_code'] ?? ''), $level);
-        $selectedStudent = $this->selectedStudent($studentOptions, (string) ($filters['student_code'] ?? ''), $level);
-        $items = array_values(array_filter($rows, static function (array $row) use ($view, $selectedSubject, $selectedStudent): bool {
-            if ($view === 'student') {
-                return $selectedStudent !== null
-                    && (string) $row['student_code'] === (string) $selectedStudent['student_code']
-                    && (int) $row['level'] === (int) $selectedStudent['level'];
-            }
-
-            return $selectedSubject !== null
+        $selectedSubject = $view === 'subject'
+            ? $this->selectedSubject($subjects, (string) ($filters['subject_code'] ?? ''), $level)
+            : null;
+        $items = $view === 'student'
+            ? array_map(static fn (array $student): array => [
+                'level' => $student['level'],
+                'student_code' => $student['student_code'],
+                'student_name' => $student['full_name'],
+                'group_code' => $student['group_code'],
+                'group_name' => $student['group_name'],
+                'subject_code' => self::OVERALL_SUBJECT,
+                'subject_name' => '',
+            ], $studentOptions)
+            : array_values(array_filter($rows, static fn (array $row): bool => $selectedSubject !== null
                 && (string) $row['subject_code'] === (string) $selectedSubject['code']
-                && (int) $row['level'] === (int) $selectedSubject['level'];
-        }));
+                && (int) $row['level'] === (int) $selectedSubject['level']));
         $search = mb_strtolower(trim((string) ($filters['search'] ?? '')));
         if ($search !== '') {
             $items = array_values(array_filter($items, static fn (array $row): bool => str_contains(mb_strtolower(implode(' ', [
@@ -75,9 +80,7 @@ final readonly class ExamAttendanceService
                 'checked_at' => $attendance?->checked_at,
             ];
         }, $items);
-        usort($items, static fn (array $left, array $right): int => $view === 'student'
-            ? strnatcasecmp($left['subject_code'], $right['subject_code'])
-            : strnatcasecmp($left['student_code'], $right['student_code']));
+        usort($items, static fn (array $left, array $right): int => strnatcasecmp($left['student_code'], $right['student_code']));
         $attended = count(array_filter($items, static fn (array $item): bool => $item['attended']));
         $total = count($items);
 
@@ -88,7 +91,6 @@ final readonly class ExamAttendanceService
             'subjects' => $subjects,
             'students' => $studentOptions,
             'selected_subject' => $selectedSubject,
-            'selected_student' => $selectedStudent,
             'items' => $items,
             'summary' => [
                 'registered_students' => $total,
@@ -107,6 +109,8 @@ final readonly class ExamAttendanceService
         abort_unless($source['selected_term'] === $values['term'], 404);
         $allowed = [];
         foreach ($this->eligibleRegistrations($source['rows']) as $row) {
+            $allowed[self::key($row)] = true;
+            $row['subject_code'] = self::OVERALL_SUBJECT;
             $allowed[self::key($row)] = true;
         }
 
@@ -236,18 +240,6 @@ final readonly class ExamAttendanceService
         foreach ($subjects as $subject) {
             if (($code === '' || $subject['code'] === $code) && ($level === null || $subject['level'] === $level)) {
                 return $subject;
-            }
-        }
-
-        return null;
-    }
-
-    /** @param list<array<string,mixed>> $students */
-    private function selectedStudent(array $students, string $code, ?int $level): ?array
-    {
-        foreach ($students as $student) {
-            if (($code === '' || $student['student_code'] === $code) && ($level === null || $student['level'] === $level)) {
-                return $student;
             }
         }
 

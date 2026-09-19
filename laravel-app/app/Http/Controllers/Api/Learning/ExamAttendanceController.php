@@ -16,7 +16,6 @@ final class ExamAttendanceController extends Controller
             'term' => ['nullable', 'regex:/^[12]\/25\d{2}$/'],
             'view' => ['nullable', Rule::in(['subject', 'student'])],
             'subject_code' => ['nullable', 'string', 'max:32'],
-            'student_code' => ['nullable', 'string', 'max:64'],
             'level' => ['nullable', 'integer', Rule::in([1, 2, 3])],
             'group' => ['nullable', 'string', 'max:120'],
             'search' => ['nullable', 'string', 'max:100'],

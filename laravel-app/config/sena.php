@@ -36,7 +36,7 @@ return [
                 ['key' => 'subjects', 'label' => 'วิชาลงทะเบียน', 'description' => 'รายวิชาที่ลงทะเบียนตามภาคเรียน', 'route' => '/reports/registered-subjects', 'icon' => 'books', 'roles' => ['teacher', 'admin', 'super_admin']],
                 ['key' => 'grade-threshold', 'label' => 'สถิติเกรด 2 ขึ้นไป', 'description' => 'สรุปผลสัมฤทธิ์ตามระดับและกลุ่ม', 'route' => '/reports/grade-threshold', 'icon' => 'trend', 'roles' => ['teacher', 'admin', 'super_admin']],
                 ['key' => 'exam-attendance', 'label' => 'สถิติการเข้าสอบ', 'description' => 'การเข้าสอบตามวิชาและห้องสอบ', 'route' => '/reports/exam-attendance', 'icon' => 'clipboard', 'roles' => ['teacher', 'admin', 'super_admin']],
-                ['key' => 'exam-attendance-check', 'label' => 'เช็คชื่อเข้าสอบ', 'description' => 'บันทึกการเข้าสอบแบบรายวิชาและรายคน พร้อมสรุปสถิติ', 'route' => '/learning/exam-attendance-check', 'icon' => 'clipboard', 'roles' => ['teacher', 'admin', 'super_admin']],
+                ['key' => 'exam-attendance-check', 'label' => 'เช็คชื่อเข้าสอบ', 'description' => 'บันทึกการเข้าสอบแบบรายวิชาและรายคนภาพรวม พร้อมสรุปสถิติ', 'route' => '/learning/exam-attendance-check', 'icon' => 'clipboard', 'roles' => ['teacher', 'admin', 'super_admin']],
                 ['key' => 'exam-eligible', 'label' => 'นักศึกษามีสิทธิ์สอบ', 'description' => 'รายชื่อนักศึกษาที่มีสิทธิ์สอบตามสถานะ ภาคเรียน ระดับ และกลุ่มเรียน', 'route' => '/reports/exam-eligible', 'icon' => 'clipboard', 'roles' => ['teacher', 'admin', 'super_admin']],
             ],
         ],

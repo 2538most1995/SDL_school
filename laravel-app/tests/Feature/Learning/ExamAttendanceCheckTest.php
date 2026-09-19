@@ -21,7 +21,7 @@ final class ExamAttendanceCheckTest extends TestCase
         $this->district = District::create(['name' => 'อำเภอเสนา', 'code' => 'sena-attendance', 'is_active' => true]);
     }
 
-    public function test_teacher_checks_attendance_by_subject_and_reads_statistics_by_student(): void
+    public function test_teacher_checks_attendance_by_subject_and_as_an_overall_student_roster(): void
     {
         Sanctum::actingAs($this->teacher(['SENA-M3-B']));
 
@@ -52,14 +52,39 @@ final class ExamAttendanceCheckTest extends TestCase
             ->assertJsonPath('data.items.0.recorded', true)
             ->assertJsonPath('data.items.1.recorded', true);
 
-        $studentCode = $items[0]['student_code'];
-        $this->getJson("/api/v1/learning/exam-attendance/workspace?view=student&term=2/2568&level=3&student_code={$studentCode}")
+        $overall = $this->getJson('/api/v1/learning/exam-attendance/workspace?view=student&term=2/2568&level=3&group=SENA-M3-B')
             ->assertOk()
-            ->assertJsonPath('data.selected_student.student_code', $studentCode)
-            ->assertJsonCount(3, 'data.items')
-            ->assertJsonPath('data.summary.attended_students', 1)
+            ->assertJsonCount(2, 'data.items')
+            ->assertJsonPath('data.items.0.subject_code', '__overall__')
+            ->assertJsonPath('data.items.0.subject_name', '')
+            ->assertJsonPath('data.summary.attended_students', 0)
             ->assertJsonPath('data.summary.absent_students', 2)
-            ->assertJsonPath('data.summary.attendance_rate', 33.3);
+            ->assertJsonPath('data.summary.attendance_rate', 0);
+
+        $overallItems = $overall->json('data.items');
+        $this->putJson('/api/v1/learning/exam-attendance', [
+            'term' => '2/2568',
+            'records' => array_map(static fn (array $item, int $index): array => [
+                'student_code' => $item['student_code'],
+                'subject_code' => $item['subject_code'],
+                'level' => $item['level'],
+                'attended' => $index === 0,
+            ], $overallItems, array_keys($overallItems)),
+        ])->assertOk()->assertJsonPath('data.saved_records', 2);
+
+        $this->getJson('/api/v1/learning/exam-attendance/workspace?view=student&term=2/2568&level=3&group=SENA-M3-B')
+            ->assertOk()
+            ->assertJsonPath('data.summary.attended_students', 1)
+            ->assertJsonPath('data.summary.absent_students', 1)
+            ->assertJsonPath('data.summary.attendance_rate', 50)
+            ->assertJsonPath('data.items.0.recorded', true)
+            ->assertJsonPath('data.items.1.recorded', true);
+
+        $this->assertDatabaseHas('learning_exam_attendances', [
+            'student_code' => $overallItems[0]['student_code'],
+            'subject_code' => '__overall__',
+            'attended' => true,
+        ]);
 
         $this->assertDatabaseHas('audit_logs', ['event' => 'learning.exam_attendance.saved']);
     }
