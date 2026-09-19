@@ -12,6 +12,7 @@ use App\Http\Controllers\Api\Auth\PublicBrandingController;
 use App\Http\Controllers\Api\Integrations\StudentDataController;
 use App\Http\Controllers\Api\Learning\AssignmentWorkflowController;
 use App\Http\Controllers\Api\Learning\CalendarController;
+use App\Http\Controllers\Api\Learning\ExamAttendanceController;
 use App\Http\Controllers\Api\Learning\ExamScheduleDocumentController;
 use App\Http\Controllers\Api\Learning\LearningContentController;
 use App\Http\Controllers\Api\Learning\LessonPlanController;
@@ -127,6 +128,8 @@ Route::prefix('v1')->group(function (): void {
         Route::get('/learning/scores', ScoreController::class)->middleware('learning.schema');
         Route::get('/learning/scores/workspace', [ScoreController::class, 'workspace'])->middleware(['learning.schema', 'role:teacher,admin,super_admin']);
         Route::get('/learning/scores/templates', [ScoreController::class, 'templates'])->middleware(['learning.schema', 'role:teacher,admin,super_admin']);
+        Route::get('/learning/exam-attendance/workspace', [ExamAttendanceController::class, 'workspace'])->middleware(['learning.schema', 'role:teacher,admin,super_admin']);
+        Route::put('/learning/exam-attendance', [ExamAttendanceController::class, 'save'])->middleware(['learning.schema', 'role:teacher,admin,super_admin']);
         Route::get('/learning/exam-schedule/signed-url', [ExamScheduleDocumentController::class, 'signedUrl']);
         Route::get('/my-learning', [CurrentStudentController::class, 'profile']);
         Route::get('/grades', [CurrentStudentController::class, 'grades']);

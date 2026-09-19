@@ -471,6 +471,7 @@ final class LearningScorebookTest extends TestCase
         Schema::drop('learning_score_entries');
         Schema::drop('learning_score_components');
         Schema::drop('learning_scorebooks');
+        Schema::drop('learning_exam_attendances');
         config(['system_data.enabled' => true, 'system_data.student_enabled' => false, 'system_data.write_enabled' => false]);
         Sanctum::actingAs($this->teacher(['SENA-M3-A']));
 
@@ -478,7 +479,7 @@ final class LearningScorebookTest extends TestCase
             ->assertOk()
             ->assertJsonPath('meta.read_only', true);
 
-        foreach (['learning_scorebooks', 'learning_score_components', 'learning_score_entries', 'learning_score_notes', 'learning_score_templates'] as $table) {
+        foreach (['learning_scorebooks', 'learning_score_components', 'learning_score_entries', 'learning_score_notes', 'learning_score_templates', 'learning_exam_attendances'] as $table) {
             $this->assertTrue(Schema::hasTable($table));
         }
         $this->assertTrue(Schema::hasIndex('learning_scorebooks', 'learning_scorebooks_course_scope_unique'));
@@ -489,6 +490,7 @@ final class LearningScorebookTest extends TestCase
         $this->assertTrue(Schema::hasColumn('learning_score_components', 'category'));
         $this->assertTrue(Schema::hasTable('learning_score_templates'));
         $this->assertTrue(Schema::hasIndex('learning_score_templates', 'learning_score_templates_district_name_unique'));
+        $this->assertTrue(Schema::hasIndex('learning_exam_attendances', 'learning_exam_attendances_scope_unique'));
 
         Schema::table('learning_score_entries', function ($table): void {
             $table->dropUnique('learning_score_entries_unique');

@@ -619,7 +619,7 @@ final readonly class LegacyStudentReportService
                     '_disqualified' => false,
                 ];
 
-                if ($this->isDisqualifyingExamStatus($registration['grade_value'] ?? null)) {
+                if (ExamEligibilityStatistics::isDisqualifyingStatus($registration['grade_value'] ?? null)) {
                     $students[$key]['_disqualified'] = true;
                 }
             }
@@ -1293,11 +1293,6 @@ final readonly class LegacyStudentReportService
         return match ($level) {
             1 => 'ประถมศึกษา', 2 => 'มัธยมศึกษาตอนต้น', 3 => 'มัธยมศึกษาตอนปลาย', default => 'ไม่ทราบระดับ',
         };
-    }
-
-    private function isDisqualifyingExamStatus(mixed $status): bool
-    {
-        return in_array(trim((string) $status), ['ม', 'มส'], true);
     }
 
     /** @param list<array<string, string>> $rows @param list<string> $terms */

@@ -375,7 +375,7 @@ final readonly class StudentReportService
             $totalStudents++;
             $disqualified = false;
             foreach ($registrations as $registration) {
-                if ($this->isDisqualifyingExamStatus($registration->grade)) {
+                if (ExamEligibilityStatistics::isDisqualifyingStatus($registration->grade)) {
                     $disqualified = true;
                     break;
                 }
@@ -640,11 +640,6 @@ final readonly class StudentReportService
     private function studentGrades(array $gradesByStudent, Student $student): array
     {
         return $gradesByStudent["{$student->districtId}|{$student->level}|{$student->code}"] ?? [];
-    }
-
-    private function isDisqualifyingExamStatus(?string $status): bool
-    {
-        return in_array(trim((string) $status), ['ม', 'มส'], true);
     }
 
     /**

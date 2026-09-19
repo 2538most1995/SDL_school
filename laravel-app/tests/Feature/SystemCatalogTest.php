@@ -51,6 +51,7 @@ class SystemCatalogTest extends TestCase
         $this->assertFalse($items->contains('key', 'districts'));
         $this->assertTrue($items->contains('key', 'exam-eligible'));
         $this->assertTrue($items->contains('route', '/reports/exam-eligible'));
+        $this->assertTrue($items->contains('key', 'exam-attendance-check'));
     }
 
     public function test_teacher_catalog_includes_only_assigned_exam_room_management(): void
@@ -65,6 +66,7 @@ class SystemCatalogTest extends TestCase
         $this->assertSame('/admin/exam-rooms', $administration['items'][0]['route']);
         $this->assertTrue(collect($response->json('data.groups'))->flatMap(fn (array $group) => $group['items'])->contains('key', 'registration-statistics'));
         $this->assertTrue(collect($response->json('data.groups'))->flatMap(fn (array $group) => $group['items'])->contains('key', 'exam-eligible'));
+        $this->assertTrue(collect($response->json('data.groups'))->flatMap(fn (array $group) => $group['items'])->contains('key', 'exam-attendance-check'));
     }
 
     public function test_super_admin_catalog_includes_district_registry(): void

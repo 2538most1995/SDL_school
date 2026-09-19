@@ -26,6 +26,7 @@ final class LearningSchemaReadiness
         'learning_score_entries' => ['scorebook_id', 'component_id', 'student_code', 'score', 'updated_by', 'created_at', 'updated_at'],
         'learning_score_notes' => ['scorebook_id', 'student_code', 'note', 'updated_by', 'created_at', 'updated_at'],
         'learning_score_templates' => ['district_id', 'created_by', 'name', 'score_ratio', 'applies_to_all', 'subject_codes', 'components', 'created_at', 'updated_at'],
+        'learning_exam_attendances' => ['district_id', 'academic_term', 'subject_code', 'education_level', 'student_code', 'attended', 'checked_by', 'checked_at', 'created_at', 'updated_at'],
         'audit_logs' => ['user_id', 'district_id', 'event', 'auditable_type', 'auditable_id', 'ip_address', 'request_id', 'before', 'after', 'context', 'created_at'],
     ];
 
@@ -38,6 +39,7 @@ final class LearningSchemaReadiness
         'learning_score_entries' => ['learning_score_entries_unique'],
         'learning_score_notes' => ['learning_score_notes_scorebook_id_student_code_unique'],
         'learning_score_templates' => ['learning_score_templates_district_name_unique'],
+        'learning_exam_attendances' => ['learning_exam_attendances_scope_unique', 'learning_exam_attendances_summary_index'],
     ];
 
     public function __construct(private readonly DatabaseManager $database) {}
@@ -130,6 +132,7 @@ final class LearningSchemaReadiness
         $this->ensureCalendar($schema);
         $this->ensureScorebooks($schema);
         $this->ensureScoreTemplates($schema);
+        $this->ensureExamAttendances($schema);
         $this->ensureAuditLogs($schema);
     }
 
@@ -598,6 +601,47 @@ final class LearningSchemaReadiness
         if (! $schema->hasIndex('learning_score_templates', 'learning_score_templates_district_name_unique')) {
             $schema->table('learning_score_templates', function (Blueprint $table): void {
                 $table->unique(['district_id', 'name'], 'learning_score_templates_district_name_unique');
+            });
+        }
+    }
+
+    private function ensureExamAttendances(Builder $schema): void
+    {
+        if (! $schema->hasTable('learning_exam_attendances')) {
+            $schema->create('learning_exam_attendances', function (Blueprint $table): void {
+                $table->id();
+                $table->unsignedBigInteger('district_id')->index();
+                $table->string('academic_term', 16)->index();
+                $table->string('subject_code', 32)->index();
+                $table->unsignedTinyInteger('education_level')->index();
+                $table->string('student_code', 64)->index();
+                $table->boolean('attended')->default(false)->index();
+                $table->unsignedBigInteger('checked_by')->nullable()->index();
+                $table->timestamp('checked_at')->nullable();
+                $table->timestamps();
+            });
+        }
+
+        $this->addMissingColumn($schema, 'learning_exam_attendances', 'district_id', fn (Blueprint $table) => $table->unsignedBigInteger('district_id')->nullable());
+        $this->addMissingColumn($schema, 'learning_exam_attendances', 'academic_term', fn (Blueprint $table) => $table->string('academic_term', 16)->nullable());
+        $this->addMissingColumn($schema, 'learning_exam_attendances', 'subject_code', fn (Blueprint $table) => $table->string('subject_code', 32)->nullable());
+        $this->addMissingColumn($schema, 'learning_exam_attendances', 'education_level', fn (Blueprint $table) => $table->unsignedTinyInteger('education_level')->nullable());
+        $this->addMissingColumn($schema, 'learning_exam_attendances', 'student_code', fn (Blueprint $table) => $table->string('student_code', 64)->nullable());
+        $this->addMissingColumn($schema, 'learning_exam_attendances', 'attended', fn (Blueprint $table) => $table->boolean('attended')->default(false));
+        $this->addMissingColumn($schema, 'learning_exam_attendances', 'checked_by', fn (Blueprint $table) => $table->unsignedBigInteger('checked_by')->nullable());
+        $this->addMissingColumn($schema, 'learning_exam_attendances', 'checked_at', fn (Blueprint $table) => $table->timestamp('checked_at')->nullable());
+        $this->addTimestamps($schema, 'learning_exam_attendances');
+
+        $indexes = [
+            ['learning_exam_attendances_scope_unique', ['district_id', 'academic_term', 'subject_code', 'education_level', 'student_code'], true],
+            ['learning_exam_attendances_summary_index', ['district_id', 'academic_term', 'subject_code', 'education_level', 'attended'], false],
+        ];
+        foreach ($indexes as [$name, $columns, $unique]) {
+            if ($schema->hasIndex('learning_exam_attendances', $name)) {
+                continue;
+            }
+            $schema->table('learning_exam_attendances', static function (Blueprint $table) use ($name, $columns, $unique): void {
+                $unique ? $table->unique($columns, $name) : $table->index($columns, $name);
             });
         }
     }

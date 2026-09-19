@@ -83,6 +83,8 @@ Existing indexes cover the main district/status/date filters and exam-room distr
 
 ## Migration history
 
+Migration `2026_09_19_000032_create_learning_exam_attendances_table.php` เพิ่มตารางเช็คชื่อเข้าสอบแบบ additive ผูกอำเภอ ภาคเรียน รายวิชา ระดับ และรหัสนักศึกษา พร้อม unique scope, summary index, ผู้บันทึก และเวลาตรวจ โดยไม่แก้ข้อมูลนำเข้าหรือผลการเรียนเดิม
+
 Migration `2026_09_15_000031_create_announcements_table.php` เพิ่มตารางประกาศรายอำเภอแบบ additive โดยไม่แตะข้อมูลนักศึกษา ตาราง import หรือ learning เดิม
 
 Migrations `2026_09_01_000029_create_student_api_clients_table.php` และ `2026_09_01_000030_create_personal_access_tokens_table.php` เพิ่ม credential store แบบ hash สำหรับ Student Data Integration API และเติมตาราง Sanctum มาตรฐานแบบ additive โดยไม่แตะข้อมูลนำเข้าหรือตารางนักศึกษาเดิม

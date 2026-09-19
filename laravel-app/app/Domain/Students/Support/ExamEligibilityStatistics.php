@@ -4,6 +4,11 @@ namespace App\Domain\Students\Support;
 
 final class ExamEligibilityStatistics
 {
+    public static function isDisqualifyingStatus(mixed $status): bool
+    {
+        return in_array(trim((string) $status), ['ม', 'มส'], true);
+    }
+
     /**
      * @param  list<array<string, mixed>>  $eligibleStudents
      * @return list<array<string, mixed>>
