@@ -69,8 +69,11 @@ export function ExamAttendanceCheckPage() {
     const attendanceRate = items.length > 0 ? (attendedCount / items.length) * 100 : 0;
     const groups = useMemo(() => {
         const catalog = new Map<string, string>();
-        for (const option of data?.students ?? []) catalog.set(option.group_code, option.group_name);
-        return Array.from(catalog, ([code, name]) => ({ code, name })).sort((a, b) => a.name.localeCompare(b.name, 'th'));
+        for (const option of data?.students ?? []) {
+            const name = option.group_name.trim() || option.group_code.trim();
+            if (name) catalog.set(name.toLocaleLowerCase('th'), name);
+        }
+        return Array.from(catalog.values()).sort((a, b) => a.localeCompare(b, 'th'));
     }, [data?.students]);
 
     const save = useMutation({
@@ -118,7 +121,7 @@ export function ExamAttendanceCheckPage() {
             <div className={`grid gap-3 md:grid-cols-2 ${view === 'subject' ? 'xl:grid-cols-4' : 'xl:grid-cols-3'}`}>
                 <label><span className="mb-2 block text-sm font-bold">ภาคเรียน</span><select value={term} onChange={(e) => { setTerm(e.target.value); setSubject(''); }} className="h-11 w-full rounded-xl border border-slate-300 bg-white px-3"><option value="">เลือกภาคเรียน</option>{(data?.terms ?? []).map((item) => <option key={item}>{item}</option>)}</select></label>
                 <label><span className="mb-2 block text-sm font-bold">ระดับชั้น</span><select value={level} onChange={(e) => { setLevel(e.target.value); setGroup(''); setSubject(''); }} className="h-11 w-full rounded-xl border border-slate-300 bg-white px-3"><option value="">ทุกระดับ</option><option value="1">ประถมศึกษา</option><option value="2">มัธยมศึกษาตอนต้น</option><option value="3">มัธยมศึกษาตอนปลาย</option></select></label>
-                <label><span className="mb-2 block text-sm font-bold">กลุ่มเรียน</span><select value={group} onChange={(e) => { setGroup(e.target.value); setSubject(''); }} className="h-11 w-full rounded-xl border border-slate-300 bg-white px-3"><option value="">ทุกกลุ่ม</option>{groups.map((item) => <option key={item.code} value={item.code}>{item.name}</option>)}</select></label>
+                <label><span className="mb-2 block text-sm font-bold">กลุ่มเรียน</span><select value={group} onChange={(e) => { setGroup(e.target.value); setSubject(''); }} className="h-11 w-full rounded-xl border border-slate-300 bg-white px-3"><option value="">ทุกกลุ่ม</option>{groups.map((name) => <option key={name} value={name}>{name}</option>)}</select></label>
                 {view === 'subject' && <label><span className="mb-2 block text-sm font-bold">รายวิชา</span><select value={subject} onChange={(e) => setSubject(e.target.value)} className="h-11 w-full rounded-xl border border-slate-300 bg-white px-3"><option value="">เลือกรายวิชา</option>{(data?.subjects ?? []).map((item) => <option key={`${item.level}|${item.code}`} value={item.code}>{item.code} · {item.name}</option>)}</select></label>}
             </div>
         </Panel>
