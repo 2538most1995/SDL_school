@@ -28,6 +28,8 @@ class SystemCatalogTest extends TestCase
         $this->assertFalse($keys->contains('students'));
         $this->assertFalse($keys->contains('academic-results'));
         $this->assertFalse($keys->contains('student-development'));
+        $this->assertFalse($keys->contains('statistics'));
+        $this->assertTrue($keys->contains('result-reports'));
 
         $basicItems = collect($response->json('data.groups'))
             ->firstWhere('key', 'basic-information')['items'];
@@ -36,6 +38,8 @@ class SystemCatalogTest extends TestCase
             ->firstWhere('key', 'learning')['items'];
         $this->assertSame('คะแนน', collect($scoreItem)->firstWhere('key', 'scores')['label']);
         $this->assertTrue(collect($response->json('data.groups'))->flatMap(fn (array $group) => $group['items'])->contains('key', 'exam-attendance-check'));
+        $resultItems = collect($response->json('data.groups'))->firstWhere('key', 'result-reports')['items'];
+        $this->assertSame(['exam-attendance-check'], collect($resultItems)->pluck('key')->values()->all());
     }
 
     public function test_admin_catalog_includes_administration_and_own_district_branding(): void
@@ -53,6 +57,11 @@ class SystemCatalogTest extends TestCase
         $this->assertTrue($items->contains('key', 'exam-eligible'));
         $this->assertTrue($items->contains('route', '/reports/exam-eligible'));
         $this->assertTrue($items->contains('key', 'exam-attendance-check'));
+        $statistics = collect($response->json('data.groups'))->firstWhere('key', 'statistics');
+        $resultReports = collect($response->json('data.groups'))->firstWhere('key', 'result-reports');
+        $this->assertSame('statistics-overview', $statistics['items'][0]['key']);
+        $this->assertFalse(collect($statistics['items'])->contains('key', 'exam-attendance-check'));
+        $this->assertTrue(collect($resultReports['items'])->contains('key', 'exam-attendance-check'));
     }
 
     public function test_teacher_catalog_includes_only_assigned_exam_room_management(): void

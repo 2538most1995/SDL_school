@@ -19,7 +19,8 @@ District scope is resolved by `ResolveDistrictContext`; role checks are enforced
 
 - Authentication/profile/appearance and district branding
 - Student directory and current-student academic endpoints
-- Student reports: overview, new students, graduates, transfers, registration statistics, registrations, grade threshold and attendance
+- Student statistics: aggregate information, registration statistics, new students, graduates, expected graduates and transfers
+- Result reports: registrations, grade threshold, exam attendance, exam eligibility and exam attendance check
 - Learning: assignments, resources, calendar activities with private images, schedules, lesson plans, scores and content writes
 - Admin: users, student announcements, import status/safety, ZIP/DBF imports, exam rooms and branding
 - Super admin: district registry for adding a new active district before assigning its administrators and importing its first ZIP/DBF batch
