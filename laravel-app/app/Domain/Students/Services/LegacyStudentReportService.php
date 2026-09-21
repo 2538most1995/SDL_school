@@ -311,7 +311,7 @@ final readonly class LegacyStudentReportService
                     }
                 }
 
-                $isExamSubject = str_contains($subCode, 'NET') || str_contains($subCode, 'EXAM') || str_contains($subName, 'N-NET') || str_contains($subName, 'E-EXAM');
+                $isExamSubject = str_contains($subCode, 'N-NET') || str_contains($subCode, 'E-EXAM') || str_contains($subName, 'N-NET') || str_contains($subName, 'E-EXAM');
                 if ($isExamSubject && ! in_array($gradeVal, ['', '-'], true)) {
                     $studentMetrics[$code]['exam_taken'] = true;
                 }
@@ -346,10 +346,11 @@ final readonly class LegacyStudentReportService
                 $expFlagVal = trim((string) ($sRow['expflag_val'] ?? ''));
                 $expSemVal = trim((string) ($sRow['expsem_val'] ?? ''));
 
-                $hasStudentScore = ($ntSara1Val !== '' && $ntSara1Val !== '0')
-                    || ($ntSara2Val !== '' && $ntSara2Val !== '0')
-                    || $ntSemVal !== ''
-                    || $ntNosemVal !== '';
+                $hasNtSem = in_array(preg_replace('/[^0-9\/]/', '', $ntSemVal), ['', '-', '0'], true) === false;
+                $hasNtNosem = in_array(preg_replace('/[^0-9\/]/', '', $ntNosemVal), ['', '-', '0'], true) === false;
+                $hasSara1Score = is_numeric($ntSara1Val) && (float) $ntSara1Val > 0;
+                $hasSara2Score = is_numeric($ntSara2Val) && (float) $ntSara2Val > 0;
+                $hasStudentScore = $hasSara1Score || $hasSara2Score || $hasNtSem || $hasNtNosem;
                 $hasExplicitPass = in_array($nnetVal, ['1', 'Y', 'P', 'PASS', 'PASSED', 'สอบแล้ว', 'ผ่าน'], true);
                 $hasExamSubjectGrade = ! empty($m['exam_taken']);
 
@@ -667,11 +668,16 @@ final readonly class LegacyStudentReportService
                 $ntSemVal = trim((string) ($row['nt_sem_val'] ?? ''));
                 $ntNosemVal = trim((string) ($row['nt_nosem_val'] ?? ''));
 
+                $hasNtSem = in_array(preg_replace('/[^0-9\/]/', '', $ntSemVal), ['', '-', '0'], true) === false;
+                $hasNtNosem = in_array(preg_replace('/[^0-9\/]/', '', $ntNosemVal), ['', '-', '0'], true) === false;
+                $hasSara1Score = is_numeric($ntSara1Val) && (float) $ntSara1Val > 0;
+                $hasSara2Score = is_numeric($ntSara2Val) && (float) $ntSara2Val > 0;
+
                 $isExamTaken = in_array($nnetVal, ['1', 'Y', 'P', 'PASS', 'PASSED', 'สอบแล้ว', 'ผ่าน'], true)
-                    || ($ntSara1Val !== '' && $ntSara1Val !== '0')
-                    || ($ntSara2Val !== '' && $ntSara2Val !== '0')
-                    || $ntSemVal !== ''
-                    || $ntNosemVal !== '';
+                    || $hasSara1Score
+                    || $hasSara2Score
+                    || $hasNtSem
+                    || $hasNtNosem;
 
                 $isEligible = ! $isExamTaken && isset($expectedStudentCodes[$code]);
 
@@ -798,11 +804,13 @@ final readonly class LegacyStudentReportService
     private function sets(int $districtId): array
     {
         $connection = $this->database->connection();
+        $isMysql = method_exists($connection, 'getDriverName') && $connection->getDriverName() === 'mysql';
+        $binaryClause = $isMysql ? 'BINARY ih.batch_key = BINARY ib.batch_key' : 'ih.batch_key = ib.batch_key';
         $batch = $connection->selectOne(
             "SELECT ib.batch_key
              FROM import_batches ib
              INNER JOIN import_history ih ON ih.id = ib.import_history_id
-                AND BINARY ih.batch_key = BINARY ib.batch_key
+                AND {$binaryClause}
                 AND ih.district_id = ib.district_id AND ih.status = 'success'
              WHERE ib.district_id = ?
              ORDER BY COALESCE(ib.created_at, ih.created_at) DESC, ib.batch_key DESC LIMIT 1",

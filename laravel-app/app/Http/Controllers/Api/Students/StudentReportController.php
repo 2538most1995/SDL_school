@@ -108,8 +108,7 @@ final class StudentReportController extends StudentsApiController
             ? $this->legacyReports->examEligibleStudents($request->user(), (int) $request->attributes->get('district_id'), $filters)
             : $this->reports->examEligibleStudents($request->user(), $filters);
 
-        return $this->reportResponse($request, $data)
-            ->header('Cache-Control', 'no-store, private');
+        return $this->reportResponse($request, $data);
     }
 
     /** @return array<string, mixed> */
@@ -146,6 +145,6 @@ final class StudentReportController extends StudentsApiController
         return response()->json([
             'data' => $resource ? (new StudentReportResource($data))->resolve($request) : $data,
             'meta' => $this->meta(['filters' => $request->query()]),
-        ]);
+        ])->header('Cache-Control', 'no-store, private');
     }
 }
