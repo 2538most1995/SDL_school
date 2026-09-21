@@ -142,4 +142,34 @@ final class RegistrationStatisticsTest extends TestCase
         $this->assertSame(2, $byName['items'][0]['count']);
         $this->assertSame(2, collect($byName['filter_options']['group'])->firstWhere('value', 'ชื่อซ้ำ')['count']);
     }
+
+    public function test_cross_tab_uses_every_configured_dimension_on_both_axes(): void
+    {
+        $records = [
+            ['group' => 'A', 'group_label' => 'กลุ่ม A', 'gender' => '1', 'level' => '1', 'age' => '20'],
+            ['group' => 'A', 'group_label' => 'กลุ่ม A', 'gender' => '2', 'level' => '1', 'age' => '21'],
+            ['group' => 'B', 'group_label' => 'กลุ่ม B', 'gender' => '2', 'level' => '2', 'age' => '21'],
+            ['group' => 'B', 'group_label' => 'กลุ่ม B', 'gender' => '2', 'level' => '2', 'age' => '21'],
+        ];
+
+        $payload = RegistrationStatistics::crossTabFromRecords(
+            ['level', 'gender'],
+            ['group', 'age'],
+            $records,
+            ['1/2569'],
+            '1/2569',
+        );
+
+        $this->assertSame(['level', 'gender'], array_column($payload['row_categories'], 'key'));
+        $this->assertSame(['group', 'age'], array_column($payload['column_categories'], 'key'));
+        $this->assertSame(4, $payload['summary']['registered_students']);
+        $this->assertSame(3, $payload['summary']['row_count']);
+        $this->assertSame(3, $payload['summary']['column_count']);
+        $this->assertSame(4, array_sum(array_column($payload['rows'], 'total')));
+
+        $largestRow = collect($payload['rows'])->firstWhere('total', 2);
+        $this->assertSame(['ระดับชั้น', 'เพศ'], array_column($largestRow['parts'], 'category_label'));
+        $this->assertSame(['กลุ่มเรียน', 'อายุ'], array_column($payload['columns'][0]['parts'], 'category_label'));
+        $this->assertSame(2, max($largestRow['cells']));
+    }
 }

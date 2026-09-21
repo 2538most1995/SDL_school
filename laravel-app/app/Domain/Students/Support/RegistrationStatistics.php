@@ -160,6 +160,126 @@ final class RegistrationStatistics
             $category = 'target_group';
         }
 
+        [$filteredRecords, $itemLabels, $filterOptions, $appliedFilters] = self::prepareRecords($records, $filters);
+
+        $counts = [];
+        foreach ($filteredRecords as $record) {
+            $code = (string) ($record[$category] ?? '');
+            $counts[$code] = ($counts[$code] ?? 0) + 1;
+        }
+
+        return [
+            ...self::payload($category, $counts, $terms, $selectedTerm, $itemLabels[$category] ?? []),
+            'filter_options' => $filterOptions,
+            'applied_filters' => $appliedFilters,
+        ];
+    }
+
+    /**
+     * Build one real cross-tab from the same unique student records. Categories
+     * added to an axis become nested tuple parts instead of separate marginal
+     * tables, so every cell represents the actual intersection of both axes.
+     *
+     * @param  list<string>  $rowCategories
+     * @param  list<string>  $columnCategories
+     * @param  list<array<string, mixed>>  $records
+     * @param  list<string>  $terms
+     * @param  array<string, mixed>  $filters
+     * @return array<string, mixed>
+     */
+    public static function crossTabFromRecords(
+        array $rowCategories,
+        array $columnCategories,
+        array $records,
+        array $terms,
+        ?string $selectedTerm,
+        array $filters = [],
+    ): array {
+        $rowCategories = self::validCategories($rowCategories, ['level']);
+        $columnCategories = self::validCategories($columnCategories, ['group']);
+        [$filteredRecords, $itemLabels, $filterOptions, $appliedFilters] = self::prepareRecords($records, $filters);
+
+        $rows = [];
+        $columns = [];
+        $nonZeroCells = 0;
+        $largestCell = null;
+
+        foreach ($filteredRecords as $record) {
+            $rowParts = self::tupleParts($rowCategories, $record, $itemLabels);
+            $columnParts = self::tupleParts($columnCategories, $record, $itemLabels);
+            $rowKey = self::tupleKey($rowParts);
+            $columnKey = self::tupleKey($columnParts);
+
+            $rows[$rowKey] ??= [
+                'key' => $rowKey,
+                'label' => implode(' · ', array_column($rowParts, 'label')),
+                'parts' => $rowParts,
+                'cells' => [],
+                'total' => 0,
+            ];
+            $columns[$columnKey] ??= [
+                'key' => $columnKey,
+                'label' => implode(' · ', array_column($columnParts, 'label')),
+                'parts' => $columnParts,
+                'total' => 0,
+            ];
+
+            $rows[$rowKey]['cells'][$columnKey] = ($rows[$rowKey]['cells'][$columnKey] ?? 0) + 1;
+            $rows[$rowKey]['total']++;
+            $columns[$columnKey]['total']++;
+        }
+
+        $rowItems = array_values($rows);
+        $columnItems = array_values($columns);
+        usort($rowItems, static fn (array $left, array $right): int => strnatcasecmp((string) $left['label'], (string) $right['label']));
+        usort($columnItems, static fn (array $left, array $right): int => strnatcasecmp((string) $left['label'], (string) $right['label']));
+
+        foreach ($rowItems as $row) {
+            foreach ($row['cells'] as $columnKey => $count) {
+                $nonZeroCells++;
+                if ($largestCell === null || $count > $largestCell['count']) {
+                    $largestCell = [
+                        'row_key' => $row['key'],
+                        'column_key' => $columnKey,
+                        'count' => $count,
+                    ];
+                }
+            }
+        }
+
+        return [
+            'categories' => self::categories(),
+            'row_categories' => array_map(
+                static fn (string $key): array => ['key' => $key, 'label' => self::categoryLabel($key)],
+                $rowCategories,
+            ),
+            'column_categories' => array_map(
+                static fn (string $key): array => ['key' => $key, 'label' => self::categoryLabel($key)],
+                $columnCategories,
+            ),
+            'terms' => $terms,
+            'selected_term' => $selectedTerm,
+            'summary' => [
+                'registered_students' => count($filteredRecords),
+                'row_count' => count($rowItems),
+                'column_count' => count($columnItems),
+                'non_zero_cells' => $nonZeroCells,
+                'largest_cell' => $largestCell,
+            ],
+            'rows' => $rowItems,
+            'columns' => $columnItems,
+            'filter_options' => $filterOptions,
+            'applied_filters' => $appliedFilters,
+        ];
+    }
+
+    /**
+     * @param  list<array<string, mixed>>  $records
+     * @param  array<string, mixed>  $filters
+     * @return array{0: list<array<string, mixed>>, 1: array<string, array<string, string>>, 2: array<string, list<array<string, mixed>>>, 3: array<string, string>}
+     */
+    private static function prepareRecords(array $records, array $filters): array
+    {
         $itemLabels = [];
         $groupCodeAliases = [];
         $normalizedRecords = array_map(static function (array $record) use (&$itemLabels, &$groupCodeAliases): array {
@@ -227,17 +347,51 @@ final class RegistrationStatistics
             },
         ));
 
-        $counts = [];
-        foreach ($filteredRecords as $record) {
-            $code = (string) ($record[$category] ?? '');
-            $counts[$code] = ($counts[$code] ?? 0) + 1;
-        }
+        return [$filteredRecords, $itemLabels, $filterOptions, $appliedFilters];
+    }
 
-        return [
-            ...self::payload($category, $counts, $terms, $selectedTerm, $itemLabels[$category] ?? []),
-            'filter_options' => $filterOptions,
-            'applied_filters' => $appliedFilters,
-        ];
+    /**
+     * @param  list<string>  $categories
+     * @param  list<string>  $fallback
+     * @return list<string>
+     */
+    private static function validCategories(array $categories, array $fallback): array
+    {
+        $valid = array_values(array_unique(array_filter(
+            $categories,
+            static fn (mixed $category): bool => is_string($category) && array_key_exists($category, self::CATEGORY_LABELS),
+        )));
+
+        return array_slice($valid === [] ? $fallback : $valid, 0, 3);
+    }
+
+    /**
+     * @param  list<string>  $categories
+     * @param  array<string, mixed>  $record
+     * @param  array<string, array<string, string>>  $itemLabels
+     * @return list<array{category: string, category_label: string, code: string, label: string}>
+     */
+    private static function tupleParts(array $categories, array $record, array $itemLabels): array
+    {
+        return array_map(static function (string $category) use ($record, $itemLabels): array {
+            $code = (string) ($record[$category] ?? '');
+
+            return [
+                'category' => $category,
+                'category_label' => self::categoryLabel($category),
+                'code' => $code,
+                'label' => $itemLabels[$category][$code] ?? self::itemLabel($category, $code),
+            ];
+        }, $categories);
+    }
+
+    /** @param list<array{category: string, category_label: string, code: string, label: string}> $parts */
+    private static function tupleKey(array $parts): string
+    {
+        return base64_encode((string) json_encode(
+            array_map(static fn (array $part): array => [$part['category'], $part['code']], $parts),
+            JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES,
+        ));
     }
 
     /**

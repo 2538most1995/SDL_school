@@ -55,6 +55,47 @@ export type StatisticResultSummary = {
     classificationTotals: Array<{ classification: string; total: number }>;
 };
 
+export type StatisticCrossTabPart = {
+    category: CategoryKey;
+    category_label: string;
+    code: string;
+    label: string;
+};
+
+export type StatisticCrossTabColumn = {
+    key: string;
+    label: string;
+    parts: StatisticCrossTabPart[];
+    total: number;
+};
+
+export type StatisticCrossTabRow = {
+    key: string;
+    label: string;
+    parts: StatisticCrossTabPart[];
+    cells: Record<string, number>;
+    total: number;
+};
+
+export type StatisticCrossTabPayload = {
+    categories: Array<{ key: CategoryKey; label: string }>;
+    row_categories: Array<{ key: CategoryKey; label: string }>;
+    column_categories: Array<{ key: CategoryKey; label: string }>;
+    terms: string[];
+    selected_term: string | null;
+    summary: {
+        registered_students: number;
+        row_count: number;
+        column_count: number;
+        non_zero_cells: number;
+        largest_cell: { row_key: string; column_key: string; count: number } | null;
+    };
+    rows: StatisticCrossTabRow[];
+    columns: StatisticCrossTabColumn[];
+    filter_options?: Record<string, unknown[]>;
+    applied_filters?: Record<string, string>;
+};
+
 export const statisticReports: StatisticReportDefinition[] = [
     { id: 1, label: 'รายงานจำนวนนักศึกษาเข้าใหม่', source: 'new-students' },
     { id: 2, label: 'รายงานจำนวนนักศึกษาขอลงทะเบียน', source: null, unavailableReason: 'ข้อมูลคำขอลงทะเบียนยังไม่มี API ต้นทางแยกจากข้อมูลลงทะเบียนจริง' },
@@ -135,6 +176,91 @@ function groupParts(value: string): { level: string; group: string } {
     return {
         level: parts[0] ?? 'ไม่ระบุระดับ',
         group: parts[1] ?? parts[0] ?? 'ไม่ระบุกลุ่ม',
+    };
+}
+
+function categoryLabel(category: CategoryKey): string {
+    return statisticCategories.find((item) => item.key === category)?.label ?? category;
+}
+
+function genericPart(category: CategoryKey, values: { level: string; group: string }): StatisticCrossTabPart {
+    const value = category === 'group' ? values.group : values.level;
+    return {
+        category,
+        category_label: categoryLabel(category),
+        code: value,
+        label: value,
+    };
+}
+
+function tupleKey(parts: StatisticCrossTabPart[]): string {
+    return JSON.stringify(parts.map((part) => [part.category, part.code]));
+}
+
+/** Build the same two-axis structure for generic reports that expose level/group rows. */
+export function genericPayloadToCrossTab(
+    payload: GenericReportPayload,
+    configuration: StatisticAxisConfiguration,
+): StatisticCrossTabPayload {
+    const usable = (categories: CategoryKey[], fallback: CategoryKey): CategoryKey[] => {
+        const filtered = categories.filter((category) => category === 'level' || category === 'group');
+        return filtered.length > 0 ? filtered : [fallback];
+    };
+    const rowKeys = usable(configuration.vertical, 'level');
+    const columnKeys = usable(configuration.horizontal, 'group');
+    const rows = new Map<string, StatisticCrossTabRow>();
+    const columns = new Map<string, StatisticCrossTabColumn>();
+
+    payload.rows.forEach((sourceRow) => {
+        const values = groupParts(sourceRow.group);
+        const rowParts = rowKeys.map((category) => genericPart(category, values));
+        const columnParts = columnKeys.map((category) => genericPart(category, values));
+        const rowKey = tupleKey(rowParts);
+        const columnKey = tupleKey(columnParts);
+        const row = rows.get(rowKey) ?? {
+            key: rowKey,
+            label: rowParts.map((part) => part.label).join(' · '),
+            parts: rowParts,
+            cells: {},
+            total: 0,
+        };
+        const column = columns.get(columnKey) ?? {
+            key: columnKey,
+            label: columnParts.map((part) => part.label).join(' · '),
+            parts: columnParts,
+            total: 0,
+        };
+        row.cells[columnKey] = (row.cells[columnKey] ?? 0) + 1;
+        row.total += 1;
+        column.total += 1;
+        rows.set(rowKey, row);
+        columns.set(columnKey, column);
+    });
+
+    const rowItems = Array.from(rows.values()).sort((left, right) => left.label.localeCompare(right.label, 'th', { numeric: true }));
+    const columnItems = Array.from(columns.values()).sort((left, right) => left.label.localeCompare(right.label, 'th', { numeric: true }));
+    let largestCell: StatisticCrossTabPayload['summary']['largest_cell'] = null;
+    let nonZeroCells = 0;
+    rowItems.forEach((row) => Object.entries(row.cells).forEach(([columnKey, count]) => {
+        nonZeroCells += 1;
+        if (!largestCell || count > largestCell.count) largestCell = { row_key: row.key, column_key: columnKey, count };
+    }));
+
+    return {
+        categories: [...new Set([...rowKeys, ...columnKeys])].map((key) => ({ key, label: categoryLabel(key) })),
+        row_categories: rowKeys.map((key) => ({ key, label: categoryLabel(key) })),
+        column_categories: columnKeys.map((key) => ({ key, label: categoryLabel(key) })),
+        terms: payload.terms ?? [],
+        selected_term: payload.selected_term ?? null,
+        summary: {
+            registered_students: payload.total,
+            row_count: rowItems.length,
+            column_count: columnItems.length,
+            non_zero_cells: nonZeroCells,
+            largest_cell: largestCell,
+        },
+        rows: rowItems,
+        columns: columnItems,
     };
 }
 
@@ -222,6 +348,53 @@ export function buildStatisticsWorkspaceSheets(
                 ['มิติข้อมูล', options.categoryLabels?.join(', ') || '-'],
                 ['จำนวนแถวผลลัพธ์', rows.length],
                 ['รวมผู้เรียนทั้งหมด (ไม่ซ้ำ)', total],
+            ],
+        },
+    ];
+}
+
+export function buildStatisticsCrossTabSheets(
+    report: StatisticReportDefinition,
+    term: string,
+    district: string,
+    crossTab: StatisticCrossTabPayload,
+): ExcelSheet[] {
+    const rowAxis = crossTab.row_categories.map((category) => category.label).join(' › ');
+    const columnAxis = crossTab.column_categories.map((category) => category.label).join(' › ');
+    return [
+        {
+            name: 'ตารางสถิติสองแกน',
+            columns: [
+                `แกนตั้ง: ${rowAxis}`,
+                ...crossTab.columns.map((column) => column.label),
+                'รวมแถว',
+            ],
+            rows: [
+                ...crossTab.rows.map((row) => [
+                    row.label,
+                    ...crossTab.columns.map((column) => row.cells[column.key] ?? 0),
+                    row.total,
+                ]),
+                [
+                    'รวมคอลัมน์',
+                    ...crossTab.columns.map((column) => column.total),
+                    crossTab.summary.registered_students,
+                ],
+            ],
+        },
+        {
+            name: 'เงื่อนไขรายงาน',
+            columns: ['เงื่อนไข', 'ค่าที่ใช้'],
+            rows: [
+                ['รายงาน', `${report.id}. ${report.label}`],
+                ['พื้นที่ข้อมูล', district],
+                ['ภาคเรียน', term || '-'],
+                ['แกนตั้ง', rowAxis || '-'],
+                ['แกนนอน', columnAxis || '-'],
+                ['ชุดแถวที่แสดง', crossTab.summary.row_count],
+                ['ชุดคอลัมน์ที่แสดง', crossTab.summary.column_count],
+                ['ช่องข้อมูลที่มีค่า', crossTab.summary.non_zero_cells],
+                ['รวมผู้เรียนทั้งหมด (ไม่ซ้ำ)', crossTab.summary.registered_students],
             ],
         },
     ];

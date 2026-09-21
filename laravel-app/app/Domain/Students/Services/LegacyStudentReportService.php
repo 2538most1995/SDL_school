@@ -505,6 +505,17 @@ final readonly class LegacyStudentReportService
         $records = [];
 
         if ($selectedTerm === null) {
+            if (isset($filters['row_categories'], $filters['column_categories'])) {
+                return RegistrationStatistics::crossTabFromRecords(
+                    $filters['row_categories'],
+                    $filters['column_categories'],
+                    $records,
+                    $terms,
+                    null,
+                    $filters,
+                );
+            }
+
             return RegistrationStatistics::fromRecords($category, $records, $terms, null, $filters);
         }
 
@@ -565,6 +576,17 @@ final readonly class LegacyStudentReportService
                     'age' => $row['age'] ?? '',
                 ];
             }
+        }
+
+        if (isset($filters['row_categories'], $filters['column_categories'])) {
+            return RegistrationStatistics::crossTabFromRecords(
+                $filters['row_categories'],
+                $filters['column_categories'],
+                array_values($records),
+                $terms,
+                $selectedTerm,
+                $filters,
+            );
         }
 
         return RegistrationStatistics::fromRecords($category, array_values($records), $terms, $selectedTerm, $filters);

@@ -3,9 +3,11 @@ import test from 'node:test';
 import { strFromU8, unzipSync } from 'fflate';
 import { createExcelFileBytes } from '../../resources/js/lib/excel.ts';
 import {
+    buildStatisticsCrossTabSheets,
     buildStatisticsWorkspaceSheets,
     categoriesForOrientation,
     createDefaultAxisConfiguration,
+    genericPayloadToCrossTab,
     genericPayloadToStatisticRows,
     registrationPayloadsToStatisticRows,
     reportById,
@@ -21,6 +23,37 @@ test('statistics workspace exposes all 15 requested report choices without inven
     assert.equal(reportById(6).source, null);
     assert.match(reportById(6).unavailableReason, /หมดสภาพ/);
     assert.equal(reportById(15).source, 'transfers');
+});
+
+test('configured dimensions become real nested rows and columns in one cross-tab', () => {
+    const crossTab = genericPayloadToCrossTab({
+        total: 4,
+        active: 4,
+        groups: 2,
+        selected_term: '1/2569',
+        rows: [
+            { id: '1', primary: 'ก', secondary: '1', group: 'ประถมศึกษา · กลุ่ม A', metric: '' },
+            { id: '2', primary: 'ข', secondary: '2', group: 'ประถมศึกษา · กลุ่ม A', metric: '' },
+            { id: '3', primary: 'ค', secondary: '3', group: 'มัธยมศึกษาตอนต้น · กลุ่ม B', metric: '' },
+            { id: '4', primary: 'ง', secondary: '4', group: 'มัธยมศึกษาตอนต้น · กลุ่ม B', metric: '' },
+        ],
+    }, { vertical: ['level', 'group'], horizontal: ['group'] });
+
+    assert.deepEqual(crossTab.row_categories.map((item) => item.key), ['level', 'group']);
+    assert.deepEqual(crossTab.column_categories.map((item) => item.key), ['group']);
+    assert.equal(crossTab.summary.registered_students, 4);
+    assert.equal(crossTab.summary.row_count, 2);
+    assert.equal(crossTab.summary.column_count, 2);
+    assert.equal(crossTab.rows[0].parts.length, 2);
+    assert.equal(Object.values(crossTab.rows[0].cells).reduce((sum, value) => sum + value, 0), crossTab.rows[0].total);
+
+    const files = unzipSync(createExcelFileBytes(buildStatisticsCrossTabSheets(reportById(1), '1/2569', 'อำเภอเสนา', crossTab)));
+    const reportXml = strFromU8(files['xl/worksheets/sheet1.xml']);
+    const conditionXml = strFromU8(files['xl/worksheets/sheet2.xml']);
+    assert.match(reportXml, /แกนตั้ง/);
+    assert.match(reportXml, /รวมคอลัมน์/);
+    assert.match(reportXml, /กลุ่ม A/);
+    assert.match(conditionXml, /แกนนอน/);
 });
 
 test('report format catalog keeps the 10 requested dimensions and marks missing source fields', () => {

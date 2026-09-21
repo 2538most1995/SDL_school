@@ -454,6 +454,31 @@ final class StudentApiTest extends TestCase
             ->assertForbidden();
     }
 
+    public function test_registration_statistics_build_a_real_cross_tab_from_both_axes(): void
+    {
+        Sanctum::actingAs($this->viewer('admin'));
+
+        $this->getJson('/api/v1/reports/students/registration-statistics?term=2/2568&row_categories[]=level&row_categories[]=gender&column_categories[]=group&column_categories[]=age')
+            ->assertOk()
+            ->assertJsonPath('data.row_categories.0.key', 'level')
+            ->assertJsonPath('data.row_categories.1.key', 'gender')
+            ->assertJsonPath('data.column_categories.0.key', 'group')
+            ->assertJsonPath('data.column_categories.1.key', 'age')
+            ->assertJsonPath('data.summary.registered_students', 8)
+            ->assertJsonStructure(['data' => [
+                'rows' => [['key', 'label', 'parts', 'cells', 'total']],
+                'columns' => [['key', 'label', 'parts', 'total']],
+                'summary' => ['row_count', 'column_count', 'non_zero_cells', 'largest_cell'],
+            ]]);
+
+        $this->getJson('/api/v1/reports/students/registration-statistics?row_categories[]=level')
+            ->assertUnprocessable();
+        $this->getJson('/api/v1/reports/students/registration-statistics?row_categories[]=level&row_categories[]=level&column_categories[]=group')
+            ->assertUnprocessable();
+        $this->getJson('/api/v1/reports/students/registration-statistics?row_categories[]=unknown&column_categories[]=group')
+            ->assertUnprocessable();
+    }
+
     public function test_registration_statistics_export_data_is_available_only_to_teacher_and_admin(): void
     {
         $this->getJson('/api/v1/reports/students/registration-statistics/export-data')

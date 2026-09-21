@@ -246,6 +246,17 @@ final readonly class StudentReportService
             ];
         }
 
+        if (isset($filters['row_categories'], $filters['column_categories'])) {
+            return RegistrationStatistics::crossTabFromRecords(
+                $filters['row_categories'],
+                $filters['column_categories'],
+                $records,
+                $terms,
+                $selectedTerm,
+                $filters,
+            );
+        }
+
         return RegistrationStatistics::fromRecords($category, $records, $terms, $selectedTerm, $filters);
     }
 
