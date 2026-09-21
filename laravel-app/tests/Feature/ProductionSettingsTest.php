@@ -105,6 +105,20 @@ final class ProductionSettingsTest extends TestCase
             'horizontal' => ['group'],
             'orientation' => 'vertical',
         ])->assertUnprocessable()->assertJsonValidationErrors('vertical');
+
+        $this->putJson('/api/v1/settings/statistics-report', [
+            'report' => 'registration-statistics',
+            'vertical' => ['nnet'],
+            'horizontal' => ['group'],
+            'orientation' => 'vertical',
+        ])->assertUnprocessable()->assertJsonValidationErrors('vertical');
+
+        $this->putJson('/api/v1/settings/statistics-report', [
+            'report' => 'expected-graduates',
+            'vertical' => ['nnet'],
+            'horizontal' => ['group'],
+            'orientation' => 'vertical',
+        ])->assertOk()->assertJsonPath('data.vertical.0', 'nnet');
     }
 
     public function test_students_cannot_read_or_change_statistics_report_preferences(): void

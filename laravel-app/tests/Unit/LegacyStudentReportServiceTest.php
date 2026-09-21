@@ -166,6 +166,9 @@ final class LegacyStudentReportServiceTest extends TestCase
         );
         $this->assertNotNull($olderTermQuery);
         $this->assertStringContainsString('COALESCE(NULLIF(TRIM(grp.grp_name)', $olderTermQuery['query']);
+        $this->assertFalse(collect($queries)->contains(
+            static fn (array $entry): bool => str_contains($entry['query'], 'SELECT s._perf_id10 AS student_code'),
+        ), 'Registration statistics must not run the expected-graduates N-NET scan.');
     }
 
     public function test_registered_subjects_start_from_historical_grades_and_keep_teacher_group_scope(): void
@@ -363,13 +366,23 @@ final class LegacyStudentReportServiceTest extends TestCase
         ));
     }
 
-    public function test_expected_graduates_classifies_exam_status_as_taken_and_eligible(): void
+    public function test_expected_graduates_classifies_thirteen_taken_and_ninety_five_eligible_for_any_district(): void
     {
         $batch = 'import_1700000004_graduates';
+        $batchDistrictBindings = [];
+        $queries = [];
         $connection = Mockery::mock(ConnectionInterface::class);
-        $connection->shouldReceive('selectOne')->once()->andReturn((object) ['batch_key' => $batch]);
+        $connection->shouldReceive('selectOne')->once()->andReturnUsing(
+            function (string $query, array $bindings = []) use ($batch, &$batchDistrictBindings): object {
+                $batchDistrictBindings = $bindings;
+
+                return (object) ['batch_key' => $batch];
+            },
+        );
         $connection->shouldReceive('select')->andReturnUsing(
-            function (string $query, array $bindings = []) use ($batch): array {
+            function (string $query, array $bindings = []) use ($batch, &$queries): array {
+                $queries[] = compact('query', 'bindings');
+
                 return match (true) {
                     str_contains($query, 'INFORMATION_SCHEMA.TABLES') => array_map(
                         static fn (string $table): object => (object) ['table_name' => $table],
@@ -392,68 +405,45 @@ final class LegacyStudentReportServiceTest extends TestCase
                     str_contains($query, 'SELECT DISTINCT g._perf_semestry AS raw_term') => [
                         (object) ['raw_term' => '69/1'],
                     ],
-                    str_contains($query, 'SELECT s._perf_id10 AS student_code') => [
-                        (object) [
-                            'student_code' => '6911000001',
-                            'prename' => 'นาย',
-                            'first_name' => 'คนสอบแล้ว',
-                            'last_name' => 'ทดสอบ',
-                            'grp_code' => 'G-01',
-                            'group_name' => 'กลุ่ม 1',
-                            'expflag_val' => '1',
-                            'expsem_val' => '69/1',
-                            'nt_sara1_val' => '25.00',
-                            'nt_sara2_val' => '30.00',
-                            'nt_sem_val' => '69/1',
-                            'nt_nosem_val' => '',
-                            'gender' => '1',
-                            'nnet_val' => '',
-                            'fin_cause_val' => '',
-                            'fin_sem_val' => '',
-                            'fin_sem2_val' => '',
-                        ],
-                        (object) [
-                            'student_code' => '6911000002',
-                            'prename' => 'นางสาว',
-                            'first_name' => 'คนมีสิทธิ์สอบ',
-                            'last_name' => 'ทดสอบ',
-                            'grp_code' => 'G-01',
-                            'group_name' => 'กลุ่ม 1',
-                            'expflag_val' => '1',
-                            'expsem_val' => '69/1',
-                            'nt_sara1_val' => '0.00',
-                            'nt_sara2_val' => '0.00',
-                            'nt_sem_val' => '-',
-                            'nt_nosem_val' => '',
-                            'gender' => '2',
-                            'nnet_val' => '',
-                            'fin_cause_val' => '',
-                            'fin_sem_val' => '',
-                            'fin_sem2_val' => '',
-                        ],
-                    ],
-                    str_contains($query, 'SELECT g._perf_std10 AS student_code') => [
-                        (object) [
-                            'student_code' => '6911000001',
+                    str_contains($query, 'SELECT s._perf_id10 AS student_code') => array_map(
+                        static function (int $number): object {
+                            $taken = $number <= 13;
+
+                            return (object) [
+                                'student_code' => '6911'.str_pad((string) $number, 6, '0', STR_PAD_LEFT),
+                                'prename' => $number % 2 === 0 ? 'นางสาว' : 'นาย',
+                                'first_name' => $taken ? 'คนสอบแล้ว' : 'คนมีสิทธิ์สอบ',
+                                'last_name' => (string) $number,
+                                'grp_code' => 'PHS-G01',
+                                'group_name' => 'ไพศาลี กลุ่ม 1',
+                                'expflag_val' => '1',
+                                'expsem_val' => '69/1',
+                                'nt_sara1_val' => '0',
+                                'nt_sara2_val' => '0',
+                                'nt_sem_val' => $taken ? ($number === 13 ? '67/2' : '68/2') : ($number === 14 ? '0/0' : '-'),
+                                'nt_nosem_val' => '',
+                                'gender' => $number % 2 === 0 ? '2' : '1',
+                                'nnet_val' => '',
+                                'fin_cause_val' => '',
+                                'fin_sem_val' => '',
+                                'fin_sem2_val' => '',
+                            ];
+                        },
+                        range(1, 108),
+                    ),
+                    str_contains($query, 'SELECT g._perf_std10 AS student_code') => array_map(
+                        static fn (int $number): object => (object) [
+                            'student_code' => '6911'.str_pad((string) $number, 6, '0', STR_PAD_LEFT),
                             'grade' => '3',
                             'typ_code' => '1',
                             'term' => '69/1',
                             'sub_type' => '1',
-                            'sub_credit' => '40',
+                            'sub_credit' => '48',
                             'sub_code' => 'ทร11001',
                             'sub_name' => 'วิชาบังคับ',
                         ],
-                        (object) [
-                            'student_code' => '6911000002',
-                            'grade' => '3',
-                            'typ_code' => '1',
-                            'term' => '69/1',
-                            'sub_type' => '1',
-                            'sub_credit' => '40',
-                            'sub_code' => 'ทร11001',
-                            'sub_name' => 'วิชาบังคับ',
-                        ],
-                    ],
+                        range(1, 108),
+                    ),
                     default => [],
                 };
             },
@@ -462,17 +452,18 @@ final class LegacyStudentReportServiceTest extends TestCase
         $database = Mockery::mock(DatabaseManager::class);
         $database->shouldReceive('connection')->andReturn($connection);
         $service = new LegacyStudentReportService($database);
-        $admin = new User(['role' => 'admin', 'district_id' => 1]);
+        $admin = new User(['role' => 'admin', 'district_id' => 2]);
 
-        $result = $service->expectedGraduates($admin, 1, ['term' => '1/2569']);
-        $this->assertCount(2, $result['rows']);
+        $result = $service->expectedGraduates($admin, 2, ['term' => '1/2569', 'group' => 'PHS-G01']);
 
-        $takenStudent = collect($result['rows'])->firstWhere('student_id', '6911000001');
-        $this->assertSame('สอบแล้ว', $takenStudent['examStatus']);
-        $this->assertSame('สอบแล้ว', $takenStudent['nnet']);
-
-        $eligibleStudent = collect($result['rows'])->firstWhere('student_id', '6911000002');
-        $this->assertSame('มีสิทธิ์สอบ', $eligibleStudent['examStatus']);
-        $this->assertSame('มีสิทธิ์สอบ', $eligibleStudent['nnet']);
+        $this->assertCount(108, $result['rows']);
+        $this->assertCount(13, collect($result['rows'])->where('examStatus', 'สอบแล้ว'));
+        $this->assertCount(95, collect($result['rows'])->where('examStatus', 'มีสิทธิ์สอบ'));
+        $this->assertSame([2], $batchDistrictBindings);
+        $studentQuery = collect($queries)->first(
+            static fn (array $entry): bool => str_contains($entry['query'], 'SELECT s._perf_id10 AS student_code'),
+        );
+        $this->assertNotNull($studentQuery);
+        $this->assertContains('PHS-G01', $studentQuery['bindings']);
     }
 }

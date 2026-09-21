@@ -7,7 +7,6 @@ import { EmptyState, QueryError, QuerySkeleton } from '../../components/QuerySta
 import { PageHeader } from '../../components/PageHeader';
 import { Panel } from '../../components/Panel';
 import { StatGrid } from '../../components/StatGrid';
-import { StatusBadge } from '../../components/StatusBadge';
 import { StatTile } from '../../components/StatTile';
 import { useDemoRole } from '../../context/DemoRoleContext';
 import { showErrorAlert } from '../../lib/feedback';
@@ -39,7 +38,6 @@ type StudentRegistrationRow = {
     category_label: string;
     category_value: string;
     category_value_label: string;
-    nnet_status: string;
     target_group: string;
     gender: string;
     occupation: string;
@@ -55,7 +53,6 @@ const categoryOptions: RegistrationStatisticsPayload['categories'] = [
     { key: 'occupation', label: 'อาชีพ' },
     { key: 'nationality', label: 'สัญชาติ' },
     { key: 'age', label: 'อายุ' },
-    { key: 'nnet', label: 'สถานะ N-Net / E-Exam' },
 ];
 
 const emptyFilters: Record<CategoryKey, string> = {
@@ -220,23 +217,6 @@ function RegistrationStudentListDialog({
                 ),
             },
             {
-                id: 'nnet',
-                header: 'สถานะ N-Net',
-                cell: ({ row }) => (
-                    <StatusBadge
-                        tone={
-                            row.original.nnet_status === 'สอบแล้ว'
-                                ? 'success'
-                                : row.original.nnet_status === 'มีสิทธิ์สอบ'
-                                ? 'info'
-                                : 'warning'
-                        }
-                    >
-                        {row.original.nnet_status || 'ยังไม่ได้สอบ'}
-                    </StatusBadge>
-                ),
-            },
-            {
                 id: 'actions',
                 header: 'รายวิชา',
                 cell: ({ row }) => (
@@ -272,7 +252,6 @@ function RegistrationStudentListDialog({
                 r.student.level.label,
                 r.student.group.name || r.student.group.code,
                 r.category_value_label || r.metric,
-                r.nnet_status || 'ยังไม่ได้สอบ',
                 r.target_group,
                 r.gender,
                 r.occupation,
@@ -290,7 +269,6 @@ function RegistrationStudentListDialog({
                         'ระดับการศึกษา',
                         'กลุ่มเรียน',
                         categoryLabel,
-                        'สถานะ N-Net',
                         'กลุ่มเป้าหมาย',
                         'เพศ',
                         'อาชีพ',

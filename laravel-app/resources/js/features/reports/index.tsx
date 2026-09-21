@@ -610,7 +610,6 @@ export function ReportPage({ kind }: { kind: ReportKind }) {
                                 <option value="">ทุกสถานะการสอบ</option>
                                 <option value="taken">สอบแล้ว</option>
                                 <option value="eligible">มีสิทธิ์สอบ</option>
-                                <option value="not_taken">ยังไม่ได้สอบ</option>
                             </select>
                         </label>
                     )}

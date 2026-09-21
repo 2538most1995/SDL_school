@@ -56,10 +56,12 @@ import {
 type WorkspaceRequest = {
     report: StatisticReportDefinition;
     term: string;
+    group: string;
     configuration: StatisticAxisConfiguration;
 };
 type WorkspaceResponse = { crossTab: StatisticCrossTabPayload; selectedTerm: string | null };
 type CurrentUser = { districts: Array<{ id: number; name: string; code: string }> };
+type FilterOption = { value: string | number; label: string };
 type StatisticsPreference = StatisticAxisConfiguration & {
     report: StatisticReportDefinition['source'];
     orientation: StatisticOrientation;
@@ -268,6 +270,7 @@ function OverviewStudentListDialog({
     if (!cellInfo) return null;
 
     const students = cellInfo.students;
+    const showExamStatus = report?.source === 'expected-graduates';
     const filteredStudents = searchTerm.trim()
         ? students.filter(
             (s) =>
@@ -280,19 +283,22 @@ function OverviewStudentListDialog({
         : students;
 
     const exportExcel = async () => {
-        if (students.length === 0 || isExporting) return;
+        if (filteredStudents.length === 0 || isExporting) return;
         setIsExporting(true);
         try {
             const { downloadExcel } = await import('../../lib/excel');
-            const sheetData = students.map((s, i) => [
-                i + 1,
-                s.student_id ?? s.secondary ?? s.id ?? '',
-                s.name ?? s.primary ?? '',
-                s.level ?? '',
-                s.group_name || s.group_label || s.group || s.group_id || '',
-                s.gender || 'ไม่ระบุ',
-                s.nnet || s.examStatus || '-',
-            ]);
+            const sheetData = filteredStudents.map((s, i) => {
+                const row: Array<string | number> = [
+                    i + 1,
+                    s.student_id ?? s.secondary ?? s.id ?? '',
+                    s.name ?? s.primary ?? '',
+                    s.level ?? '',
+                    s.group_name || s.group_label || s.group || s.group_id || '',
+                    s.gender || 'ไม่ระบุ',
+                ];
+                if (showExamStatus) row.push(s.nnet || s.examStatus || '-');
+                return row;
+            });
             const titleSanitized = cellInfo.title.replace(/[/\\?%*:|"<>]/g, '-');
             downloadExcel(`รายชื่อนักศึกษา-${titleSanitized}-ภาคเรียน-${term || 'all'}`, [
                 {
@@ -304,7 +310,7 @@ function OverviewStudentListDialog({
                         'ระดับการศึกษา',
                         'กลุ่มเรียน',
                         'เพศ',
-                        'สถานะ N-Net / การสอบ',
+                        ...(showExamStatus ? ['สถานะ N-Net / การสอบ'] : []),
                     ],
                     rows: sheetData,
                 },
@@ -397,7 +403,7 @@ function OverviewStudentListDialog({
                                         <th className="px-4 py-3 text-left">ระดับชั้น</th>
                                         <th className="px-4 py-3 text-left">กลุ่มเรียน</th>
                                         <th className="px-4 py-3 text-center">เพศ</th>
-                                        <th className="px-4 py-3 text-center">สถานะ N-Net / การสอบ</th>
+                                        {showExamStatus && <th className="px-4 py-3 text-center">สถานะ N-Net / การสอบ</th>}
                                         <th className="px-4 py-3 text-center">รายวิชา</th>
                                     </tr>
                                 </thead>
@@ -420,7 +426,7 @@ function OverviewStudentListDialog({
                                                     {student.gender || 'ไม่ระบุ'}
                                                 </span>
                                             </td>
-                                            <td className="px-4 py-3 text-center">
+                                            {showExamStatus && <td className="px-4 py-3 text-center">
                                                 <span className={`inline-flex rounded-lg px-2.5 py-1 text-xs font-bold ${
                                                     student.nnet === 'สอบแล้ว' || student.examStatus === 'สอบแล้ว'
                                                         ? 'bg-emerald-50 text-emerald-800'
@@ -430,7 +436,7 @@ function OverviewStudentListDialog({
                                                 }`}>
                                                     {student.nnet || student.examStatus || '-'}
                                                 </span>
-                                            </td>
+                                            </td>}
                                             <td className="px-4 py-3 text-center">
                                                 <button
                                                     type="button"
@@ -524,6 +530,7 @@ function ReportFormatDialog({ report, initialConfiguration, initialOrientation, 
 async function loadWorkspace(request: WorkspaceRequest, signal?: AbortSignal): Promise<WorkspaceResponse> {
     const params = new URLSearchParams();
     if (request.term) params.set('term', request.term);
+    if (request.group) params.set('group', request.group);
     if (request.report.source === 'registration-statistics') {
         request.configuration.vertical.forEach((category) => params.append('row_categories[]', category));
         request.configuration.horizontal.forEach((category) => params.append('column_categories[]', category));
@@ -549,6 +556,7 @@ export function StatisticsOverviewPage() {
     const districtId = window.localStorage.getItem('sena-district-id');
     const [reportId, setReportId] = useState<StatisticReportId>(1);
     const [termStart, setTermStart] = useState('');
+    const [group, setGroup] = useState('');
     const [axisConfiguration, setAxisConfiguration] = useState<StatisticAxisConfiguration>(() => createDefaultAxisConfiguration());
     const [orientation, setOrientation] = useState<StatisticOrientation>('vertical');
     const [request, setRequest] = useState<WorkspaceRequest | null>(null);
@@ -563,6 +571,11 @@ export function StatisticsOverviewPage() {
 
     const portal = useQuery({ queryKey: ['reports', 'overview', role, districtId], queryFn: ({ signal }) => apiGet<PortalData>('/api/v1/portal', signal).then((response) => response.data), staleTime: 2 * 60_000 });
     const me = useQuery({ queryKey: ['statistics', 'me', districtId], queryFn: ({ signal }) => apiGet<CurrentUser>('/api/v1/me', signal).then((response) => response.data), staleTime: 5 * 60_000 });
+    const directoryOptions = useQuery({
+        queryKey: ['statistics', 'group-options', role, districtId],
+        queryFn: ({ signal }) => getFeatureDataWithDemo<unknown[]>('/api/v1/students?per_page=1', [], signal),
+        staleTime: 2 * 60_000,
+    });
     const selectedReport = reportById(reportId);
     const preference = useQuery({
         queryKey: ['statistics-preference', districtId, selectedReport.source],
@@ -586,6 +599,8 @@ export function StatisticsOverviewPage() {
     const selectedDistrict = me.data?.districts.find((district) => String(district.id) === districtId);
     const districtName = selectedDistrict?.name ?? portal.data?.viewer.district ?? '-';
     const districtCode = selectedDistrict?.code ?? districtId ?? '-';
+    const groupOptions = ((directoryOptions.data?.meta as { filter_options?: { groups?: FilterOption[] } } | undefined)?.filter_options?.groups ?? []);
+    const selectedGroupLabel = groupOptions.find((option) => String(option.value) === group)?.label ?? group;
     const crossTab = workspace.data?.crossTab ?? emptyCrossTabPayload;
     const totalStudents = portal.data?.analytics.totals.students ?? 0;
     const resultTotal = crossTab.summary.registered_students;
@@ -605,7 +620,7 @@ export function StatisticsOverviewPage() {
         const normalized = normalizeAxisConfiguration(selectedReport, axisConfiguration);
         const vertical = supportedCategoryKeys(normalized.vertical);
         const horizontal = supportedCategoryKeys(normalized.horizontal);
-        setRequest({ report: selectedReport, term: termStart, configuration: { vertical, horizontal } });
+        setRequest({ report: selectedReport, term: termStart, group, configuration: { vertical, horizontal } });
     };
 
     const exportExcel = async () => {
@@ -637,7 +652,7 @@ export function StatisticsOverviewPage() {
                 <div className="space-y-5 lg:border-r lg:border-slate-200 lg:pr-6">
                     <div><label htmlFor="statistics-report" className="mb-2 flex items-center gap-2 text-sm font-black text-slate-800"><FileText size={19} className="text-emerald-600" weight="duotone" />รายงาน</label><select id="statistics-report" value={reportId} onChange={(event) => changeReport(Number(event.target.value) as StatisticReportId)} className={inputClassName()}>{statisticReports.map((report) => <option key={report.id} value={report.id}>{report.id}. {report.label}</option>)}</select><p className="mt-2 text-xs text-slate-500">แสดงเฉพาะรายงานที่มีแหล่งข้อมูลและวิธีนับที่ระบบรองรับแล้ว</p></div>
                     <div className="grid gap-3 sm:grid-cols-[190px_minmax(0,1fr)] sm:items-end"><label className="grid gap-2 text-sm font-black text-slate-800"><span className="flex items-center gap-2"><Buildings size={19} className="text-brand-700" weight="duotone" />รหัสพื้นที่/สถานศึกษา</span><div className="relative"><input readOnly value={districtCode} className={`${inputClassName(true)} pr-11`} /><MagnifyingGlass size={18} className="absolute right-3 top-1/2 -translate-y-1/2 text-brand-600" /></div></label><label className="grid gap-2 text-sm font-black text-slate-800">พื้นที่ข้อมูล<input readOnly value={districtName} className={inputClassName(true)} /></label></div>
-                    <fieldset><legend id="statistics-filter-title" className="mb-3 flex items-center gap-2 text-sm font-black text-slate-800"><CalendarBlank size={19} className="text-brand-700" weight="duotone" />ภาคเรียนที่ต้องการประมวลผล</legend><div className="sm:max-w-xs"><input aria-label="ภาคเรียนที่ต้องการประมวลผล" value={termStart} onChange={(event) => { setTermStart(event.target.value); clearProcessedResult(); }} placeholder="1/2569" className={inputClassName()} /><p className="mt-2 text-xs text-slate-500">ระบบประมวลผลจากข้อมูลจริงครั้งละ 1 ภาคเรียน</p></div></fieldset>
+                    <fieldset><legend id="statistics-filter-title" className="mb-3 flex items-center gap-2 text-sm font-black text-slate-800"><CalendarBlank size={19} className="text-brand-700" weight="duotone" />ตัวกรองรายงาน</legend><div className="grid gap-3 sm:grid-cols-2"><label className="grid gap-2 text-sm font-black text-slate-800">ภาคเรียนที่ต้องการประมวลผล<input aria-label="ภาคเรียนที่ต้องการประมวลผล" value={termStart} onChange={(event) => { setTermStart(event.target.value); clearProcessedResult(); }} placeholder="1/2569" className={inputClassName()} /></label><label className="grid gap-2 text-sm font-black text-slate-800">กลุ่มเรียน<select aria-label="กรองตามกลุ่มเรียน" value={group} onChange={(event) => { setGroup(event.target.value); clearProcessedResult(); }} className={inputClassName()}><option value="">ทุกกลุ่มเรียน</option>{groupOptions.map((option) => <option key={String(option.value)} value={String(option.value)}>{option.label}</option>)}</select></label></div><p className="mt-2 text-xs text-slate-500">ระบบประมวลผลจากข้อมูลจริงครั้งละ 1 ภาคเรียน และเลือกกรองเฉพาะกลุ่มได้</p></fieldset>
                 </div>
                 <div className="flex flex-col justify-between gap-6">
                     <div><h2 className="flex items-center gap-2 text-sm font-black text-slate-800"><ChartBar size={19} className="text-brand-700" weight="duotone" />ระดับการแสดงผล</h2><div className="mt-3 inline-flex items-center gap-2 rounded-full bg-emerald-50 px-3 py-1.5 text-sm font-black text-emerald-800"><span className="size-2 rounded-full bg-emerald-500" />ระดับสถานศึกษา/อำเภอ</div><p className="mt-2 text-xs text-slate-500">ใช้ข้อมูลของอำเภอที่เลือกและขอบเขตกลุ่มของผู้ใช้งาน</p><div className="mt-4 grid gap-2 rounded-xl border border-brand-100 bg-brand-50/70 px-4 py-3 text-sm text-brand-950"><p><strong className="font-black text-indigo-800">แกนตั้ง:</strong> {verticalSummary || 'ยังไม่ได้เลือก'}</p><p><strong className="font-black text-sky-800">แกนนอน:</strong> {horizontalSummary || 'ยังไม่ได้เลือก'}</p></div></div>
@@ -646,7 +661,7 @@ export function StatisticsOverviewPage() {
             </div>
         </section>
         {validationMessage && <div role="alert" className="flex items-start gap-3 rounded-2xl border border-amber-200 bg-amber-50 px-4 py-4 text-sm text-amber-950"><Info size={20} weight="fill" className="mt-0.5 shrink-0 text-amber-600" /><div><strong className="font-black">ยังประมวลผลรายงานนี้ไม่ได้</strong><p className="mt-0.5 leading-6">{validationMessage}</p></div></div>}
-        <section aria-labelledby="statistics-result-title" className="rounded-[24px] border border-slate-200 bg-white p-5 shadow-sm shadow-slate-200/60 lg:p-6"><div className="mb-5 flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between"><div><h2 id="statistics-result-title" className="flex items-center gap-2 text-lg font-black text-slate-950"><Rows size={21} className="text-brand-700" weight="duotone" />ผลการประมวลผลแบบสองแกน</h2><p className="mt-1 text-sm text-slate-500">{request ? `${processedReport.label} · ${districtName} · ภาคเรียน ${workspace.data?.selectedTerm ?? request.term}` : 'ยังไม่มีข้อมูล กรุณาตั้งค่าทั้งสองแกนและกดปุ่มประมวลผล'}</p></div>{hasProcessedResult && crossTab.rows.length > 0 && <div className="flex flex-wrap gap-2 text-xs font-bold"><span className="rounded-full bg-indigo-50 px-3 py-1.5 text-indigo-800">{crossTab.summary.row_count} ชุดแถว × {crossTab.summary.column_count} ชุดคอลัมน์</span><span className="rounded-full bg-emerald-50 px-3 py-1.5 text-emerald-800">สูงสุด {largestCell && largestRow && largestColumn ? `${largestRow.label} × ${largestColumn.label} ${largestCell.count.toLocaleString('th-TH')} คน` : '-'}</span></div>}</div>{workspace.isFetching && <QuerySkeleton rows={6} />}{workspace.isError && <QueryError onRetry={() => workspace.refetch()} />}{!workspace.isFetching && !workspace.isError && <CrossTabResultTable crossTab={hasProcessedResult ? crossTab : unprocessedCrossTab} onSelectCell={hasProcessedResult ? setSelectedCell : undefined} />}</section>
+        <section aria-labelledby="statistics-result-title" className="rounded-[24px] border border-slate-200 bg-white p-5 shadow-sm shadow-slate-200/60 lg:p-6"><div className="mb-5 flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between"><div><h2 id="statistics-result-title" className="flex items-center gap-2 text-lg font-black text-slate-950"><Rows size={21} className="text-brand-700" weight="duotone" />ผลการประมวลผลแบบสองแกน</h2><p className="mt-1 text-sm text-slate-500">{request ? `${processedReport.label} · ${districtName} · ภาคเรียน ${workspace.data?.selectedTerm ?? request.term}${request.group ? ` · กลุ่ม ${selectedGroupLabel}` : ''}` : 'ยังไม่มีข้อมูล กรุณาตั้งค่าทั้งสองแกนและกดปุ่มประมวลผล'}</p></div>{hasProcessedResult && crossTab.rows.length > 0 && <div className="flex flex-wrap gap-2 text-xs font-bold"><span className="rounded-full bg-indigo-50 px-3 py-1.5 text-indigo-800">{crossTab.summary.row_count} ชุดแถว × {crossTab.summary.column_count} ชุดคอลัมน์</span><span className="rounded-full bg-emerald-50 px-3 py-1.5 text-emerald-800">สูงสุด {largestCell && largestRow && largestColumn ? `${largestRow.label} × ${largestColumn.label} ${largestCell.count.toLocaleString('th-TH')} คน` : '-'}</span></div>}</div>{workspace.isFetching && <QuerySkeleton rows={6} />}{workspace.isError && <QueryError onRetry={() => workspace.refetch()} />}{!workspace.isFetching && !workspace.isError && <CrossTabResultTable crossTab={hasProcessedResult ? crossTab : unprocessedCrossTab} onSelectCell={hasProcessedResult ? setSelectedCell : undefined} />}</section>
         {formatOpen && <ReportFormatDialog report={selectedReport} initialConfiguration={axisConfiguration} initialOrientation={orientation} onClose={() => setFormatOpen(false)} onSave={(nextConfiguration, nextOrientation) => {
             const normalized = normalizeAxisConfiguration(selectedReport, nextConfiguration);
             savePreference.mutate({ report: selectedReport.source, ...normalized, orientation: nextOrientation, saved: true }, {

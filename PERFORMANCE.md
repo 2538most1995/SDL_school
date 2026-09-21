@@ -61,6 +61,13 @@
 
 แก้ driver detection ใน `LegacyStudentRepository` ให้ใช้ MySQL-specific `BINARY` เมื่อ connection มี `getDriverName()` และใช้ plain equality ใน mocked/SQLite contexts; ไม่เปลี่ยน production MySQL path.
 
+### 5. Student statistics and expected-graduate queries
+
+- ตัดการเรียก `expectedGraduateRows()` ออกจากรายงานลงทะเบียน เพราะรายงานนี้ไม่ใช้สถานะ N-Net และการเรียกเดิมทำให้สแกน student/grade ซ้ำทั้งอำเภอ
+- รายงานคาดว่าจะจบโหลด grade แบบกลุ่มรหัสนักศึกษาครั้งละ 500 คน แทนการสร้าง `IN (...)` ขนาดไม่จำกัด ลดความเสี่ยงชน parameter/query-size limit เมื่อทะเบียนอำเภอมีข้อมูลมากขึ้น
+- batch และ dynamic table set ยังคง resolve จาก batch สำเร็จล่าสุดที่ผูกกับ `district_id`; ไม่มี query หรือ table name ที่ hard-code เสนา/ไพศาลี จึงรองรับทะเบียนอำเภอใหม่ด้วยเส้นทางเดียวกัน
+- import pipeline มี index สำหรับ grade ตาม `_perf_std10`, `_perf_semestry` และ `_perf_sub`; execution plan และเวลาจริงบน MySQL production ยัง `Not verified`
+
 ## Query and Eloquent review
 
 - Dynamic legacy identifiers ถูก whitelist ก่อน interpolate; values ใช้ bindings
@@ -99,6 +106,8 @@
 | User directory query count | `1 + N` | `1` | static review + `LegacyPortalReadPerformanceTest` (1 user) |
 | Overview duplicate assignment query | duplicated in same request | one load/reuse | source review; Not benchmarked |
 | Exam-room queries | per unique subject (+ fallback) | one per district + term | source review; Not benchmarked |
+| Registration-statistics N-Net scan | full expected-graduate student/grade scan in addition to registration query | removed | unit assertion verifies no expected-graduate query |
+| Expected-graduate grade lookup | one unbounded student-code `IN (...)` | chunks of at most 500 student codes | unit test with 108 expected graduates; live workload Not benchmarked |
 | Admin exam-room scope | ทุกภาคเรียนสูงสุด 500 รายการและไม่มีขอบเขตตำบล/ระดับ | เฉพาะภาคเรียนปัจจุบันสูงสุด 5,000 รายการ; exact student/group assignment ใช้ index ในหน่วยความจำ; การ sync อ่าน grade/schedule ด้วย term indexes ของ active batch แล้ว insert ทีละ 500 แถว | feature test; live workload Not benchmarked |
 | Database time | Not benchmarked | Not benchmarked | live MySQL unavailable |
 | Response time | Not benchmarked | Not benchmarked | live workload unavailable |

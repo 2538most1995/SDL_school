@@ -65,9 +65,10 @@ test('report format catalog keeps only dimensions backed by imported source fiel
         'ระดับชั้น', 'กลุ่มเรียน', 'เพศ', 'อายุ', 'อาชีพ', 'กลุ่มเป้าหมาย', 'สัญชาติ', 'สถานะ N-Net / E-Exam',
     ]);
     assert.deepEqual(categoriesForReport(reportById(2)).map((item) => item.key), [
-        'level', 'group', 'gender', 'age', 'occupation', 'target_group', 'nationality', 'nnet',
+        'level', 'group', 'gender', 'age', 'occupation', 'target_group', 'nationality',
     ]);
     assert.deepEqual(categoriesForReport(reportById(3)).map((item) => item.key), ['level', 'group', 'gender']);
+    assert.deepEqual(categoriesForReport(reportById(4)).map((item) => item.key), ['level', 'group', 'gender', 'nnet']);
     assert.deepEqual(normalizeAxisConfiguration(reportById(3), {
         vertical: ['gender', 'level'],
         horizontal: ['age'],

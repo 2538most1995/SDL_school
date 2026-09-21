@@ -156,14 +156,14 @@ final readonly class StudentReportService
             'group_label' => $student->groupName,
             'gender' => (string) ($student->demographics['gender'] ?? 'ไม่ระบุ'),
             'metric' => number_format($projectedCreditsByStudent["{$student->districtId}|{$student->level}|{$student->code}"] ?? 0, 0).'/'.number_format($student->creditsRequired, 0).' หน่วยกิต (คาดว่าจะจบ)',
-            'examStatus' => $student->creditsEarned >= $student->creditsRequired ? 'สอบแล้ว' : 'มีสิทธิ์สอบ',
-            'nnet' => $student->creditsEarned >= $student->creditsRequired ? 'สอบแล้ว' : 'มีสิทธิ์สอบ',
+            'examStatus' => 'มีสิทธิ์สอบ',
+            'nnet' => 'มีสิทธิ์สอบ',
         ], $students);
 
         $examStatusFilter = trim((string) ($filters['exam_status'] ?? ''));
         if ($examStatusFilter === 'taken') {
             $rows = array_values(array_filter($rows, static fn (array $row): bool => ($row['examStatus'] ?? '') === 'สอบแล้ว'));
-        } elseif ($examStatusFilter === 'eligible' || $examStatusFilter === 'not_taken') {
+        } elseif ($examStatusFilter === 'eligible') {
             $rows = array_values(array_filter($rows, static fn (array $row): bool => in_array($row['examStatus'] ?? '', ['มีสิทธิ์สอบ', 'ยังไม่ได้สอบ'], true)));
         }
 
@@ -308,7 +308,6 @@ final readonly class StudentReportService
                 'occupation' => ['00', '04', '05', '06'][$seed % 4],
                 'nationality' => '099',
                 'age' => (string) (18 + ($seed % 43)),
-                'nnet' => ($seed % 3 === 0) ? 'not_taken' : (($seed % 3 === 1) ? 'eligible' : 'taken'),
             ];
         }
 

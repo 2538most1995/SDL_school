@@ -129,7 +129,9 @@ export function reportById(id: StatisticReportId): StatisticReportDefinition {
 }
 
 export function categoriesForReport(report: StatisticReportDefinition): StatisticCategoryDefinition[] {
-    if (report.source === 'registration-statistics') return statisticCategories;
+    if (report.source === 'registration-statistics') {
+        return statisticCategories.filter((category) => category.key !== 'nnet');
+    }
     if (report.source === 'expected-graduates') {
         return statisticCategories.filter((category) => category.key === 'level' || category.key === 'group' || category.key === 'gender' || category.key === 'nnet');
     }

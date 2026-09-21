@@ -14,7 +14,7 @@ final class StatisticsReportPreferenceController extends Controller
     /** @var array<string, list<string>> */
     private const REPORT_CATEGORIES = [
         'new-students' => ['level', 'group', 'gender'],
-        'registration-statistics' => ['level', 'group', 'gender', 'age', 'occupation', 'target_group', 'nationality', 'nnet'],
+        'registration-statistics' => ['level', 'group', 'gender', 'age', 'occupation', 'target_group', 'nationality'],
         'graduates' => ['level', 'group', 'gender'],
         'expected-graduates' => ['level', 'group', 'gender', 'nnet'],
         'transfers' => ['level', 'group', 'gender'],

@@ -13,7 +13,6 @@ final class RegistrationStatistics
         'occupation' => 'อาชีพ',
         'nationality' => 'สัญชาติ',
         'age' => 'อายุ',
-        'nnet' => 'สถานะ N-Net / E-Exam',
     ];
 
     /** @var array<string, string> */
@@ -122,12 +121,6 @@ final class RegistrationStatistics
             'occupation' => self::OCCUPATIONS[$code] ?? "ไม่พบชื่ออาชีพ (รหัส {$code})",
             'nationality' => self::NATIONALITIES[$code] ?? (preg_match('/^\d+$/', $code) === 1 ? "ไม่พบชื่อสัญชาติ (รหัส {$code})" : $code),
             'age' => "{$code} ปี",
-            'nnet' => match (mb_strtolower($code)) {
-                'taken', '1', 'y', 'pass', 'passed', 'สอบแล้ว', 'ผ่าน' => 'สอบแล้ว',
-                'eligible', 'มีสิทธิ์สอบ' => 'มีสิทธิ์สอบ',
-                'not_taken', '0', 'n', 'fail', 'ยังไม่ได้สอบ', 'ไม่ผ่าน' => 'ยังไม่ได้สอบ',
-                default => $code !== '' ? $code : 'ยังไม่ได้สอบ',
-            },
             default => $code,
         };
     }
@@ -151,11 +144,6 @@ final class RegistrationStatistics
             'age' => (preg_match('/^\d{1,3}$/', $value) === 1 && (int) $value > 0 && (int) $value <= 120)
                 ? (string) ((int) $value)
                 : '',
-            'nnet' => match (mb_strtolower($value)) {
-                'taken', '1', 'y', 'pass', 'passed', 'สอบแล้ว', 'ผ่าน' => 'taken',
-                'eligible', 'มีสิทธิ์สอบ' => 'eligible',
-                default => 'not_taken',
-            },
             default => $value,
         };
     }
@@ -223,11 +211,6 @@ final class RegistrationStatistics
                 'category_label' => self::categoryLabel($category),
                 'category_value' => (string) ($record[$category] ?? ''),
                 'category_value_label' => self::itemLabel($category, (string) ($record[$category] ?? '')),
-                'nnet_status' => match ($record['nnet'] ?? '') {
-                    'taken' => 'สอบแล้ว',
-                    'eligible' => 'มีสิทธิ์สอบ',
-                    default => 'ยังไม่ได้สอบ',
-                },
                 'target_group' => self::itemLabel('target_group', (string) ($record['target_group'] ?? '')),
                 'gender' => self::itemLabel('gender', (string) ($record['gender'] ?? '')),
                 'occupation' => self::itemLabel('occupation', (string) ($record['occupation'] ?? '')),
@@ -336,16 +319,6 @@ final class RegistrationStatistics
                     default => 'ไม่ระบุระดับ',
                 }),
                 'gender' => self::itemLabel('gender', (string) ($record['gender'] ?? '')),
-                'nnet' => match ($record['nnet'] ?? '') {
-                    'taken' => 'สอบแล้ว',
-                    'eligible' => 'มีสิทธิ์สอบ',
-                    default => 'ยังไม่ได้สอบ',
-                },
-                'examStatus' => match ($record['nnet'] ?? '') {
-                    'taken' => 'สอบแล้ว',
-                    'eligible' => 'มีสิทธิ์สอบ',
-                    default => 'ยังไม่ได้สอบ',
-                },
             ];
             $rows[$rowKey]['total']++;
             $columns[$columnKey]['total']++;
@@ -577,11 +550,10 @@ final class RegistrationStatistics
         }
 
         usort($items, static function (array $left, array $right) use ($category): int {
-            if (in_array($category, ['gender', 'level', 'age', 'nnet'], true)) {
+            if (in_array($category, ['gender', 'level', 'age'], true)) {
                 $order = match ($category) {
                     'gender' => ['1' => 1, 'M' => 1, 'ชาย' => 1, '2' => 2, 'F' => 2, 'หญิง' => 2],
                     'level' => ['1' => 1, '2' => 2, '3' => 3],
-                    'nnet' => ['taken' => 1, 'eligible' => 2, 'not_taken' => 3],
                     default => [],
                 };
                 if ($category === 'age') {

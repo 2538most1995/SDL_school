@@ -260,6 +260,11 @@ final class StudentApiTest extends TestCase
             ->assertJsonPath('data.selected_term', '1/2569')
             ->assertJsonPath('data.total', 0)
             ->assertJsonCount(0, 'data.rows');
+
+        $this->getJson('/api/v1/reports/expected-graduates?term=1/2569&exam_status=eligible')
+            ->assertOk();
+        $this->getJson('/api/v1/reports/expected-graduates?term=1/2569&exam_status=not_taken')
+            ->assertUnprocessable();
     }
 
     public function test_every_student_report_accepts_level_and_group_filters_with_teacher_scope(): void
@@ -459,6 +464,8 @@ final class StudentApiTest extends TestCase
             ->assertJsonPath('data.items.0.code', 'เสนา ม.ปลาย B');
 
         $this->getJson('/api/v1/reports/students/registration-statistics?category=unknown')
+            ->assertUnprocessable();
+        $this->getJson('/api/v1/reports/students/registration-statistics?category=nnet')
             ->assertUnprocessable();
 
         Sanctum::actingAs($this->viewer('student', $this->sena->id, [], '6650100001'));
