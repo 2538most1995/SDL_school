@@ -2,8 +2,6 @@ import { keepPreviousData, useQuery } from '@tanstack/react-query';
 import {
     Buildings,
     CalendarBlank,
-    CaretLeft,
-    CaretRight,
     ChartBar,
     ChartPieSlice,
     FileText,
@@ -71,7 +69,6 @@ const emptyCrossTabPayload: StatisticCrossTabPayload = {
     columns: [],
 };
 const emptyGenericPayload: GenericReportPayload = { total: 0, active: 0, groups: 0, rows: [] };
-const pageSize = 10;
 
 function inputClassName(disabled = false): string {
     return `h-11 w-full rounded-xl border px-3 text-sm font-semibold outline-none transition-[border-color,box-shadow,background-color] duration-150 ${disabled
@@ -135,9 +132,7 @@ function ResultInformationSummary({ crossTab }: { crossTab: StatisticCrossTabPay
     </aside>;
 }
 
-function CrossTabResultTable({ crossTab, page, onPageChange, showPagination = true }: { crossTab: StatisticCrossTabPayload; page: number; onPageChange: (page: number) => void; showPagination?: boolean }) {
-    const pageCount = Math.max(1, Math.ceil(crossTab.rows.length / pageSize));
-    const visibleRows = showPagination ? crossTab.rows.slice((page - 1) * pageSize, page * pageSize) : crossTab.rows;
+function CrossTabResultTable({ crossTab }: { crossTab: StatisticCrossTabPayload }) {
     const hasRows = crossTab.rows.length > 0;
     return (
         <>
@@ -145,19 +140,11 @@ function CrossTabResultTable({ crossTab, page, onPageChange, showPagination = tr
             <div className="overflow-x-auto rounded-2xl border border-slate-200">
                 <table className="w-full min-w-max border-collapse text-sm">
                     <thead><tr className="bg-gradient-to-b from-brand-50 to-sky-50 text-brand-950"><th className="sticky left-0 z-[2] min-w-64 border-b border-r border-slate-200 bg-brand-50 px-4 py-3 text-left"><span className="block text-xs font-bold text-indigo-700">ข้อมูลแนวตั้ง</span><span className="mt-0.5 block font-black">{crossTab.row_categories.map((item) => item.label).join(' › ')}</span></th>{crossTab.columns.map((column) => <th key={column.key} className="min-w-36 border-b border-r border-slate-200 px-3 py-3 text-center align-top">{column.parts.map((part) => <span key={`${column.key}-${part.category}`} className="block"><span className="block text-[10px] font-bold text-sky-700">{part.category_label}</span><span className="block font-black text-slate-900">{part.label}</span></span>)}</th>)}<th className="min-w-28 border-b border-slate-200 bg-brand-100 px-4 py-3 text-center font-black">รวมแถว</th></tr></thead>
-                    <tbody>{visibleRows.map((row) => <tr key={row.key} className="bg-white transition-colors hover:bg-slate-50"><th className="sticky left-0 z-[1] border-b border-r border-slate-200 bg-white px-4 py-3 text-left align-top">{row.parts.map((part) => <span key={`${row.key}-${part.category}`} className="block"><span className="text-[10px] font-bold text-indigo-600">{part.category_label}</span><span className="ml-2 font-black text-slate-900">{part.label}</span></span>)}</th>{crossTab.columns.map((column) => { const count = row.cells[column.key] ?? 0; return <td key={`${row.key}-${column.key}`} className={`border-b border-r border-slate-100 px-4 py-3 text-center font-black ${count > 0 ? 'bg-sky-50/50 text-slate-950' : 'text-slate-300'}`}>{count.toLocaleString('th-TH')}</td>; })}<td className="border-b border-slate-200 bg-brand-50 px-4 py-3 text-center font-black text-brand-900">{row.total.toLocaleString('th-TH')}</td></tr>)}</tbody>
+                    <tbody>{crossTab.rows.map((row) => <tr key={row.key} className="bg-white transition-colors hover:bg-slate-50"><th className="sticky left-0 z-[1] border-b border-r border-slate-200 bg-white px-4 py-3 text-left align-top">{row.parts.map((part) => <span key={`${row.key}-${part.category}`} className="block"><span className="text-[10px] font-bold text-indigo-600">{part.category_label}</span><span className="ml-2 font-black text-slate-900">{part.label}</span></span>)}</th>{crossTab.columns.map((column) => { const count = row.cells[column.key] ?? 0; return <td key={`${row.key}-${column.key}`} className={`border-b border-r border-slate-100 px-4 py-3 text-center font-black ${count > 0 ? 'bg-sky-50/50 text-slate-950' : 'text-slate-300'}`}>{count.toLocaleString('th-TH')}</td>; })}<td className="border-b border-slate-200 bg-brand-50 px-4 py-3 text-center font-black text-brand-900">{row.total.toLocaleString('th-TH')}</td></tr>)}</tbody>
                     {hasRows && <tfoot><tr className="bg-brand-100 text-brand-950"><th className="sticky left-0 z-[2] border-t border-r border-brand-200 bg-brand-100 px-4 py-3 text-right font-black">รวมคอลัมน์</th>{crossTab.columns.map((column) => <td key={column.key} className="border-t border-r border-brand-200 px-4 py-3 text-center font-black">{column.total.toLocaleString('th-TH')}</td>)}<td className="border-t border-brand-300 bg-brand-200 px-4 py-3 text-center text-base font-black">{crossTab.summary.registered_students.toLocaleString('th-TH')}</td></tr></tfoot>}
                 </table>
                 {!hasRows && <div className="grid min-h-64 place-items-center bg-white px-6 py-12 text-center"><div><span className="mx-auto grid size-16 place-items-center rounded-2xl bg-slate-100 text-slate-400"><Rows size={30} weight="duotone" /></span><h3 className="mt-4 font-black text-slate-800">ยังไม่มีข้อมูลในตาราง</h3><p className="mt-1 text-sm text-slate-500">ตั้งค่าทั้งสองแกนและกด “ประมวลผล” เพื่อสร้างตารางไขว้</p></div></div>}
             </div>
-            {showPagination && <div className="mt-4 flex flex-col gap-3 text-sm text-slate-500 sm:flex-row sm:items-center sm:justify-between">
-                <p>แสดง {crossTab.rows.length === 0 ? 0 : ((page - 1) * pageSize) + 1}–{Math.min(page * pageSize, crossTab.rows.length)} จาก {crossTab.rows.length.toLocaleString('th-TH')} ชุดแถว</p>
-                <div className="flex items-center gap-2">
-                    <button type="button" aria-label="หน้าก่อนหน้า" disabled={page === 1} onClick={() => onPageChange(page - 1)} className="grid size-10 place-items-center rounded-xl border border-slate-200 bg-white text-slate-600 transition-[transform,background-color] duration-150 hover:bg-slate-50 active:scale-[0.97] disabled:cursor-not-allowed disabled:text-slate-300"><CaretLeft size={18} weight="bold" /></button>
-                    <span className="grid min-w-10 place-items-center rounded-xl bg-brand-700 px-3 py-2.5 font-black text-white">{page}</span>
-                    <button type="button" aria-label="หน้าถัดไป" disabled={page >= pageCount} onClick={() => onPageChange(page + 1)} className="grid size-10 place-items-center rounded-xl border border-slate-200 bg-white text-slate-600 transition-[transform,background-color] duration-150 hover:bg-slate-50 active:scale-[0.97] disabled:cursor-not-allowed disabled:text-slate-300"><CaretRight size={18} weight="bold" /></button>
-                </div>
-            </div>}
             {hasRows && <ResultInformationSummary crossTab={crossTab} />}
         </>
     );
@@ -167,7 +154,7 @@ function ReportPreviewDialog({ report, district, term, crossTab, onClose }: { re
     return <div className="fixed inset-0 z-[70] flex items-center justify-center bg-slate-950/55 p-4 backdrop-blur-[2px]" role="presentation" onMouseDown={(event) => { if (event.target === event.currentTarget) onClose(); }}>
         <section role="dialog" aria-modal="true" aria-labelledby="report-preview-title" className="statistics-print-surface max-h-[calc(100dvh-2rem)] w-full max-w-6xl overflow-y-auto rounded-[24px] border border-white/70 bg-white shadow-[0_30px_100px_rgb(2_6_23_/_0.35)]">
             <header className="sticky top-0 z-10 flex items-start justify-between gap-4 border-b border-slate-200 bg-white/95 px-5 py-4 backdrop-blur sm:px-7"><div><p className="text-xs font-black uppercase tracking-[0.15em] text-brand-700">ตัวอย่างก่อนพิมพ์</p><h2 id="report-preview-title" className="mt-1 text-xl font-black text-slate-950">{report.label}</h2><p className="mt-1 text-sm text-slate-500">{district} · ภาคเรียน {term || '-'}</p></div><button type="button" onClick={onClose} className="grid size-10 shrink-0 place-items-center rounded-xl border border-slate-200 text-slate-600 transition-[transform,background-color] duration-150 hover:bg-slate-100 active:scale-[0.97]" aria-label="ปิดตัวอย่าง"><X size={20} weight="bold" /></button></header>
-            <div className="p-5 sm:p-7"><CrossTabResultTable crossTab={crossTab} page={1} onPageChange={() => undefined} showPagination={false} /><div className="mt-5 flex justify-end gap-2 print:hidden"><ActionButton onClick={onClose}>ปิด</ActionButton><ActionButton tone="primary" onClick={() => window.print()}><Printer size={18} weight="bold" />พิมพ์รายงาน</ActionButton></div></div>
+            <div className="p-5 sm:p-7"><CrossTabResultTable crossTab={crossTab} /><div className="mt-5 flex justify-end gap-2 print:hidden"><ActionButton onClick={onClose}>ปิด</ActionButton><ActionButton tone="primary" onClick={() => window.print()}><Printer size={18} weight="bold" />พิมพ์รายงาน</ActionButton></div></div>
         </section>
     </div>;
 }
@@ -246,7 +233,6 @@ export function StatisticsOverviewPage() {
     const [request, setRequest] = useState<WorkspaceRequest | null>(null);
     const [formatOpen, setFormatOpen] = useState(false);
     const [previewOpen, setPreviewOpen] = useState(false);
-    const [page, setPage] = useState(1);
     const [validationMessage, setValidationMessage] = useState('');
 
     const portal = useQuery({ queryKey: ['reports', 'overview', role, districtId], queryFn: ({ signal }) => apiGet<PortalData>('/api/v1/portal', signal).then((response) => response.data), staleTime: 2 * 60_000 });
@@ -268,7 +254,7 @@ export function StatisticsOverviewPage() {
     const canExport = canExportRegistrationStatistics(role);
     const processedReport = request?.report ?? selectedReport;
     const hasProcessedResult = request !== null && workspace.isSuccess;
-    const clearProcessedResult = () => { setRequest(null); setPage(1); setValidationMessage(''); };
+    const clearProcessedResult = () => { setRequest(null); setValidationMessage(''); };
     const changeReport = (nextId: StatisticReportId) => { setReportId(nextId); setAxisConfiguration(createDefaultAxisConfiguration()); clearProcessedResult(); };
 
     const processReport = () => {
@@ -282,7 +268,6 @@ export function StatisticsOverviewPage() {
         const vertical = supportedCategoryKeys(axisConfiguration.vertical);
         const horizontal = supportedCategoryKeys(axisConfiguration.horizontal);
         setRequest({ report: selectedReport, term: termStart, configuration: { vertical, horizontal } });
-        setPage(1);
     };
 
     const exportExcel = async () => {
@@ -323,7 +308,7 @@ export function StatisticsOverviewPage() {
             </div>
         </section>
         {validationMessage && <div role="alert" className="flex items-start gap-3 rounded-2xl border border-amber-200 bg-amber-50 px-4 py-4 text-sm text-amber-950"><Info size={20} weight="fill" className="mt-0.5 shrink-0 text-amber-600" /><div><strong className="font-black">ยังประมวลผลรายงานนี้ไม่ได้</strong><p className="mt-0.5 leading-6">{validationMessage}</p></div></div>}
-        <section aria-labelledby="statistics-result-title" className="rounded-[24px] border border-slate-200 bg-white p-5 shadow-sm shadow-slate-200/60 lg:p-6"><div className="mb-5 flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between"><div><h2 id="statistics-result-title" className="flex items-center gap-2 text-lg font-black text-slate-950"><Rows size={21} className="text-brand-700" weight="duotone" />ผลการประมวลผลแบบสองแกน</h2><p className="mt-1 text-sm text-slate-500">{request ? `${processedReport.label} · ${districtName} · ภาคเรียน ${workspace.data?.selectedTerm ?? request.term}` : 'ยังไม่มีข้อมูล กรุณาตั้งค่าทั้งสองแกนและกดปุ่มประมวลผล'}</p></div>{hasProcessedResult && crossTab.rows.length > 0 && <div className="flex flex-wrap gap-2 text-xs font-bold"><span className="rounded-full bg-indigo-50 px-3 py-1.5 text-indigo-800">{crossTab.summary.row_count} ชุดแถว × {crossTab.summary.column_count} ชุดคอลัมน์</span><span className="rounded-full bg-emerald-50 px-3 py-1.5 text-emerald-800">สูงสุด {largestCell && largestRow && largestColumn ? `${largestRow.label} × ${largestColumn.label} ${largestCell.count.toLocaleString('th-TH')} คน` : '-'}</span></div>}</div>{workspace.isFetching && <QuerySkeleton rows={6} />}{workspace.isError && <QueryError onRetry={() => workspace.refetch()} />}{!workspace.isFetching && !workspace.isError && <CrossTabResultTable crossTab={hasProcessedResult ? crossTab : emptyCrossTabPayload} page={page} onPageChange={setPage} />}</section>
+        <section aria-labelledby="statistics-result-title" className="rounded-[24px] border border-slate-200 bg-white p-5 shadow-sm shadow-slate-200/60 lg:p-6"><div className="mb-5 flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between"><div><h2 id="statistics-result-title" className="flex items-center gap-2 text-lg font-black text-slate-950"><Rows size={21} className="text-brand-700" weight="duotone" />ผลการประมวลผลแบบสองแกน</h2><p className="mt-1 text-sm text-slate-500">{request ? `${processedReport.label} · ${districtName} · ภาคเรียน ${workspace.data?.selectedTerm ?? request.term}` : 'ยังไม่มีข้อมูล กรุณาตั้งค่าทั้งสองแกนและกดปุ่มประมวลผล'}</p></div>{hasProcessedResult && crossTab.rows.length > 0 && <div className="flex flex-wrap gap-2 text-xs font-bold"><span className="rounded-full bg-indigo-50 px-3 py-1.5 text-indigo-800">{crossTab.summary.row_count} ชุดแถว × {crossTab.summary.column_count} ชุดคอลัมน์</span><span className="rounded-full bg-emerald-50 px-3 py-1.5 text-emerald-800">สูงสุด {largestCell && largestRow && largestColumn ? `${largestRow.label} × ${largestColumn.label} ${largestCell.count.toLocaleString('th-TH')} คน` : '-'}</span></div>}</div>{workspace.isFetching && <QuerySkeleton rows={6} />}{workspace.isError && <QueryError onRetry={() => workspace.refetch()} />}{!workspace.isFetching && !workspace.isError && <CrossTabResultTable crossTab={hasProcessedResult ? crossTab : emptyCrossTabPayload} />}</section>
         {formatOpen && <ReportFormatDialog report={selectedReport} initialConfiguration={axisConfiguration} initialOrientation={orientation} onClose={() => setFormatOpen(false)} onSave={(nextConfiguration, nextOrientation) => { setAxisConfiguration(nextConfiguration); setOrientation(nextOrientation); setFormatOpen(false); clearProcessedResult(); showSuccessAlert('บันทึกรูปแบบแนวตั้งและแนวนอนแยกกันเรียบร้อยแล้ว'); }} />}
         {previewOpen && request && <ReportPreviewDialog report={processedReport} district={districtName} term={workspace.data?.selectedTerm ?? request.term} crossTab={crossTab} onClose={() => setPreviewOpen(false)} />}
     </div>;
