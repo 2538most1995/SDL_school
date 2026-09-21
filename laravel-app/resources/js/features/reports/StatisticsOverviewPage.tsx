@@ -1,5 +1,6 @@
 import { keepPreviousData, useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import {
+    Books,
     Buildings,
     CalendarBlank,
     ChartBar,
@@ -28,6 +29,7 @@ import { apiGet } from '../../lib/api';
 import { showErrorAlert, showSuccessAlert } from '../../lib/feedback';
 import type { PortalData } from '../../types';
 import { getFeatureDataWithDemo, sendFeatureData } from '../api';
+import { StudentSubjectsDialog } from './StudentSubjectsDialog';
 import {
     canExportRegistrationStatistics,
     type CategoryKey,
@@ -251,14 +253,17 @@ function CrossTabResultTable({ crossTab, onSelectCell }: { crossTab: StatisticCr
 function OverviewStudentListDialog({
     cellInfo,
     term,
+    report,
     onClose,
 }: {
     cellInfo: { title: string; subtitle: string; students: GenericReportRow[] } | null;
     term: string;
+    report?: StatisticReportDefinition;
     onClose: () => void;
 }) {
     const [searchTerm, setSearchTerm] = useState('');
     const [isExporting, setIsExporting] = useState(false);
+    const [subjectStudent, setSubjectStudent] = useState<{ code: string; name: string; level: string; group: string } | null>(null);
 
     if (!cellInfo) return null;
 
@@ -269,7 +274,8 @@ function OverviewStudentListDialog({
                 (s.student_id ?? s.secondary ?? s.id ?? '').toLowerCase().includes(searchTerm.toLowerCase()) ||
                 (s.name ?? s.primary ?? '').toLowerCase().includes(searchTerm.toLowerCase()) ||
                 (s.group_name ?? s.group_label ?? s.group ?? s.group_id ?? '').toLowerCase().includes(searchTerm.toLowerCase()) ||
-                (s.level ?? '').toLowerCase().includes(searchTerm.toLowerCase()),
+                (s.level ?? '').toLowerCase().includes(searchTerm.toLowerCase()) ||
+                (s.gender ?? '').toLowerCase().includes(searchTerm.toLowerCase()),
         )
         : students;
 
@@ -284,6 +290,7 @@ function OverviewStudentListDialog({
                 s.name ?? s.primary ?? '',
                 s.level ?? '',
                 s.group_name || s.group_label || s.group || s.group_id || '',
+                s.gender || 'ไม่ระบุ',
                 s.nnet || s.examStatus || '-',
             ]);
             const titleSanitized = cellInfo.title.replace(/[/\\?%*:|"<>]/g, '-');
@@ -296,6 +303,7 @@ function OverviewStudentListDialog({
                         'ชื่อ - สกุล',
                         'ระดับการศึกษา',
                         'กลุ่มเรียน',
+                        'เพศ',
                         'สถานะ N-Net / การสอบ',
                     ],
                     rows: sheetData,
@@ -388,7 +396,9 @@ function OverviewStudentListDialog({
                                         <th className="px-4 py-3 text-left">ชื่อ - สกุล</th>
                                         <th className="px-4 py-3 text-left">ระดับชั้น</th>
                                         <th className="px-4 py-3 text-left">กลุ่มเรียน</th>
+                                        <th className="px-4 py-3 text-center">เพศ</th>
                                         <th className="px-4 py-3 text-center">สถานะ N-Net / การสอบ</th>
+                                        <th className="px-4 py-3 text-center">รายวิชา</th>
                                     </tr>
                                 </thead>
                                 <tbody className="divide-y divide-slate-100 bg-white">
@@ -399,6 +409,17 @@ function OverviewStudentListDialog({
                                             <td className="px-4 py-3 font-bold text-slate-950">{student.name ?? student.primary ?? '-'}</td>
                                             <td className="px-4 py-3 text-xs font-semibold text-slate-700">{student.level ?? '-'}</td>
                                             <td className="px-4 py-3 text-xs font-semibold text-slate-700">{student.group_name || student.group_label || student.group || student.group_id || '-'}</td>
+                                            <td className="px-4 py-3 text-center text-xs font-semibold text-slate-700">
+                                                <span className={`inline-flex rounded-lg px-2 py-0.5 text-xs font-bold ${
+                                                    student.gender === 'ชาย'
+                                                        ? 'bg-sky-50 text-sky-800'
+                                                        : student.gender === 'หญิง'
+                                                        ? 'bg-rose-50 text-rose-800'
+                                                        : 'bg-slate-100 text-slate-700'
+                                                }`}>
+                                                    {student.gender || 'ไม่ระบุ'}
+                                                </span>
+                                            </td>
                                             <td className="px-4 py-3 text-center">
                                                 <span className={`inline-flex rounded-lg px-2.5 py-1 text-xs font-bold ${
                                                     student.nnet === 'สอบแล้ว' || student.examStatus === 'สอบแล้ว'
@@ -408,6 +429,22 @@ function OverviewStudentListDialog({
                                                     {student.nnet || student.examStatus || '-'}
                                                 </span>
                                             </td>
+                                            <td className="px-4 py-3 text-center">
+                                                <button
+                                                    type="button"
+                                                    onClick={() => setSubjectStudent({
+                                                        code: student.student_id ?? student.secondary ?? student.id ?? '',
+                                                        name: student.name ?? student.primary ?? '',
+                                                        level: student.level ?? '',
+                                                        group: student.group_name || student.group_label || student.group || student.group_id || '',
+                                                    })}
+                                                    className="inline-flex items-center gap-1.5 rounded-xl border border-brand-200 bg-brand-50 px-2.5 py-1 text-xs font-bold text-brand-800 transition hover:border-brand-400 hover:bg-brand-100 active:scale-95"
+                                                    title={report?.source === 'transfers' ? 'ดูรายวิชาที่เทียบโอน' : 'ดูรายวิชาที่ลงทะเบียน'}
+                                                >
+                                                    <Books size={14} weight="bold" />
+                                                    {report?.source === 'transfers' ? 'วิชาเทียบโอน' : 'ดูรายวิชา'}
+                                                </button>
+                                            </td>
                                         </tr>
                                     ))}
                                 </tbody>
@@ -415,6 +452,17 @@ function OverviewStudentListDialog({
                         </div>
                     )}
                 </div>
+
+                <StudentSubjectsDialog
+                    isOpen={subjectStudent !== null}
+                    onClose={() => setSubjectStudent(null)}
+                    studentCode={subjectStudent?.code ?? ''}
+                    studentName={subjectStudent?.name ?? ''}
+                    level={subjectStudent?.level ?? ''}
+                    group={subjectStudent?.group ?? ''}
+                    term={term}
+                    initialFilter={report?.source === 'transfers' ? 'transferred' : 'all'}
+                />
             </section>
         </div>
     );
@@ -614,6 +662,6 @@ export function StatisticsOverviewPage() {
             });
         }} />}
         {previewOpen && request && <ReportPreviewDialog report={processedReport} district={districtName} term={workspace.data?.selectedTerm ?? request.term} crossTab={crossTab} onClose={() => setPreviewOpen(false)} />}
-        {selectedCell && <OverviewStudentListDialog cellInfo={selectedCell} term={workspace.data?.selectedTerm ?? request?.term ?? termStart} onClose={() => setSelectedCell(null)} />}
+        {selectedCell && <OverviewStudentListDialog cellInfo={selectedCell} term={workspace.data?.selectedTerm ?? request?.term ?? termStart} report={processedReport} onClose={() => setSelectedCell(null)} />}
     </div>;
 }

@@ -44,10 +44,12 @@ final readonly class LegacyStudentReportService
             $this->appendGroupAndSearchFilters($conditions, $bindings, $filters, $join !== '', 's', $groupName);
 
             $student = $this->identifier($set->student);
+            $genderCol = $this->firstExistingColumn($set->student, ['gender', 'sex']);
+            $genderSql = $genderCol !== null ? ", s.{$this->identifier($genderCol)} AS gender" : ", '' AS gender";
             foreach ($this->rows(
                 "SELECT s._perf_id10 AS student_code, s.prename, s.name AS first_name,
                         s.surname AS last_name, s.grp_code AS group_code, {$groupName} AS group_name,
-                        s.dep_sem AS raw_term, s.fin_cause, s.trn_date2 AS transfer_date
+                        s.dep_sem AS raw_term, s.fin_cause, s.trn_date2 AS transfer_date {$genderSql}
                  FROM {$student} s {$join}
                  WHERE ".implode(' AND ', array_filter($conditions)).'
                  ORDER BY s.name ASC, s.surname ASC, s._perf_id10 ASC',
@@ -59,15 +61,19 @@ final readonly class LegacyStudentReportService
                     continue;
                 }
                 [$status] = LegacyStudentStatus::resolve((string) ($row['fin_cause'] ?? ''), (string) ($row['transfer_date'] ?? ''));
+                $genderLabel = $this->resolveGender((string) ($row['gender'] ?? ''), (string) ($row['prename'] ?? ''));
                 $rows[] = [
                     'id' => "{$set->districtId}-{$set->level}-{$code}",
                     'entity_key' => "{$set->districtId}-{$set->level}-{$code}",
+                    'student_id' => $code,
                     'primary' => $this->fullName($row),
+                    'name' => $this->fullName($row),
                     'secondary' => $code,
                     'group' => $this->levelLabel($set->level).' · '.$this->groupLabel($row),
                     'level' => $this->levelLabel($set->level),
                     'group_code' => trim((string) ($row['group_code'] ?? '')),
                     'group_label' => $this->groupLabel($row),
+                    'gender' => $genderLabel,
                     'metric' => 'ภาคเรียน '.$term,
                     '_active' => $status === 'studying',
                 ];
@@ -98,10 +104,12 @@ final readonly class LegacyStudentReportService
             $this->appendGroupAndSearchFilters($conditions, $bindings, $filters, $join !== '', 's', $groupName);
 
             $student = $this->identifier($set->student);
+            $genderCol = $this->firstExistingColumn($set->student, ['gender', 'sex']);
+            $genderSql = $genderCol !== null ? ", s.{$this->identifier($genderCol)} AS gender" : ", '' AS gender";
             foreach ($this->rows(
                 "SELECT s._perf_id10 AS student_code, s.prename, s.name AS first_name,
                         s.surname AS last_name, s.grp_code AS group_code, {$groupName} AS group_name,
-                        s.fin_sem AS raw_term, s.fin_date AS graduation_date
+                        s.fin_sem AS raw_term, s.fin_date AS graduation_date {$genderSql}
                  FROM {$student} s {$join}
                  WHERE ".implode(' AND ', array_filter($conditions)).'
                  ORDER BY s.name ASC, s.surname ASC, s._perf_id10 ASC',
@@ -112,15 +120,19 @@ final readonly class LegacyStudentReportService
                 if ($code === '' || $term === null) {
                     continue;
                 }
+                $genderLabel = $this->resolveGender((string) ($row['gender'] ?? ''), (string) ($row['prename'] ?? ''));
                 $rows[] = [
                     'id' => "{$set->districtId}-{$set->level}-{$code}-{$term}",
                     'entity_key' => "{$set->districtId}-{$set->level}-{$code}",
+                    'student_id' => $code,
                     'primary' => $this->fullName($row),
+                    'name' => $this->fullName($row),
                     'secondary' => $code,
                     'group' => $this->levelLabel($set->level).' · '.$this->groupLabel($row),
                     'level' => $this->levelLabel($set->level),
                     'group_code' => trim((string) ($row['group_code'] ?? '')),
                     'group_label' => $this->groupLabel($row),
+                    'gender' => $genderLabel,
                     'metric' => 'ภาคเรียน '.$term,
                 ];
             }
@@ -168,23 +180,26 @@ final readonly class LegacyStudentReportService
                 $ntSara1Col = $this->firstExistingColumn($set->student, ['nt_sara1']);
                 $ntSara2Col = $this->firstExistingColumn($set->student, ['nt_sara2']);
                 $ntSemCol = $this->firstExistingColumn($set->student, ['nt_sem']);
+                $ntNosemCol = $this->firstExistingColumn($set->student, ['nt_nosem']);
+                $genderCol = $this->firstExistingColumn($set->student, ['gender', 'sex']);
                 $nnetCol = $this->firstExistingColumn($set->student, [
                     'nnet', 'n_net', 'eexam', 'e_exam', 'nnet_stat', 'exm_status',
                     'nt_result', 'nt_res', 'nnet_pass', 'nnet_result', 'eexam_status', 'e_exam_stat',
                 ]);
 
-                $finSemSql = $finSemCol !== null ? ", s.{$finSemCol} AS fin_sem_val" : ", '' AS fin_sem_val";
-                $finSem2Sql = $finSem2Col !== null ? ", s.{$finSem2Col} AS fin_sem2_val" : ", '' AS fin_sem2_val";
-                $finCauseSql = $finCauseCol !== null ? ", s.{$finCauseCol} AS fin_cause_val" : ", '' AS fin_cause_val";
-                $ntSql1 = $ntSara1Col !== null ? ", s.{$ntSara1Col} AS nt_sara1_val" : ", '' AS nt_sara1_val";
-                $ntSql2 = $ntSara2Col !== null ? ", s.{$ntSara2Col} AS nt_sara2_val" : ", '' AS nt_sara2_val";
-                $ntSemSql = $ntSemCol !== null ? ", s.{$ntSemCol} AS nt_sem_val" : ", '' AS nt_sem_val";
-                $ntNosemSql = $ntNosemCol !== null ? ", s.{$ntNosemCol} AS nt_nosem_val" : ", '' AS nt_nosem_val";
-                $nnetSql = $nnetCol !== null ? ", s.{$nnetCol} AS nnet_val" : ", '' AS nnet_val";
+                $finSemSql = $finSemCol !== null ? ", s.{$this->identifier($finSemCol)} AS fin_sem_val" : ", '' AS fin_sem_val";
+                $finSem2Sql = $finSem2Col !== null ? ", s.{$this->identifier($finSem2Col)} AS fin_sem2_val" : ", '' AS fin_sem2_val";
+                $finCauseSql = $finCauseCol !== null ? ", s.{$this->identifier($finCauseCol)} AS fin_cause_val" : ", '' AS fin_cause_val";
+                $ntSql1 = $ntSara1Col !== null ? ", s.{$this->identifier($ntSara1Col)} AS nt_sara1_val" : ", '' AS nt_sara1_val";
+                $ntSql2 = $ntSara2Col !== null ? ", s.{$this->identifier($ntSara2Col)} AS nt_sara2_val" : ", '' AS nt_sara2_val";
+                $ntSemSql = $ntSemCol !== null ? ", s.{$this->identifier($ntSemCol)} AS nt_sem_val" : ", '' AS nt_sem_val";
+                $ntNosemSql = $ntNosemCol !== null ? ", s.{$this->identifier($ntNosemCol)} AS nt_nosem_val" : ", '' AS nt_nosem_val";
+                $genderSql = $genderCol !== null ? ", s.{$this->identifier($genderCol)} AS gender" : ", '' AS gender";
+                $nnetSql = $nnetCol !== null ? ", s.{$this->identifier($nnetCol)} AS nnet_val" : ", '' AS nnet_val";
 
                 $studentsSql = "SELECT s._perf_id10 AS student_code, s.prename, s.name AS first_name,
                                        s.surname AS last_name, s.grp_code AS group_code, {$groupName} AS group_name
-                                       {$finCauseSql} {$finSemSql} {$finSem2Sql} {$ntSql1} {$ntSql2} {$ntSemSql} {$ntNosemSql} {$nnetSql}
+                                       {$finCauseSql} {$finSemSql} {$finSem2Sql} {$ntSql1} {$ntSql2} {$ntSemSql} {$ntNosemSql} {$genderSql} {$nnetSql}
                                 FROM {$student} s {$join}
                                 WHERE ".implode(' AND ', array_filter($conditions)).'
                                 ORDER BY s.name ASC, s.surname ASC, s._perf_id10 ASC';
@@ -248,28 +263,34 @@ final readonly class LegacyStudentReportService
                         $registeredInSelectedTerm[$code] = true;
                     }
 
-                    $isTermBeforeOrEqual = $selectedTerm === null || $term === null || AcademicTerm::compare($term, $selectedTerm) <= 0;
-
-                    $isNumericPassed = is_numeric($gradeVal) && (float) $gradeVal >= 1.0;
-                    $isExamSubject = str_contains($subCode, 'NET') || str_contains($subCode, 'EXAM') || str_contains($subName, 'N-NET') || str_contains($subName, 'E-EXAM');
-
-                    if (($isExamSubject || in_array($typCode, ['2', '3'], true)) && ! in_array($gradeVal, ['', '-'], true) && $isTermBeforeOrEqual) {
-                        $studentMetrics[$code]['exam_taken'] = true;
+                    $isPass = false;
+                    if ($typCode === '1') {
+                        $isPass = true;
+                    } elseif ($gradeVal !== '' && is_numeric($gradeVal)) {
+                        $isPass = (float) $gradeVal >= 1.0;
                     }
 
-                    $isElective = in_array($subType, ['2', '3'], true);
+                    $isCompulsory = in_array($subType, ['1', 'บังคับ', 'compulsory'], true);
+                    if (! $isCompulsory && $subType === '') {
+                        $isCompulsory = str_contains($subCode, 'ทร') || str_contains($subCode, 'ทช') || str_contains($subName, 'บังคับ');
+                    }
 
-                    if ($isNumericPassed && $isTermBeforeOrEqual) {
-                        if ($isElective) {
-                            $studentMetrics[$code]['elective_earned'] += $credit;
-                        } else {
+                    if ($isPass) {
+                        if ($isCompulsory) {
                             $studentMetrics[$code]['compulsory_earned'] += $credit;
-                        }
-                    } elseif ($isTermMatch) {
-                        if ($isElective) {
-                            $studentMetrics[$code]['elective_registered'] += $credit;
                         } else {
+                            $studentMetrics[$code]['elective_earned'] += $credit;
+                        }
+                    }
+
+                    if ($isTermMatch) {
+                        if ($isCompulsory) {
                             $studentMetrics[$code]['compulsory_registered'] += $credit;
+                        } else {
+                            $studentMetrics[$code]['elective_registered'] += $credit;
+                        }
+                        if ($gradeVal !== '' || $typCode === '1') {
+                            $studentMetrics[$code]['exam_taken'] = true;
                         }
                     }
                 }
@@ -280,21 +301,8 @@ final readonly class LegacyStudentReportService
                         continue;
                     }
 
-                    if ($selectedTerm !== null && empty($registeredInSelectedTerm[$code])) {
+                    if (! isset($registeredInSelectedTerm[$code]) && $selectedTerm !== null) {
                         continue;
-                    }
-
-                    $finCauseVal = trim((string) ($sRow['fin_cause_val'] ?? ''));
-                    if ($finCauseVal === '1') {
-                        if ($isLatestTerm) {
-                            continue;
-                        }
-
-                        $finSem = AcademicTerm::normalize((string) ($sRow['fin_sem_val'] ?? ''))
-                            ?? AcademicTerm::normalize((string) ($sRow['fin_sem2_val'] ?? ''));
-                        if ($finSem !== null && $selectedTerm !== null && AcademicTerm::compare($finSem, $selectedTerm) < 0) {
-                            continue;
-                        }
                     }
 
                     $m = $studentMetrics[$code] ?? [
@@ -328,15 +336,19 @@ final readonly class LegacyStudentReportService
 
                     // Active student qualifies for expected graduation if total credits meet or approach graduation requirements
                     if ($grandTotal >= $reqTotal || ($compTotal >= $reqComp && $elecTotal >= $reqElec)) {
+                        $genderLabel = $this->resolveGender((string) ($sRow['gender'] ?? ''), (string) ($sRow['prename'] ?? ''));
                         $rows[] = [
                             'id' => "{$set->districtId}-{$set->level}-{$code}",
                             'entity_key' => "{$set->districtId}-{$set->level}-{$code}",
+                            'student_id' => $code,
                             'primary' => $this->fullName($sRow),
+                            'name' => $this->fullName($sRow),
                             'secondary' => $code,
                             'group' => $this->levelLabel($set->level).' · '.$this->groupLabel($sRow),
                             'level' => $this->levelLabel($set->level),
                             'group_code' => trim((string) ($sRow['group_code'] ?? '')),
                             'group_label' => $this->groupLabel($sRow),
+                            'gender' => $genderLabel,
                             'metric' => number_format($grandTotal, 0).'/'.number_format($reqTotal, 0).' หน่วยกิต (บังคับ '.number_format($compTotal, 0).' / เลือก '.number_format($elecTotal, 0).')',
                             'examStatus' => $isExamTaken ? 'สอบแล้ว' : 'ยังไม่ได้สอบ',
                         ];
@@ -374,11 +386,13 @@ final readonly class LegacyStudentReportService
             $student = $this->identifier($set->student);
             $grade = $this->identifier($set->grade);
             $subject = $this->identifier($set->subject);
+            $genderCol = $this->firstExistingColumn($set->student, ['gender', 'sex']);
+            $genderSql = $genderCol !== null ? ", st.{$this->identifier($genderCol)} AS gender" : ", '' AS gender";
             foreach ($this->rows(
                 "SELECT g._id AS row_id, g._perf_std10 AS student_code, g._perf_sub AS subject_code,
                         g._perf_semestry AS raw_term, sub.sub_name AS subject_name,
                         sub.sub_credit AS subject_credit, st.prename, st.name AS first_name,
-                        st.surname AS last_name, st.grp_code AS group_code, {$groupName} AS group_name
+                        st.surname AS last_name, st.grp_code AS group_code, {$groupName} AS group_name {$genderSql}
                  FROM {$grade} g
                  INNER JOIN {$student} st ON st._perf_id10 = g._perf_std10
                  LEFT JOIN {$subject} sub ON sub._perf_sub = g._perf_sub
@@ -397,16 +411,24 @@ final readonly class LegacyStudentReportService
                 $seen[$key] = true;
                 $subjectName = trim((string) ($row['subject_name'] ?? '')) ?: 'ไม่พบชื่อรายวิชา';
                 $credits = (float) ($row['subject_credit'] ?? 0);
+                $genderLabel = $this->resolveGender((string) ($row['gender'] ?? ''), (string) ($row['prename'] ?? ''));
                 $rows[] = [
                     'id' => "{$set->districtId}-{$set->level}-{$code}-{$term}-{$subjectCode}",
                     'entity_key' => "{$set->districtId}-{$set->level}-{$code}",
-                    'primary' => $subjectName,
-                    'secondary' => $subjectCode,
-                    'group' => $this->fullName($row).' · '.$code,
+                    'primary' => $this->fullName($row),
+                    'name' => $this->fullName($row),
+                    'secondary' => $code,
+                    'student_id' => $code,
+                    'group' => $this->levelLabel($set->level).' · '.$this->groupLabel($row),
                     'level' => $this->levelLabel($set->level),
                     'group_code' => trim((string) ($row['group_code'] ?? '')),
                     'group_label' => $this->groupLabel($row),
-                    'metric' => number_format($credits, 1).' หน่วยกิต',
+                    'gender' => $genderLabel,
+                    'metric' => "วิชาเทียบโอน: {$subjectCode} {$subjectName} (".number_format($credits, 1).' นก.)',
+                    'subject_code' => $subjectCode,
+                    'subject_name' => $subjectName,
+                    'subject_credit' => $credits,
+                    'is_transferred' => true,
                 ];
             }
         }
@@ -1404,6 +1426,26 @@ final readonly class LegacyStudentReportService
         }
 
         return '`'.$identifier.'`';
+    }
+
+    private function resolveGender(string $genderVal, string $prename): string
+    {
+        $g = mb_strtoupper(trim($genderVal));
+        if (in_array($g, ['1', 'M', 'ชาย'], true)) {
+            return 'ชาย';
+        }
+        if (in_array($g, ['2', 'F', 'หญิง'], true)) {
+            return 'หญิง';
+        }
+        $p = trim($prename);
+        if (str_starts_with($p, 'นาย') || str_starts_with($p, 'ด.ช.') || str_starts_with($p, 'เด็กชาย')) {
+            return 'ชาย';
+        }
+        if (str_starts_with($p, 'นาง') || str_starts_with($p, 'นางสาว') || str_starts_with($p, 'น.ส.') || str_starts_with($p, 'น.ส') || str_starts_with($p, 'ด.ญ.') || str_starts_with($p, 'เด็กหญิง')) {
+            return 'หญิง';
+        }
+
+        return 'ไม่ระบุเพศ';
     }
 
     private function validIdentifier(string $identifier): bool

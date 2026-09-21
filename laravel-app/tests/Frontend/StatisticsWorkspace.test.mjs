@@ -67,11 +67,11 @@ test('report format catalog keeps only dimensions backed by imported source fiel
     assert.deepEqual(categoriesForReport(reportById(2)).map((item) => item.key), [
         'level', 'group', 'gender', 'age', 'occupation', 'target_group', 'nationality', 'nnet',
     ]);
-    assert.deepEqual(categoriesForReport(reportById(3)).map((item) => item.key), ['level', 'group']);
+    assert.deepEqual(categoriesForReport(reportById(3)).map((item) => item.key), ['level', 'group', 'gender']);
     assert.deepEqual(normalizeAxisConfiguration(reportById(3), {
         vertical: ['gender', 'level'],
         horizontal: ['age'],
-    }), { vertical: ['level'], horizontal: ['group'] });
+    }), { vertical: ['gender', 'level'], horizontal: ['group'] });
 });
 
 test('vertical and horizontal category configurations remain independent', () => {

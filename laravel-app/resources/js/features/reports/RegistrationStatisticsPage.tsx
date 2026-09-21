@@ -1,4 +1,4 @@
-import { CalendarBlank, ChartBar, FileXls, FunnelSimple, MagnifyingGlass, StackSimple, Trophy, UsersThree, X } from '@phosphor-icons/react';
+import { Books, CalendarBlank, ChartBar, FileXls, FunnelSimple, MagnifyingGlass, StackSimple, Trophy, UsersThree, X } from '@phosphor-icons/react';
 import { keepPreviousData, useQuery } from '@tanstack/react-query';
 import type { ColumnDef } from '@tanstack/react-table';
 import { useEffect, useMemo, useState } from 'react';
@@ -12,6 +12,7 @@ import { StatTile } from '../../components/StatTile';
 import { useDemoRole } from '../../context/DemoRoleContext';
 import { showErrorAlert } from '../../lib/feedback';
 import { getFeatureDataWithDemo } from '../api';
+import { StudentSubjectsDialog } from './StudentSubjectsDialog';
 import {
     buildRegistrationStatisticsSheets,
     canExportRegistrationStatistics,
@@ -114,6 +115,7 @@ function RegistrationStudentListDialog({
 }) {
     const [searchTerm, setSearchTerm] = useState('');
     const [isExporting, setIsExporting] = useState(false);
+    const [subjectStudent, setSubjectStudent] = useState<{ code: string; name: string; level: string; group: string } | null>(null);
 
     const queryKey = [
         'registration-statistics-students',
@@ -226,6 +228,26 @@ function RegistrationStudentListDialog({
                     >
                         {row.original.nnet_status || 'ยังไม่ได้สอบ'}
                     </StatusBadge>
+                ),
+            },
+            {
+                id: 'actions',
+                header: 'รายวิชา',
+                cell: ({ row }) => (
+                    <button
+                        type="button"
+                        onClick={() => setSubjectStudent({
+                            code: row.original.student.code,
+                            name: row.original.student.full_name,
+                            level: row.original.student.level.label,
+                            group: row.original.student.group.name || row.original.student.group.code || '',
+                        })}
+                        className="inline-flex items-center gap-1.5 rounded-xl border border-brand-200 bg-brand-50 px-2.5 py-1 text-xs font-bold text-brand-800 transition hover:border-brand-400 hover:bg-brand-100 active:scale-95"
+                        title={`ดูรายวิชาที่ลงทะเบียนของ ${row.original.student.full_name}`}
+                    >
+                        <Books size={14} weight="bold" />
+                        ดูรายวิชา
+                    </button>
                 ),
             },
         ],
@@ -360,6 +382,16 @@ function RegistrationStudentListDialog({
                         )
                     )}
                 </div>
+
+                <StudentSubjectsDialog
+                    isOpen={subjectStudent !== null}
+                    onClose={() => setSubjectStudent(null)}
+                    studentCode={subjectStudent?.code ?? ''}
+                    studentName={subjectStudent?.name ?? ''}
+                    level={subjectStudent?.level ?? ''}
+                    group={subjectStudent?.group ?? ''}
+                    term={term}
+                />
             </section>
         </div>
     );

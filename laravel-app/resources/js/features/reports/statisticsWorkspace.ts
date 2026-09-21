@@ -31,6 +31,7 @@ export type GenericReportRow = {
     level?: string;
     group_code?: string;
     group_label?: string;
+    gender?: string;
     examStatus?: string;
     nnet?: string;
 };
@@ -130,9 +131,9 @@ export function reportById(id: StatisticReportId): StatisticReportDefinition {
 export function categoriesForReport(report: StatisticReportDefinition): StatisticCategoryDefinition[] {
     if (report.source === 'registration-statistics') return statisticCategories;
     if (report.source === 'expected-graduates') {
-        return statisticCategories.filter((category) => category.key === 'level' || category.key === 'group' || category.key === 'nnet');
+        return statisticCategories.filter((category) => category.key === 'level' || category.key === 'group' || category.key === 'gender' || category.key === 'nnet');
     }
-    return statisticCategories.filter((category) => category.key === 'level' || category.key === 'group');
+    return statisticCategories.filter((category) => category.key === 'level' || category.key === 'group' || category.key === 'gender');
 }
 
 export function supportedCategoryKeys(keys: Array<StatisticCategoryDefinition['key']>): CategoryKey[] {
@@ -190,12 +191,14 @@ export function summarizeStatisticRows(
     };
 }
 
-function groupParts(row: GenericReportRow): { level: string; group: string; nnet: string } {
+function groupParts(row: GenericReportRow): { level: string; group: string; gender: string; nnet: string } {
     const nnet = row.examStatus ?? row.nnet ?? 'ยังไม่ได้สอบ';
+    const gender = row.gender || 'ไม่ระบุเพศ';
     if (row.level || row.group_label || row.group_code) {
         return {
             level: row.level || 'ไม่ระบุระดับ',
             group: row.group_label || row.group_code || 'ไม่ระบุกลุ่ม',
+            gender,
             nnet,
         };
     }
@@ -204,6 +207,7 @@ function groupParts(row: GenericReportRow): { level: string; group: string; nnet
     return {
         level: parts[0] ?? 'ไม่ระบุระดับ',
         group: parts[1] ?? parts[0] ?? 'ไม่ระบุกลุ่ม',
+        gender,
         nnet,
     };
 }
@@ -212,8 +216,8 @@ function categoryLabel(category: CategoryKey): string {
     return statisticCategories.find((item) => item.key === category)?.label ?? category;
 }
 
-function genericPart(category: CategoryKey, values: { level: string; group: string; nnet: string }): StatisticCrossTabPart {
-    const value = category === 'group' ? values.group : category === 'nnet' ? values.nnet : values.level;
+function genericPart(category: CategoryKey, values: { level: string; group: string; gender: string; nnet: string }): StatisticCrossTabPart {
+    const value = category === 'group' ? values.group : category === 'nnet' ? values.nnet : category === 'gender' ? values.gender : values.level;
     return {
         category,
         category_label: categoryLabel(category),
@@ -232,7 +236,7 @@ export function genericPayloadToCrossTab(
     configuration: StatisticAxisConfiguration,
 ): StatisticCrossTabPayload {
     const usable = (categories: CategoryKey[], fallback: CategoryKey): CategoryKey[] => {
-        const filtered = categories.filter((category) => category === 'level' || category === 'group' || category === 'nnet');
+        const filtered = categories.filter((category) => category === 'level' || category === 'group' || category === 'gender' || category === 'nnet');
         return filtered.length > 0 ? filtered : [fallback];
     };
     const rowKeys = usable(configuration.vertical, 'level');
@@ -311,9 +315,9 @@ export function genericPayloadToStatisticRows(
     payload: GenericReportPayload,
     categories: CategoryKey[],
 ): StatisticResultRow[] {
-    const usableCategories = categories.filter((category) => category === 'level' || category === 'group');
-    const selectedCategories: Array<'level' | 'group'> = usableCategories.length > 0
-        ? usableCategories as Array<'level' | 'group'>
+    const usableCategories = categories.filter((category) => category === 'level' || category === 'group' || category === 'gender' || category === 'nnet');
+    const selectedCategories: Array<'level' | 'group' | 'gender' | 'nnet'> = usableCategories.length > 0
+        ? usableCategories as Array<'level' | 'group' | 'gender' | 'nnet'>
         : ['level'];
     const total = payload.rows.length;
     const output: StatisticResultRow[] = [];
@@ -331,7 +335,7 @@ export function genericPayloadToStatisticRows(
                     id: `${category}-${index}-${label}`,
                     code: category === 'group' ? label : String(index + 1),
                     label,
-                    classification: category === 'level' ? 'ระดับชั้น' : 'รหัสกลุ่ม',
+                    classification: category === 'level' ? 'ระดับชั้น' : category === 'group' ? 'รหัสกลุ่ม' : category === 'gender' ? 'เพศ' : 'สถานะ N-Net / E-Exam',
                     count,
                     percentage: total > 0 ? Number(((count / total) * 100).toFixed(1)) : 0,
                     note: payload.selected_term ? `ภาคเรียน ${payload.selected_term}` : '',

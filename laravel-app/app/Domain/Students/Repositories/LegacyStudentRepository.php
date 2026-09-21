@@ -186,7 +186,142 @@ final class LegacyStudentRepository implements StudentRepository
                 && ($level === null || $student->level === $level),
         ));
 
-        return count($matches) === 1 ? $matches[0] : null;
+        if (count($matches) === 1) {
+            return $matches[0];
+        }
+
+        $code = trim($code);
+        if ($code === '') {
+            return null;
+        }
+
+        $sets = $this->sets($districtId === null ? null : [$districtId]);
+        foreach ($sets as $set) {
+            if ($level !== null && $set->level !== $level) {
+                continue;
+            }
+            $student = $this->identifier($set->student);
+            $citizenId = $this->citizenIdSql($set);
+            $groupJoin = '';
+            $groupName = 's.grp_code';
+            if ($set->group !== null) {
+                $group = $this->identifier($set->group);
+                $groupJoin = " LEFT JOIN {$group} grp ON grp._perf_grp = s._perf_grp ";
+                $groupName = "COALESCE(NULLIF(TRIM(grp.grp_name), ''), s.grp_code)";
+            }
+            $rows = $this->rows(
+                "SELECT s._perf_id10 AS code,
+                        s.prename AS prename,
+                        s.name AS first_name,
+                        s.surname AS last_name,
+                        s.grp_code AS group_code,
+                        {$groupName} AS group_name,
+                        s.dep_sem AS enrollment_term,
+                        s.fin_cause AS fin_cause,
+                        s.trn_date2 AS transfer_date,
+                        s.gpasem AS gpasem,
+                        CASE
+                            WHEN CHAR_LENGTH(TRIM(COALESCE({$citizenId}, ''))) = 13
+                            THEN CONCAT(LEFT(TRIM({$citizenId}), 1), '-xxxx-xxxxx-xx-', RIGHT(TRIM({$citizenId}), 1))
+                            ELSE NULL
+                        END AS citizen_id_masked,
+                        {$citizenId} AS citizen_id,
+                        s.gender AS gender,
+                        s.birday AS birth_date,
+                        s.age AS age,
+                        s.app_date AS application_date,
+                        s.lastupdate AS last_updated,
+                        s.phone AS phone,
+                        s.curphone AS curphone,
+                        s.email AS email,
+                        s.addr AS registered_address,
+                        s.tambonid AS registered_area_code,
+                        s.zipcode AS registered_postcode,
+                        s.curaddr AS current_address,
+                        s.ctambonid AS current_area_code,
+                        s.czipcode AS current_postcode
+                 FROM {$student} s
+                 {$groupJoin}
+                 WHERE s._perf_id10 = ?
+                 LIMIT 1",
+                [$code],
+            );
+
+            if ($rows !== []) {
+                $row = $rows[0];
+                $academic = $this->academicAggregates($set, null, [$code]);
+                $kpch = $this->kpchAggregates($set, [$code]);
+                $moral = $this->moralAggregates($set, [$code]);
+                $metrics = $academic[$code] ?? [];
+                [$creditsRequired, $compulsoryRequired, $electiveRequired] = $this->creditRequirements($set->level);
+                $contactPhone = $this->phoneMemoValue($set, $code, 'curphone', (string) ($row['curphone'] ?? ''))
+                    ?? $this->phoneMemoValue($set, $code, 'phone', (string) ($row['phone'] ?? ''))
+                    ?? '';
+                $email = $this->memoValue($set, $code, 'email', (string) ($row['email'] ?? '')) ?? '';
+                [$status, $statusLabel] = LegacyStudentStatus::resolve(
+                    (string) ($row['fin_cause'] ?? ''),
+                    (string) ($row['transfer_date'] ?? ''),
+                );
+
+                return new Student(
+                    code: $code,
+                    districtId: $set->districtId,
+                    districtName: $set->districtName,
+                    prefix: trim((string) ($row['prename'] ?? '')),
+                    firstName: trim((string) ($row['first_name'] ?? '')),
+                    lastName: trim((string) ($row['last_name'] ?? '')),
+                    level: $set->level,
+                    levelLabel: $this->levelLabel($set->level),
+                    groupCode: trim((string) ($row['group_code'] ?? '')),
+                    groupName: trim((string) (($row['group_name'] ?? '') ?: ($row['group_code'] ?? ''))),
+                    enrollmentTerm: AcademicTerm::normalize((string) ($row['enrollment_term'] ?? ''))
+                        ?? trim((string) ($row['enrollment_term'] ?? '')),
+                    currentTerm: null,
+                    status: $status,
+                    statusLabel: $statusLabel,
+                    gpax: round((float) ($metrics['gpax'] ?? $row['gpasem'] ?? 0), 2),
+                    creditsEarned: round((float) ($metrics['credits_earned'] ?? 0), 1),
+                    creditsRequired: $creditsRequired,
+                    kpchHours: round((float) ($kpch[$code] ?? 0), 1),
+                    moralResult: (string) ($moral[$code]['result'] ?? 'ยังไม่มีผลประเมิน'),
+                    contact: array_filter([
+                        'phone_masked' => $this->maskPhone($contactPhone),
+                        'email_masked' => $this->maskEmail($email),
+                    ], static fn (?string $value): bool => $value !== null),
+                    guardian: [],
+                    demographics: array_filter([
+                        'citizen_id_masked' => $row['citizen_id_masked'] ?? null,
+                        'birth_date' => $this->formatThaiDate((string) ($row['birth_date'] ?? '')),
+                        'gender' => $this->genderLabel((string) ($row['gender'] ?? '')),
+                        'age' => $this->positiveInteger($row['age'] ?? null),
+                        'application_date' => $this->formatThaiDate((string) ($row['application_date'] ?? '')),
+                        'last_updated' => $this->formatThaiDate(
+                            $this->legacyDateValue($set, $code, 'lastupdate', (string) ($row['last_updated'] ?? '')) ?? '',
+                        ),
+                    ], static fn (mixed $value): bool => $value !== null && $value !== ''),
+                    creditsCurrent: round((float) ($metrics['credits_current'] ?? $metrics['credits_earned'] ?? 0), 1),
+                    compulsoryCreditsEarned: round((float) ($metrics['compulsory_earned'] ?? 0), 1),
+                    compulsoryCreditsRequired: $compulsoryRequired,
+                    electiveCreditsEarned: round((float) ($metrics['elective_earned'] ?? 0), 1),
+                    electiveCreditsRequired: $electiveRequired,
+                    dataClassification: 'personal_data_sensitive',
+                    citizenId: $this->validCitizenId((string) ($row['citizen_id'] ?? '')),
+                    phone: $contactPhone === '' ? null : $contactPhone,
+                    registeredAddress: $this->formatAddress(
+                        $this->memoValue($set, $code, 'addr', (string) ($row['registered_address'] ?? '')) ?? '',
+                        (string) ($row['registered_area_code'] ?? ''),
+                        (string) ($row['registered_postcode'] ?? ''),
+                    ),
+                    currentAddress: $this->formatAddress(
+                        $this->memoValue($set, $code, 'curaddr', (string) ($row['current_address'] ?? '')) ?? '',
+                        (string) ($row['current_area_code'] ?? ''),
+                        (string) ($row['current_postcode'] ?? ''),
+                    ),
+                );
+            }
+        }
+
+        return null;
     }
 
     /** @return list<Grade> */

@@ -326,6 +326,7 @@ final class RegistrationStatistics
                     '3' => 'มัธยมศึกษาตอนปลาย',
                     default => 'ไม่ระบุระดับ',
                 }),
+                'gender' => self::itemLabel('gender', (string) ($record['gender'] ?? '')),
                 'nnet' => ($record['nnet'] ?? '') === 'taken' ? 'สอบแล้ว' : 'ยังไม่ได้สอบ',
                 'examStatus' => ($record['nnet'] ?? '') === 'taken' ? 'สอบแล้ว' : 'ยังไม่ได้สอบ',
             ];

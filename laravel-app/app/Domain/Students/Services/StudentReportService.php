@@ -61,12 +61,15 @@ final readonly class StudentReportService
         $rows = array_map(static fn (Student $student): array => [
             'id' => "{$student->districtId}-{$student->level}-{$student->code}",
             'entity_key' => "{$student->districtId}-{$student->level}-{$student->code}",
+            'student_id' => $student->code,
             'primary' => $student->fullName(),
+            'name' => $student->fullName(),
             'secondary' => $student->code,
             'group' => $student->levelLabel.' · '.$student->groupName,
             'level' => $student->levelLabel,
             'group_code' => $student->groupCode,
             'group_label' => $student->groupName,
+            'gender' => (string) ($student->demographics['gender'] ?? 'ไม่ระบุ'),
             'metric' => 'ภาคเรียน '.$student->enrollmentTerm,
         ], $students);
 
@@ -86,12 +89,15 @@ final readonly class StudentReportService
         $rows = array_map(static fn (Student $student): array => [
             'id' => "{$student->districtId}-{$student->level}-{$student->code}",
             'entity_key' => "{$student->districtId}-{$student->level}-{$student->code}",
+            'student_id' => $student->code,
             'primary' => $student->fullName(),
+            'name' => $student->fullName(),
             'secondary' => $student->code,
             'group' => $student->levelLabel.' · '.$student->groupName,
             'level' => $student->levelLabel,
             'group_code' => $student->groupCode,
             'group_label' => $student->groupName,
+            'gender' => (string) ($student->demographics['gender'] ?? 'ไม่ระบุ'),
             'metric' => $student->currentTerm,
         ], $students);
 
@@ -140,12 +146,15 @@ final readonly class StudentReportService
         $rows = array_map(static fn (Student $student): array => [
             'id' => "{$student->districtId}-{$student->level}-{$student->code}",
             'entity_key' => "{$student->districtId}-{$student->level}-{$student->code}",
+            'student_id' => $student->code,
             'primary' => $student->fullName(),
+            'name' => $student->fullName(),
             'secondary' => $student->code,
             'group' => $student->levelLabel.' · '.$student->groupName,
             'level' => $student->levelLabel,
             'group_code' => $student->groupCode,
             'group_label' => $student->groupName,
+            'gender' => (string) ($student->demographics['gender'] ?? 'ไม่ระบุ'),
             'metric' => number_format($projectedCreditsByStudent["{$student->districtId}|{$student->level}|{$student->code}"] ?? 0, 0).'/'.number_format($student->creditsRequired, 0).' หน่วยกิต (คาดว่าจะจบ)',
             'examStatus' => $student->creditsEarned >= $student->creditsRequired ? 'สอบแล้ว' : 'ยังไม่ได้สอบ',
         ], $students);
@@ -184,13 +193,20 @@ final readonly class StudentReportService
                 $rows[] = [
                     'id' => "{$student->districtId}-{$student->level}-{$student->code}-{$grade->term}-{$grade->subjectCode}",
                     'entity_key' => "{$student->districtId}-{$student->level}-{$student->code}",
-                    'primary' => $grade->subjectName,
-                    'secondary' => $grade->subjectCode,
-                    'group' => $student->fullName().' · '.$student->code,
+                    'primary' => $student->fullName(),
+                    'name' => $student->fullName(),
+                    'secondary' => $student->code,
+                    'student_id' => $student->code,
+                    'group' => $student->levelLabel.' · '.$student->groupName,
                     'level' => $student->levelLabel,
                     'group_code' => $student->groupCode,
                     'group_label' => $student->groupName,
-                    'metric' => number_format($grade->credits, 1).' หน่วยกิต',
+                    'gender' => (string) ($student->demographics['gender'] ?? 'ไม่ระบุ'),
+                    'metric' => "วิชาเทียบโอน: {$grade->subjectCode} {$grade->subjectName} (".number_format($grade->credits, 1).' นก.)',
+                    'subject_code' => $grade->subjectCode,
+                    'subject_name' => $grade->subjectName,
+                    'subject_credit' => $grade->credits,
+                    'is_transferred' => true,
                 ];
             }
         }

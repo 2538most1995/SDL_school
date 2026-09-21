@@ -101,7 +101,7 @@ final class ProductionSettingsTest extends TestCase
 
         $this->putJson('/api/v1/settings/statistics-report', [
             'report' => 'graduates',
-            'vertical' => ['gender'],
+            'vertical' => ['occupation'],
             'horizontal' => ['group'],
             'orientation' => 'vertical',
         ])->assertUnprocessable()->assertJsonValidationErrors('vertical');
