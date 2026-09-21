@@ -19,14 +19,20 @@ export type StatisticCategoryDefinition = {
 
 export type GenericReportRow = {
     id: string;
+    student_id?: string;
+    name?: string;
     primary: string;
     secondary: string;
     group: string;
+    group_id?: string;
+    group_name?: string;
     metric: string;
     entity_key?: string;
     level?: string;
     group_code?: string;
     group_label?: string;
+    examStatus?: string;
+    nnet?: string;
 };
 
 export type GenericReportPayload = {
@@ -76,6 +82,7 @@ export type StatisticCrossTabRow = {
     parts: StatisticCrossTabPart[];
     cells: Record<string, number>;
     total: number;
+    studentsByCell?: Record<string, GenericReportRow[]>;
 };
 
 export type StatisticCrossTabPayload = {
@@ -113,6 +120,7 @@ export const statisticCategories: StatisticCategoryDefinition[] = [
     { order: 5, key: 'occupation', label: 'อาชีพ' },
     { order: 6, key: 'target_group', label: 'กลุ่มเป้าหมาย' },
     { order: 7, key: 'nationality', label: 'สัญชาติ' },
+    { order: 8, key: 'nnet', label: 'สถานะ N-Net / E-Exam' },
 ];
 
 export function reportById(id: StatisticReportId): StatisticReportDefinition {
@@ -121,6 +129,9 @@ export function reportById(id: StatisticReportId): StatisticReportDefinition {
 
 export function categoriesForReport(report: StatisticReportDefinition): StatisticCategoryDefinition[] {
     if (report.source === 'registration-statistics') return statisticCategories;
+    if (report.source === 'expected-graduates') {
+        return statisticCategories.filter((category) => category.key === 'level' || category.key === 'group' || category.key === 'nnet');
+    }
     return statisticCategories.filter((category) => category.key === 'level' || category.key === 'group');
 }
 
@@ -179,11 +190,13 @@ export function summarizeStatisticRows(
     };
 }
 
-function groupParts(row: GenericReportRow): { level: string; group: string } {
+function groupParts(row: GenericReportRow): { level: string; group: string; nnet: string } {
+    const nnet = row.examStatus ?? row.nnet ?? 'ยังไม่ได้สอบ';
     if (row.level || row.group_label || row.group_code) {
         return {
             level: row.level || 'ไม่ระบุระดับ',
             group: row.group_label || row.group_code || 'ไม่ระบุกลุ่ม',
+            nnet,
         };
     }
     const value = row.group;
@@ -191,6 +204,7 @@ function groupParts(row: GenericReportRow): { level: string; group: string } {
     return {
         level: parts[0] ?? 'ไม่ระบุระดับ',
         group: parts[1] ?? parts[0] ?? 'ไม่ระบุกลุ่ม',
+        nnet,
     };
 }
 
@@ -198,8 +212,8 @@ function categoryLabel(category: CategoryKey): string {
     return statisticCategories.find((item) => item.key === category)?.label ?? category;
 }
 
-function genericPart(category: CategoryKey, values: { level: string; group: string }): StatisticCrossTabPart {
-    const value = category === 'group' ? values.group : values.level;
+function genericPart(category: CategoryKey, values: { level: string; group: string; nnet: string }): StatisticCrossTabPart {
+    const value = category === 'group' ? values.group : category === 'nnet' ? values.nnet : values.level;
     return {
         category,
         category_label: categoryLabel(category),
@@ -218,7 +232,7 @@ export function genericPayloadToCrossTab(
     configuration: StatisticAxisConfiguration,
 ): StatisticCrossTabPayload {
     const usable = (categories: CategoryKey[], fallback: CategoryKey): CategoryKey[] => {
-        const filtered = categories.filter((category) => category === 'level' || category === 'group');
+        const filtered = categories.filter((category) => category === 'level' || category === 'group' || category === 'nnet');
         return filtered.length > 0 ? filtered : [fallback];
     };
     const rowKeys = usable(configuration.vertical, 'level');
@@ -242,6 +256,7 @@ export function genericPayloadToCrossTab(
             parts: rowParts,
             cells: {},
             total: 0,
+            studentsByCell: {},
         };
         const column = columns.get(columnKey) ?? {
             key: columnKey,
@@ -256,6 +271,9 @@ export function genericPayloadToCrossTab(
             row.cells[columnKey] = (row.cells[columnKey] ?? 0) + 1;
             row.total += 1;
             column.total += 1;
+            row.studentsByCell = row.studentsByCell ?? {};
+            row.studentsByCell[columnKey] = row.studentsByCell[columnKey] ?? [];
+            row.studentsByCell[columnKey].push(sourceRow);
         }
         cellEntities.set(cellKey, entities);
         rows.set(rowKey, row);

@@ -98,6 +98,62 @@ curl --fail-with-body \
 
 Endpoint เกรด กพช. คุณธรรม และรายวิชารองรับ `term` รูปแบบเดียวกัน และแบ่งหน้าด้วย `page`/`per_page` ค่าเริ่มต้น `100` สูงสุด `500` หากไม่ส่ง `term` จะอ่านข้อมูลทุกภาคเรียนที่มีในชุดนำเข้าปัจจุบันแล้วแบ่งหน้า
 
+### ตัวอย่างรายวิชาที่ลงทะเบียน
+
+```bash
+curl --fail-with-body \
+  -H 'Accept: application/json' \
+  -H 'Authorization: Bearer sdl_student_...' \
+  'https://example.com/SDL_school/api/v1/integrations/student-data/students/6650100001/subjects?term=1%2F2569&page=1&per_page=100'
+```
+
+Response แต่ละรายวิชามี `code` เป็นรหัสวิชาและ `name` เป็นชื่อรายวิชา:
+
+```json
+{
+  "data": {
+    "student": {
+      "code": "6650100001",
+      "name": { "full_name": "นายสมชาย ตัวอย่าง" }
+    },
+    "items": [
+      {
+        "student_code": "6650100001",
+        "code": "ทช11001",
+        "name": "เศรษฐกิจพอเพียง",
+        "credits": 1,
+        "type": "compulsory",
+        "term": "1/2569",
+        "registration_status": "registered",
+        "is_transferred": false,
+        "grade": null,
+        "exam_attended": false
+      }
+    ],
+    "summary": {
+      "subject_count": 1,
+      "total_credits": 1,
+      "transferred_subjects": 0,
+      "passed_subjects": 0
+    }
+  },
+  "meta": {
+    "api_contract": "student-data-v1",
+    "term": "1/2569",
+    "pagination": {
+      "current_page": 1,
+      "per_page": 100,
+      "total": 1,
+      "last_page": 1,
+      "from": 1,
+      "to": 1
+    }
+  }
+}
+```
+
+`registration_status` อาจเป็น `registered`, `passed`, `needs_improvement` หรือ `transferred` ตามข้อมูลในชุดนำเข้า
+
 ## รูปแบบ response
 
 ตัวอย่างข้อมูลนักศึกษา:

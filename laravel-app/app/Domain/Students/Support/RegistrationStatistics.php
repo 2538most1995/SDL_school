@@ -13,6 +13,7 @@ final class RegistrationStatistics
         'occupation' => 'อาชีพ',
         'nationality' => 'สัญชาติ',
         'age' => 'อายุ',
+        'nnet' => 'สถานะ N-Net / E-Exam',
     ];
 
     /** @var array<string, string> */
@@ -121,6 +122,11 @@ final class RegistrationStatistics
             'occupation' => self::OCCUPATIONS[$code] ?? "ไม่พบชื่ออาชีพ (รหัส {$code})",
             'nationality' => self::NATIONALITIES[$code] ?? (preg_match('/^\d+$/', $code) === 1 ? "ไม่พบชื่อสัญชาติ (รหัส {$code})" : $code),
             'age' => "{$code} ปี",
+            'nnet' => match (mb_strtolower($code)) {
+                'taken', '1', 'y', 'pass', 'passed', 'สอบแล้ว', 'ผ่าน' => 'สอบแล้ว',
+                'not_taken', '0', 'n', 'fail', 'ยังไม่ได้สอบ', 'ไม่ผ่าน' => 'ยังไม่ได้สอบ',
+                default => $code !== '' ? $code : 'ยังไม่ได้สอบ',
+            },
             default => $code,
         };
     }
@@ -144,6 +150,7 @@ final class RegistrationStatistics
             'age' => (preg_match('/^\d{1,3}$/', $value) === 1 && (int) $value > 0 && (int) $value <= 120)
                 ? (string) ((int) $value)
                 : '',
+            'nnet' => in_array(mb_strtolower($value), ['taken', '1', 'y', 'pass', 'passed', 'สอบแล้ว', 'ผ่าน'], true) ? 'taken' : 'not_taken',
             default => $value,
         };
     }
@@ -161,6 +168,83 @@ final class RegistrationStatistics
         }
 
         [$filteredRecords, $itemLabels, $filterOptions, $appliedFilters] = self::prepareRecords($records, $filters);
+
+        if (($filters['view'] ?? '') === 'student') {
+            $search = trim((string) ($filters['search'] ?? ''));
+            if ($search !== '') {
+                $keyword = mb_strtolower($search);
+                $filteredRecords = array_values(array_filter(
+                    $filteredRecords,
+                    static fn (array $record): bool => str_contains(mb_strtolower((string) ($record['student_name'] ?? '')), $keyword)
+                        || str_contains(mb_strtolower((string) ($record['student_code'] ?? '')), $keyword)
+                        || str_contains(mb_strtolower((string) ($record['group_label'] ?? $record['group'] ?? '')), $keyword)
+                ));
+            }
+
+            usort($filteredRecords, static fn (array $left, array $right): int => strnatcasecmp(
+                (string) ($left['student_name'] ?? ''),
+                (string) ($right['student_name'] ?? ''),
+            ));
+
+            $studentRows = array_map(static fn (array $record): array => [
+                'id' => (string) ($record['student_code'] ?? ''),
+                'student' => [
+                    'code' => $record['student_code'] ?? '',
+                    'full_name' => $record['student_name'] ?? 'ไม่พบชื่อนักศึกษา',
+                    'level' => [
+                        'id' => $record['level'] ?? '',
+                        'label' => match ((string) ($record['level'] ?? '')) {
+                            '1' => 'ประถมศึกษา',
+                            '2' => 'มัธยมศึกษาตอนต้น',
+                            '3' => 'มัธยมศึกษาตอนปลาย',
+                            default => 'ไม่ระบุระดับ',
+                        },
+                    ],
+                    'group' => [
+                        'code' => $record['group_code'] ?? $record['group'] ?? '',
+                        'name' => $record['group_label'] ?? $record['group'] ?? '',
+                    ],
+                ],
+                'primary' => $record['student_name'] ?? 'ไม่พบชื่อนักศึกษา',
+                'secondary' => $record['student_code'] ?? '',
+                'group' => (match ((string) ($record['level'] ?? '')) {
+                    '1' => 'ประถมศึกษา',
+                    '2' => 'มัธยมศึกษาตอนต้น',
+                    '3' => 'มัธยมศึกษาตอนปลาย',
+                    default => 'ไม่ระบุระดับ',
+                }).' · '.($record['group_label'] ?? $record['group'] ?? ''),
+                'metric' => self::itemLabel($category, (string) ($record[$category] ?? '')),
+                'category' => $category,
+                'category_label' => self::categoryLabel($category),
+                'category_value' => (string) ($record[$category] ?? ''),
+                'category_value_label' => self::itemLabel($category, (string) ($record[$category] ?? '')),
+                'nnet_status' => ($record['nnet'] ?? '') === 'taken' ? 'สอบแล้ว' : 'ยังไม่ได้สอบ',
+                'target_group' => self::itemLabel('target_group', (string) ($record['target_group'] ?? '')),
+                'gender' => self::itemLabel('gender', (string) ($record['gender'] ?? '')),
+                'occupation' => self::itemLabel('occupation', (string) ($record['occupation'] ?? '')),
+                'nationality' => self::itemLabel('nationality', (string) ($record['nationality'] ?? '')),
+                'age' => ($record['age'] ?? '') !== '' ? "{$record['age']} ปี" : 'ไม่ระบุ',
+            ], $filteredRecords);
+
+            return [
+                'items' => $studentRows,
+                'rows' => $studentRows,
+                'total' => count($studentRows),
+                'active' => count($studentRows),
+                'groups' => count(array_unique(array_column($studentRows, 'group'))),
+                'summary' => [
+                    'unique_students' => count($studentRows),
+                    'total_students' => count($studentRows),
+                ],
+                'terms' => $terms,
+                'selected_term' => $selectedTerm,
+                'categories' => self::categories(),
+                'selected_category' => $category,
+                'selected_category_label' => self::categoryLabel($category),
+                'filter_options' => $filterOptions,
+                'applied_filters' => $appliedFilters,
+            ];
+        }
 
         $counts = [];
         foreach ($filteredRecords as $record) {
@@ -215,6 +299,7 @@ final class RegistrationStatistics
                 'label' => implode(' · ', array_column($rowParts, 'label')),
                 'parts' => $rowParts,
                 'cells' => [],
+                'studentsByCell' => [],
                 'total' => 0,
             ];
             $columns[$columnKey] ??= [
@@ -225,6 +310,25 @@ final class RegistrationStatistics
             ];
 
             $rows[$rowKey]['cells'][$columnKey] = ($rows[$rowKey]['cells'][$columnKey] ?? 0) + 1;
+            $rows[$rowKey]['studentsByCell'][$columnKey][] = [
+                'id' => (string) ($record['student_code'] ?? ''),
+                'student_id' => (string) ($record['student_code'] ?? ''),
+                'primary' => (string) ($record['student_name'] ?? 'ไม่พบชื่อนักศึกษา'),
+                'name' => (string) ($record['student_name'] ?? 'ไม่พบชื่อนักศึกษา'),
+                'secondary' => (string) ($record['student_code'] ?? ''),
+                'group' => (string) ($record['group_label'] ?? $record['group'] ?? ''),
+                'group_id' => (string) ($record['group_code'] ?? $record['group'] ?? ''),
+                'group_name' => (string) ($record['group_label'] ?? $record['group'] ?? ''),
+                'metric' => (string) ($record['student_code'] ?? ''),
+                'level' => (string) (match ((string) ($record['level'] ?? '')) {
+                    '1' => 'ประถมศึกษา',
+                    '2' => 'มัธยมศึกษาตอนต้น',
+                    '3' => 'มัธยมศึกษาตอนปลาย',
+                    default => 'ไม่ระบุระดับ',
+                }),
+                'nnet' => ($record['nnet'] ?? '') === 'taken' ? 'สอบแล้ว' : 'ยังไม่ได้สอบ',
+                'examStatus' => ($record['nnet'] ?? '') === 'taken' ? 'สอบแล้ว' : 'ยังไม่ได้สอบ',
+            ];
             $rows[$rowKey]['total']++;
             $columns[$columnKey]['total']++;
         }
@@ -332,6 +436,16 @@ final class RegistrationStatistics
                 $value = $groupCodeAliases[$value];
             }
             $appliedFilters[$key] = $value;
+        }
+
+        $categoryValue = trim((string) ($filters['category_value'] ?? ''));
+        $targetCategory = (string) ($filters['category'] ?? '');
+        if ($categoryValue !== '' && array_key_exists($targetCategory, self::CATEGORY_LABELS)) {
+            $normalizedCategoryValue = self::normalizeCode($targetCategory, $categoryValue);
+            if ($targetCategory === 'group' && array_key_exists($normalizedCategoryValue, $groupCodeAliases)) {
+                $normalizedCategoryValue = $groupCodeAliases[$normalizedCategoryValue];
+            }
+            $appliedFilters[$targetCategory] = $normalizedCategoryValue;
         }
 
         $filteredRecords = array_values(array_filter(
@@ -445,10 +559,13 @@ final class RegistrationStatistics
         }
 
         usort($items, static function (array $left, array $right) use ($category): int {
-            if (in_array($category, ['gender', 'level', 'age'], true)) {
-                $order = $category === 'gender'
-                    ? ['1' => 1, 'M' => 1, 'ชาย' => 1, '2' => 2, 'F' => 2, 'หญิง' => 2]
-                    : ($category === 'level' ? ['1' => 1, '2' => 2, '3' => 3] : []);
+            if (in_array($category, ['gender', 'level', 'age', 'nnet'], true)) {
+                $order = match ($category) {
+                    'gender' => ['1' => 1, 'M' => 1, 'ชาย' => 1, '2' => 2, 'F' => 2, 'หญิง' => 2],
+                    'level' => ['1' => 1, '2' => 2, '3' => 3],
+                    'nnet' => ['taken' => 1, 'not_taken' => 2],
+                    default => [],
+                };
                 if ($category === 'age') {
                     $comparison = ($left['code'] === '' ? 999 : (int) $left['code']) <=> ($right['code'] === '' ? 999 : (int) $right['code']);
                 } else {

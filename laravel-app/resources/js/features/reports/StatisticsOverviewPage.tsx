@@ -43,6 +43,7 @@ import {
     statisticReports,
     supportedCategoryKeys,
     type GenericReportPayload,
+    type GenericReportRow,
     type StatisticAxisConfiguration,
     type StatisticCrossTabPayload,
     type StatisticOrientation,
@@ -150,7 +151,7 @@ function ResultInformationSummary({ crossTab }: { crossTab: StatisticCrossTabPay
     </aside>;
 }
 
-function CrossTabResultTable({ crossTab }: { crossTab: StatisticCrossTabPayload }) {
+function CrossTabResultTable({ crossTab, onSelectCell }: { crossTab: StatisticCrossTabPayload; onSelectCell?: (cell: { title: string; subtitle: string; students: GenericReportRow[] }) => void }) {
     const hasRows = crossTab.rows.length > 0;
     return (
         <>
@@ -158,13 +159,264 @@ function CrossTabResultTable({ crossTab }: { crossTab: StatisticCrossTabPayload 
             <div className="overflow-x-auto rounded-2xl border border-slate-200">
                 <table className="w-full min-w-max border-collapse text-sm">
                     <thead><tr className="bg-gradient-to-b from-brand-50 to-sky-50 text-brand-950"><th className="sticky left-0 z-[2] min-w-64 border-b border-r border-slate-200 bg-brand-50 px-4 py-3 text-left"><span className="block text-xs font-bold text-indigo-700">ข้อมูลแนวตั้ง</span><span className="mt-0.5 block font-black">{crossTab.row_categories.map((item) => item.label).join(' › ')}</span></th>{crossTab.columns.map((column) => <th key={column.key} className="min-w-36 border-b border-r border-slate-200 px-3 py-3 text-center align-top">{column.parts.map((part) => <span key={`${column.key}-${part.category}`} className="block"><span className="block text-[10px] font-bold text-sky-700">{part.category_label}</span><span className="block font-black text-slate-900">{part.label}</span></span>)}</th>)}<th className="min-w-28 border-b border-slate-200 bg-brand-100 px-4 py-3 text-center font-black">รวมแถว</th></tr></thead>
-                    <tbody>{crossTab.rows.map((row) => <tr key={row.key} className="bg-white transition-colors hover:bg-slate-50"><th className="sticky left-0 z-[1] border-b border-r border-slate-200 bg-white px-4 py-3 text-left align-top">{row.parts.map((part) => <span key={`${row.key}-${part.category}`} className="block"><span className="text-[10px] font-bold text-indigo-600">{part.category_label}</span><span className="ml-2 font-black text-slate-900">{part.label}</span></span>)}</th>{crossTab.columns.map((column) => { const count = row.cells[column.key] ?? 0; return <td key={`${row.key}-${column.key}`} className={`border-b border-r border-slate-100 px-4 py-3 text-center font-black ${count > 0 ? 'bg-sky-50/50 text-slate-950' : 'text-slate-300'}`}>{count.toLocaleString('th-TH')}</td>; })}<td className="border-b border-slate-200 bg-brand-50 px-4 py-3 text-center font-black text-brand-900">{row.total.toLocaleString('th-TH')}</td></tr>)}</tbody>
-                    {hasRows && <tfoot><tr className="bg-brand-100 text-brand-950"><th className="sticky left-0 z-[2] border-t border-r border-brand-200 bg-brand-100 px-4 py-3 text-right font-black">รวมคอลัมน์</th>{crossTab.columns.map((column) => <td key={column.key} className="border-t border-r border-brand-200 px-4 py-3 text-center font-black">{column.total.toLocaleString('th-TH')}</td>)}<td className="border-t border-brand-300 bg-brand-200 px-4 py-3 text-center text-base font-black">{crossTab.summary.registered_students.toLocaleString('th-TH')}</td></tr></tfoot>}
+                    <tbody>{crossTab.rows.map((row) => <tr key={row.key} className="bg-white transition-colors hover:bg-slate-50"><th className="sticky left-0 z-[1] border-b border-r border-slate-200 bg-white px-4 py-3 text-left align-top">{row.parts.map((part) => <span key={`${row.key}-${part.category}`} className="block"><span className="text-[10px] font-bold text-indigo-600">{part.category_label}</span><span className="ml-2 font-black text-slate-900">{part.label}</span></span>)}</th>{crossTab.columns.map((column) => {
+                        const count = row.cells[column.key] ?? 0;
+                        const cellStudents = row.studentsByCell?.[column.key] ?? [];
+                        return (
+                            <td key={`${row.key}-${column.key}`} className={`border-b border-r border-slate-100 px-2 py-3 text-center font-black ${count > 0 ? 'bg-sky-50/50 text-slate-950' : 'text-slate-300'}`}>
+                                {count > 0 && onSelectCell ? (
+                                    <button
+                                        type="button"
+                                        onClick={() => onSelectCell({
+                                            title: `${row.label} × ${column.label}`,
+                                            subtitle: `${count.toLocaleString('th-TH')} คน`,
+                                            students: cellStudents,
+                                        })}
+                                        className="inline-flex min-h-8 min-w-8 items-center justify-center rounded-lg px-2 py-1 font-black text-brand-900 transition hover:bg-brand-100 hover:text-brand-950 active:scale-95"
+                                        title={`คลิกเพื่อดูรายชื่อนักศึกษา (${count.toLocaleString('th-TH')} คน)`}
+                                    >
+                                        {count.toLocaleString('th-TH')}
+                                    </button>
+                                ) : (
+                                    count.toLocaleString('th-TH')
+                                )}
+                            </td>
+                        );
+                    })}<td className="border-b border-slate-200 bg-brand-50 px-3 py-3 text-center font-black text-brand-900">
+                        {row.total > 0 && onSelectCell ? (
+                            <button
+                                type="button"
+                                onClick={() => onSelectCell({
+                                    title: `รวมแถว: ${row.label}`,
+                                    subtitle: `${row.total.toLocaleString('th-TH')} คน`,
+                                    students: Object.values(row.studentsByCell ?? {}).flat(),
+                                })}
+                                className="inline-flex min-h-8 min-w-8 items-center justify-center rounded-lg px-2 py-1 font-black text-brand-900 transition hover:bg-brand-100 hover:text-brand-950 active:scale-95"
+                                title={`คลิกเพื่อดูรายชื่อนักศึกษาทั้งหมดในแถวนี้ (${row.total.toLocaleString('th-TH')} คน)`}
+                            >
+                                {row.total.toLocaleString('th-TH')}
+                            </button>
+                        ) : (
+                            row.total.toLocaleString('th-TH')
+                        )}
+                    </td></tr>)}</tbody>
+                    {hasRows && <tfoot><tr className="bg-brand-100 text-brand-950"><th className="sticky left-0 z-[2] border-t border-r border-brand-200 bg-brand-100 px-4 py-3 text-right font-black">รวมคอลัมน์</th>{crossTab.columns.map((column) => {
+                        const colStudents = crossTab.rows.flatMap((r) => r.studentsByCell?.[column.key] ?? []);
+                        return (
+                            <td key={column.key} className="border-t border-r border-brand-200 px-3 py-3 text-center font-black">
+                                {column.total > 0 && onSelectCell ? (
+                                    <button
+                                        type="button"
+                                        onClick={() => onSelectCell({
+                                            title: `รวมคอลัมน์: ${column.label}`,
+                                            subtitle: `${column.total.toLocaleString('th-TH')} คน`,
+                                            students: colStudents,
+                                        })}
+                                        className="inline-flex min-h-8 min-w-8 items-center justify-center rounded-lg px-2 py-1 font-black text-brand-900 transition hover:bg-brand-200 active:scale-95"
+                                        title={`คลิกเพื่อดูรายชื่อนักศึกษาในคอลัมน์นี้ (${column.total.toLocaleString('th-TH')} คน)`}
+                                    >
+                                        {column.total.toLocaleString('th-TH')}
+                                    </button>
+                                ) : (
+                                    column.total.toLocaleString('th-TH')
+                                )}
+                            </td>
+                        );
+                    })}<td className="border-t border-brand-300 bg-brand-200 px-4 py-3 text-center text-base font-black">
+                        {crossTab.summary.registered_students > 0 && onSelectCell ? (
+                            <button
+                                type="button"
+                                onClick={() => onSelectCell({
+                                    title: 'รวมนักศึกษาทั้งหมดในตาราง',
+                                    subtitle: `${crossTab.summary.registered_students.toLocaleString('th-TH')} คน`,
+                                    students: crossTab.rows.flatMap((r) => Object.values(r.studentsByCell ?? {}).flat()),
+                                })}
+                                className="inline-flex min-h-8 min-w-8 items-center justify-center rounded-lg px-2 py-1 font-black text-brand-950 transition hover:bg-brand-300 active:scale-95"
+                                title={`คลิกเพื่อดูรายชื่อนักศึกษาทั้งหมด (${crossTab.summary.registered_students.toLocaleString('th-TH')} คน)`}
+                            >
+                                {crossTab.summary.registered_students.toLocaleString('th-TH')}
+                            </button>
+                        ) : (
+                            crossTab.summary.registered_students.toLocaleString('th-TH')
+                        )}
+                    </td></tr></tfoot>}
                 </table>
                 {!hasRows && <div className="grid min-h-64 place-items-center bg-white px-6 py-12 text-center"><div><span className="mx-auto grid size-16 place-items-center rounded-2xl bg-slate-100 text-slate-400"><Rows size={30} weight="duotone" /></span><h3 className="mt-4 font-black text-slate-800">ยังไม่มีข้อมูลในตาราง</h3><p className="mt-1 text-sm text-slate-500">ตั้งค่าทั้งสองแกนและกด “ประมวลผล” เพื่อสร้างตารางไขว้</p></div></div>}
             </div>
             {hasRows && <ResultInformationSummary crossTab={crossTab} />}
         </>
+    );
+}
+
+function OverviewStudentListDialog({
+    cellInfo,
+    term,
+    onClose,
+}: {
+    cellInfo: { title: string; subtitle: string; students: GenericReportRow[] } | null;
+    term: string;
+    onClose: () => void;
+}) {
+    const [searchTerm, setSearchTerm] = useState('');
+    const [isExporting, setIsExporting] = useState(false);
+
+    if (!cellInfo) return null;
+
+    const students = cellInfo.students;
+    const filteredStudents = searchTerm.trim()
+        ? students.filter(
+            (s) =>
+                (s.student_id ?? s.secondary ?? s.id ?? '').toLowerCase().includes(searchTerm.toLowerCase()) ||
+                (s.name ?? s.primary ?? '').toLowerCase().includes(searchTerm.toLowerCase()) ||
+                (s.group_name ?? s.group_label ?? s.group ?? s.group_id ?? '').toLowerCase().includes(searchTerm.toLowerCase()) ||
+                (s.level ?? '').toLowerCase().includes(searchTerm.toLowerCase()),
+        )
+        : students;
+
+    const exportExcel = async () => {
+        if (students.length === 0 || isExporting) return;
+        setIsExporting(true);
+        try {
+            const { downloadExcel } = await import('../../lib/excel');
+            const sheetData = students.map((s, i) => [
+                i + 1,
+                s.student_id ?? s.secondary ?? s.id ?? '',
+                s.name ?? s.primary ?? '',
+                s.level ?? '',
+                s.group_name || s.group_label || s.group || s.group_id || '',
+                s.nnet || s.examStatus || '-',
+            ]);
+            const titleSanitized = cellInfo.title.replace(/[/\\?%*:|"<>]/g, '-');
+            downloadExcel(`รายชื่อนักศึกษา-${titleSanitized}-ภาคเรียน-${term || 'all'}`, [
+                {
+                    name: 'รายชื่อนักศึกษา',
+                    columns: [
+                        'ลำดับ',
+                        'รหัสนักศึกษา',
+                        'ชื่อ - สกุล',
+                        'ระดับการศึกษา',
+                        'กลุ่มเรียน',
+                        'สถานะ N-Net / การสอบ',
+                    ],
+                    rows: sheetData,
+                },
+            ]);
+        } catch (error) {
+            showErrorAlert(error instanceof Error ? error.message : 'ไม่สามารถส่งออก Excel ได้');
+        } finally {
+            setIsExporting(false);
+        }
+    };
+
+    return (
+        <div
+            className="fixed inset-0 z-[70] flex items-center justify-center bg-slate-950/55 p-4 backdrop-blur-[2px]"
+            role="presentation"
+            onMouseDown={(e) => {
+                if (e.target === e.currentTarget) onClose();
+            }}
+        >
+            <section
+                role="dialog"
+                aria-modal="true"
+                aria-labelledby="overview-student-list-title"
+                className="max-h-[calc(100dvh-2rem)] w-full max-w-5xl overflow-y-auto rounded-[24px] border border-white/70 bg-white shadow-[0_30px_100px_rgb(2_6_23_/_0.35)]"
+            >
+                <header className="sticky top-0 z-10 flex flex-wrap items-center justify-between gap-4 border-b border-slate-200 bg-white/95 px-5 py-4 backdrop-blur sm:px-7">
+                    <div>
+                        <div className="flex items-center gap-2">
+                            <span className="inline-flex rounded-lg bg-brand-50 px-2.5 py-1 text-xs font-bold text-brand-700">
+                                รายชื่อนักศึกษาในตารางสถิติ
+                            </span>
+                            <span className="text-xs text-slate-500">
+                                ภาคเรียน {term || '-'}
+                            </span>
+                        </div>
+                        <h2 id="overview-student-list-title" className="mt-1 text-xl font-black text-slate-950">
+                            {cellInfo.title} ({cellInfo.subtitle})
+                        </h2>
+                    </div>
+                    <div className="flex items-center gap-2">
+                        <button
+                            type="button"
+                            onClick={() => void exportExcel()}
+                            disabled={isExporting || students.length === 0}
+                            className="inline-flex h-10 items-center gap-2 rounded-xl border border-brand-700 bg-white px-3 text-sm font-bold text-brand-800 transition hover:bg-brand-50 disabled:cursor-not-allowed disabled:border-slate-200 disabled:text-slate-400"
+                        >
+                            <FileXls size={18} weight="bold" />
+                            {isExporting ? 'กำลังส่งออก...' : 'ส่งออก Excel'}
+                        </button>
+                        <button
+                            type="button"
+                            onClick={onClose}
+                            className="grid size-10 shrink-0 place-items-center rounded-xl border border-slate-200 text-slate-600 transition hover:bg-slate-100"
+                            aria-label="ปิดหน้าต่าง"
+                        >
+                            <X size={20} weight="bold" />
+                        </button>
+                    </div>
+                </header>
+
+                <div className="p-5 sm:p-7">
+                    <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
+                        <div className="relative w-full sm:w-80">
+                            <input
+                                type="text"
+                                value={searchTerm}
+                                onChange={(e) => setSearchTerm(e.target.value)}
+                                placeholder="ค้นหารหัส, ชื่อ-สกุล, กลุ่ม..."
+                                className="h-10 w-full rounded-xl border border-slate-300 bg-white pl-9 pr-3 text-sm font-semibold text-slate-900 placeholder:text-slate-400 focus:border-brand-600 focus:outline-none"
+                            />
+                            <MagnifyingGlass size={18} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
+                        </div>
+                        <p className="text-xs font-bold text-slate-500">
+                            แสดง {filteredStudents.length.toLocaleString('th-TH')} จาก {students.length.toLocaleString('th-TH')} คน
+                        </p>
+                    </div>
+
+                    {filteredStudents.length === 0 ? (
+                        <div className="grid min-h-48 place-items-center rounded-2xl border border-slate-200 bg-slate-50 p-6 text-center text-sm font-bold text-slate-500">
+                            {searchTerm ? 'ไม่พบข้อมูลที่ตรงกับคำค้นหา' : 'ไม่มีรายชื่อนักศึกษาในจุดตัดนี้'}
+                        </div>
+                    ) : (
+                        <div className="overflow-x-auto rounded-2xl border border-slate-200">
+                            <table className="w-full border-collapse text-sm">
+                                <thead>
+                                    <tr className="border-b border-slate-200 bg-slate-50 text-xs font-bold text-slate-600">
+                                        <th className="px-4 py-3 text-center">ลำดับ</th>
+                                        <th className="px-4 py-3 text-left">รหัสนักศึกษา</th>
+                                        <th className="px-4 py-3 text-left">ชื่อ - สกุล</th>
+                                        <th className="px-4 py-3 text-left">ระดับชั้น</th>
+                                        <th className="px-4 py-3 text-left">กลุ่มเรียน</th>
+                                        <th className="px-4 py-3 text-center">สถานะ N-Net / การสอบ</th>
+                                    </tr>
+                                </thead>
+                                <tbody className="divide-y divide-slate-100 bg-white">
+                                    {filteredStudents.map((student, idx) => (
+                                        <tr key={student.student_id ?? student.secondary ?? student.id ?? idx} className="hover:bg-slate-50/80 transition-colors">
+                                            <td className="px-4 py-3 text-center text-xs font-bold text-slate-500">{idx + 1}</td>
+                                            <td className="px-4 py-3 font-mono text-xs font-black text-slate-900">{student.student_id ?? student.secondary ?? student.id ?? '-'}</td>
+                                            <td className="px-4 py-3 font-bold text-slate-950">{student.name ?? student.primary ?? '-'}</td>
+                                            <td className="px-4 py-3 text-xs font-semibold text-slate-700">{student.level ?? '-'}</td>
+                                            <td className="px-4 py-3 text-xs font-semibold text-slate-700">{student.group_name || student.group_label || student.group || student.group_id || '-'}</td>
+                                            <td className="px-4 py-3 text-center">
+                                                <span className={`inline-flex rounded-lg px-2.5 py-1 text-xs font-bold ${
+                                                    student.nnet === 'สอบแล้ว' || student.examStatus === 'สอบแล้ว'
+                                                        ? 'bg-emerald-50 text-emerald-800'
+                                                        : 'bg-slate-100 text-slate-700'
+                                                }`}>
+                                                    {student.nnet || student.examStatus || '-'}
+                                                </span>
+                                            </td>
+                                        </tr>
+                                    ))}
+                                </tbody>
+                            </table>
+                        </div>
+                    )}
+                </div>
+            </section>
+        </div>
     );
 }
 
@@ -252,6 +504,11 @@ export function StatisticsOverviewPage() {
     const [request, setRequest] = useState<WorkspaceRequest | null>(null);
     const [formatOpen, setFormatOpen] = useState(false);
     const [previewOpen, setPreviewOpen] = useState(false);
+    const [selectedCell, setSelectedCell] = useState<{
+        title: string;
+        subtitle: string;
+        students: GenericReportRow[];
+    } | null>(null);
     const [validationMessage, setValidationMessage] = useState('');
 
     const portal = useQuery({ queryKey: ['reports', 'overview', role, districtId], queryFn: ({ signal }) => apiGet<PortalData>('/api/v1/portal', signal).then((response) => response.data), staleTime: 2 * 60_000 });
@@ -274,7 +531,7 @@ export function StatisticsOverviewPage() {
         setAxisConfiguration(normalizeAxisConfiguration(selectedReport, preference.data));
         setOrientation(preference.data.orientation);
     }, [preference.data, selectedReport]);
-    useEffect(() => { if (!formatOpen && !previewOpen) return undefined; const onKeyDown = (event: KeyboardEvent) => { if (event.key === 'Escape') { setFormatOpen(false); setPreviewOpen(false); } }; const previousOverflow = document.body.style.overflow; document.body.style.overflow = 'hidden'; window.addEventListener('keydown', onKeyDown); return () => { document.body.style.overflow = previousOverflow; window.removeEventListener('keydown', onKeyDown); }; }, [formatOpen, previewOpen]);
+    useEffect(() => { if (!formatOpen && !previewOpen && !selectedCell) return undefined; const onKeyDown = (event: KeyboardEvent) => { if (event.key === 'Escape') { setFormatOpen(false); setPreviewOpen(false); setSelectedCell(null); } }; const previousOverflow = document.body.style.overflow; document.body.style.overflow = 'hidden'; window.addEventListener('keydown', onKeyDown); return () => { document.body.style.overflow = previousOverflow; window.removeEventListener('keydown', onKeyDown); }; }, [formatOpen, previewOpen, selectedCell]);
 
     const selectedDistrict = me.data?.districts.find((district) => String(district.id) === districtId);
     const districtName = selectedDistrict?.name ?? portal.data?.viewer.district ?? '-';
@@ -339,7 +596,7 @@ export function StatisticsOverviewPage() {
             </div>
         </section>
         {validationMessage && <div role="alert" className="flex items-start gap-3 rounded-2xl border border-amber-200 bg-amber-50 px-4 py-4 text-sm text-amber-950"><Info size={20} weight="fill" className="mt-0.5 shrink-0 text-amber-600" /><div><strong className="font-black">ยังประมวลผลรายงานนี้ไม่ได้</strong><p className="mt-0.5 leading-6">{validationMessage}</p></div></div>}
-        <section aria-labelledby="statistics-result-title" className="rounded-[24px] border border-slate-200 bg-white p-5 shadow-sm shadow-slate-200/60 lg:p-6"><div className="mb-5 flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between"><div><h2 id="statistics-result-title" className="flex items-center gap-2 text-lg font-black text-slate-950"><Rows size={21} className="text-brand-700" weight="duotone" />ผลการประมวลผลแบบสองแกน</h2><p className="mt-1 text-sm text-slate-500">{request ? `${processedReport.label} · ${districtName} · ภาคเรียน ${workspace.data?.selectedTerm ?? request.term}` : 'ยังไม่มีข้อมูล กรุณาตั้งค่าทั้งสองแกนและกดปุ่มประมวลผล'}</p></div>{hasProcessedResult && crossTab.rows.length > 0 && <div className="flex flex-wrap gap-2 text-xs font-bold"><span className="rounded-full bg-indigo-50 px-3 py-1.5 text-indigo-800">{crossTab.summary.row_count} ชุดแถว × {crossTab.summary.column_count} ชุดคอลัมน์</span><span className="rounded-full bg-emerald-50 px-3 py-1.5 text-emerald-800">สูงสุด {largestCell && largestRow && largestColumn ? `${largestRow.label} × ${largestColumn.label} ${largestCell.count.toLocaleString('th-TH')} คน` : '-'}</span></div>}</div>{workspace.isFetching && <QuerySkeleton rows={6} />}{workspace.isError && <QueryError onRetry={() => workspace.refetch()} />}{!workspace.isFetching && !workspace.isError && <CrossTabResultTable crossTab={hasProcessedResult ? crossTab : unprocessedCrossTab} />}</section>
+        <section aria-labelledby="statistics-result-title" className="rounded-[24px] border border-slate-200 bg-white p-5 shadow-sm shadow-slate-200/60 lg:p-6"><div className="mb-5 flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between"><div><h2 id="statistics-result-title" className="flex items-center gap-2 text-lg font-black text-slate-950"><Rows size={21} className="text-brand-700" weight="duotone" />ผลการประมวลผลแบบสองแกน</h2><p className="mt-1 text-sm text-slate-500">{request ? `${processedReport.label} · ${districtName} · ภาคเรียน ${workspace.data?.selectedTerm ?? request.term}` : 'ยังไม่มีข้อมูล กรุณาตั้งค่าทั้งสองแกนและกดปุ่มประมวลผล'}</p></div>{hasProcessedResult && crossTab.rows.length > 0 && <div className="flex flex-wrap gap-2 text-xs font-bold"><span className="rounded-full bg-indigo-50 px-3 py-1.5 text-indigo-800">{crossTab.summary.row_count} ชุดแถว × {crossTab.summary.column_count} ชุดคอลัมน์</span><span className="rounded-full bg-emerald-50 px-3 py-1.5 text-emerald-800">สูงสุด {largestCell && largestRow && largestColumn ? `${largestRow.label} × ${largestColumn.label} ${largestCell.count.toLocaleString('th-TH')} คน` : '-'}</span></div>}</div>{workspace.isFetching && <QuerySkeleton rows={6} />}{workspace.isError && <QueryError onRetry={() => workspace.refetch()} />}{!workspace.isFetching && !workspace.isError && <CrossTabResultTable crossTab={hasProcessedResult ? crossTab : unprocessedCrossTab} onSelectCell={hasProcessedResult ? setSelectedCell : undefined} />}</section>
         {formatOpen && <ReportFormatDialog report={selectedReport} initialConfiguration={axisConfiguration} initialOrientation={orientation} onClose={() => setFormatOpen(false)} onSave={(nextConfiguration, nextOrientation) => {
             const normalized = normalizeAxisConfiguration(selectedReport, nextConfiguration);
             savePreference.mutate({ report: selectedReport.source, ...normalized, orientation: nextOrientation, saved: true }, {
@@ -357,5 +614,6 @@ export function StatisticsOverviewPage() {
             });
         }} />}
         {previewOpen && request && <ReportPreviewDialog report={processedReport} district={districtName} term={workspace.data?.selectedTerm ?? request.term} crossTab={crossTab} onClose={() => setPreviewOpen(false)} />}
+        {selectedCell && <OverviewStudentListDialog cellInfo={selectedCell} term={workspace.data?.selectedTerm ?? request?.term ?? termStart} onClose={() => setSelectedCell(null)} />}
     </div>;
 }

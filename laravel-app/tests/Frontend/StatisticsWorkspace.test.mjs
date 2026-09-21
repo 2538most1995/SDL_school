@@ -60,12 +60,12 @@ test('configured dimensions become real nested rows and columns in one cross-tab
 });
 
 test('report format catalog keeps only dimensions backed by imported source fields', () => {
-    assert.equal(statisticCategories.length, 7);
+    assert.equal(statisticCategories.length, 8);
     assert.deepEqual(statisticCategories.map((item) => item.label), [
-        'ระดับชั้น', 'กลุ่มเรียน', 'เพศ', 'อายุ', 'อาชีพ', 'กลุ่มเป้าหมาย', 'สัญชาติ',
+        'ระดับชั้น', 'กลุ่มเรียน', 'เพศ', 'อายุ', 'อาชีพ', 'กลุ่มเป้าหมาย', 'สัญชาติ', 'สถานะ N-Net / E-Exam',
     ]);
     assert.deepEqual(categoriesForReport(reportById(2)).map((item) => item.key), [
-        'level', 'group', 'gender', 'age', 'occupation', 'target_group', 'nationality',
+        'level', 'group', 'gender', 'age', 'occupation', 'target_group', 'nationality', 'nnet',
     ]);
     assert.deepEqual(categoriesForReport(reportById(3)).map((item) => item.key), ['level', 'group']);
     assert.deepEqual(normalizeAxisConfiguration(reportById(3), {

@@ -110,6 +110,26 @@ final class StudentDataIntegrationApiTest extends TestCase
             ->assertJsonPath('meta.pagination.current_page', 999);
     }
 
+    public function test_registered_subjects_expose_the_subject_code_and_name_contract(): void
+    {
+        $this->withToken($this->token)
+            ->getJson('/api/v1/integrations/student-data/students/STU001/subjects?term=1/2569&page=1&per_page=100')
+            ->assertOk()
+            ->assertJsonPath('data.items.0.student_code', 'STU001')
+            ->assertJsonPath('data.items.0.code', 'TH1001')
+            ->assertJsonPath('data.items.0.name', 'ภาษาไทย')
+            ->assertJsonPath('data.items.0.credits', 3)
+            ->assertJsonPath('data.items.0.type', 'compulsory')
+            ->assertJsonPath('data.items.0.term', '1/2569')
+            ->assertJsonPath('data.items.0.registration_status', 'passed')
+            ->assertJsonPath('data.items.0.is_transferred', false)
+            ->assertJsonPath('data.items.0.grade', '3.5')
+            ->assertJsonPath('data.items.0.exam_attended', true)
+            ->assertJsonPath('data.summary.subject_count', 1)
+            ->assertJsonPath('meta.term', '1/2569')
+            ->assertJsonPath('meta.pagination.total', 1);
+    }
+
     public function test_client_is_fixed_to_one_district_and_cannot_override_it(): void
     {
         $this->withToken($this->token)

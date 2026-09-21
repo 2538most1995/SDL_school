@@ -125,16 +125,18 @@ final class StudentReportController extends StudentsApiController
             'subject' => ['nullable', 'string', 'max:30'],
             'view' => ['nullable', Rule::in(['subject', 'student'])],
             'exam_status' => ['nullable', 'string', Rule::in(['taken', 'not_taken'])],
-            'category' => ['nullable', Rule::in(['target_group', 'group', 'gender', 'level', 'occupation', 'nationality', 'age'])],
+            'category' => ['nullable', Rule::in(['target_group', 'group', 'gender', 'level', 'occupation', 'nationality', 'age', 'nnet'])],
+            'category_value' => ['nullable', 'string', 'max:180'],
             'row_categories' => ['nullable', 'required_with:column_categories', 'array', 'min:1', 'max:3'],
-            'row_categories.*' => ['string', 'distinct', Rule::in(['target_group', 'group', 'gender', 'level', 'occupation', 'nationality', 'age'])],
+            'row_categories.*' => ['string', 'distinct', Rule::in(['target_group', 'group', 'gender', 'level', 'occupation', 'nationality', 'age', 'nnet'])],
             'column_categories' => ['nullable', 'required_with:row_categories', 'array', 'min:1', 'max:3'],
-            'column_categories.*' => ['string', 'distinct', Rule::in(['target_group', 'group', 'gender', 'level', 'occupation', 'nationality', 'age'])],
+            'column_categories.*' => ['string', 'distinct', Rule::in(['target_group', 'group', 'gender', 'level', 'occupation', 'nationality', 'age', 'nnet'])],
             'target_group' => ['nullable', 'string', 'max:10'],
             'gender' => ['nullable', 'string', 'max:10'],
             'occupation' => ['nullable', 'string', 'max:10'],
             'nationality' => ['nullable', 'string', 'max:10'],
             'age' => ['nullable', 'integer', 'min:1', 'max:120'],
+            'nnet' => ['nullable', 'string', 'max:20'],
         ]);
     }
 

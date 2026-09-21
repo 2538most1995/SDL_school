@@ -280,14 +280,18 @@ final readonly class StudentReportService
 
             $seed = (int) substr($student->code, -2);
             $records[] = [
+                'student_code' => $student->code,
+                'student_name' => $student->fullName(),
                 'target_group' => ['09', '17', '19', '30'][$seed % 4],
                 'group' => $student->groupCode,
+                'group_code' => $student->groupCode,
                 'group_label' => $student->groupName,
                 'gender' => str_starts_with($student->prefix, 'นาย') ? '1' : '2',
                 'level' => (string) $student->level,
                 'occupation' => ['00', '04', '05', '06'][$seed % 4],
                 'nationality' => '099',
                 'age' => (string) (18 + ($seed % 43)),
+                'nnet' => ($seed % 3 === 0) ? 'not_taken' : 'taken',
             ];
         }
 

@@ -168,8 +168,10 @@ final readonly class LegacyStudentReportService
                 $ntSara1Col = $this->firstExistingColumn($set->student, ['nt_sara1']);
                 $ntSara2Col = $this->firstExistingColumn($set->student, ['nt_sara2']);
                 $ntSemCol = $this->firstExistingColumn($set->student, ['nt_sem']);
-                $ntNosemCol = $this->firstExistingColumn($set->student, ['nt_nosem']);
-                $nnetCol = $this->firstExistingColumn($set->student, ['nnet', 'n_net', 'eexam', 'e_exam', 'nnet_stat', 'exm_status']);
+                $nnetCol = $this->firstExistingColumn($set->student, [
+                    'nnet', 'n_net', 'eexam', 'e_exam', 'nnet_stat', 'exm_status',
+                    'nt_result', 'nt_res', 'nnet_pass', 'nnet_result', 'eexam_status', 'e_exam_stat',
+                ]);
 
                 $finSemSql = $finSemCol !== null ? ", s.{$finSemCol} AS fin_sem_val" : ", '' AS fin_sem_val";
                 $finSem2Sql = $finSem2Col !== null ? ", s.{$finSem2Col} AS fin_sem2_val" : ", '' AS fin_sem2_val";
@@ -553,17 +555,32 @@ final readonly class LegacyStudentReportService
                 'nationality' => $this->firstExistingColumn($set->student, ['nation']),
                 'age' => $this->firstExistingColumn($set->student, ['age']),
             ];
+            $ntSara1Col = $this->firstExistingColumn($set->student, ['nt_sara1']);
+            $ntSara2Col = $this->firstExistingColumn($set->student, ['nt_sara2']);
+            $ntSemCol = $this->firstExistingColumn($set->student, ['nt_sem']);
+            $ntNosemCol = $this->firstExistingColumn($set->student, ['nt_nosem']);
+            $nnetCol = $this->firstExistingColumn($set->student, [
+                'nnet', 'n_net', 'eexam', 'e_exam', 'nnet_stat', 'exm_status',
+                'nt_result', 'nt_res', 'nnet_pass', 'nnet_result', 'eexam_status', 'e_exam_stat',
+            ]);
+
             $valueSql = fn (?string $column): string => $column === null ? "''" : 'st.'.$this->identifier($column);
             $targetGroupSql = $valueSql($columns['target_group']);
             $genderSql = $valueSql($columns['gender']);
             $occupationSql = $valueSql($columns['occupation']);
             $nationalitySql = $valueSql($columns['nationality']);
             $ageSql = $valueSql($columns['age']);
+            $ntSql1 = $ntSara1Col !== null ? ", st.{$this->identifier($ntSara1Col)} AS nt_sara1_val" : ", '' AS nt_sara1_val";
+            $ntSql2 = $ntSara2Col !== null ? ", st.{$this->identifier($ntSara2Col)} AS nt_sara2_val" : ", '' AS nt_sara2_val";
+            $ntSemSql = $ntSemCol !== null ? ", st.{$this->identifier($ntSemCol)} AS nt_sem_val" : ", '' AS nt_sem_val";
+            $ntNosemSql = $ntNosemCol !== null ? ", st.{$this->identifier($ntNosemCol)} AS nt_nosem_val" : ", '' AS nt_nosem_val";
+            $nnetSql = $nnetCol !== null ? ", st.{$this->identifier($nnetCol)} AS nnet_val" : ", '' AS nnet_val";
             $student = $this->identifier($set->student);
             $grade = $this->identifier($set->grade);
 
             foreach ($this->rows(
                 "SELECT DISTINCT st._perf_id10 AS student_code,
+                        st.prename, st.name AS first_name, st.surname AS last_name,
                         {$targetGroupSql} AS target_group,
                         st.grp_code AS group_code,
                         {$groupName} AS group_label,
@@ -572,6 +589,7 @@ final readonly class LegacyStudentReportService
                         {$occupationSql} AS occupation,
                         {$nationalitySql} AS nationality,
                         {$ageSql} AS age
+                        {$ntSql1} {$ntSql2} {$ntSemSql} {$ntNosemSql} {$nnetSql}
                  FROM {$grade} g
                  INNER JOIN {$student} st ON st._perf_id10 = g._perf_std10
                  {$groupJoin}
@@ -581,15 +599,28 @@ final readonly class LegacyStudentReportService
                 if (trim((string) ($row['student_code'] ?? '')) === '') {
                     continue;
                 }
+                $nnetVal = strtoupper(trim((string) ($row['nnet_val'] ?? '')));
+                $ntSara1Val = trim((string) ($row['nt_sara1_val'] ?? ''));
+                $ntSara2Val = trim((string) ($row['nt_sara2_val'] ?? ''));
+                $ntSemVal = trim((string) ($row['nt_sem_val'] ?? ''));
+                $ntNosemVal = trim((string) ($row['nt_nosem_val'] ?? ''));
+
+                $hasStudentFlag = in_array($nnetVal, ['1', 'Y', 'P', 'PASS', 'PASSED', 'สอบแล้ว', 'ผ่าน'], true)
+                    || $ntSara1Val !== '' || $ntSara2Val !== '' || $ntSemVal !== '' || $ntNosemVal !== '';
+
                 $records[$set->level.'|'.trim((string) $row['student_code'])] = [
+                    'student_code' => trim((string) $row['student_code']),
+                    'student_name' => $this->fullName($row) ?: 'ไม่พบชื่อนักศึกษา',
                     'target_group' => $row['target_group'] ?? '',
                     'group' => $row['group_code'] ?? '',
+                    'group_code' => $row['group_code'] ?? '',
                     'group_label' => $row['group_label'] ?? '',
                     'gender' => $row['gender'] ?? '',
                     'level' => (string) $set->level,
                     'occupation' => $row['occupation'] ?? '',
                     'nationality' => $row['nationality'] ?? '',
                     'age' => $row['age'] ?? '',
+                    'nnet' => $hasStudentFlag ? 'taken' : 'not_taken',
                 ];
             }
         }
