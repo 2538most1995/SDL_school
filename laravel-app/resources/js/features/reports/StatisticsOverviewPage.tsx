@@ -424,7 +424,9 @@ function OverviewStudentListDialog({
                                                 <span className={`inline-flex rounded-lg px-2.5 py-1 text-xs font-bold ${
                                                     student.nnet === 'สอบแล้ว' || student.examStatus === 'สอบแล้ว'
                                                         ? 'bg-emerald-50 text-emerald-800'
-                                                        : 'bg-slate-100 text-slate-700'
+                                                        : student.nnet === 'มีสิทธิ์สอบ' || student.examStatus === 'มีสิทธิ์สอบ'
+                                                        ? 'bg-sky-50 text-sky-800'
+                                                        : 'bg-amber-50 text-amber-800'
                                                 }`}>
                                                     {student.nnet || student.examStatus || '-'}
                                                 </span>

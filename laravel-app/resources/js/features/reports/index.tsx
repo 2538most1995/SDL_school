@@ -524,10 +524,11 @@ export function ReportPage({ kind }: { kind: ReportKind }) {
             size: 180,
             meta: { compactSize: 96, compactTextAlign: 'center' },
             cell: ({ row }: { row: { original: ReportRow } }) => {
-                const status = row.original.examStatus ?? 'สอบแล้ว';
+                const status = row.original.examStatus ?? 'มีสิทธิ์สอบ';
                 const isPassed = status === 'สอบแล้ว';
+                const isEligible = status === 'มีสิทธิ์สอบ';
                 return (
-                    <StatusBadge tone={isPassed ? 'success' : 'warning'}>
+                    <StatusBadge tone={isPassed ? 'success' : isEligible ? 'info' : 'warning'}>
                         {status}
                     </StatusBadge>
                 );
@@ -608,6 +609,7 @@ export function ReportPage({ kind }: { kind: ReportKind }) {
                             <select value={examStatus} onChange={(event) => setExamStatus(event.target.value)} className="h-11 w-full rounded-xl border border-slate-300 bg-white px-3 text-sm">
                                 <option value="">ทุกสถานะการสอบ</option>
                                 <option value="taken">สอบแล้ว</option>
+                                <option value="eligible">มีสิทธิ์สอบ</option>
                                 <option value="not_taken">ยังไม่ได้สอบ</option>
                             </select>
                         </label>

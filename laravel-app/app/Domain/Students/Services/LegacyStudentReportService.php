@@ -177,6 +177,8 @@ final readonly class LegacyStudentReportService
                 $finSemCol = $this->firstExistingColumn($set->student, ['fin_sem']);
                 $finSem2Col = $this->firstExistingColumn($set->student, ['fin_sem2']);
                 $finCauseCol = $this->firstExistingColumn($set->student, ['fin_cause']);
+                $expFlagCol = $this->firstExistingColumn($set->student, ['expflag', 'exp_flag']);
+                $expSemCol = $this->firstExistingColumn($set->student, ['expsem', 'exp_sem']);
                 $ntSara1Col = $this->firstExistingColumn($set->student, ['nt_sara1']);
                 $ntSara2Col = $this->firstExistingColumn($set->student, ['nt_sara2']);
                 $ntSemCol = $this->firstExistingColumn($set->student, ['nt_sem']);
@@ -190,6 +192,8 @@ final readonly class LegacyStudentReportService
                 $finSemSql = $finSemCol !== null ? ", s.{$this->identifier($finSemCol)} AS fin_sem_val" : ", '' AS fin_sem_val";
                 $finSem2Sql = $finSem2Col !== null ? ", s.{$this->identifier($finSem2Col)} AS fin_sem2_val" : ", '' AS fin_sem2_val";
                 $finCauseSql = $finCauseCol !== null ? ", s.{$this->identifier($finCauseCol)} AS fin_cause_val" : ", '' AS fin_cause_val";
+                $expFlagSql = $expFlagCol !== null ? ", s.{$this->identifier($expFlagCol)} AS expflag_val" : ", '' AS expflag_val";
+                $expSemSql = $expSemCol !== null ? ", s.{$this->identifier($expSemCol)} AS expsem_val" : ", '' AS expsem_val";
                 $ntSql1 = $ntSara1Col !== null ? ", s.{$this->identifier($ntSara1Col)} AS nt_sara1_val" : ", '' AS nt_sara1_val";
                 $ntSql2 = $ntSara2Col !== null ? ", s.{$this->identifier($ntSara2Col)} AS nt_sara2_val" : ", '' AS nt_sara2_val";
                 $ntSemSql = $ntSemCol !== null ? ", s.{$this->identifier($ntSemCol)} AS nt_sem_val" : ", '' AS nt_sem_val";
@@ -199,7 +203,7 @@ final readonly class LegacyStudentReportService
 
                 $studentsSql = "SELECT s._perf_id10 AS student_code, s.prename, s.name AS first_name,
                                        s.surname AS last_name, s.grp_code AS group_code, {$groupName} AS group_name
-                                       {$finCauseSql} {$finSemSql} {$finSem2Sql} {$ntSql1} {$ntSql2} {$ntSemSql} {$ntNosemSql} {$genderSql} {$nnetSql}
+                                       {$finCauseSql} {$finSemSql} {$finSem2Sql} {$expFlagSql} {$expSemSql} {$ntSql1} {$ntSql2} {$ntSemSql} {$ntNosemSql} {$genderSql} {$nnetSql}
                                 FROM {$student} s {$join}
                                 WHERE ".implode(' AND ', array_filter($conditions)).'
                                 ORDER BY s.name ASC, s.surname ASC, s._perf_id10 ASC';
@@ -289,9 +293,11 @@ final readonly class LegacyStudentReportService
                         } else {
                             $studentMetrics[$code]['elective_registered'] += $credit;
                         }
-                        if ($gradeVal !== '' || $typCode === '1') {
-                            $studentMetrics[$code]['exam_taken'] = true;
-                        }
+                    }
+
+                    $isExamSubject = str_contains($subCode, 'NET') || str_contains($subCode, 'EXAM') || str_contains($subName, 'N-NET') || str_contains($subName, 'E-EXAM');
+                    if ($isExamSubject && ! in_array($gradeVal, ['', '-'], true)) {
+                        $studentMetrics[$code]['exam_taken'] = true;
                     }
                 }
 
@@ -321,21 +327,29 @@ final readonly class LegacyStudentReportService
                     $ntSara2Val = trim((string) ($sRow['nt_sara2_val'] ?? ''));
                     $ntSemVal = trim((string) ($sRow['nt_sem_val'] ?? ''));
                     $ntNosemVal = trim((string) ($sRow['nt_nosem_val'] ?? ''));
+                    $expFlagVal = trim((string) ($sRow['expflag_val'] ?? ''));
+                    $expSemVal = trim((string) ($sRow['expsem_val'] ?? ''));
 
-                    $hasStudentFlag = in_array($nnetVal, ['1', 'Y', 'P', 'PASS', 'PASSED', 'สอบแล้ว', 'ผ่าน'], true)
-                        || $ntSara1Val !== '' || $ntSara2Val !== '' || $ntSemVal !== '' || $ntNosemVal !== '';
-                    $isExamTaken = ! empty($m['exam_taken']) || $hasStudentFlag;
+                    $hasStudentScore = ($ntSara1Val !== '' && $ntSara1Val !== '0')
+                        || ($ntSara2Val !== '' && $ntSara2Val !== '0')
+                        || $ntSemVal !== '';
+                    $hasExplicitPass = in_array($nnetVal, ['1', 'Y', 'P', 'PASS', 'PASSED', 'สอบแล้ว', 'ผ่าน'], true);
+                    $hasExamSubjectGrade = ! empty($m['exam_taken']);
+
+                    $isExamTaken = $hasStudentScore || $hasExplicitPass || $hasExamSubjectGrade;
+                    $examStatus = $isExamTaken ? 'สอบแล้ว' : 'มีสิทธิ์สอบ';
 
                     $examStatusFilter = trim((string) ($filters['exam_status'] ?? ''));
                     if ($examStatusFilter === 'taken' && ! $isExamTaken) {
                         continue;
                     }
-                    if ($examStatusFilter === 'not_taken' && $isExamTaken) {
+                    if (($examStatusFilter === 'eligible' || $examStatusFilter === 'not_taken') && $isExamTaken) {
                         continue;
                     }
 
                     // Active student qualifies for expected graduation if total credits meet or approach graduation requirements
-                    if ($grandTotal >= $reqTotal || ($compTotal >= $reqComp && $elecTotal >= $reqElec)) {
+                    // or if explicitly flagged as expected graduate (expflag = 1 or expsem set)
+                    if ($grandTotal >= $reqTotal || ($compTotal >= $reqComp && $elecTotal >= $reqElec) || $expFlagVal === '1' || $expSemVal !== '') {
                         $genderLabel = $this->resolveGender((string) ($sRow['gender'] ?? ''), (string) ($sRow['prename'] ?? ''));
                         $rows[] = [
                             'id' => "{$set->districtId}-{$set->level}-{$code}",
@@ -350,7 +364,8 @@ final readonly class LegacyStudentReportService
                             'group_label' => $this->groupLabel($sRow),
                             'gender' => $genderLabel,
                             'metric' => number_format($grandTotal, 0).'/'.number_format($reqTotal, 0).' หน่วยกิต (บังคับ '.number_format($compTotal, 0).' / เลือก '.number_format($elecTotal, 0).')',
-                            'examStatus' => $isExamTaken ? 'สอบแล้ว' : 'ยังไม่ได้สอบ',
+                            'examStatus' => $examStatus,
+                            'nnet' => $examStatus,
                         ];
                     }
                 }
@@ -577,6 +592,8 @@ final readonly class LegacyStudentReportService
                 'nationality' => $this->firstExistingColumn($set->student, ['nation']),
                 'age' => $this->firstExistingColumn($set->student, ['age']),
             ];
+            $expFlagCol = $this->firstExistingColumn($set->student, ['expflag', 'exp_flag']);
+            $expSemCol = $this->firstExistingColumn($set->student, ['expsem', 'exp_sem']);
             $ntSara1Col = $this->firstExistingColumn($set->student, ['nt_sara1']);
             $ntSara2Col = $this->firstExistingColumn($set->student, ['nt_sara2']);
             $ntSemCol = $this->firstExistingColumn($set->student, ['nt_sem']);
@@ -592,6 +609,8 @@ final readonly class LegacyStudentReportService
             $occupationSql = $valueSql($columns['occupation']);
             $nationalitySql = $valueSql($columns['nationality']);
             $ageSql = $valueSql($columns['age']);
+            $expFlagSql = $expFlagCol !== null ? ", st.{$this->identifier($expFlagCol)} AS expflag_val" : ", '' AS expflag_val";
+            $expSemSql = $expSemCol !== null ? ", st.{$this->identifier($expSemCol)} AS expsem_val" : ", '' AS expsem_val";
             $ntSql1 = $ntSara1Col !== null ? ", st.{$this->identifier($ntSara1Col)} AS nt_sara1_val" : ", '' AS nt_sara1_val";
             $ntSql2 = $ntSara2Col !== null ? ", st.{$this->identifier($ntSara2Col)} AS nt_sara2_val" : ", '' AS nt_sara2_val";
             $ntSemSql = $ntSemCol !== null ? ", st.{$this->identifier($ntSemCol)} AS nt_sem_val" : ", '' AS nt_sem_val";
@@ -611,7 +630,7 @@ final readonly class LegacyStudentReportService
                         {$occupationSql} AS occupation,
                         {$nationalitySql} AS nationality,
                         {$ageSql} AS age
-                        {$ntSql1} {$ntSql2} {$ntSemSql} {$ntNosemSql} {$nnetSql}
+                        {$expFlagSql} {$expSemSql} {$ntSql1} {$ntSql2} {$ntSemSql} {$ntNosemSql} {$nnetSql}
                  FROM {$grade} g
                  INNER JOIN {$student} st ON st._perf_id10 = g._perf_std10
                  {$groupJoin}
@@ -626,9 +645,17 @@ final readonly class LegacyStudentReportService
                 $ntSara2Val = trim((string) ($row['nt_sara2_val'] ?? ''));
                 $ntSemVal = trim((string) ($row['nt_sem_val'] ?? ''));
                 $ntNosemVal = trim((string) ($row['nt_nosem_val'] ?? ''));
+                $expFlagVal = trim((string) ($row['expflag_val'] ?? ''));
+                $expSemVal = trim((string) ($row['expsem_val'] ?? ''));
 
-                $hasStudentFlag = in_array($nnetVal, ['1', 'Y', 'P', 'PASS', 'PASSED', 'สอบแล้ว', 'ผ่าน'], true)
-                    || $ntSara1Val !== '' || $ntSara2Val !== '' || $ntSemVal !== '' || $ntNosemVal !== '';
+                $isExamTaken = in_array($nnetVal, ['1', 'Y', 'P', 'PASS', 'PASSED', 'สอบแล้ว', 'ผ่าน'], true)
+                    || ($ntSara1Val !== '' && $ntSara1Val !== '0')
+                    || ($ntSara2Val !== '' && $ntSara2Val !== '0')
+                    || $ntSemVal !== '';
+
+                $isEligible = ! $isExamTaken && ($expFlagVal === '1' || $expSemVal !== '');
+
+                $nnetStatus = $isExamTaken ? 'taken' : ($isEligible ? 'eligible' : 'not_taken');
 
                 $records[$set->level.'|'.trim((string) $row['student_code'])] = [
                     'student_code' => trim((string) $row['student_code']),
@@ -642,7 +669,8 @@ final readonly class LegacyStudentReportService
                     'occupation' => $row['occupation'] ?? '',
                     'nationality' => $row['nationality'] ?? '',
                     'age' => $row['age'] ?? '',
-                    'nnet' => $hasStudentFlag ? 'taken' : 'not_taken',
+                    'nnet' => $nnetStatus,
+                    'nnet_status' => $isExamTaken ? 'สอบแล้ว' : ($isEligible ? 'มีสิทธิ์สอบ' : 'ยังไม่ได้สอบ'),
                 ];
             }
         }
@@ -1331,15 +1359,27 @@ final readonly class LegacyStudentReportService
 
         if (! array_key_exists($table, $columnsByTable)) {
             $columns = [];
-            foreach ($this->rows(
-                'SELECT COLUMN_NAME AS column_name
-                 FROM INFORMATION_SCHEMA.COLUMNS
-                 WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = ?',
-                [$table],
-            ) as $row) {
-                $column = strtolower(trim((string) ($row['column_name'] ?? '')));
-                if ($column !== '') {
-                    $columns[$column] = true;
+            try {
+                foreach ($this->rows(
+                    'SELECT COLUMN_NAME AS column_name
+                     FROM INFORMATION_SCHEMA.COLUMNS
+                     WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = ?',
+                    [$table],
+                ) as $row) {
+                    $column = strtolower(trim((string) ($row['column_name'] ?? '')));
+                    if ($column !== '') {
+                        $columns[$column] = true;
+                    }
+                }
+            } catch (\Throwable) {
+                try {
+                    foreach ($this->rows("PRAGMA table_info({$this->identifier($table)})") as $row) {
+                        $column = strtolower(trim((string) ($row['name'] ?? '')));
+                        if ($column !== '') {
+                            $columns[$column] = true;
+                        }
+                    }
+                } catch (\Throwable) {
                 }
             }
             $columnsByTable[$table] = $columns;

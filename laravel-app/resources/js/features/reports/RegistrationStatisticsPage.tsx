@@ -224,7 +224,13 @@ function RegistrationStudentListDialog({
                 header: 'สถานะ N-Net',
                 cell: ({ row }) => (
                     <StatusBadge
-                        tone={row.original.nnet_status === 'สอบแล้ว' ? 'success' : 'neutral'}
+                        tone={
+                            row.original.nnet_status === 'สอบแล้ว'
+                                ? 'success'
+                                : row.original.nnet_status === 'มีสิทธิ์สอบ'
+                                ? 'info'
+                                : 'warning'
+                        }
                     >
                         {row.original.nnet_status || 'ยังไม่ได้สอบ'}
                     </StatusBadge>
