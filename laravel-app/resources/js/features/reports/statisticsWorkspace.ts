@@ -3,6 +3,7 @@ import type { CategoryKey, RegistrationStatisticsPayload } from './registrationS
 
 export type StatisticReportId = 1 | 2 | 3 | 4 | 5 | 6 | 7 | 8 | 9 | 10 | 11 | 12 | 13 | 14 | 15;
 export type StatisticOrientation = 'vertical' | 'horizontal';
+export type StatisticAxisConfiguration = Record<StatisticOrientation, CategoryKey[]>;
 
 export type StatisticReportDefinition = {
     id: StatisticReportId;
@@ -46,6 +47,14 @@ export type StatisticResultRow = {
     note: string;
 };
 
+export type StatisticResultSummary = {
+    sourceTotal: number;
+    classificationCount: number;
+    categoryCount: number;
+    maximum: StatisticResultRow | null;
+    classificationTotals: Array<{ classification: string; total: number }>;
+};
+
 export const statisticReports: StatisticReportDefinition[] = [
     { id: 1, label: 'รายงานจำนวนนักศึกษาเข้าใหม่', source: 'new-students' },
     { id: 2, label: 'รายงานจำนวนนักศึกษาขอลงทะเบียน', source: null, unavailableReason: 'ข้อมูลคำขอลงทะเบียนยังไม่มี API ต้นทางแยกจากข้อมูลลงทะเบียนจริง' },
@@ -84,6 +93,41 @@ export function reportById(id: StatisticReportId): StatisticReportDefinition {
 export function supportedCategoryKeys(keys: Array<StatisticCategoryDefinition['key']>): CategoryKey[] {
     const supported = new Set(statisticCategories.filter((category) => category.supported).map((category) => category.key));
     return keys.filter((key): key is CategoryKey => supported.has(key));
+}
+
+export function createDefaultAxisConfiguration(): StatisticAxisConfiguration {
+    return {
+        vertical: ['level'],
+        horizontal: ['group'],
+    };
+}
+
+export function categoriesForOrientation(
+    configuration: StatisticAxisConfiguration,
+    orientation: StatisticOrientation,
+): CategoryKey[] {
+    return [...configuration[orientation]];
+}
+
+export function summarizeStatisticRows(
+    rows: StatisticResultRow[],
+    sourceTotal: number,
+): StatisticResultSummary {
+    const totals = new Map<string, number>();
+    let maximum: StatisticResultRow | null = null;
+
+    rows.forEach((row) => {
+        totals.set(row.classification, (totals.get(row.classification) ?? 0) + row.count);
+        if (!maximum || row.count > maximum.count) maximum = row;
+    });
+
+    return {
+        sourceTotal,
+        classificationCount: totals.size,
+        categoryCount: rows.length,
+        maximum,
+        classificationTotals: Array.from(totals, ([classification, total]) => ({ classification, total })),
+    };
 }
 
 function groupParts(value: string): { level: string; group: string } {
@@ -146,13 +190,26 @@ export function buildStatisticsWorkspaceSheets(
     term: string,
     district: string,
     rows: StatisticResultRow[],
+    options: {
+        sourceTotal?: number;
+        orientation?: StatisticOrientation;
+        categoryLabels?: string[];
+    } = {},
 ): ExcelSheet[] {
-    const total = rows.reduce((sum, row) => sum + row.count, 0);
+    const firstClassification = rows[0]?.classification;
+    const inferredTotal = rows
+        .filter((row) => row.classification === firstClassification)
+        .reduce((sum, row) => sum + row.count, 0);
+    const total = options.sourceTotal ?? inferredTotal;
+    const orientationLabel = options.orientation === 'horizontal' ? 'แนวนอน' : 'แนวตั้ง';
     return [
         {
             name: 'รายงานสถิติ',
             columns: ['ลำดับ', 'รหัส', 'รายการ', 'ประเภทการจำแนก', 'จำนวน', 'ร้อยละ', 'หมายเหตุ'],
-            rows: rows.map((row, index) => [index + 1, row.code, row.label, row.classification, row.count, row.percentage, row.note]),
+            rows: [
+                ...rows.map((row, index) => [index + 1, row.code, row.label, row.classification, row.count, row.percentage, row.note]),
+                ['', '', 'รวมทั้งหมด (ผู้เรียนไม่ซ้ำ)', '', total, total > 0 ? 100 : 0, 'สรุปจากข้อมูลต้นทาง'],
+            ],
         },
         {
             name: 'เงื่อนไขรายงาน',
@@ -161,8 +218,10 @@ export function buildStatisticsWorkspaceSheets(
                 ['รายงาน', `${report.id}. ${report.label}`],
                 ['พื้นที่ข้อมูล', district],
                 ['ภาคเรียน', term || '-'],
+                ['รูปแบบการแสดงผล', orientationLabel],
+                ['มิติข้อมูล', options.categoryLabels?.join(', ') || '-'],
                 ['จำนวนแถวผลลัพธ์', rows.length],
-                ['ผลรวมจำนวนในตาราง', total],
+                ['รวมผู้เรียนทั้งหมด (ไม่ซ้ำ)', total],
             ],
         },
     ];

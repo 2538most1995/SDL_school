@@ -37,13 +37,17 @@ import {
 } from './registrationStatisticsExport';
 import {
     buildStatisticsWorkspaceSheets,
+    categoriesForOrientation,
+    createDefaultAxisConfiguration,
     genericPayloadToStatisticRows,
     registrationPayloadsToStatisticRows,
     reportById,
     statisticCategories,
     statisticReports,
+    summarizeStatisticRows,
     supportedCategoryKeys,
     type GenericReportPayload,
+    type StatisticAxisConfiguration,
     type StatisticOrientation,
     type StatisticReportDefinition,
     type StatisticReportId,
@@ -119,29 +123,51 @@ function InformationCard({ label, value, detail, icon: Icon, tone }: {
     </article>;
 }
 
-function HorizontalResultTable({ rows }: { rows: StatisticResultRow[] }) {
+function ResultInformationSummary({ rows, sourceTotal }: { rows: StatisticResultRow[]; sourceTotal: number }) {
+    const summary = summarizeStatisticRows(rows, sourceTotal);
+    return <aside aria-label="สรุปสารสนเทศท้ายตาราง" className="mt-4 overflow-hidden rounded-2xl border border-brand-200 bg-gradient-to-br from-brand-50 via-white to-sky-50">
+        <div className="flex flex-col gap-1 border-b border-brand-100 px-4 py-3 sm:flex-row sm:items-center sm:justify-between">
+            <h3 className="flex items-center gap-2 text-sm font-black text-brand-950"><ChartPieSlice size={19} weight="duotone" />สรุปสารสนเทศท้ายตาราง</h3>
+            <p className="text-xs text-slate-500">ยอดรวมอ้างอิงผู้เรียนไม่ซ้ำจากข้อมูลต้นทาง</p>
+        </div>
+        <div className="grid gap-px bg-brand-100 sm:grid-cols-2 xl:grid-cols-4">
+            <div className="bg-white/90 px-4 py-3"><p className="text-xs font-bold text-slate-500">รวมทั้งหมด</p><p className="mt-1 text-2xl font-black text-brand-800">{summary.sourceTotal.toLocaleString('th-TH')} <span className="text-sm">คน</span></p></div>
+            <div className="bg-white/90 px-4 py-3"><p className="text-xs font-bold text-slate-500">ประเภทการจำแนก</p><p className="mt-1 text-2xl font-black text-slate-950">{summary.classificationCount.toLocaleString('th-TH')} <span className="text-sm">มิติ</span></p></div>
+            <div className="bg-white/90 px-4 py-3"><p className="text-xs font-bold text-slate-500">หมวดข้อมูลที่แสดง</p><p className="mt-1 text-2xl font-black text-slate-950">{summary.categoryCount.toLocaleString('th-TH')} <span className="text-sm">รายการ</span></p></div>
+            <div className="bg-white/90 px-4 py-3"><p className="text-xs font-bold text-slate-500">ค่าสูงสุด</p><p className="mt-1 truncate text-lg font-black text-emerald-700">{summary.maximum ? `${summary.maximum.label} ${summary.maximum.count.toLocaleString('th-TH')} คน` : '-'}</p></div>
+        </div>
+    </aside>;
+}
+
+function HorizontalResultTable({ rows, sourceTotal }: { rows: StatisticResultRow[]; sourceTotal: number }) {
     const groups = Array.from(new Set(rows.map((row) => row.classification))).map((classification) => ({
         classification,
         rows: rows.filter((row) => row.classification === classification),
     }));
-    if (rows.length === 0) return <ResultTable rows={rows} page={1} onPageChange={() => undefined} />;
+    if (rows.length === 0) return <ResultTable rows={rows} sourceTotal={sourceTotal} page={1} onPageChange={() => undefined} />;
     return <div className="space-y-4">
-        {groups.map((group) => <div key={group.classification} className="overflow-x-auto rounded-2xl border border-slate-200">
-            <table className="w-full min-w-max border-collapse text-sm">
-                <thead><tr className="bg-gradient-to-b from-brand-50 to-sky-50 text-brand-950"><th className="sticky left-0 min-w-36 border-b border-r border-slate-200 bg-brand-50 px-4 py-3 text-left">{group.classification}</th>{group.rows.map((row) => <th key={row.id} className="min-w-36 border-b border-r border-slate-200 px-4 py-3 text-center"><span className="block font-black">{row.label}</span>{row.code && <span className="mt-0.5 block font-mono text-[11px] font-medium text-slate-500">{row.code}</span>}</th>)}</tr></thead>
-                <tbody><tr><th className="sticky left-0 border-b border-r border-slate-200 bg-white px-4 py-3 text-left font-black text-slate-700">จำนวน</th>{group.rows.map((row) => <td key={row.id} className="border-b border-r border-slate-100 px-4 py-3 text-center font-black text-slate-950">{row.count.toLocaleString('th-TH')}</td>)}</tr><tr><th className="sticky left-0 border-r border-slate-200 bg-white px-4 py-3 text-left font-black text-slate-700">ร้อยละ</th>{group.rows.map((row) => <td key={row.id} className="border-r border-slate-100 px-4 py-3 text-center font-bold text-brand-700">{row.percentage.toLocaleString('th-TH')}%</td>)}</tr></tbody>
-            </table>
-        </div>)}
-        <p className="text-sm text-slate-500">แสดง {rows.length.toLocaleString('th-TH')} รายการ ในรูปแบบแนวนอน</p>
+        <div className="flex items-center justify-between gap-3 rounded-xl border border-sky-200 bg-sky-50 px-4 py-3"><div><p className="text-sm font-black text-sky-950">รูปแบบแนวนอน</p><p className="text-xs text-sky-700">แต่ละมิติแสดงเป็นตารางคอลัมน์แยกอิสระ</p></div><span className="rounded-full bg-white px-3 py-1 text-xs font-black text-sky-800 shadow-sm">{groups.length} มิติ</span></div>
+        {groups.map((group) => {
+            const groupTotal = group.rows.reduce((sum, row) => sum + row.count, 0);
+            return <div key={group.classification} className="overflow-x-auto rounded-2xl border border-slate-200">
+                <table className="w-full min-w-max border-collapse text-sm">
+                    <thead><tr className="bg-gradient-to-b from-brand-50 to-sky-50 text-brand-950"><th className="sticky left-0 min-w-36 border-b border-r border-slate-200 bg-brand-50 px-4 py-3 text-left">{group.classification}</th>{group.rows.map((row) => <th key={row.id} className="min-w-36 border-b border-r border-slate-200 px-4 py-3 text-center"><span className="block font-black">{row.label}</span>{row.code && row.code !== row.label && <span className="mt-0.5 block font-mono text-[11px] font-medium text-slate-500">{row.code}</span>}</th>)}<th className="min-w-36 border-b border-slate-200 bg-brand-100 px-4 py-3 text-center font-black">รวมทั้งหมด</th></tr></thead>
+                    <tbody><tr><th className="sticky left-0 border-b border-r border-slate-200 bg-white px-4 py-3 text-left font-black text-slate-700">จำนวน</th>{group.rows.map((row) => <td key={row.id} className="border-b border-r border-slate-100 px-4 py-3 text-center font-black text-slate-950">{row.count.toLocaleString('th-TH')}</td>)}<td className="border-b border-slate-200 bg-brand-50 px-4 py-3 text-center font-black text-brand-900">{groupTotal.toLocaleString('th-TH')}</td></tr><tr><th className="sticky left-0 border-r border-slate-200 bg-white px-4 py-3 text-left font-black text-slate-700">ร้อยละ</th>{group.rows.map((row) => <td key={row.id} className="border-r border-slate-100 px-4 py-3 text-center font-bold text-brand-700">{row.percentage.toLocaleString('th-TH')}%</td>)}<td className="bg-brand-50 px-4 py-3 text-center font-black text-brand-900">{groupTotal > 0 ? '100%' : '0%'}</td></tr></tbody>
+                </table>
+            </div>;
+        })}
+        <p className="text-sm text-slate-500">แสดง {rows.length.toLocaleString('th-TH')} หมวดข้อมูล ในรูปแบบแนวนอน</p>
+        <ResultInformationSummary rows={rows} sourceTotal={sourceTotal} />
     </div>;
 }
 
-function ResultTable({ rows, page, onPageChange, showPagination = true, orientation = 'vertical' }: { rows: StatisticResultRow[]; page: number; onPageChange: (page: number) => void; showPagination?: boolean; orientation?: StatisticOrientation }) {
-    if (orientation === 'horizontal') return <HorizontalResultTable rows={rows} />;
+function ResultTable({ rows, sourceTotal, page, onPageChange, showPagination = true, orientation = 'vertical' }: { rows: StatisticResultRow[]; sourceTotal: number; page: number; onPageChange: (page: number) => void; showPagination?: boolean; orientation?: StatisticOrientation }) {
+    if (orientation === 'horizontal') return <HorizontalResultTable rows={rows} sourceTotal={sourceTotal} />;
     const pageCount = Math.max(1, Math.ceil(rows.length / pageSize));
     const visibleRows = showPagination ? rows.slice((page - 1) * pageSize, page * pageSize) : rows;
     return (
         <>
+            {rows.length > 0 && <div className="mb-4 flex items-center justify-between gap-3 rounded-xl border border-indigo-200 bg-indigo-50 px-4 py-3"><div><p className="text-sm font-black text-indigo-950">รูปแบบแนวตั้ง</p><p className="text-xs text-indigo-700">แต่ละหมวดเรียงเป็นแถว อ่านรายละเอียดและเปรียบเทียบลงด้านล่าง</p></div><span className="rounded-full bg-white px-3 py-1 text-xs font-black text-indigo-800 shadow-sm">{new Set(rows.map((row) => row.classification)).size} มิติ</span></div>}
             <div className="overflow-x-auto rounded-2xl border border-slate-200">
                 <table className="w-full min-w-[880px] border-collapse text-sm">
                     <thead><tr className="bg-gradient-to-b from-brand-50 to-sky-50 text-brand-950">
@@ -164,6 +190,7 @@ function ResultTable({ rows, page, onPageChange, showPagination = true, orientat
                             <td className="border-b border-slate-100 px-4 py-3 text-xs text-slate-500">{row.note || '-'}</td>
                         </tr>
                     ))}</tbody>
+                    {rows.length > 0 && <tfoot><tr className="bg-brand-50 text-brand-950"><th colSpan={4} className="border-t border-r border-brand-200 px-4 py-3 text-right font-black">รวมทั้งหมด (ผู้เรียนไม่ซ้ำ)</th><td className="border-t border-r border-brand-200 px-4 py-3 text-right font-black">{sourceTotal.toLocaleString('th-TH')}</td><td className="border-t border-r border-brand-200 px-4 py-3 text-right font-black">{sourceTotal > 0 ? '100%' : '0%'}</td><td className="border-t border-brand-200 px-4 py-3 text-xs font-bold text-brand-700">สรุปจากข้อมูลต้นทาง</td></tr></tfoot>}
                 </table>
                 {rows.length === 0 && <div className="grid min-h-64 place-items-center bg-white px-6 py-12 text-center"><div><span className="mx-auto grid size-16 place-items-center rounded-2xl bg-slate-100 text-slate-400"><Rows size={30} weight="duotone" /></span><h3 className="mt-4 font-black text-slate-800">ยังไม่มีข้อมูลในตาราง</h3><p className="mt-1 text-sm text-slate-500">เลือกเงื่อนไขและกด “ประมวลผล” เพื่อแสดงข้อมูล</p></div></div>}
             </div>
@@ -175,36 +202,47 @@ function ResultTable({ rows, page, onPageChange, showPagination = true, orientat
                     <button type="button" aria-label="หน้าถัดไป" disabled={page >= pageCount} onClick={() => onPageChange(page + 1)} className="grid size-10 place-items-center rounded-xl border border-slate-200 bg-white text-slate-600 transition-[transform,background-color] duration-150 hover:bg-slate-50 active:scale-[0.97] disabled:cursor-not-allowed disabled:text-slate-300"><CaretRight size={18} weight="bold" /></button>
                 </div>
             </div>}
+            {rows.length > 0 && <ResultInformationSummary rows={rows} sourceTotal={sourceTotal} />}
         </>
     );
 }
 
-function ReportPreviewDialog({ report, district, term, rows, orientation, onClose }: { report: StatisticReportDefinition; district: string; term: string; rows: StatisticResultRow[]; orientation: StatisticOrientation; onClose: () => void }) {
+function ReportPreviewDialog({ report, district, term, rows, sourceTotal, orientation, onClose }: { report: StatisticReportDefinition; district: string; term: string; rows: StatisticResultRow[]; sourceTotal: number; orientation: StatisticOrientation; onClose: () => void }) {
     return <div className="fixed inset-0 z-[70] flex items-center justify-center bg-slate-950/55 p-4 backdrop-blur-[2px]" role="presentation" onMouseDown={(event) => { if (event.target === event.currentTarget) onClose(); }}>
         <section role="dialog" aria-modal="true" aria-labelledby="report-preview-title" className="statistics-print-surface max-h-[calc(100dvh-2rem)] w-full max-w-6xl overflow-y-auto rounded-[24px] border border-white/70 bg-white shadow-[0_30px_100px_rgb(2_6_23_/_0.35)]">
             <header className="sticky top-0 z-10 flex items-start justify-between gap-4 border-b border-slate-200 bg-white/95 px-5 py-4 backdrop-blur sm:px-7"><div><p className="text-xs font-black uppercase tracking-[0.15em] text-brand-700">ตัวอย่างก่อนพิมพ์</p><h2 id="report-preview-title" className="mt-1 text-xl font-black text-slate-950">{report.label}</h2><p className="mt-1 text-sm text-slate-500">{district} · ภาคเรียน {term || '-'}</p></div><button type="button" onClick={onClose} className="grid size-10 shrink-0 place-items-center rounded-xl border border-slate-200 text-slate-600 transition-[transform,background-color] duration-150 hover:bg-slate-100 active:scale-[0.97]" aria-label="ปิดตัวอย่าง"><X size={20} weight="bold" /></button></header>
-            <div className="p-5 sm:p-7"><ResultTable rows={rows} page={1} onPageChange={() => undefined} showPagination={false} orientation={orientation} /><div className="mt-5 flex justify-end gap-2 print:hidden"><ActionButton onClick={onClose}>ปิด</ActionButton><ActionButton tone="primary" onClick={() => window.print()}><Printer size={18} weight="bold" />พิมพ์รายงาน</ActionButton></div></div>
+            <div className="p-5 sm:p-7"><ResultTable rows={rows} sourceTotal={sourceTotal} page={1} onPageChange={() => undefined} showPagination={false} orientation={orientation} /><div className="mt-5 flex justify-end gap-2 print:hidden"><ActionButton onClick={onClose}>ปิด</ActionButton><ActionButton tone="primary" onClick={() => window.print()}><Printer size={18} weight="bold" />พิมพ์รายงาน</ActionButton></div></div>
         </section>
     </div>;
 }
 
-function ReportFormatDialog({ report, initialCategories, initialOrientation, onSave, onClose }: {
+function ReportFormatDialog({ report, initialConfiguration, initialOrientation, onSave, onClose }: {
     report: StatisticReportDefinition;
-    initialCategories: CategoryKey[];
+    initialConfiguration: StatisticAxisConfiguration;
     initialOrientation: StatisticOrientation;
-    onSave: (categories: CategoryKey[], orientation: StatisticOrientation) => void;
+    onSave: (configuration: StatisticAxisConfiguration, orientation: StatisticOrientation) => void;
     onClose: () => void;
 }) {
     const [orientation, setOrientation] = useState(initialOrientation);
-    const [selected, setSelected] = useState<CategoryKey[]>(initialCategories);
+    const [configuration, setConfiguration] = useState<StatisticAxisConfiguration>({
+        vertical: [...initialConfiguration.vertical],
+        horizontal: [...initialConfiguration.horizontal],
+    });
     const [candidate, setCandidate] = useState<CategoryKey>('level');
     const availableCategories = report.source === 'registration-statistics'
         ? statisticCategories
         : statisticCategories.map((category) => ({ ...category, supported: category.key === 'level' || category.key === 'group' }));
     const candidateDefinition = availableCategories.find((category) => category.key === candidate);
+    const selected = configuration[orientation];
+    const updateSelected = (updater: (items: CategoryKey[]) => CategoryKey[]) => {
+        setConfiguration((current) => ({
+            ...current,
+            [orientation]: updater(current[orientation]),
+        }));
+    };
     const addCategory = () => {
         if (!candidateDefinition?.supported || selected.includes(candidate) || selected.length >= 3) return;
-        setSelected((current) => [...current, candidate]);
+        updateSelected((current) => [...current, candidate]);
     };
     return <div className="fixed inset-0 z-[70] flex items-center justify-center bg-slate-950/55 p-4 backdrop-blur-[2px]" role="presentation" onMouseDown={(event) => { if (event.target === event.currentTarget) onClose(); }}>
         <section role="dialog" aria-modal="true" aria-labelledby="format-dialog-title" className="max-h-[calc(100dvh-2rem)] w-full max-w-5xl overflow-y-auto rounded-[24px] border border-white/70 bg-white shadow-[0_30px_100px_rgb(2_6_23_/_0.35)]">
@@ -212,12 +250,12 @@ function ReportFormatDialog({ report, initialCategories, initialOrientation, onS
             <div className="space-y-5 p-5 sm:p-7">
                 <div className="grid gap-3 sm:grid-cols-[140px_minmax(0,1fr)] sm:items-center"><span className="text-sm font-black text-slate-700">รายงาน</span><div className="rounded-xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm font-bold text-slate-800">{report.id}. {report.label}</div></div>
                 <div className="grid gap-4 lg:grid-cols-[1fr_1.2fr_1fr]">
-                    <section className="rounded-2xl border border-slate-200 bg-slate-50/60 p-4"><h3 className="font-black text-slate-900">รูปแบบการจำแนกข้อมูล</h3><div className="mt-4 space-y-3"><label className="flex cursor-pointer items-center gap-3 text-sm font-bold text-slate-700"><input type="radio" name="orientation" value="vertical" checked={orientation === 'vertical'} onChange={() => setOrientation('vertical')} className="size-4 accent-blue-600" />จำแนกประเภทแนวตั้ง</label><label className="flex cursor-pointer items-center gap-3 text-sm font-bold text-slate-700"><input type="radio" name="orientation" value="horizontal" checked={orientation === 'horizontal'} onChange={() => setOrientation('horizontal')} className="size-4 accent-blue-600" />จำแนกประเภทแนวนอน</label></div><div className="mt-6 border-t border-slate-200 pt-4"><p className="text-xs font-black text-slate-600">ตัวอย่างรูปแบบรายงาน</p><div className="mt-3 overflow-hidden rounded-xl border border-brand-200 bg-white">{Array.from({ length: 5 }, (_, row) => <div key={row} className={`grid ${orientation === 'vertical' ? 'grid-cols-[86px_repeat(4,1fr)]' : 'grid-cols-5'}`}>{Array.from({ length: 5 }, (_, col) => <span key={col} className={`h-8 border-b border-r border-brand-100 ${orientation === 'vertical' && col === 0 ? 'bg-brand-100' : orientation === 'horizontal' && row === 0 ? 'bg-brand-100' : ''}`} />)}</div>)}</div></div></section>
-                    <section className="rounded-2xl border border-slate-200 bg-white p-4"><h3 className="font-black text-slate-900">จำแนกประเภทตาม{orientation === 'vertical' ? 'แนวตั้ง' : 'แนวนอน'}</h3><ol className="mt-4 min-h-56 space-y-2 rounded-xl border border-slate-200 bg-slate-50 p-2">{selected.map((key, index) => { const category = statisticCategories.find((item) => item.key === key); return <li key={key} className="flex items-center justify-between gap-3 rounded-lg bg-brand-700 px-3 py-2.5 text-sm font-bold text-white"><span>{index + 1}. {category?.label}</span><button type="button" onClick={() => setSelected((items) => items.filter((item) => item !== key))} className="grid size-7 place-items-center rounded-lg bg-white/10 hover:bg-white/20" aria-label={`ลบ ${category?.label}`}><X size={15} weight="bold" /></button></li>; })}{selected.length === 0 && <li className="grid min-h-48 place-items-center px-4 text-center text-sm text-slate-400">เพิ่มประเภทข้อมูลอย่างน้อย 1 รายการ</li>}</ol></section>
-                    <section className="rounded-2xl border border-slate-200 bg-slate-50/60 p-4"><label className="grid gap-2 text-sm font-black text-slate-700">ประเภทข้อมูล<select value={candidate} onChange={(event) => setCandidate(event.target.value as CategoryKey)} className={inputClassName()}>{availableCategories.map((category) => <option key={category.key} value={category.key} disabled={!category.supported}>{category.order}. {category.label}{category.supported ? '' : ' (รอข้อมูลต้นทาง)'}</option>)}</select></label><div className="mt-4 grid gap-2"><ActionButton onClick={addCategory} disabled={!candidateDefinition?.supported || selected.includes(candidate) || selected.length >= 3}><SlidersHorizontal size={18} weight="bold" />เพิ่มประเภทข้อมูล</ActionButton><ActionButton tone="danger" disabled={selected.length === 0} onClick={() => setSelected((items) => items.slice(0, -1))}><Trash size={18} weight="bold" />ลบรายการล่าสุด</ActionButton><ActionButton disabled={selected.length === 0} onClick={() => setSelected([])}><Trash size={18} weight="bold" />ลบทั้งหมด</ActionButton></div><p className="mt-4 text-xs leading-5 text-slate-500">เพิ่มได้สูงสุด 3 มิติ ระบบจะประมวลผลแต่ละมิติแยกกันเพื่อไม่ให้จำนวนผู้เรียนถูกนับซ้ำข้ามประเภท</p></section>
+                    <section className="rounded-2xl border border-slate-200 bg-slate-50/60 p-4"><h3 className="font-black text-slate-900">รูปแบบการจำแนกข้อมูล</h3><div className="mt-4 space-y-3"><label className={`flex cursor-pointer items-center justify-between gap-3 rounded-xl border px-3 py-3 text-sm font-bold transition-[border-color,background-color] duration-150 ${orientation === 'vertical' ? 'border-indigo-300 bg-indigo-50 text-indigo-950' : 'border-slate-200 bg-white text-slate-700'}`}><span className="flex items-center gap-3"><input type="radio" name="orientation" value="vertical" checked={orientation === 'vertical'} onChange={() => setOrientation('vertical')} className="size-4 accent-indigo-600" />จำแนกประเภทแนวตั้ง</span><span className="rounded-full bg-white px-2 py-0.5 text-xs text-indigo-700 shadow-sm">{configuration.vertical.length}</span></label><label className={`flex cursor-pointer items-center justify-between gap-3 rounded-xl border px-3 py-3 text-sm font-bold transition-[border-color,background-color] duration-150 ${orientation === 'horizontal' ? 'border-sky-300 bg-sky-50 text-sky-950' : 'border-slate-200 bg-white text-slate-700'}`}><span className="flex items-center gap-3"><input type="radio" name="orientation" value="horizontal" checked={orientation === 'horizontal'} onChange={() => setOrientation('horizontal')} className="size-4 accent-sky-600" />จำแนกประเภทแนวนอน</span><span className="rounded-full bg-white px-2 py-0.5 text-xs text-sky-700 shadow-sm">{configuration.horizontal.length}</span></label></div><p className="mt-3 text-xs leading-5 text-slate-500">รายการแนวตั้งและแนวนอนจัดเก็บแยกกัน การเปลี่ยนรูปแบบจะไม่คัดลอกหรือแก้ไขอีกด้าน</p><div className="mt-5 border-t border-slate-200 pt-4"><p className="text-xs font-black text-slate-600">ตัวอย่างรูปแบบรายงาน</p><div className="mt-3 overflow-hidden rounded-xl border border-brand-200 bg-white">{Array.from({ length: 5 }, (_, row) => <div key={row} className={`grid ${orientation === 'vertical' ? 'grid-cols-[86px_repeat(4,1fr)]' : 'grid-cols-5'}`}>{Array.from({ length: 5 }, (_, col) => <span key={col} className={`h-8 border-b border-r border-brand-100 ${orientation === 'vertical' && col === 0 ? 'bg-indigo-100' : orientation === 'horizontal' && row === 0 ? 'bg-sky-100' : ''}`} />)}</div>)}</div></div></section>
+                    <section className="rounded-2xl border border-slate-200 bg-white p-4"><div className="flex items-center justify-between gap-3"><h3 className="font-black text-slate-900">ข้อมูล{orientation === 'vertical' ? 'แนวตั้ง' : 'แนวนอน'}</h3><span className={`rounded-full px-2.5 py-1 text-xs font-black ${orientation === 'vertical' ? 'bg-indigo-50 text-indigo-700' : 'bg-sky-50 text-sky-700'}`}>ตั้งค่าแยกอิสระ</span></div><ol className="mt-4 min-h-56 space-y-2 rounded-xl border border-slate-200 bg-slate-50 p-2">{selected.map((key, index) => { const category = statisticCategories.find((item) => item.key === key); return <li key={key} className={`flex items-center justify-between gap-3 rounded-lg px-3 py-2.5 text-sm font-bold text-white ${orientation === 'vertical' ? 'bg-indigo-700' : 'bg-sky-700'}`}><span>{index + 1}. {category?.label}</span><button type="button" onClick={() => updateSelected((items) => items.filter((item) => item !== key))} className="grid size-7 place-items-center rounded-lg bg-white/10 transition-colors hover:bg-white/20" aria-label={`ลบ ${category?.label} จาก${orientation === 'vertical' ? 'แนวตั้ง' : 'แนวนอน'}`}><X size={15} weight="bold" /></button></li>; })}{selected.length === 0 && <li className="grid min-h-48 place-items-center px-4 text-center text-sm text-slate-400">เพิ่มประเภทข้อมูลสำหรับ{orientation === 'vertical' ? 'แนวตั้ง' : 'แนวนอน'}อย่างน้อย 1 รายการ</li>}</ol></section>
+                    <section className="rounded-2xl border border-slate-200 bg-slate-50/60 p-4"><label className="grid gap-2 text-sm font-black text-slate-700">ประเภทข้อมูล<select value={candidate} onChange={(event) => setCandidate(event.target.value as CategoryKey)} className={inputClassName()}>{availableCategories.map((category) => <option key={category.key} value={category.key} disabled={!category.supported}>{category.order}. {category.label}{category.supported ? '' : ' (รอข้อมูลต้นทาง)'}</option>)}</select></label><div className="mt-4 grid gap-2"><ActionButton onClick={addCategory} disabled={!candidateDefinition?.supported || selected.includes(candidate) || selected.length >= 3}><SlidersHorizontal size={18} weight="bold" />เพิ่มใน{orientation === 'vertical' ? 'แนวตั้ง' : 'แนวนอน'}</ActionButton><ActionButton tone="danger" disabled={selected.length === 0} onClick={() => updateSelected((items) => items.slice(0, -1))}><Trash size={18} weight="bold" />ลบรายการล่าสุด</ActionButton><ActionButton disabled={selected.length === 0} onClick={() => updateSelected(() => [])}><Trash size={18} weight="bold" />ลบทั้งหมดเฉพาะด้านนี้</ActionButton></div><p className="mt-4 text-xs leading-5 text-slate-500">แต่ละด้านเพิ่มได้สูงสุด 3 มิติ ระบบประมวลผลเฉพาะรายการของรูปแบบที่เลือกและนับยอดรวมผู้เรียนไม่ซ้ำ</p></section>
                 </div>
             </div>
-            <footer className="flex flex-col-reverse gap-2 border-t border-slate-200 bg-slate-50 px-5 py-4 sm:flex-row sm:justify-end sm:px-7"><ActionButton tone="danger" onClick={onClose}><SignOut size={18} weight="bold" />ออก</ActionButton><ActionButton tone="primary" disabled={selected.length === 0} onClick={() => onSave(selected, orientation)}><FloppyDisk size={18} weight="bold" />บันทึก</ActionButton></footer>
+            <footer className="flex flex-col-reverse gap-2 border-t border-slate-200 bg-slate-50 px-5 py-4 sm:flex-row sm:items-center sm:justify-between sm:px-7"><p className="text-xs text-slate-500">แนวตั้ง {configuration.vertical.length} มิติ · แนวนอน {configuration.horizontal.length} มิติ{configuration.vertical.length === 0 || configuration.horizontal.length === 0 ? ' · กรุณาเลือกอย่างน้อยด้านละ 1 มิติ' : ''}</p><div className="flex flex-col-reverse gap-2 sm:flex-row"><ActionButton tone="danger" onClick={onClose}><SignOut size={18} weight="bold" />ออก</ActionButton><ActionButton tone="primary" disabled={configuration.vertical.length === 0 || configuration.horizontal.length === 0} onClick={() => onSave(configuration, orientation)}><FloppyDisk size={18} weight="bold" />บันทึก</ActionButton></div></footer>
         </section>
     </div>;
 }
@@ -248,7 +286,7 @@ export function StatisticsOverviewPage() {
     const [termStart, setTermStart] = useState('');
     const [termEnd, setTermEnd] = useState('');
     const [displayScope, setDisplayScope] = useState<DisplayScope>('district');
-    const [categories, setCategories] = useState<CategoryKey[]>(['level']);
+    const [axisConfiguration, setAxisConfiguration] = useState<StatisticAxisConfiguration>(() => createDefaultAxisConfiguration());
     const [orientation, setOrientation] = useState<StatisticOrientation>('vertical');
     const [request, setRequest] = useState<WorkspaceRequest | null>(null);
     const [formatOpen, setFormatOpen] = useState(false);
@@ -270,12 +308,13 @@ export function StatisticsOverviewPage() {
     const results = workspace.data?.rows ?? [];
     const totalStudents = portal.data?.analytics.totals.students ?? 0;
     const resultTotal = workspace.data?.sourceTotal ?? 0;
-    const formatSummary = categories.map((key) => statisticCategories.find((category) => category.key === key)?.label).filter(Boolean).join(' · ');
+    const activeCategories = categoriesForOrientation(axisConfiguration, orientation);
+    const formatSummary = activeCategories.map((key) => statisticCategories.find((category) => category.key === key)?.label).filter(Boolean).join(' · ');
     const canExport = canExportRegistrationStatistics(role);
     const processedReport = request?.report ?? selectedReport;
     const hasProcessedResult = request !== null && workspace.isSuccess;
     const clearProcessedResult = () => { setRequest(null); setPage(1); setValidationMessage(''); };
-    const changeReport = (nextId: StatisticReportId) => { setReportId(nextId); setCategories(['level']); clearProcessedResult(); };
+    const changeReport = (nextId: StatisticReportId) => { setReportId(nextId); setAxisConfiguration(createDefaultAxisConfiguration()); clearProcessedResult(); };
 
     const processReport = () => {
         setValidationMessage('');
@@ -284,18 +323,28 @@ export function StatisticsOverviewPage() {
         if (periodType !== 'semester') { setValidationMessage('ระบบข้อมูลปัจจุบันรองรับการประมวลผลทีละภาคเรียน กรุณาเลือก “ภาคเรียน”'); return; }
         if (termStart !== termEnd) { setValidationMessage('ระบบข้อมูลปัจจุบันรองรับครั้งละ 1 ภาคเรียน กรุณากำหนดภาคเรียนเริ่มต้นและสิ้นสุดให้ตรงกัน'); return; }
         if (!/^([12])\/25\d{2}$/.test(termStart)) { setValidationMessage('กรุณาระบุภาคเรียนในรูปแบบ 1/2569 หรือ 2/2569'); return; }
-        const usableCategories = supportedCategoryKeys(categories);
+        if (activeCategories.length === 0) { setValidationMessage(`กรุณาเลือกมิติข้อมูล${orientation === 'vertical' ? 'แนวตั้ง' : 'แนวนอน'}อย่างน้อย 1 รายการ`); return; }
+        const usableCategories = supportedCategoryKeys(activeCategories);
         setRequest({ report: selectedReport, term: termStart, categories: usableCategories.length > 0 ? usableCategories : ['level'], orientation });
         setPage(1);
     };
 
     const exportExcel = async () => {
         if (!request || results.length === 0 || !canExport) return;
-        try { const { downloadExcel } = await import('../../lib/excel'); downloadExcel(`รายงานสถิติ-${processedReport.id}-${request.term}`, buildStatisticsWorkspaceSheets(processedReport, request.term, districtName, results)); showSuccessAlert('จัดทำไฟล์ Excel เรียบร้อยแล้ว'); }
+        try {
+            const { downloadExcel } = await import('../../lib/excel');
+            const categoryLabels = request.categories.map((key) => statisticCategories.find((category) => category.key === key)?.label ?? key);
+            downloadExcel(`รายงานสถิติ-${processedReport.id}-${request.term}`, buildStatisticsWorkspaceSheets(processedReport, request.term, districtName, results, {
+                sourceTotal: resultTotal,
+                orientation: request.orientation,
+                categoryLabels,
+            }));
+            showSuccessAlert('จัดทำไฟล์ Excel เรียบร้อยแล้ว');
+        }
         catch (error) { showErrorAlert(error instanceof Error ? error.message : 'ไม่สามารถจัดทำไฟล์ Excel ได้'); }
     };
 
-    const resultSummary = useMemo(() => { const maximum = results.reduce<StatisticResultRow | null>((largest, row) => !largest || row.count > largest.count ? row : largest, null); return { maximum, classifications: new Set(results.map((row) => row.classification)).size }; }, [results]);
+    const resultSummary = useMemo(() => summarizeStatisticRows(results, resultTotal), [results, resultTotal]);
     if (portal.isPending) return <div className="space-y-5"><PageHeader category="สถิติ" title="รายงานสถิติ" description="ค้นหา ประมวลผล และส่งออกรายงานสถิติทางการศึกษา" icon={ChartPieSlice} /><QuerySkeleton rows={7} /></div>;
     if (portal.isError) return <div className="space-y-5"><PageHeader category="สถิติ" title="รายงานสถิติ" description="ค้นหา ประมวลผล และส่งออกรายงานสถิติทางการศึกษา" icon={ChartPieSlice} /><QueryError onRetry={() => portal.refetch()} /></div>;
 
@@ -321,8 +370,8 @@ export function StatisticsOverviewPage() {
             </div>
         </section>
         {validationMessage && <div role="alert" className="flex items-start gap-3 rounded-2xl border border-amber-200 bg-amber-50 px-4 py-4 text-sm text-amber-950"><Info size={20} weight="fill" className="mt-0.5 shrink-0 text-amber-600" /><div><strong className="font-black">ยังประมวลผลรายงานนี้ไม่ได้</strong><p className="mt-0.5 leading-6">{validationMessage}</p></div></div>}
-        <section aria-labelledby="statistics-result-title" className="rounded-[24px] border border-slate-200 bg-white p-5 shadow-sm shadow-slate-200/60 lg:p-6"><div className="mb-5 flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between"><div><h2 id="statistics-result-title" className="flex items-center gap-2 text-lg font-black text-slate-950"><Rows size={21} className="text-brand-700" weight="duotone" />ผลการประมวลผล</h2><p className="mt-1 text-sm text-slate-500">{request ? `${processedReport.label} · ${districtName} · ภาคเรียน ${workspace.data?.selectedTerm ?? request.term}` : 'ยังไม่มีข้อมูล กรุณาเลือกเงื่อนไขและกดปุ่มประมวลผล'}</p></div>{hasProcessedResult && results.length > 0 && <div className="flex flex-wrap gap-2 text-xs font-bold"><span className="rounded-full bg-brand-50 px-3 py-1.5 text-brand-800">{resultSummary.classifications} ประเภทการจำแนก</span><span className="rounded-full bg-emerald-50 px-3 py-1.5 text-emerald-800">สูงสุด {resultSummary.maximum?.label} {resultSummary.maximum?.count.toLocaleString('th-TH')} รายการ</span></div>}</div>{workspace.isFetching && <QuerySkeleton rows={6} />}{workspace.isError && <QueryError onRetry={() => workspace.refetch()} />}{!workspace.isFetching && !workspace.isError && <ResultTable rows={hasProcessedResult ? results : []} page={page} onPageChange={setPage} orientation={request?.orientation ?? orientation} />}</section>
-        {formatOpen && <ReportFormatDialog report={selectedReport} initialCategories={categories} initialOrientation={orientation} onClose={() => setFormatOpen(false)} onSave={(nextCategories, nextOrientation) => { setCategories(nextCategories); setOrientation(nextOrientation); setFormatOpen(false); clearProcessedResult(); showSuccessAlert('บันทึกรูปแบบรายงานเรียบร้อยแล้ว'); }} />}
-        {previewOpen && request && <ReportPreviewDialog report={processedReport} district={districtName} term={workspace.data?.selectedTerm ?? request.term} rows={results} orientation={request.orientation} onClose={() => setPreviewOpen(false)} />}
+        <section aria-labelledby="statistics-result-title" className="rounded-[24px] border border-slate-200 bg-white p-5 shadow-sm shadow-slate-200/60 lg:p-6"><div className="mb-5 flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between"><div><h2 id="statistics-result-title" className="flex items-center gap-2 text-lg font-black text-slate-950"><Rows size={21} className="text-brand-700" weight="duotone" />ผลการประมวลผล</h2><p className="mt-1 text-sm text-slate-500">{request ? `${processedReport.label} · ${districtName} · ภาคเรียน ${workspace.data?.selectedTerm ?? request.term}` : 'ยังไม่มีข้อมูล กรุณาเลือกเงื่อนไขและกดปุ่มประมวลผล'}</p></div>{hasProcessedResult && results.length > 0 && <div className="flex flex-wrap gap-2 text-xs font-bold"><span className="rounded-full bg-brand-50 px-3 py-1.5 text-brand-800">{resultSummary.classificationCount} ประเภทการจำแนก</span><span className="rounded-full bg-emerald-50 px-3 py-1.5 text-emerald-800">สูงสุด {resultSummary.maximum?.label} {resultSummary.maximum?.count.toLocaleString('th-TH')} รายการ</span></div>}</div>{workspace.isFetching && <QuerySkeleton rows={6} />}{workspace.isError && <QueryError onRetry={() => workspace.refetch()} />}{!workspace.isFetching && !workspace.isError && <ResultTable rows={hasProcessedResult ? results : []} sourceTotal={hasProcessedResult ? resultTotal : 0} page={page} onPageChange={setPage} orientation={request?.orientation ?? orientation} />}</section>
+        {formatOpen && <ReportFormatDialog report={selectedReport} initialConfiguration={axisConfiguration} initialOrientation={orientation} onClose={() => setFormatOpen(false)} onSave={(nextConfiguration, nextOrientation) => { setAxisConfiguration(nextConfiguration); setOrientation(nextOrientation); setFormatOpen(false); clearProcessedResult(); showSuccessAlert('บันทึกรูปแบบแนวตั้งและแนวนอนแยกกันเรียบร้อยแล้ว'); }} />}
+        {previewOpen && request && <ReportPreviewDialog report={processedReport} district={districtName} term={workspace.data?.selectedTerm ?? request.term} rows={results} sourceTotal={resultTotal} orientation={request.orientation} onClose={() => setPreviewOpen(false)} />}
     </div>;
 }

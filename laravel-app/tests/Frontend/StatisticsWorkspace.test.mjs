@@ -4,11 +4,14 @@ import { strFromU8, unzipSync } from 'fflate';
 import { createExcelFileBytes } from '../../resources/js/lib/excel.ts';
 import {
     buildStatisticsWorkspaceSheets,
+    categoriesForOrientation,
+    createDefaultAxisConfiguration,
     genericPayloadToStatisticRows,
     registrationPayloadsToStatisticRows,
     reportById,
     statisticCategories,
     statisticReports,
+    summarizeStatisticRows,
 } from '../../resources/js/features/reports/statisticsWorkspace.ts';
 
 test('statistics workspace exposes all 15 requested report choices without inventing unsupported sources', () => {
@@ -27,6 +30,18 @@ test('report format catalog keeps the 10 requested dimensions and marks missing 
     ]);
     assert.equal(statisticCategories.find((item) => item.key === 'learning_method').supported, false);
     assert.equal(statisticCategories.find((item) => item.key === 'disability').supported, false);
+});
+
+test('vertical and horizontal category configurations remain independent', () => {
+    const configuration = createDefaultAxisConfiguration();
+    configuration.vertical.push('gender');
+
+    assert.deepEqual(categoriesForOrientation(configuration, 'vertical'), ['level', 'gender']);
+    assert.deepEqual(categoriesForOrientation(configuration, 'horizontal'), ['group']);
+
+    const horizontal = categoriesForOrientation(configuration, 'horizontal');
+    horizontal.push('age');
+    assert.deepEqual(configuration.horizontal, ['group']);
 });
 
 test('generic student lists are aggregated by real level and group values', () => {
@@ -58,12 +73,23 @@ test('registration dimensions remain separate and export as a valid workbook', (
         { ...base, selected_category: 'level', selected_category_label: 'ระดับชั้น', items: [{ key: '1', code: '1', label: 'ประถมศึกษา', count: 4, percentage: 100 }] },
         { ...base, selected_category: 'gender', selected_category_label: 'เพศ', items: [{ key: '2', code: '2', label: 'หญิง', count: 4, percentage: 100 }] },
     ]);
-    const files = unzipSync(createExcelFileBytes(buildStatisticsWorkspaceSheets(reportById(3), '1/2569', 'อำเภอเสนา', rows)));
+    const summary = summarizeStatisticRows(rows, 4);
+    const files = unzipSync(createExcelFileBytes(buildStatisticsWorkspaceSheets(reportById(3), '1/2569', 'อำเภอเสนา', rows, {
+        sourceTotal: summary.sourceTotal,
+        orientation: 'horizontal',
+        categoryLabels: ['ระดับชั้น', 'เพศ'],
+    })));
     const reportXml = strFromU8(files['xl/worksheets/sheet1.xml']);
     const conditionXml = strFromU8(files['xl/worksheets/sheet2.xml']);
 
     assert.equal(rows.length, 2);
+    assert.equal(summary.sourceTotal, 4);
+    assert.equal(summary.classificationCount, 2);
+    assert.equal(summary.categoryCount, 2);
     assert.match(reportXml, /ประถมศึกษา/);
     assert.match(reportXml, /หญิง/);
+    assert.match(reportXml, /รวมทั้งหมด/);
     assert.match(conditionXml, /อำเภอเสนา/);
+    assert.match(conditionXml, /แนวนอน/);
+    assert.match(conditionXml, /รวมผู้เรียนทั้งหมด/);
 });
