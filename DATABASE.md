@@ -24,6 +24,10 @@ Laravel users table มี `username`, `first_name`, `last_name`, `student_code`
 
 ประกาศป๊อปอัปสำหรับนักศึกษา เก็บ `district_id`, ผู้สร้าง `created_by`, หัวข้อ, ข้อความ plain text, ชื่อ/URL ปุ่มแบบ optional, สถานะ `is_active` และ timestamps. มี index (`district_id`, `is_active`, `updated_at`) สำหรับอ่านประกาศล่าสุดของนักศึกษาและรายการจัดการ ผู้ดูแลอำเภอเปิดใช้งานได้ครั้งละหนึ่งรายการโดย transaction ล็อกแถวอำเภอก่อนปิดรายการเดิมและเปิดรายการใหม่; ทุกการสร้าง แก้ไข และเปลี่ยนสถานะมี audit. คอลัมน์อ้างอิงใช้ index โดยไม่เพิ่ม foreign key เพื่อรองรับ deployment ที่รับช่วงตาราง `districts`/`users` ซึ่งชนิด primary key อาจเป็น `INT` หรือ `BIGINT` ต่างกัน.
 
+### `statistics_report_preferences`
+
+เก็บรูปแบบรายงานสถิติแยกตาม `user_id`, `district_id` และ `report_key` โดยมี JSON `vertical_categories`/`horizontal_categories`, ด้านที่กำลังตั้งค่า `active_orientation` และ timestamps; unique (`user_id`, `district_id`, `report_key`) ป้องกันค่าซ้ำและไม่ให้ค่าของผู้ใช้ อำเภอ หรือรายงานหนึ่งไหลไปอีกรายงานหนึ่ง. API รับ user จาก session และ district จาก middleware เท่านั้น ไม่รับ scope เหล่านี้จาก request body.
+
 ### Student canonical domain
 
 - `students`: district/import batch, student code, hashed/encrypted citizen ID, name, education level, group, enrollment/latest term, status และ source payload; UNIQUE (`district_id`, `student_code`) และ scope index (`district_id`, `education_level`, `group_code`, `status`)
@@ -82,6 +86,8 @@ Successful ZIP/DBF imports create physical names such as `db_import_{timestamp}_
 Existing indexes cover the main district/status/date filters and exam-room district/term/subject lookup. Additional index proposals are recorded in [`PERFORMANCE.md`](PERFORMANCE.md); none are added based on column names alone. Live `SHOW INDEX` and `EXPLAIN` are `Not verified`.
 
 ## Migration history
+
+Migration `2026_09_21_000033_create_statistics_report_preferences_table.php` เพิ่มตารางเก็บรูปแบบรายงานสถิติแบบ additive โดยไม่แตะข้อมูลนำเข้าหรือตารางนักศึกษาเดิม.
 
 Migration `2026_09_19_000032_create_learning_exam_attendances_table.php` เพิ่มตารางเช็คชื่อเข้าสอบแบบ additive ผูกอำเภอ ภาคเรียน รายวิชา ระดับ และรหัสนักศึกษา พร้อม unique scope, summary index, ผู้บันทึก และเวลาตรวจ โดยไม่แก้ข้อมูลนำเข้าหรือผลการเรียนเดิม; การเช็คแบบรายคนภาพรวมใช้ค่า `subject_code = __overall__` เพื่อแยกจากการเช็คแบบรายวิชาอย่างชัดเจน
 

@@ -26,6 +26,7 @@ use App\Http\Controllers\Api\PortalDemoController;
 use App\Http\Controllers\Api\Settings\AppearanceController;
 use App\Http\Controllers\Api\Settings\NnetScheduleController;
 use App\Http\Controllers\Api\Settings\ProfileController;
+use App\Http\Controllers\Api\Settings\StatisticsReportPreferenceController;
 use App\Http\Controllers\Api\Students\CurrentStudentController;
 use App\Http\Controllers\Api\Students\StudentAnnouncementController;
 use App\Http\Controllers\Api\Students\StudentDirectoryController;
@@ -165,6 +166,10 @@ Route::prefix('v1')->group(function (): void {
         Route::patch('/settings/password', [ProfileController::class, 'updatePassword']);
         Route::get('/settings/appearance', [AppearanceController::class, 'show']);
         Route::patch('/settings/appearance', [AppearanceController::class, 'update']);
+        Route::get('/settings/statistics-report', [StatisticsReportPreferenceController::class, 'show'])
+            ->middleware('role:teacher,admin,super_admin');
+        Route::put('/settings/statistics-report', [StatisticsReportPreferenceController::class, 'update'])
+            ->middleware('role:teacher,admin,super_admin');
         Route::get('/settings/nnet-schedule', [NnetScheduleController::class, 'show']);
         Route::put('/settings/nnet-schedule', [NnetScheduleController::class, 'update']);
     });

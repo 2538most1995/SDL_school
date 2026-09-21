@@ -37,6 +37,7 @@ final class StudentApiTest extends TestCase
             Route::get('/reports/students/overview', [StudentReportController::class, 'overview']);
             Route::get('/reports/new-students', [StudentReportController::class, 'newStudents']);
             Route::get('/reports/graduates', [StudentReportController::class, 'graduates']);
+            Route::get('/reports/expected-graduates', [StudentReportController::class, 'expectedGraduates']);
             Route::get('/reports/transfers', [StudentReportController::class, 'transfers']);
             Route::get('/reports/registered-subjects', [StudentReportController::class, 'registeredSubjects']);
             Route::get('/reports/students/registration-statistics', [StudentReportController::class, 'registrationStatistics'])
@@ -248,6 +249,17 @@ final class StudentApiTest extends TestCase
             ->assertOk()
             ->assertJsonCount(3, 'data.items')
             ->assertJsonPath('data.items.0.term', '1/2568');
+    }
+
+    public function test_expected_graduates_honours_the_selected_academic_term(): void
+    {
+        Sanctum::actingAs($this->viewer('admin'));
+
+        $this->getJson('/api/v1/reports/expected-graduates?term=1/2569')
+            ->assertOk()
+            ->assertJsonPath('data.selected_term', '1/2569')
+            ->assertJsonPath('data.total', 0)
+            ->assertJsonCount(0, 'data.rows');
     }
 
     public function test_every_student_report_accepts_level_and_group_filters_with_teacher_scope(): void

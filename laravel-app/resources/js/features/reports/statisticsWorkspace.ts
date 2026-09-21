@@ -1,23 +1,20 @@
 import type { ExcelSheet } from '../../lib/excel';
 import type { CategoryKey, RegistrationStatisticsPayload } from './registrationStatisticsExport';
 
-export type StatisticReportId = 1 | 2 | 3 | 4 | 5 | 6 | 7 | 8 | 9 | 10 | 11 | 12 | 13 | 14 | 15;
+export type StatisticReportId = 1 | 2 | 3 | 4 | 5;
 export type StatisticOrientation = 'vertical' | 'horizontal';
 export type StatisticAxisConfiguration = Record<StatisticOrientation, CategoryKey[]>;
 
 export type StatisticReportDefinition = {
     id: StatisticReportId;
     label: string;
-    source: 'new-students' | 'registration-statistics' | 'graduates' | 'transfers' | null;
-    level?: 1 | 2;
-    unavailableReason?: string;
+    source: 'new-students' | 'registration-statistics' | 'graduates' | 'expected-graduates' | 'transfers';
 };
 
 export type StatisticCategoryDefinition = {
     order: number;
-    key: CategoryKey | 'learning_method' | 'disability' | 'study_center';
+    key: CategoryKey;
     label: string;
-    supported: boolean;
 };
 
 export type GenericReportRow = {
@@ -26,6 +23,10 @@ export type GenericReportRow = {
     secondary: string;
     group: string;
     metric: string;
+    entity_key?: string;
+    level?: string;
+    group_code?: string;
+    group_label?: string;
 };
 
 export type GenericReportPayload = {
@@ -98,42 +99,49 @@ export type StatisticCrossTabPayload = {
 
 export const statisticReports: StatisticReportDefinition[] = [
     { id: 1, label: 'รายงานจำนวนนักศึกษาเข้าใหม่', source: 'new-students' },
-    { id: 2, label: 'รายงานจำนวนนักศึกษาขอลงทะเบียน', source: null, unavailableReason: 'ข้อมูลคำขอลงทะเบียนยังไม่มี API ต้นทางแยกจากข้อมูลลงทะเบียนจริง' },
-    { id: 3, label: 'รายงานจำนวนนักศึกษาลงทะเบียน', source: 'registration-statistics' },
-    { id: 4, label: 'รายงานจำนวนนักศึกษารักษาสภาพ', source: null, unavailableReason: 'ข้อมูลรักษาสภาพยังไม่มีรหัสสถานะที่ยืนยันได้ในชุดนำเข้าปัจจุบัน' },
-    { id: 5, label: 'รายงานจำนวนนักศึกษาขาดรักษาสภาพ', source: null, unavailableReason: 'ข้อมูลขาดรักษาสภาพยังไม่มีรหัสสถานะที่ยืนยันได้ในชุดนำเข้าปัจจุบัน' },
-    { id: 6, label: 'รายงานจำนวนนักศึกษาหมดสภาพ', source: null, unavailableReason: 'ข้อมูลหมดสภาพยังถูกรวมอยู่ในสถานะพ้นสภาพ/รอตรวจสอบ จึงยังแยกตัวเลขไม่ได้อย่างถูกต้อง' },
-    { id: 7, label: 'รายงานจำนวนนักศึกษาลาออก', source: null, unavailableReason: 'ข้อมูลลาออกยังไม่มีรหัสสาเหตุที่ผ่านการยืนยันสำหรับรายงานแยก' },
-    { id: 8, label: 'รายงานจำนวนนักศึกษาขึ้นเรียน', source: null, unavailableReason: 'ข้อมูลขึ้นเรียนยังไม่มี API รายงานเฉพาะ' },
-    { id: 9, label: 'รายงานจำนวนนักศึกษาขึ้นทะเบียน', source: null, unavailableReason: 'ข้อมูลขึ้นทะเบียนยังไม่มี API รายงานเฉพาะ' },
-    { id: 10, label: 'รายงานจำนวนนักศึกษาที่จบ ป.6 ปีการศึกษาที่แล้ว', source: 'graduates', level: 1 },
-    { id: 11, label: 'รายงานจำนวนนักศึกษาที่จบ ม.3 ปีการศึกษาที่แล้ว', source: 'graduates', level: 2 },
-    { id: 12, label: 'รายงานจำนวนนักศึกษาที่จบ ป.6 สกร. ภาคเรียนที่แล้ว', source: 'graduates', level: 1 },
-    { id: 13, label: 'รายงานจำนวนนักศึกษาที่จบ ม.3 สกร. ภาคเรียนที่แล้ว', source: 'graduates', level: 2 },
-    { id: 14, label: 'รายงานจำนวนนักศึกษาเทียบโอนกลุ่มเป้าหมายเฉพาะ', source: null, unavailableReason: 'ข้อมูลต้นทางยังไม่ระบุชนิดการเทียบโอนกลุ่มเป้าหมายเฉพาะแยกจากรายการเทียบโอนทั่วไป' },
-    { id: 15, label: 'รายงานจำนวนนักศึกษาเทียบโอนความรู้', source: 'transfers' },
+    { id: 2, label: 'รายงานจำนวนนักศึกษาลงทะเบียน', source: 'registration-statistics' },
+    { id: 3, label: 'รายงานจำนวนนักศึกษาจบการศึกษา', source: 'graduates' },
+    { id: 4, label: 'รายงานจำนวนนักศึกษาคาดว่าจะจบ', source: 'expected-graduates' },
+    { id: 5, label: 'รายงานจำนวนนักศึกษาที่มีรายการเทียบโอน', source: 'transfers' },
 ];
 
 export const statisticCategories: StatisticCategoryDefinition[] = [
-    { order: 1, key: 'level', label: 'ระดับชั้น', supported: true },
-    { order: 2, key: 'group', label: 'รหัสกลุ่ม', supported: true },
-    { order: 3, key: 'gender', label: 'เพศ', supported: true },
-    { order: 4, key: 'age', label: 'อายุ', supported: true },
-    { order: 5, key: 'learning_method', label: 'วิธีเรียน', supported: false },
-    { order: 6, key: 'occupation', label: 'อาชีพ', supported: true },
-    { order: 7, key: 'target_group', label: 'กลุ่มเป้าหมาย', supported: true },
-    { order: 8, key: 'nationality', label: 'สัญชาติ', supported: true },
-    { order: 9, key: 'disability', label: 'รหัสความพิการ', supported: false },
-    { order: 10, key: 'study_center', label: 'จุดการศึกษา', supported: false },
+    { order: 1, key: 'level', label: 'ระดับชั้น' },
+    { order: 2, key: 'group', label: 'กลุ่มเรียน' },
+    { order: 3, key: 'gender', label: 'เพศ' },
+    { order: 4, key: 'age', label: 'อายุ' },
+    { order: 5, key: 'occupation', label: 'อาชีพ' },
+    { order: 6, key: 'target_group', label: 'กลุ่มเป้าหมาย' },
+    { order: 7, key: 'nationality', label: 'สัญชาติ' },
 ];
 
 export function reportById(id: StatisticReportId): StatisticReportDefinition {
     return statisticReports.find((report) => report.id === id) ?? statisticReports[0];
 }
 
+export function categoriesForReport(report: StatisticReportDefinition): StatisticCategoryDefinition[] {
+    if (report.source === 'registration-statistics') return statisticCategories;
+    return statisticCategories.filter((category) => category.key === 'level' || category.key === 'group');
+}
+
 export function supportedCategoryKeys(keys: Array<StatisticCategoryDefinition['key']>): CategoryKey[] {
-    const supported = new Set(statisticCategories.filter((category) => category.supported).map((category) => category.key));
+    const supported = new Set(statisticCategories.map((category) => category.key));
     return keys.filter((key): key is CategoryKey => supported.has(key));
+}
+
+export function normalizeAxisConfiguration(
+    report: StatisticReportDefinition,
+    configuration: StatisticAxisConfiguration,
+): StatisticAxisConfiguration {
+    const supported = new Set(categoriesForReport(report).map((category) => category.key));
+    const normalize = (keys: CategoryKey[], fallback: CategoryKey): CategoryKey[] => {
+        const unique = keys.filter((key, index) => supported.has(key) && keys.indexOf(key) === index).slice(0, 3);
+        return unique.length > 0 ? unique : [fallback];
+    };
+    return {
+        vertical: normalize(configuration.vertical, 'level'),
+        horizontal: normalize(configuration.horizontal, 'group'),
+    };
 }
 
 export function createDefaultAxisConfiguration(): StatisticAxisConfiguration {
@@ -171,7 +179,14 @@ export function summarizeStatisticRows(
     };
 }
 
-function groupParts(value: string): { level: string; group: string } {
+function groupParts(row: GenericReportRow): { level: string; group: string } {
+    if (row.level || row.group_label || row.group_code) {
+        return {
+            level: row.level || 'ไม่ระบุระดับ',
+            group: row.group_label || row.group_code || 'ไม่ระบุกลุ่ม',
+        };
+    }
+    const value = row.group;
     const parts = value.split('·').map((part) => part.trim()).filter(Boolean);
     return {
         level: parts[0] ?? 'ไม่ระบุระดับ',
@@ -211,8 +226,12 @@ export function genericPayloadToCrossTab(
     const rows = new Map<string, StatisticCrossTabRow>();
     const columns = new Map<string, StatisticCrossTabColumn>();
 
+    const sourceEntities = new Set<string>();
+    const cellEntities = new Map<string, Set<string>>();
     payload.rows.forEach((sourceRow) => {
-        const values = groupParts(sourceRow.group);
+        const values = groupParts(sourceRow);
+        const entityKey = sourceRow.entity_key || sourceRow.id;
+        sourceEntities.add(entityKey);
         const rowParts = rowKeys.map((category) => genericPart(category, values));
         const columnParts = columnKeys.map((category) => genericPart(category, values));
         const rowKey = tupleKey(rowParts);
@@ -230,9 +249,15 @@ export function genericPayloadToCrossTab(
             parts: columnParts,
             total: 0,
         };
-        row.cells[columnKey] = (row.cells[columnKey] ?? 0) + 1;
-        row.total += 1;
-        column.total += 1;
+        const cellKey = `${rowKey}\u0000${columnKey}`;
+        const entities = cellEntities.get(cellKey) ?? new Set<string>();
+        if (!entities.has(entityKey)) {
+            entities.add(entityKey);
+            row.cells[columnKey] = (row.cells[columnKey] ?? 0) + 1;
+            row.total += 1;
+            column.total += 1;
+        }
+        cellEntities.set(cellKey, entities);
         rows.set(rowKey, row);
         columns.set(columnKey, column);
     });
@@ -253,7 +278,7 @@ export function genericPayloadToCrossTab(
         terms: payload.terms ?? [],
         selected_term: payload.selected_term ?? null,
         summary: {
-            registered_students: payload.total,
+            registered_students: sourceEntities.size,
             row_count: rowItems.length,
             column_count: columnItems.length,
             non_zero_cells: nonZeroCells,
@@ -278,7 +303,7 @@ export function genericPayloadToStatisticRows(
     selectedCategories.forEach((category) => {
         const counts = new Map<string, number>();
         payload.rows.forEach((row) => {
-            const value = groupParts(row.group)[category];
+            const value = groupParts(row)[category];
             counts.set(value, (counts.get(value) ?? 0) + 1);
         });
         Array.from(counts.entries())

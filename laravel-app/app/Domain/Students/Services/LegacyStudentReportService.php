@@ -61,9 +61,13 @@ final readonly class LegacyStudentReportService
                 [$status] = LegacyStudentStatus::resolve((string) ($row['fin_cause'] ?? ''), (string) ($row['transfer_date'] ?? ''));
                 $rows[] = [
                     'id' => "{$set->districtId}-{$set->level}-{$code}",
+                    'entity_key' => "{$set->districtId}-{$set->level}-{$code}",
                     'primary' => $this->fullName($row),
                     'secondary' => $code,
                     'group' => $this->levelLabel($set->level).' · '.$this->groupLabel($row),
+                    'level' => $this->levelLabel($set->level),
+                    'group_code' => trim((string) ($row['group_code'] ?? '')),
+                    'group_label' => $this->groupLabel($row),
                     'metric' => 'ภาคเรียน '.$term,
                     '_active' => $status === 'studying',
                 ];
@@ -110,9 +114,13 @@ final readonly class LegacyStudentReportService
                 }
                 $rows[] = [
                     'id' => "{$set->districtId}-{$set->level}-{$code}-{$term}",
+                    'entity_key' => "{$set->districtId}-{$set->level}-{$code}",
                     'primary' => $this->fullName($row),
                     'secondary' => $code,
                     'group' => $this->levelLabel($set->level).' · '.$this->groupLabel($row),
+                    'level' => $this->levelLabel($set->level),
+                    'group_code' => trim((string) ($row['group_code'] ?? '')),
+                    'group_label' => $this->groupLabel($row),
                     'metric' => 'ภาคเรียน '.$term,
                 ];
             }
@@ -320,9 +328,13 @@ final readonly class LegacyStudentReportService
                     if ($grandTotal >= $reqTotal || ($compTotal >= $reqComp && $elecTotal >= $reqElec)) {
                         $rows[] = [
                             'id' => "{$set->districtId}-{$set->level}-{$code}",
+                            'entity_key' => "{$set->districtId}-{$set->level}-{$code}",
                             'primary' => $this->fullName($sRow),
                             'secondary' => $code,
                             'group' => $this->levelLabel($set->level).' · '.$this->groupLabel($sRow),
+                            'level' => $this->levelLabel($set->level),
+                            'group_code' => trim((string) ($sRow['group_code'] ?? '')),
+                            'group_label' => $this->groupLabel($sRow),
                             'metric' => number_format($grandTotal, 0).'/'.number_format($reqTotal, 0).' หน่วยกิต (บังคับ '.number_format($compTotal, 0).' / เลือก '.number_format($elecTotal, 0).')',
                             'examStatus' => $isExamTaken ? 'สอบแล้ว' : 'ยังไม่ได้สอบ',
                         ];
@@ -385,9 +397,13 @@ final readonly class LegacyStudentReportService
                 $credits = (float) ($row['subject_credit'] ?? 0);
                 $rows[] = [
                     'id' => "{$set->districtId}-{$set->level}-{$code}-{$term}-{$subjectCode}",
+                    'entity_key' => "{$set->districtId}-{$set->level}-{$code}",
                     'primary' => $subjectName,
                     'secondary' => $subjectCode,
                     'group' => $this->fullName($row).' · '.$code,
+                    'level' => $this->levelLabel($set->level),
+                    'group_code' => trim((string) ($row['group_code'] ?? '')),
+                    'group_label' => $this->groupLabel($row),
                     'metric' => number_format($credits, 1).' หน่วยกิต',
                 ];
             }

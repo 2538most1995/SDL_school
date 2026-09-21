@@ -5,10 +5,12 @@ import { createExcelFileBytes } from '../../resources/js/lib/excel.ts';
 import {
     buildStatisticsCrossTabSheets,
     buildStatisticsWorkspaceSheets,
+    categoriesForReport,
     categoriesForOrientation,
     createDefaultAxisConfiguration,
     genericPayloadToCrossTab,
     genericPayloadToStatisticRows,
+    normalizeAxisConfiguration,
     registrationPayloadsToStatisticRows,
     reportById,
     statisticCategories,
@@ -16,13 +18,14 @@ import {
     summarizeStatisticRows,
 } from '../../resources/js/features/reports/statisticsWorkspace.ts';
 
-test('statistics workspace exposes all 15 requested report choices without inventing unsupported sources', () => {
-    assert.equal(statisticReports.length, 15);
+test('statistics workspace exposes only reports backed by a real source', () => {
+    assert.equal(statisticReports.length, 5);
     assert.equal(reportById(1).source, 'new-students');
-    assert.equal(reportById(3).source, 'registration-statistics');
-    assert.equal(reportById(6).source, null);
-    assert.match(reportById(6).unavailableReason, /หมดสภาพ/);
-    assert.equal(reportById(15).source, 'transfers');
+    assert.equal(reportById(2).source, 'registration-statistics');
+    assert.equal(reportById(3).source, 'graduates');
+    assert.equal(reportById(4).source, 'expected-graduates');
+    assert.equal(reportById(5).source, 'transfers');
+    assert.ok(statisticReports.every((report) => report.source));
 });
 
 test('configured dimensions become real nested rows and columns in one cross-tab', () => {
@@ -56,13 +59,19 @@ test('configured dimensions become real nested rows and columns in one cross-tab
     assert.match(conditionXml, /แกนนอน/);
 });
 
-test('report format catalog keeps the 10 requested dimensions and marks missing source fields', () => {
-    assert.equal(statisticCategories.length, 10);
+test('report format catalog keeps only dimensions backed by imported source fields', () => {
+    assert.equal(statisticCategories.length, 7);
     assert.deepEqual(statisticCategories.map((item) => item.label), [
-        'ระดับชั้น', 'รหัสกลุ่ม', 'เพศ', 'อายุ', 'วิธีเรียน', 'อาชีพ', 'กลุ่มเป้าหมาย', 'สัญชาติ', 'รหัสความพิการ', 'จุดการศึกษา',
+        'ระดับชั้น', 'กลุ่มเรียน', 'เพศ', 'อายุ', 'อาชีพ', 'กลุ่มเป้าหมาย', 'สัญชาติ',
     ]);
-    assert.equal(statisticCategories.find((item) => item.key === 'learning_method').supported, false);
-    assert.equal(statisticCategories.find((item) => item.key === 'disability').supported, false);
+    assert.deepEqual(categoriesForReport(reportById(2)).map((item) => item.key), [
+        'level', 'group', 'gender', 'age', 'occupation', 'target_group', 'nationality',
+    ]);
+    assert.deepEqual(categoriesForReport(reportById(3)).map((item) => item.key), ['level', 'group']);
+    assert.deepEqual(normalizeAxisConfiguration(reportById(3), {
+        vertical: ['gender', 'level'],
+        horizontal: ['age'],
+    }), { vertical: ['level'], horizontal: ['group'] });
 });
 
 test('vertical and horizontal category configurations remain independent', () => {
@@ -97,6 +106,23 @@ test('generic student lists are aggregated by real level and group values', () =
     assert.equal(rows.find((row) => row.label === 'กลุ่ม A').count, 2);
 });
 
+test('transfer rows use explicit level and group fields and count each student once', () => {
+    const crossTab = genericPayloadToCrossTab({
+        total: 3,
+        active: 3,
+        groups: 2,
+        rows: [
+            { id: 'a-1', entity_key: 'a', primary: 'วิชา 1', secondary: 'ทช11001', group: 'ชื่อ ก · 001', level: 'ประถมศึกษา', group_code: 'A', group_label: 'กลุ่ม A', metric: '' },
+            { id: 'a-2', entity_key: 'a', primary: 'วิชา 2', secondary: 'ทช11002', group: 'ชื่อ ก · 001', level: 'ประถมศึกษา', group_code: 'A', group_label: 'กลุ่ม A', metric: '' },
+            { id: 'b-1', entity_key: 'b', primary: 'วิชา 1', secondary: 'ทช21001', group: 'ชื่อ ข · 002', level: 'มัธยมศึกษาตอนต้น', group_code: 'B', group_label: 'กลุ่ม B', metric: '' },
+        ],
+    }, { vertical: ['level'], horizontal: ['group'] });
+
+    assert.equal(crossTab.summary.registered_students, 2);
+    assert.equal(crossTab.rows.find((row) => row.label === 'ประถมศึกษา').total, 1);
+    assert.deepEqual(crossTab.columns.map((column) => column.label), ['กลุ่ม A', 'กลุ่ม B']);
+});
+
 test('registration dimensions remain separate and export as a valid workbook', () => {
     const base = {
         categories: [], filter_options: {}, applied_filters: {}, terms: ['1/2569'], selected_term: '1/2569',
@@ -107,7 +133,7 @@ test('registration dimensions remain separate and export as a valid workbook', (
         { ...base, selected_category: 'gender', selected_category_label: 'เพศ', items: [{ key: '2', code: '2', label: 'หญิง', count: 4, percentage: 100 }] },
     ]);
     const summary = summarizeStatisticRows(rows, 4);
-    const files = unzipSync(createExcelFileBytes(buildStatisticsWorkspaceSheets(reportById(3), '1/2569', 'อำเภอเสนา', rows, {
+    const files = unzipSync(createExcelFileBytes(buildStatisticsWorkspaceSheets(reportById(2), '1/2569', 'อำเภอเสนา', rows, {
         sourceTotal: summary.sourceTotal,
         orientation: 'horizontal',
         categoryLabels: ['ระดับชั้น', 'เพศ'],

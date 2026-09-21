@@ -55,6 +55,73 @@ final class ProductionSettingsTest extends TestCase
         $this->assertDatabaseHas('users', ['id' => $user->id, 'color_scheme' => 'violet']);
     }
 
+    public function test_statistics_report_format_is_persisted_per_user_and_district(): void
+    {
+        $district = District::create(['name' => 'อำเภอทดสอบ', 'code' => 'statistics']);
+        $user = User::factory()->create(['role' => 'teacher', 'district_id' => $district->id]);
+        Sanctum::actingAs($user);
+
+        $this->getJson('/api/v1/settings/statistics-report?report=registration-statistics')
+            ->assertOk()
+            ->assertJsonPath('data.saved', false)
+            ->assertJsonPath('data.vertical.0', 'level')
+            ->assertJsonPath('data.horizontal.0', 'group');
+
+        $this->putJson('/api/v1/settings/statistics-report', [
+            'report' => 'registration-statistics',
+            'vertical' => ['level', 'gender'],
+            'horizontal' => ['age', 'occupation'],
+            'orientation' => 'horizontal',
+        ])->assertOk()
+            ->assertJsonPath('data.saved', true)
+            ->assertJsonPath('data.vertical.1', 'gender')
+            ->assertJsonPath('data.horizontal.1', 'occupation');
+
+        $this->getJson('/api/v1/settings/statistics-report?report=registration-statistics')
+            ->assertOk()
+            ->assertJsonPath('data.orientation', 'horizontal')
+            ->assertJsonPath('data.vertical.1', 'gender');
+
+        $this->assertDatabaseHas('statistics_report_preferences', [
+            'user_id' => $user->id,
+            'district_id' => $district->id,
+            'report_key' => 'registration-statistics',
+        ]);
+        $this->assertDatabaseHas('audit_logs', [
+            'user_id' => $user->id,
+            'event' => 'statistics.preference_updated',
+        ]);
+    }
+
+    public function test_statistics_report_format_rejects_categories_without_a_source(): void
+    {
+        $district = District::create(['name' => 'อำเภอทดสอบ', 'code' => 'statistics-invalid']);
+        $user = User::factory()->create(['role' => 'admin', 'district_id' => $district->id]);
+        Sanctum::actingAs($user);
+
+        $this->putJson('/api/v1/settings/statistics-report', [
+            'report' => 'graduates',
+            'vertical' => ['gender'],
+            'horizontal' => ['group'],
+            'orientation' => 'vertical',
+        ])->assertUnprocessable()->assertJsonValidationErrors('vertical');
+    }
+
+    public function test_students_cannot_read_or_change_statistics_report_preferences(): void
+    {
+        $district = District::create(['name' => 'อำเภอทดสอบ', 'code' => 'statistics-student']);
+        $student = User::factory()->create(['role' => 'student', 'district_id' => $district->id]);
+        Sanctum::actingAs($student);
+
+        $this->getJson('/api/v1/settings/statistics-report?report=new-students')->assertForbidden();
+        $this->putJson('/api/v1/settings/statistics-report', [
+            'report' => 'new-students',
+            'vertical' => ['level'],
+            'horizontal' => ['group'],
+            'orientation' => 'vertical',
+        ])->assertForbidden();
+    }
+
     public function test_local_user_can_change_password(): void
     {
         $district = District::create(['name' => 'อำเภอทดสอบ', 'code' => 'password']);

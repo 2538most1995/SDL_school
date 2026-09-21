@@ -60,9 +60,13 @@ final readonly class StudentReportService
         ));
         $rows = array_map(static fn (Student $student): array => [
             'id' => "{$student->districtId}-{$student->level}-{$student->code}",
+            'entity_key' => "{$student->districtId}-{$student->level}-{$student->code}",
             'primary' => $student->fullName(),
             'secondary' => $student->code,
             'group' => $student->levelLabel.' · '.$student->groupName,
+            'level' => $student->levelLabel,
+            'group_code' => $student->groupCode,
+            'group_label' => $student->groupName,
             'metric' => 'ภาคเรียน '.$student->enrollmentTerm,
         ], $students);
 
@@ -81,9 +85,13 @@ final readonly class StudentReportService
         ));
         $rows = array_map(static fn (Student $student): array => [
             'id' => "{$student->districtId}-{$student->level}-{$student->code}",
+            'entity_key' => "{$student->districtId}-{$student->level}-{$student->code}",
             'primary' => $student->fullName(),
             'secondary' => $student->code,
-            'group' => $student->levelLabel,
+            'group' => $student->levelLabel.' · '.$student->groupName,
+            'level' => $student->levelLabel,
+            'group_code' => $student->groupCode,
+            'group_label' => $student->groupName,
             'metric' => $student->currentTerm,
         ], $students);
 
@@ -95,24 +103,50 @@ final readonly class StudentReportService
      */
     public function expectedGraduates(User $viewer, array $filters = []): array
     {
+        $students = $this->students($viewer, $filters);
+        $gradesByStudent = $this->repository->gradesForMany($students);
+        $terms = $this->academicTerms($gradesByStudent);
+        $selectedTerm = $this->selectedAcademicTerm($filters, $terms);
+        $projectedCreditsByStudent = [];
         $students = array_values(array_filter(
-            $this->students($viewer, $filters),
-            static function (Student $student): bool {
+            $students,
+            function (Student $student) use ($gradesByStudent, $selectedTerm, &$projectedCreditsByStudent): bool {
                 if ($student->status !== 'studying') {
                     return false;
                 }
-                $current = $student->creditsCurrent > 0 ? $student->creditsCurrent : $student->creditsEarned;
 
-                return $current >= $student->creditsRequired;
+                $projectedCredits = 0.0;
+                $registeredInSelectedTerm = false;
+                foreach ($this->studentGrades($gradesByStudent, $student) as $grade) {
+                    $gradeTerm = AcademicTerm::normalize($grade->term);
+                    if ($selectedTerm !== null && $gradeTerm === $selectedTerm) {
+                        $registeredInSelectedTerm = true;
+                    }
+                    if ($selectedTerm !== null && ($gradeTerm === null || AcademicTerm::compare($gradeTerm, $selectedTerm) > 0)) {
+                        continue;
+                    }
+                    if ($grade->isPassed() || ($selectedTerm !== null && $gradeTerm === $selectedTerm)) {
+                        $projectedCredits += $grade->credits;
+                    }
+                }
+
+                $projectedCreditsByStudent["{$student->districtId}|{$student->level}|{$student->code}"] = $projectedCredits;
+
+                return ($selectedTerm === null || $registeredInSelectedTerm)
+                    && $projectedCredits >= $student->creditsRequired;
             },
         ));
 
         $rows = array_map(static fn (Student $student): array => [
             'id' => "{$student->districtId}-{$student->level}-{$student->code}",
+            'entity_key' => "{$student->districtId}-{$student->level}-{$student->code}",
             'primary' => $student->fullName(),
             'secondary' => $student->code,
             'group' => $student->levelLabel.' · '.$student->groupName,
-            'metric' => number_format($student->creditsCurrent > 0 ? $student->creditsCurrent : $student->creditsEarned, 0).'/'.number_format($student->creditsRequired, 0).' หน่วยกิต (คาดว่าจะจบ)',
+            'level' => $student->levelLabel,
+            'group_code' => $student->groupCode,
+            'group_label' => $student->groupName,
+            'metric' => number_format($projectedCreditsByStudent["{$student->districtId}|{$student->level}|{$student->code}"] ?? 0, 0).'/'.number_format($student->creditsRequired, 0).' หน่วยกิต (คาดว่าจะจบ)',
             'examStatus' => $student->creditsEarned >= $student->creditsRequired ? 'สอบแล้ว' : 'ยังไม่ได้สอบ',
         ], $students);
 
@@ -123,7 +157,14 @@ final readonly class StudentReportService
             $rows = array_values(array_filter($rows, static fn (array $row): bool => ($row['examStatus'] ?? '') === 'ยังไม่ได้สอบ'));
         }
 
-        return ['total' => count($rows), 'active' => count($rows), 'groups' => count(array_unique(array_column($rows, 'group'))), 'rows' => $rows];
+        return [
+            'total' => count($rows),
+            'active' => count($rows),
+            'groups' => count(array_unique(array_column($rows, 'group'))),
+            'terms' => $terms,
+            'selected_term' => $selectedTerm,
+            'rows' => $rows,
+        ];
     }
 
     /** @param array<string, mixed> $filters
@@ -142,9 +183,13 @@ final readonly class StudentReportService
                 }
                 $rows[] = [
                     'id' => "{$student->districtId}-{$student->level}-{$student->code}-{$grade->term}-{$grade->subjectCode}",
+                    'entity_key' => "{$student->districtId}-{$student->level}-{$student->code}",
                     'primary' => $grade->subjectName,
                     'secondary' => $grade->subjectCode,
                     'group' => $student->fullName().' · '.$student->code,
+                    'level' => $student->levelLabel,
+                    'group_code' => $student->groupCode,
+                    'group_label' => $student->groupName,
                     'metric' => number_format($grade->credits, 1).' หน่วยกิต',
                 ];
             }
