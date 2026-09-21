@@ -28,12 +28,7 @@ return [
             'label' => 'สถิติ',
             'color' => 'coral',
             'items' => [
-                ['key' => 'statistics-overview', 'label' => 'สารสนเทศรวม', 'description' => 'ภาพรวมตัวเลขสำคัญสำหรับประเมินผลและเลือกรายงาน', 'route' => '/reports/overview', 'icon' => 'information', 'roles' => ['teacher', 'admin', 'super_admin']],
-                ['key' => 'registration-statistics', 'label' => 'สถิตินักศึกษาลงทะเบียน', 'description' => 'สรุปตามกลุ่มเป้าหมาย เพศ ระดับ อาชีพ และสัญชาติ', 'route' => '/reports/registration-statistics', 'icon' => 'chart', 'roles' => ['teacher', 'admin', 'super_admin']],
-                ['key' => 'new-students', 'label' => 'นักศึกษาใหม่', 'description' => 'นักศึกษาใหม่ภาคเรียนปัจจุบัน', 'route' => '/reports/new-students', 'icon' => 'user-plus', 'roles' => ['teacher', 'admin', 'super_admin']],
-                ['key' => 'graduates', 'label' => 'ผู้จบหลักสูตร', 'description' => 'สถานะจบและภาคเรียนที่จบ', 'route' => '/reports/graduates', 'icon' => 'medal', 'roles' => ['teacher', 'admin', 'super_admin']],
-                ['key' => 'expected-graduates', 'label' => 'นักศึกษาคาดว่าจะจบ', 'description' => 'นักศึกษาผ่านเกณฑ์หน่วยกิตรวมภาคเรียนปัจจุบัน', 'route' => '/reports/expected-graduates', 'icon' => 'certificate', 'roles' => ['teacher', 'admin', 'super_admin']],
-                ['key' => 'transfers', 'label' => 'ข้อมูลเทียบโอน', 'description' => 'รายวิชาและผลการเทียบโอน', 'route' => '/reports/transfers', 'icon' => 'arrows', 'roles' => ['teacher', 'admin', 'super_admin']],
+                ['key' => 'statistics-overview', 'label' => 'รายงานสถิติ', 'description' => 'สารสนเทศรวม ตัวเลือกรายงาน การประมวลผล และส่งออกในหน้าเดียว', 'route' => '/reports/overview', 'icon' => 'information', 'roles' => ['teacher', 'admin', 'super_admin']],
             ],
         ],
         [

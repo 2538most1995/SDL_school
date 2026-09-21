@@ -52,7 +52,7 @@ class SystemCatalogTest extends TestCase
         $this->assertTrue($items->contains('key', 'users'));
         $this->assertTrue($items->contains('key', 'announcements'));
         $this->assertTrue($items->contains('key', 'branding'));
-        $this->assertTrue($items->contains('key', 'registration-statistics'));
+        $this->assertTrue($items->contains('key', 'statistics-overview'));
         $this->assertFalse($items->contains('key', 'districts'));
         $this->assertTrue($items->contains('key', 'exam-eligible'));
         $this->assertTrue($items->contains('route', '/reports/exam-eligible'));
@@ -60,6 +60,8 @@ class SystemCatalogTest extends TestCase
         $statistics = collect($response->json('data.groups'))->firstWhere('key', 'statistics');
         $resultReports = collect($response->json('data.groups'))->firstWhere('key', 'result-reports');
         $this->assertSame('statistics-overview', $statistics['items'][0]['key']);
+        $this->assertSame('รายงานสถิติ', $statistics['items'][0]['label']);
+        $this->assertCount(1, $statistics['items']);
         $this->assertFalse(collect($statistics['items'])->contains('key', 'exam-attendance-check'));
         $this->assertTrue(collect($resultReports['items'])->contains('key', 'exam-attendance-check'));
     }
@@ -74,7 +76,7 @@ class SystemCatalogTest extends TestCase
         $this->assertNotNull($administration);
         $this->assertSame(['exam-rooms'], collect($administration['items'])->pluck('key')->values()->all());
         $this->assertSame('/admin/exam-rooms', $administration['items'][0]['route']);
-        $this->assertTrue(collect($response->json('data.groups'))->flatMap(fn (array $group) => $group['items'])->contains('key', 'registration-statistics'));
+        $this->assertTrue(collect($response->json('data.groups'))->flatMap(fn (array $group) => $group['items'])->contains('key', 'statistics-overview'));
         $this->assertTrue(collect($response->json('data.groups'))->flatMap(fn (array $group) => $group['items'])->contains('key', 'exam-eligible'));
         $this->assertTrue(collect($response->json('data.groups'))->flatMap(fn (array $group) => $group['items'])->contains('key', 'exam-attendance-check'));
     }

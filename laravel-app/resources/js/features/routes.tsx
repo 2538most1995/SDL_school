@@ -43,7 +43,7 @@ export const featureRouteCatalog: FeatureRoute[] = [
     { path: '/kpch', label: 'กิจกรรม กพช.', roles: ['student', 'teacher', 'admin', 'super_admin'], element: <AchievementPage kind="kpch" /> },
     { path: '/moral', label: 'คุณธรรม', roles: ['student', 'teacher', 'admin', 'super_admin'], element: <AchievementPage kind="moral" /> },
 
-    { path: '/reports/overview', label: 'สารสนเทศรวม', roles: ['teacher', 'admin', 'super_admin'], element: <StatisticsOverviewPage /> },
+    { path: '/reports/overview', label: 'รายงานสถิติ', roles: ['teacher', 'admin', 'super_admin'], element: <StatisticsOverviewPage /> },
     { path: '/reports/registration-statistics', label: 'สถิตินักศึกษาลงทะเบียน', roles: ['teacher', 'admin', 'super_admin'], element: <RegistrationStatisticsPage /> },
     { path: '/reports/new-students', label: 'นักศึกษาใหม่', roles: ['teacher', 'admin', 'super_admin'], element: <ReportPage kind="new-students" /> },
     { path: '/reports/graduates', label: 'ผู้จบหลักสูตร', roles: ['teacher', 'admin', 'super_admin'], element: <ReportPage kind="graduates" /> },
