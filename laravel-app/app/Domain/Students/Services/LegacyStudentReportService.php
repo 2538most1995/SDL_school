@@ -148,233 +148,250 @@ final readonly class LegacyStudentReportService
             $sets = $this->sets($districtId);
             $terms = $this->registeredSubjectTerms($viewer, $sets, $filters);
             $selectedTerm = $this->selectedTerm($filters, $terms);
-            $selectedTermVariants = $selectedTerm !== null ? AcademicTerm::variants($selectedTerm) : [];
-            $rows = [];
+            $rows = $this->expectedGraduateRows($viewer, $sets, $filters, $selectedTerm, $terms);
 
-            $isLatestTerm = $selectedTerm === null || ($terms !== [] && $selectedTerm === $terms[0]);
+            return $this->payload($rows, $terms, $selectedTerm, static fn (): bool => true);
+        } catch (\Throwable) {
+            return $this->payload([], [], null, static fn (): bool => true);
+        }
+    }
 
-            foreach ($this->filteredSets($sets, $filters) as $set) {
-                [$join, $groupName] = $this->groupJoin($set, 's');
-                [$scopeSql, $scopeBindings] = $this->scope($viewer, $set, 's', $join !== '');
-                $conditions = [$scopeSql];
-                if ($isLatestTerm) {
-                    $conditions[] = "TRIM(COALESCE(s.fin_cause, '')) <> '1'";
-                }
-                $bindings = $scopeBindings;
-                $this->appendGroupAndSearchFilters($conditions, $bindings, $filters, $join !== '', 's', $groupName);
+    /**
+     * @param  list<LegacyTableSet>  $sets
+     * @param  array<string, mixed>  $filters
+     * @param  list<string>  $terms
+     * @return list<array<string, mixed>>
+     */
+    private function expectedGraduateRows(User $viewer, array $sets, array $filters, ?string $selectedTerm, array $terms): array
+    {
+        $selectedTermVariants = $selectedTerm !== null ? AcademicTerm::variants($selectedTerm) : [];
+        $rows = [];
+        $isLatestTerm = $selectedTerm === null || ($terms !== [] && $selectedTerm === $terms[0]);
 
-                $student = $this->identifier($set->student);
-                $grade = $this->identifier($set->grade);
-                $subject = $this->identifier($set->subject);
+        foreach ($this->filteredSets($sets, $filters) as $set) {
+            [$join, $groupName] = $this->groupJoin($set, 's');
+            [$scopeSql, $scopeBindings] = $this->scope($viewer, $set, 's', $join !== '');
+            $conditions = [$scopeSql];
+            if ($isLatestTerm) {
+                $conditions[] = "TRIM(COALESCE(s.fin_cause, '')) <> '1'";
+            }
+            $bindings = $scopeBindings;
+            $this->appendGroupAndSearchFilters($conditions, $bindings, $filters, $join !== '', 's', $groupName);
 
-                [$reqTotal, $reqComp, $reqElec] = match ($set->level) {
-                    1 => [48.0, 36.0, 12.0],
-                    2 => [56.0, 40.0, 16.0],
-                    3 => [76.0, 44.0, 32.0],
-                    default => [0.0, 0.0, 0.0],
-                };
+            $student = $this->identifier($set->student);
+            $grade = $this->identifier($set->grade);
+            $subject = $this->identifier($set->subject);
 
-                $finSemCol = $this->firstExistingColumn($set->student, ['fin_sem']);
-                $finSem2Col = $this->firstExistingColumn($set->student, ['fin_sem2']);
-                $finCauseCol = $this->firstExistingColumn($set->student, ['fin_cause']);
-                $expFlagCol = $this->firstExistingColumn($set->student, ['expflag', 'exp_flag']);
-                $expSemCol = $this->firstExistingColumn($set->student, ['expsem', 'exp_sem']);
-                $ntSara1Col = $this->firstExistingColumn($set->student, ['nt_sara1']);
-                $ntSara2Col = $this->firstExistingColumn($set->student, ['nt_sara2']);
-                $ntSemCol = $this->firstExistingColumn($set->student, ['nt_sem']);
-                $ntNosemCol = $this->firstExistingColumn($set->student, ['nt_nosem']);
-                $genderCol = $this->firstExistingColumn($set->student, ['gender', 'sex']);
-                $nnetCol = $this->firstExistingColumn($set->student, [
-                    'nnet', 'n_net', 'eexam', 'e_exam', 'nnet_stat', 'exm_status',
-                    'nt_result', 'nt_res', 'nnet_pass', 'nnet_result', 'eexam_status', 'e_exam_stat',
-                ]);
+            [$reqTotal, $reqComp, $reqElec] = match ($set->level) {
+                1 => [48.0, 36.0, 12.0],
+                2 => [56.0, 40.0, 16.0],
+                3 => [76.0, 44.0, 32.0],
+                default => [0.0, 0.0, 0.0],
+            };
 
-                $finSemSql = $finSemCol !== null ? ", s.{$this->identifier($finSemCol)} AS fin_sem_val" : ", '' AS fin_sem_val";
-                $finSem2Sql = $finSem2Col !== null ? ", s.{$this->identifier($finSem2Col)} AS fin_sem2_val" : ", '' AS fin_sem2_val";
-                $finCauseSql = $finCauseCol !== null ? ", s.{$this->identifier($finCauseCol)} AS fin_cause_val" : ", '' AS fin_cause_val";
-                $expFlagSql = $expFlagCol !== null ? ", s.{$this->identifier($expFlagCol)} AS expflag_val" : ", '' AS expflag_val";
-                $expSemSql = $expSemCol !== null ? ", s.{$this->identifier($expSemCol)} AS expsem_val" : ", '' AS expsem_val";
-                $ntSql1 = $ntSara1Col !== null ? ", s.{$this->identifier($ntSara1Col)} AS nt_sara1_val" : ", '' AS nt_sara1_val";
-                $ntSql2 = $ntSara2Col !== null ? ", s.{$this->identifier($ntSara2Col)} AS nt_sara2_val" : ", '' AS nt_sara2_val";
-                $ntSemSql = $ntSemCol !== null ? ", s.{$this->identifier($ntSemCol)} AS nt_sem_val" : ", '' AS nt_sem_val";
-                $ntNosemSql = $ntNosemCol !== null ? ", s.{$this->identifier($ntNosemCol)} AS nt_nosem_val" : ", '' AS nt_nosem_val";
-                $genderSql = $genderCol !== null ? ", s.{$this->identifier($genderCol)} AS gender" : ", '' AS gender";
-                $nnetSql = $nnetCol !== null ? ", s.{$this->identifier($nnetCol)} AS nnet_val" : ", '' AS nnet_val";
+            $finSemCol = $this->firstExistingColumn($set->student, ['fin_sem']);
+            $finSem2Col = $this->firstExistingColumn($set->student, ['fin_sem2']);
+            $finCauseCol = $this->firstExistingColumn($set->student, ['fin_cause']);
+            $expFlagCol = $this->firstExistingColumn($set->student, ['expflag', 'exp_flag']);
+            $expSemCol = $this->firstExistingColumn($set->student, ['expsem', 'exp_sem']);
+            $ntSara1Col = $this->firstExistingColumn($set->student, ['nt_sara1']);
+            $ntSara2Col = $this->firstExistingColumn($set->student, ['nt_sara2']);
+            $ntSemCol = $this->firstExistingColumn($set->student, ['nt_sem']);
+            $ntNosemCol = $this->firstExistingColumn($set->student, ['nt_nosem']);
+            $genderCol = $this->firstExistingColumn($set->student, ['gender', 'sex']);
+            $nnetCol = $this->firstExistingColumn($set->student, [
+                'nnet', 'n_net', 'eexam', 'e_exam', 'nnet_stat', 'exm_status',
+                'nt_result', 'nt_res', 'nnet_pass', 'nnet_result', 'eexam_status', 'e_exam_stat',
+            ]);
 
-                $studentsSql = "SELECT s._perf_id10 AS student_code, s.prename, s.name AS first_name,
-                                       s.surname AS last_name, s.grp_code AS group_code, {$groupName} AS group_name
-                                       {$finCauseSql} {$finSemSql} {$finSem2Sql} {$expFlagSql} {$expSemSql} {$ntSql1} {$ntSql2} {$ntSemSql} {$ntNosemSql} {$genderSql} {$nnetSql}
-                                FROM {$student} s {$join}
-                                WHERE ".implode(' AND ', array_filter($conditions)).'
-                                ORDER BY s.name ASC, s.surname ASC, s._perf_id10 ASC';
+            $finSemSql = $finSemCol !== null ? ", s.{$this->identifier($finSemCol)} AS fin_sem_val" : ", '' AS fin_sem_val";
+            $finSem2Sql = $finSem2Col !== null ? ", s.{$this->identifier($finSem2Col)} AS fin_sem2_val" : ", '' AS fin_sem2_val";
+            $finCauseSql = $finCauseCol !== null ? ", s.{$this->identifier($finCauseCol)} AS fin_cause_val" : ", '' AS fin_cause_val";
+            $expFlagSql = $expFlagCol !== null ? ", s.{$this->identifier($expFlagCol)} AS expflag_val" : ", '' AS expflag_val";
+            $expSemSql = $expSemCol !== null ? ", s.{$this->identifier($expSemCol)} AS expsem_val" : ", '' AS expsem_val";
+            $ntSql1 = $ntSara1Col !== null ? ", s.{$this->identifier($ntSara1Col)} AS nt_sara1_val" : ", '' AS nt_sara1_val";
+            $ntSql2 = $ntSara2Col !== null ? ", s.{$this->identifier($ntSara2Col)} AS nt_sara2_val" : ", '' AS nt_sara2_val";
+            $ntSemSql = $ntSemCol !== null ? ", s.{$this->identifier($ntSemCol)} AS nt_sem_val" : ", '' AS nt_sem_val";
+            $ntNosemSql = $ntNosemCol !== null ? ", s.{$this->identifier($ntNosemCol)} AS nt_nosem_val" : ", '' AS nt_nosem_val";
+            $genderSql = $genderCol !== null ? ", s.{$this->identifier($genderCol)} AS gender" : ", '' AS gender";
+            $nnetSql = $nnetCol !== null ? ", s.{$this->identifier($nnetCol)} AS nnet_val" : ", '' AS nnet_val";
 
-                $studentList = $this->rows($studentsSql, $bindings);
-                if ($studentList === []) {
+            $studentsSql = "SELECT s._perf_id10 AS student_code, s.prename, s.name AS first_name,
+                                   s.surname AS last_name, s.grp_code AS group_code, {$groupName} AS group_name
+                                   {$finCauseSql} {$finSemSql} {$finSem2Sql} {$expFlagSql} {$expSemSql} {$ntSql1} {$ntSql2} {$ntSemSql} {$ntNosemSql} {$genderSql} {$nnetSql}
+                            FROM {$student} s {$join}
+                            WHERE ".implode(' AND ', array_filter($conditions)).'
+                            ORDER BY s.name ASC, s.surname ASC, s._perf_id10 ASC';
+
+            $studentList = $this->rows($studentsSql, $bindings);
+            if ($studentList === []) {
+                continue;
+            }
+
+            $studentCodes = array_values(array_unique(array_filter(array_map(
+                static fn (array $row): string => trim((string) ($row['student_code'] ?? '')),
+                $studentList,
+            ))));
+
+            if ($studentCodes === []) {
+                continue;
+            }
+
+            $placeholders = implode(',', array_fill(0, count($studentCodes), '?'));
+            $academicSql = "SELECT g._perf_std10 AS student_code,
+                                   g.grade,
+                                   g.typ_code,
+                                   g._perf_semestry AS term,
+                                   sub.sub_type,
+                                   sub.sub_credit,
+                                   sub.sub_code,
+                                   sub.sub_name
+                            FROM {$grade} g
+                            LEFT JOIN {$subject} sub ON sub._perf_sub = g._perf_sub
+                            WHERE g._perf_std10 IN ({$placeholders})";
+
+            $academicRows = $this->rows($academicSql, $studentCodes);
+            $studentMetrics = [];
+            $registeredInSelectedTerm = [];
+
+            foreach ($academicRows as $aRow) {
+                $code = trim((string) ($aRow['student_code'] ?? ''));
+                if ($code === '') {
                     continue;
                 }
+                $studentMetrics[$code] ??= [
+                    'compulsory_earned' => 0.0,
+                    'elective_earned' => 0.0,
+                    'compulsory_registered' => 0.0,
+                    'elective_registered' => 0.0,
+                    'exam_taken' => false,
+                ];
 
-                $studentCodes = array_values(array_unique(array_filter(array_map(
-                    static fn (array $row): string => trim((string) ($row['student_code'] ?? '')),
-                    $studentList,
-                ))));
+                $gradeVal = trim((string) ($aRow['grade'] ?? ''));
+                $subType = trim((string) ($aRow['sub_type'] ?? ''));
+                $typCode = trim((string) ($aRow['typ_code'] ?? ''));
+                $subCode = strtoupper(trim((string) ($aRow['sub_code'] ?? '')));
+                $subName = strtoupper(trim((string) ($aRow['sub_name'] ?? '')));
+                $credit = (float) ($aRow['sub_credit'] ?? 0);
+                $rawTerm = (string) ($aRow['term'] ?? '');
+                $term = AcademicTerm::normalize($rawTerm);
 
-                if ($studentCodes === []) {
-                    continue;
+                $isTermMatch = $selectedTerm === null || ($term !== null && in_array($term, $selectedTermVariants, true)) || in_array(trim($rawTerm), $selectedTermVariants, true);
+
+                if ($isTermMatch) {
+                    $registeredInSelectedTerm[$code] = true;
                 }
 
-                $placeholders = implode(',', array_fill(0, count($studentCodes), '?'));
-                $academicSql = "SELECT g._perf_std10 AS student_code,
-                                       g.grade,
-                                       g.typ_code,
-                                       g._perf_semestry AS term,
-                                       sub.sub_type,
-                                       sub.sub_credit,
-                                       sub.sub_code,
-                                       sub.sub_name
-                                FROM {$grade} g
-                                LEFT JOIN {$subject} sub ON sub._perf_sub = g._perf_sub
-                                WHERE g._perf_std10 IN ({$placeholders})";
+                $isPass = false;
+                if ($typCode === '1') {
+                    $isPass = true;
+                } elseif ($gradeVal !== '' && is_numeric($gradeVal)) {
+                    $isPass = (float) $gradeVal >= 1.0;
+                }
 
-                $academicRows = $this->rows($academicSql, $studentCodes);
-                $studentMetrics = [];
-                $registeredInSelectedTerm = [];
+                $isCompulsory = in_array($subType, ['1', 'บังคับ', 'compulsory'], true);
+                if (! $isCompulsory && $subType === '') {
+                    $isCompulsory = str_contains($subCode, 'ทร') || str_contains($subCode, 'ทช') || str_contains($subName, 'บังคับ');
+                }
 
-                foreach ($academicRows as $aRow) {
-                    $code = trim((string) ($aRow['student_code'] ?? ''));
-                    if ($code === '') {
-                        continue;
+                if ($isTermMatch) {
+                    if ($isCompulsory) {
+                        $studentMetrics[$code]['compulsory_registered'] += $credit;
+                    } else {
+                        $studentMetrics[$code]['elective_registered'] += $credit;
                     }
-                    $studentMetrics[$code] ??= [
-                        'compulsory_earned' => 0.0,
-                        'elective_earned' => 0.0,
-                        'compulsory_registered' => 0.0,
-                        'elective_registered' => 0.0,
-                        'exam_taken' => false,
-                    ];
-
-                    $gradeVal = trim((string) ($aRow['grade'] ?? ''));
-                    $subType = trim((string) ($aRow['sub_type'] ?? ''));
-                    $typCode = trim((string) ($aRow['typ_code'] ?? ''));
-                    $subCode = strtoupper(trim((string) ($aRow['sub_code'] ?? '')));
-                    $subName = strtoupper(trim((string) ($aRow['sub_name'] ?? '')));
-                    $credit = (float) ($aRow['sub_credit'] ?? 0);
-                    $rawTerm = (string) ($aRow['term'] ?? '');
-                    $term = AcademicTerm::normalize($rawTerm);
-
-                    $isTermMatch = $selectedTerm === null || ($term !== null && in_array($term, $selectedTermVariants, true)) || in_array(trim($rawTerm), $selectedTermVariants, true);
-
-                    if ($isTermMatch) {
-                        $registeredInSelectedTerm[$code] = true;
-                    }
-
-                    $isPass = false;
-                    if ($typCode === '1') {
-                        $isPass = true;
-                    } elseif ($gradeVal !== '' && is_numeric($gradeVal)) {
-                        $isPass = (float) $gradeVal >= 1.0;
-                    }
-
-                    $isCompulsory = in_array($subType, ['1', 'บังคับ', 'compulsory'], true);
-                    if (! $isCompulsory && $subType === '') {
-                        $isCompulsory = str_contains($subCode, 'ทร') || str_contains($subCode, 'ทช') || str_contains($subName, 'บังคับ');
-                    }
-
-                    if ($isPass) {
+                } else {
+                    $isTermBefore = $selectedTerm === null || $term === null || AcademicTerm::compare($term, $selectedTerm) < 0;
+                    if ($isTermBefore && $isPass) {
                         if ($isCompulsory) {
                             $studentMetrics[$code]['compulsory_earned'] += $credit;
                         } else {
                             $studentMetrics[$code]['elective_earned'] += $credit;
                         }
                     }
-
-                    if ($isTermMatch) {
-                        if ($isCompulsory) {
-                            $studentMetrics[$code]['compulsory_registered'] += $credit;
-                        } else {
-                            $studentMetrics[$code]['elective_registered'] += $credit;
-                        }
-                    }
-
-                    $isExamSubject = str_contains($subCode, 'NET') || str_contains($subCode, 'EXAM') || str_contains($subName, 'N-NET') || str_contains($subName, 'E-EXAM');
-                    if ($isExamSubject && ! in_array($gradeVal, ['', '-'], true)) {
-                        $studentMetrics[$code]['exam_taken'] = true;
-                    }
                 }
 
-                foreach ($studentList as $sRow) {
-                    $code = trim((string) ($sRow['student_code'] ?? ''));
-                    if ($code === '') {
-                        continue;
-                    }
-
-                    if (! isset($registeredInSelectedTerm[$code]) && $selectedTerm !== null) {
-                        continue;
-                    }
-
-                    $m = $studentMetrics[$code] ?? [
-                        'compulsory_earned' => 0.0,
-                        'elective_earned' => 0.0,
-                        'compulsory_registered' => 0.0,
-                        'elective_registered' => 0.0,
-                        'exam_taken' => false,
-                    ];
-                    $compTotal = $m['compulsory_earned'] + $m['compulsory_registered'];
-                    $elecTotal = $m['elective_earned'] + $m['elective_registered'];
-                    $grandTotal = $compTotal + $elecTotal;
-
-                    $nnetVal = strtoupper(trim((string) ($sRow['nnet_val'] ?? '')));
-                    $ntSara1Val = trim((string) ($sRow['nt_sara1_val'] ?? ''));
-                    $ntSara2Val = trim((string) ($sRow['nt_sara2_val'] ?? ''));
-                    $ntSemVal = trim((string) ($sRow['nt_sem_val'] ?? ''));
-                    $ntNosemVal = trim((string) ($sRow['nt_nosem_val'] ?? ''));
-                    $expFlagVal = trim((string) ($sRow['expflag_val'] ?? ''));
-                    $expSemVal = trim((string) ($sRow['expsem_val'] ?? ''));
-
-                    $hasStudentScore = ($ntSara1Val !== '' && $ntSara1Val !== '0')
-                        || ($ntSara2Val !== '' && $ntSara2Val !== '0')
-                        || $ntSemVal !== '';
-                    $hasExplicitPass = in_array($nnetVal, ['1', 'Y', 'P', 'PASS', 'PASSED', 'สอบแล้ว', 'ผ่าน'], true);
-                    $hasExamSubjectGrade = ! empty($m['exam_taken']);
-
-                    $isExamTaken = $hasStudentScore || $hasExplicitPass || $hasExamSubjectGrade;
-                    $examStatus = $isExamTaken ? 'สอบแล้ว' : 'มีสิทธิ์สอบ';
-
-                    $examStatusFilter = trim((string) ($filters['exam_status'] ?? ''));
-                    if ($examStatusFilter === 'taken' && ! $isExamTaken) {
-                        continue;
-                    }
-                    if (($examStatusFilter === 'eligible' || $examStatusFilter === 'not_taken') && $isExamTaken) {
-                        continue;
-                    }
-
-                    // Active student qualifies for expected graduation if total credits meet or approach graduation requirements
-                    // or if explicitly flagged as expected graduate (expflag = 1 or expsem set)
-                    if ($grandTotal >= $reqTotal || ($compTotal >= $reqComp && $elecTotal >= $reqElec) || $expFlagVal === '1' || $expSemVal !== '') {
-                        $genderLabel = $this->resolveGender((string) ($sRow['gender'] ?? ''), (string) ($sRow['prename'] ?? ''));
-                        $rows[] = [
-                            'id' => "{$set->districtId}-{$set->level}-{$code}",
-                            'entity_key' => "{$set->districtId}-{$set->level}-{$code}",
-                            'student_id' => $code,
-                            'primary' => $this->fullName($sRow),
-                            'name' => $this->fullName($sRow),
-                            'secondary' => $code,
-                            'group' => $this->levelLabel($set->level).' · '.$this->groupLabel($sRow),
-                            'level' => $this->levelLabel($set->level),
-                            'group_code' => trim((string) ($sRow['group_code'] ?? '')),
-                            'group_label' => $this->groupLabel($sRow),
-                            'gender' => $genderLabel,
-                            'metric' => number_format($grandTotal, 0).'/'.number_format($reqTotal, 0).' หน่วยกิต (บังคับ '.number_format($compTotal, 0).' / เลือก '.number_format($elecTotal, 0).')',
-                            'examStatus' => $examStatus,
-                            'nnet' => $examStatus,
-                        ];
-                    }
+                $isExamSubject = str_contains($subCode, 'NET') || str_contains($subCode, 'EXAM') || str_contains($subName, 'N-NET') || str_contains($subName, 'E-EXAM');
+                if ($isExamSubject && ! in_array($gradeVal, ['', '-'], true)) {
+                    $studentMetrics[$code]['exam_taken'] = true;
                 }
             }
 
-            return $this->payload($rows, $terms, $selectedTerm, static fn (): bool => true);
-        } catch (\Throwable) {
-            return $this->payload([], [], null, static fn (): bool => true);
+            foreach ($studentList as $sRow) {
+                $code = trim((string) ($sRow['student_code'] ?? ''));
+                if ($code === '') {
+                    continue;
+                }
+
+                if (! isset($registeredInSelectedTerm[$code]) && $selectedTerm !== null) {
+                    continue;
+                }
+
+                $m = $studentMetrics[$code] ?? [
+                    'compulsory_earned' => 0.0,
+                    'elective_earned' => 0.0,
+                    'compulsory_registered' => 0.0,
+                    'elective_registered' => 0.0,
+                    'exam_taken' => false,
+                ];
+                $compTotal = $m['compulsory_earned'] + $m['compulsory_registered'];
+                $elecTotal = $m['elective_earned'] + $m['elective_registered'];
+                $grandTotal = $compTotal + $elecTotal;
+
+                $nnetVal = strtoupper(trim((string) ($sRow['nnet_val'] ?? '')));
+                $ntSara1Val = trim((string) ($sRow['nt_sara1_val'] ?? ''));
+                $ntSara2Val = trim((string) ($sRow['nt_sara2_val'] ?? ''));
+                $ntSemVal = trim((string) ($sRow['nt_sem_val'] ?? ''));
+                $ntNosemVal = trim((string) ($sRow['nt_nosem_val'] ?? ''));
+                $expFlagVal = trim((string) ($sRow['expflag_val'] ?? ''));
+                $expSemVal = trim((string) ($sRow['expsem_val'] ?? ''));
+
+                $hasStudentScore = ($ntSara1Val !== '' && $ntSara1Val !== '0')
+                    || ($ntSara2Val !== '' && $ntSara2Val !== '0')
+                    || $ntSemVal !== ''
+                    || $ntNosemVal !== '';
+                $hasExplicitPass = in_array($nnetVal, ['1', 'Y', 'P', 'PASS', 'PASSED', 'สอบแล้ว', 'ผ่าน'], true);
+                $hasExamSubjectGrade = ! empty($m['exam_taken']);
+
+                $isExamTaken = $hasStudentScore || $hasExplicitPass || $hasExamSubjectGrade;
+                $examStatus = $isExamTaken ? 'สอบแล้ว' : 'มีสิทธิ์สอบ';
+
+                $examStatusFilter = trim((string) ($filters['exam_status'] ?? ''));
+                if ($examStatusFilter === 'taken' && ! $isExamTaken) {
+                    continue;
+                }
+                if (($examStatusFilter === 'eligible' || $examStatusFilter === 'not_taken') && $isExamTaken) {
+                    continue;
+                }
+
+                $isExpsemMatch = ($expSemVal !== '' && in_array(AcademicTerm::normalize($expSemVal), $selectedTermVariants, true))
+                    || in_array($expSemVal, $selectedTermVariants, true);
+
+                // Active student qualifies for expected graduation if total credits meet or approach graduation requirements
+                // or if explicitly flagged as expected graduate for this term
+                if ($grandTotal >= $reqTotal || ($compTotal >= $reqComp && $elecTotal >= $reqElec) || ($isExpsemMatch && ($expFlagVal === '1' || $expSemVal !== ''))) {
+                    $genderLabel = $this->resolveGender((string) ($sRow['gender'] ?? ''), (string) ($sRow['prename'] ?? ''));
+                    $rows[] = [
+                        'id' => "{$set->districtId}-{$set->level}-{$code}",
+                        'entity_key' => "{$set->districtId}-{$set->level}-{$code}",
+                        'student_id' => $code,
+                        'primary' => $this->fullName($sRow),
+                        'name' => $this->fullName($sRow),
+                        'secondary' => $code,
+                        'group' => $this->levelLabel($set->level).' · '.$this->groupLabel($sRow),
+                        'level' => $this->levelLabel($set->level),
+                        'group_code' => trim((string) ($sRow['group_code'] ?? '')),
+                        'group_label' => $this->groupLabel($sRow),
+                        'gender' => $genderLabel,
+                        'metric' => number_format($grandTotal, 0).'/'.number_format($reqTotal, 0).' หน่วยกิต (บังคับ '.number_format($compTotal, 0).' / เลือก '.number_format($elecTotal, 0).')',
+                        'examStatus' => $examStatus,
+                        'nnet' => $examStatus,
+                    ];
+                }
+            }
         }
+
+        return $rows;
     }
 
     /** @param array<string, mixed> $filters */
@@ -574,6 +591,9 @@ final readonly class LegacyStudentReportService
             return RegistrationStatistics::fromRecords($category, $records, $terms, null, $filters);
         }
 
+        $expectedRows = $this->expectedGraduateRows($viewer, $sets, $queryFilters, $selectedTerm, $terms);
+        $expectedStudentCodes = array_fill_keys(array_column($expectedRows, 'student_id'), true);
+
         foreach ($sets as $set) {
             [$groupJoin, $groupName] = $this->groupJoin($set, 'st');
             [$scopeSql, $scopeBindings] = $this->scope($viewer, $set, 'st', $groupJoin !== '');
@@ -637,7 +657,8 @@ final readonly class LegacyStudentReportService
                  WHERE ".implode(' AND ', array_filter($conditions)),
                 $bindings,
             ) as $row) {
-                if (trim((string) ($row['student_code'] ?? '')) === '') {
+                $code = trim((string) ($row['student_code'] ?? ''));
+                if ($code === '') {
                     continue;
                 }
                 $nnetVal = strtoupper(trim((string) ($row['nnet_val'] ?? '')));
@@ -645,20 +666,19 @@ final readonly class LegacyStudentReportService
                 $ntSara2Val = trim((string) ($row['nt_sara2_val'] ?? ''));
                 $ntSemVal = trim((string) ($row['nt_sem_val'] ?? ''));
                 $ntNosemVal = trim((string) ($row['nt_nosem_val'] ?? ''));
-                $expFlagVal = trim((string) ($row['expflag_val'] ?? ''));
-                $expSemVal = trim((string) ($row['expsem_val'] ?? ''));
 
                 $isExamTaken = in_array($nnetVal, ['1', 'Y', 'P', 'PASS', 'PASSED', 'สอบแล้ว', 'ผ่าน'], true)
                     || ($ntSara1Val !== '' && $ntSara1Val !== '0')
                     || ($ntSara2Val !== '' && $ntSara2Val !== '0')
-                    || $ntSemVal !== '';
+                    || $ntSemVal !== ''
+                    || $ntNosemVal !== '';
 
-                $isEligible = ! $isExamTaken && ($expFlagVal === '1' || $expSemVal !== '');
+                $isEligible = ! $isExamTaken && isset($expectedStudentCodes[$code]);
 
                 $nnetStatus = $isExamTaken ? 'taken' : ($isEligible ? 'eligible' : 'not_taken');
 
-                $records[$set->level.'|'.trim((string) $row['student_code'])] = [
-                    'student_code' => trim((string) $row['student_code']),
+                $records[$set->level.'|'.$code] = [
+                    'student_code' => $code,
                     'student_name' => $this->fullName($row) ?: 'ไม่พบชื่อนักศึกษา',
                     'target_group' => $row['target_group'] ?? '',
                     'group' => $row['group_code'] ?? '',
