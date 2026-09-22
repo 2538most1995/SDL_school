@@ -50,9 +50,5 @@ class DistrictContextMiddlewareTest extends TestCase
             ->getJson('/api/_test/district')
             ->assertOk()
             ->assertJsonPath('data.district_id', $district->id);
-
-        $this->getJson("/api/_test/district?district_id={$district->id}")
-            ->assertOk()
-            ->assertJsonPath('data.district_id', $district->id);
     }
 }

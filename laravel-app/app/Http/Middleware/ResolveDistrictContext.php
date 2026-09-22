@@ -14,7 +14,7 @@ final class ResolveDistrictContext
         $user = $request->user();
         abort_unless($user, 401);
 
-        $requestedDistrict = $request->header('X-District-Id') ?: $request->query('district_id');
+        $requestedDistrict = $request->header('X-District-Id');
 
         if ($user->role === 'super_admin') {
             abort_if(blank($requestedDistrict), 422, 'กรุณาเลือกอำเภอก่อนเรียกดูข้อมูล');
