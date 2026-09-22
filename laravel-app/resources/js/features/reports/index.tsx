@@ -524,11 +524,14 @@ export function ReportPage({ kind }: { kind: ReportKind }) {
             size: 180,
             meta: { compactSize: 96, compactTextAlign: 'center' },
             cell: ({ row }: { row: { original: ReportRow } }) => {
-                const status = row.original.examStatus ?? 'มีสิทธิ์สอบ';
-                const isPassed = status === 'สอบแล้ว';
-                const isEligible = status === 'มีสิทธิ์สอบ';
+                // Backend always sends examStatus for every expected-graduates row.
+                // A missing value means the row came from a different report kind
+                // (should not happen given the column is only added for expected-graduates).
+                const status = row.original.examStatus;
+                if (!status) return null;
+                const isTaken = status === 'สอบแล้ว';
                 return (
-                    <StatusBadge tone={isPassed ? 'success' : isEligible ? 'info' : 'warning'}>
+                    <StatusBadge tone={isTaken ? 'success' : 'info'}>
                         {status}
                     </StatusBadge>
                 );
