@@ -195,9 +195,13 @@ final readonly class LegacyStudentReportService
             $ntSemCol = $this->firstExistingColumn($set->student, ['nt_sem']);
             $ntNosemCol = $this->firstExistingColumn($set->student, ['nt_nosem']);
             $genderCol = $this->firstExistingColumn($set->student, ['gender', 'sex']);
+            // Exhaustive list of column name variants used across different itw51 export versions.
             $nnetCol = $this->firstExistingColumn($set->student, [
-                'nnet', 'n_net', 'eexam', 'e_exam', 'nnet_stat', 'exm_status',
-                'nt_result', 'nt_res', 'nnet_pass', 'nnet_result', 'eexam_status', 'e_exam_stat',
+                'nnet', 'n_net', 'eexam', 'e_exam',
+                'nnet_stat', 'nnet_status', 'nnet_pass', 'nnet_result',
+                'exm_status', 'exam_stat', 'exam_status', 'exam_pass',
+                'eexam_status', 'e_exam_stat', 'e_exam_status',
+                'nt_result', 'nt_res',
             ]);
 
             $finSemSql = $finSemCol !== null ? ", s.{$this->identifier($finSemCol)} AS fin_sem_val" : ", '' AS fin_sem_val";
@@ -343,13 +347,22 @@ final readonly class LegacyStudentReportService
                 $expFlagVal = trim((string) ($sRow['expflag_val'] ?? ''));
                 $expSemVal = trim((string) ($sRow['expsem_val'] ?? ''));
 
+                // --- Exam-taken detection (three independent signal tiers) ---
+                // Tier 1: Dedicated N-NET/E-Exam score columns on the student record.
                 $hasNtSem = AcademicTerm::normalize($ntSemVal) !== null;
                 $hasNtNosem = AcademicTerm::normalize($ntNosemVal) !== null;
                 $hasSara1Score = is_numeric($ntSara1Val) && (float) $ntSara1Val > 0;
                 $hasSara2Score = is_numeric($ntSara2Val) && (float) $ntSara2Val > 0;
                 $hasStudentScore = $hasSara1Score || $hasSara2Score || $hasNtSem || $hasNtNosem;
-                $hasExplicitPass = in_array($nnetVal, ['1', 'Y', 'P', 'PASS', 'PASSED', 'สอบแล้ว', 'ผ่าน'], true)
-                    || (is_numeric($nnetVal) && (float) $nnetVal > 0);
+
+                // Tier 2: Explicit pass/taken flag in the nnet/eexam status column across itw51 export versions.
+                $hasExplicitPass = in_array($nnetVal, [
+                    '1', '2',
+                    'Y', 'YES', 'P', 'PASS', 'PASSED', 'OK', 'DONE', 'EXAM', 'TAKEN',
+                    'สอบแล้ว', 'ผ่าน', 'สอบผ่าน', 'เข้าสอบ', 'มีผล',
+                ], true) || (is_numeric($nnetVal) && $nnetVal !== '' && (float) $nnetVal > 0);
+
+                // Tier 3: N-NET subject row found in the grade table with a non-blank grade.
                 $hasExamSubjectGrade = ! empty($m['exam_taken']);
 
                 $isExamTaken = $hasStudentScore || $hasExplicitPass || $hasExamSubjectGrade;
@@ -359,16 +372,14 @@ final readonly class LegacyStudentReportService
                 if ($examStatusFilter === 'taken' && ! $isExamTaken) {
                     continue;
                 }
-                if ($examStatusFilter === 'eligible' && $isExamTaken) {
+                if (($examStatusFilter === 'eligible' || $examStatusFilter === 'not_taken') && $isExamTaken) {
                     continue;
                 }
 
-                $isExpsemMatch = ($expSemVal !== '' && in_array(AcademicTerm::normalize($expSemVal), $selectedTermVariants, true))
-                    || in_array($expSemVal, $selectedTermVariants, true);
-
-                // Active student qualifies for expected graduation if total credits meet or approach graduation requirements
-                // or if explicitly flagged as expected graduate for this term
-                if ($grandTotal >= $reqTotal || ($compTotal >= $reqComp && $elecTotal >= $reqElec) || ($isExpsemMatch && ($expFlagVal === '1' || $expSemVal !== ''))) {
+                // Method 2 (pure credit calculation): Active student qualifies for expected graduation
+                // if total earned credits + registered credits in selected term meet graduation requirements.
+                // Applied uniformly across all academic terms and districts.
+                if ($grandTotal >= $reqTotal || ($compTotal >= $reqComp && $elecTotal >= $reqElec)) {
                     $genderLabel = $this->resolveGender((string) ($sRow['gender'] ?? ''), (string) ($sRow['prename'] ?? ''));
                     $rows[] = [
                         'id' => "{$set->districtId}-{$set->level}-{$code}",

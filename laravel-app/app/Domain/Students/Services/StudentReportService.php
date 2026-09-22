@@ -143,28 +143,47 @@ final readonly class StudentReportService
             },
         ));
 
-        $rows = array_map(static fn (Student $student): array => [
-            'id' => "{$student->districtId}-{$student->level}-{$student->code}",
-            'entity_key' => "{$student->districtId}-{$student->level}-{$student->code}",
-            'student_id' => $student->code,
-            'primary' => $student->fullName(),
-            'name' => $student->fullName(),
-            'secondary' => $student->code,
-            'group' => $student->levelLabel.' · '.$student->groupName,
-            'level' => $student->levelLabel,
-            'group_code' => $student->groupCode,
-            'group_label' => $student->groupName,
-            'gender' => (string) ($student->demographics['gender'] ?? 'ไม่ระบุ'),
-            'metric' => number_format($projectedCreditsByStudent["{$student->districtId}|{$student->level}|{$student->code}"] ?? 0, 0).'/'.number_format($student->creditsRequired, 0).' หน่วยกิต (คาดว่าจะจบ)',
-            'examStatus' => 'มีสิทธิ์สอบ',
-            'nnet' => 'มีสิทธิ์สอบ',
-        ], $students);
+        $rows = array_map(function (Student $student) use ($gradesByStudent, $projectedCreditsByStudent): array {
+            $studentGrades = $this->studentGrades($gradesByStudent, $student);
+            $examTaken = false;
+            foreach ($studentGrades as $grade) {
+                $code = strtoupper($grade->subjectCode);
+                $name = strtoupper($grade->subjectName);
+                if ((str_contains($code, 'N-NET') || str_contains($code, 'E-EXAM') || str_contains($name, 'N-NET') || str_contains($name, 'E-EXAM'))
+                    && $grade->numericGrade() !== null && $grade->numericGrade() > 0) {
+                    $examTaken = true;
+                    break;
+                }
+            }
+            $statusVal = (string) ($student->demographics['nnet'] ?? $student->demographics['exam_status'] ?? '');
+            if (in_array(strtoupper(trim($statusVal)), ['1', '2', 'Y', 'YES', 'P', 'PASS', 'PASSED', 'สอบแล้ว', 'ผ่าน'], true)) {
+                $examTaken = true;
+            }
+            $examStatus = $examTaken ? 'สอบแล้ว' : 'มีสิทธิ์สอบ';
+
+            return [
+                'id' => "{$student->districtId}-{$student->level}-{$student->code}",
+                'entity_key' => "{$student->districtId}-{$student->level}-{$student->code}",
+                'student_id' => $student->code,
+                'primary' => $student->fullName(),
+                'name' => $student->fullName(),
+                'secondary' => $student->code,
+                'group' => $student->levelLabel.' · '.$student->groupName,
+                'level' => $student->levelLabel,
+                'group_code' => $student->groupCode,
+                'group_label' => $student->groupName,
+                'gender' => (string) ($student->demographics['gender'] ?? 'ไม่ระบุ'),
+                'metric' => number_format($projectedCreditsByStudent["{$student->districtId}|{$student->level}|{$student->code}"] ?? 0, 0).'/'.number_format($student->creditsRequired, 0).' หน่วยกิต (คาดว่าจะจบ)',
+                'examStatus' => $examStatus,
+                'nnet' => $examStatus,
+            ];
+        }, $students);
 
         $examStatusFilter = trim((string) ($filters['exam_status'] ?? ''));
         if ($examStatusFilter === 'taken') {
             $rows = array_values(array_filter($rows, static fn (array $row): bool => ($row['examStatus'] ?? '') === 'สอบแล้ว'));
-        } elseif ($examStatusFilter === 'eligible') {
-            $rows = array_values(array_filter($rows, static fn (array $row): bool => in_array($row['examStatus'] ?? '', ['มีสิทธิ์สอบ', 'ยังไม่ได้สอบ'], true)));
+        } elseif ($examStatusFilter === 'eligible' || $examStatusFilter === 'not_taken') {
+            $rows = array_values(array_filter($rows, static fn (array $row): bool => ($row['examStatus'] ?? '') === 'มีสิทธิ์สอบ'));
         }
 
         return [

@@ -194,7 +194,7 @@ export function summarizeStatisticRows(
 }
 
 function groupParts(row: GenericReportRow): { level: string; group: string; gender: string; nnet: string } {
-    const nnet = row.examStatus ?? row.nnet ?? 'ยังไม่ได้สอบ';
+    const nnet = row.examStatus ?? row.nnet ?? 'มีสิทธิ์สอบ';
     const gender = row.gender || 'ไม่ระบุเพศ';
     if (row.level || row.group_label || row.group_code) {
         return {

@@ -264,6 +264,7 @@ function OverviewStudentListDialog({
     onClose: () => void;
 }) {
     const [searchTerm, setSearchTerm] = useState('');
+    const [examFilter, setExamFilter] = useState<'all' | 'taken' | 'eligible'>('all');
     const [isExporting, setIsExporting] = useState(false);
     const [subjectStudent, setSubjectStudent] = useState<{ code: string; name: string; level: string; group: string } | null>(null);
 
@@ -271,16 +272,27 @@ function OverviewStudentListDialog({
 
     const students = cellInfo.students;
     const showExamStatus = report?.source === 'expected-graduates';
-    const filteredStudents = searchTerm.trim()
-        ? students.filter(
-            (s) =>
-                (s.student_id ?? s.secondary ?? s.id ?? '').toLowerCase().includes(searchTerm.toLowerCase()) ||
-                (s.name ?? s.primary ?? '').toLowerCase().includes(searchTerm.toLowerCase()) ||
-                (s.group_name ?? s.group_label ?? s.group ?? s.group_id ?? '').toLowerCase().includes(searchTerm.toLowerCase()) ||
-                (s.level ?? '').toLowerCase().includes(searchTerm.toLowerCase()) ||
-                (s.gender ?? '').toLowerCase().includes(searchTerm.toLowerCase()),
-        )
-        : students;
+    const takenCount = students.filter((s) => s.nnet === 'สอบแล้ว' || s.examStatus === 'สอบแล้ว').length;
+    const eligibleCount = students.length - takenCount;
+
+    const filteredStudents = students.filter((s) => {
+        if (showExamStatus && examFilter !== 'all') {
+            const isTaken = s.nnet === 'สอบแล้ว' || s.examStatus === 'สอบแล้ว';
+            if (examFilter === 'taken' && !isTaken) return false;
+            if (examFilter === 'eligible' && isTaken) return false;
+        }
+
+        if (!searchTerm.trim()) return true;
+        const q = searchTerm.toLowerCase();
+        return (
+            (s.student_id ?? s.secondary ?? s.id ?? '').toLowerCase().includes(q) ||
+            (s.name ?? s.primary ?? '').toLowerCase().includes(q) ||
+            (s.group_name ?? s.group_label ?? s.group ?? s.group_id ?? '').toLowerCase().includes(q) ||
+            (s.level ?? '').toLowerCase().includes(q) ||
+            (s.gender ?? '').toLowerCase().includes(q) ||
+            (s.nnet ?? s.examStatus ?? '').toLowerCase().includes(q)
+        );
+    });
 
     const exportExcel = async () => {
         if (filteredStudents.length === 0 || isExporting) return;
@@ -373,15 +385,54 @@ function OverviewStudentListDialog({
 
                 <div className="p-5 sm:p-7">
                     <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
-                        <div className="relative w-full sm:w-80">
-                            <input
-                                type="text"
-                                value={searchTerm}
-                                onChange={(e) => setSearchTerm(e.target.value)}
-                                placeholder="ค้นหารหัส, ชื่อ-สกุล, กลุ่ม..."
-                                className="h-10 w-full rounded-xl border border-slate-300 bg-white pl-9 pr-3 text-sm font-semibold text-slate-900 placeholder:text-slate-400 focus:border-brand-600 focus:outline-none"
-                            />
-                            <MagnifyingGlass size={18} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
+                        <div className="flex flex-wrap items-center gap-3">
+                            <div className="relative w-full sm:w-80">
+                                <input
+                                    type="text"
+                                    value={searchTerm}
+                                    onChange={(e) => setSearchTerm(e.target.value)}
+                                    placeholder="ค้นหารหัส, ชื่อ-สกุล, กลุ่ม, สถานะ..."
+                                    className="h-10 w-full rounded-xl border border-slate-300 bg-white pl-9 pr-3 text-sm font-semibold text-slate-900 placeholder:text-slate-400 focus:border-brand-600 focus:outline-none"
+                                />
+                                <MagnifyingGlass size={18} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
+                            </div>
+                            {showExamStatus && (
+                                <div className="flex items-center gap-1.5 rounded-xl border border-slate-200 bg-slate-50 p-1">
+                                    <button
+                                        type="button"
+                                        onClick={() => setExamFilter('all')}
+                                        className={`rounded-lg px-2.5 py-1 text-xs font-bold transition ${
+                                            examFilter === 'all'
+                                                ? 'bg-white text-slate-900 shadow-sm'
+                                                : 'text-slate-600 hover:text-slate-900'
+                                        }`}
+                                    >
+                                        ทั้งหมด ({students.length})
+                                    </button>
+                                    <button
+                                        type="button"
+                                        onClick={() => setExamFilter('taken')}
+                                        className={`rounded-lg px-2.5 py-1 text-xs font-bold transition ${
+                                            examFilter === 'taken'
+                                                ? 'bg-emerald-600 text-white shadow-sm'
+                                                : 'text-emerald-700 hover:bg-emerald-100/60'
+                                        }`}
+                                    >
+                                        สอบแล้ว ({takenCount})
+                                    </button>
+                                    <button
+                                        type="button"
+                                        onClick={() => setExamFilter('eligible')}
+                                        className={`rounded-lg px-2.5 py-1 text-xs font-bold transition ${
+                                            examFilter === 'eligible'
+                                                ? 'bg-sky-600 text-white shadow-sm'
+                                                : 'text-sky-700 hover:bg-sky-100/60'
+                                        }`}
+                                    >
+                                        มีสิทธิ์สอบ ({eligibleCount})
+                                    </button>
+                                </div>
+                            )}
                         </div>
                         <p className="text-xs font-bold text-slate-500">
                             แสดง {filteredStudents.length.toLocaleString('th-TH')} จาก {students.length.toLocaleString('th-TH')} คน
