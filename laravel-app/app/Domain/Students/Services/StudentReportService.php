@@ -159,6 +159,15 @@ final readonly class StudentReportService
             if (in_array(strtoupper(trim($statusVal)), ['1', '2', 'Y', 'YES', 'P', 'PASS', 'PASSED', 'สอบแล้ว', 'ผ่าน'], true)) {
                 $examTaken = true;
             }
+            $ntSemVal = trim((string) ($student->demographics['nt_sem'] ?? ''));
+            $ntNosemVal = trim((string) ($student->demographics['nt_nosem'] ?? ''));
+            $hasNtSem = (AcademicTerm::normalize($ntSemVal) !== null)
+                || (! in_array($ntSemVal, ['', '-', '0', '0/0', 'null', 'NULL'], true) && ! str_starts_with($ntSemVal, '0/'));
+            $hasNtNosem = (AcademicTerm::normalize($ntNosemVal) !== null)
+                || (! in_array($ntNosemVal, ['', '-', '0', '0/0', 'null', 'NULL'], true) && ! str_starts_with($ntNosemVal, '0/'));
+            if ($hasNtSem || $hasNtNosem) {
+                $examTaken = true;
+            }
             $examStatus = $examTaken ? 'สอบแล้ว' : 'มีสิทธิ์สอบ';
 
             return [

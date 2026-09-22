@@ -409,6 +409,9 @@ final class LegacyStudentReportServiceTest extends TestCase
                         static function (int $number): object {
                             $taken = $number <= 13;
 
+                            $hasNtSem = $number <= 7;
+                            $hasNtNosem = $number >= 8 && $number <= 13;
+
                             return (object) [
                                 'student_code' => '6911'.str_pad((string) $number, 6, '0', STR_PAD_LEFT),
                                 'prename' => $number % 2 === 0 ? 'นางสาว' : 'นาย',
@@ -420,8 +423,8 @@ final class LegacyStudentReportServiceTest extends TestCase
                                 'expsem_val' => '69/1',
                                 'nt_sara1_val' => '0',
                                 'nt_sara2_val' => '0',
-                                'nt_sem_val' => $taken ? ($number === 13 ? '67/2' : '68/2') : ($number === 14 ? '0/0' : '-'),
-                                'nt_nosem_val' => '',
+                                'nt_sem_val' => $hasNtSem ? ($number === 7 ? '68/1' : '68/2') : ($number === 14 ? '0/0' : '-'),
+                                'nt_nosem_val' => $hasNtNosem ? ($number === 13 ? '67/2' : '68/2') : '',
                                 'gender' => $number % 2 === 0 ? '2' : '1',
                                 'nnet_val' => '',
                                 'fin_cause_val' => '',

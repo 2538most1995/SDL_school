@@ -347,10 +347,12 @@ final readonly class LegacyStudentReportService
                 $expFlagVal = trim((string) ($sRow['expflag_val'] ?? ''));
                 $expSemVal = trim((string) ($sRow['expsem_val'] ?? ''));
 
-                // --- Exam-taken detection (three independent signal tiers) ---
-                // Tier 1: Dedicated N-NET/E-Exam score columns on the student record.
-                $hasNtSem = AcademicTerm::normalize($ntSemVal) !== null;
-                $hasNtNosem = AcademicTerm::normalize($ntNosemVal) !== null;
+                // --- Exam-taken detection (N-NET / E-Exam) ---
+                // นักศึกษาที่มีค่าใน nt_sem หรือ nt_nosem ให้มีสถานะ "สอบแล้ว" แต่ถ้าไม่มีให้ขึ้น "มีสิทธิ์สอบ"
+                $hasNtSem = (AcademicTerm::normalize($ntSemVal) !== null)
+                    || (! in_array($ntSemVal, ['', '-', '0', '0/0', 'null', 'NULL'], true) && ! str_starts_with($ntSemVal, '0/'));
+                $hasNtNosem = (AcademicTerm::normalize($ntNosemVal) !== null)
+                    || (! in_array($ntNosemVal, ['', '-', '0', '0/0', 'null', 'NULL'], true) && ! str_starts_with($ntNosemVal, '0/'));
                 $hasSara1Score = is_numeric($ntSara1Val) && (float) $ntSara1Val > 0;
                 $hasSara2Score = is_numeric($ntSara2Val) && (float) $ntSara2Val > 0;
                 $hasStudentScore = $hasSara1Score || $hasSara2Score || $hasNtSem || $hasNtNosem;
@@ -365,7 +367,7 @@ final readonly class LegacyStudentReportService
                 // Tier 3: N-NET subject row found in the grade table with a non-blank grade.
                 $hasExamSubjectGrade = ! empty($m['exam_taken']);
 
-                $isExamTaken = $hasStudentScore || $hasExplicitPass || $hasExamSubjectGrade;
+                $isExamTaken = $hasNtSem || $hasNtNosem || $hasStudentScore || $hasExplicitPass || $hasExamSubjectGrade;
                 $examStatus = $isExamTaken ? 'สอบแล้ว' : 'มีสิทธิ์สอบ';
 
                 $examStatusFilter = trim((string) ($filters['exam_status'] ?? ''));
