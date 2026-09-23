@@ -276,6 +276,36 @@ final readonly class CourseRegistrationService
         $electiveRequired = $student->electiveCreditsRequired > 0 ? $student->electiveCreditsRequired : $reqs['elective'];
         $electiveRemaining = max(0.0, round($electiveRequired - $electiveEarned, 1));
 
+        $addrParts = $this->parseAddress($student->currentAddress ?: $student->registeredAddress ?: '');
+        [$termNo, $termYear] = $this->splitTerm($targetTerm);
+
+        $savedStudentInfo = null;
+        if ($saved !== null && ! empty($saved->student_info)) {
+            $savedStudentInfo = json_decode((string) $saved->student_info, true) ?: null;
+        }
+
+        $studentInfo = $savedStudentInfo ?? [
+            'name' => $student->fullName(),
+            'phone' => $student->phone ?? '',
+            'facebook' => $student->facebookUrl ?? '',
+            'line_id' => $student->lineId ?? '',
+            'house_no' => $addrParts['house_no'],
+            'moo' => $addrParts['moo'],
+            'subdistrict' => $addrParts['subdistrict'],
+            'district' => $addrParts['district'],
+            'province' => $addrParts['province'],
+            'citizen_id' => $student->citizenId ?? '',
+            'code' => $student->code,
+            'group' => $student->groupName ?: $student->groupCode,
+            'box_subdistrict' => $addrParts['subdistrict'],
+            'compulsory_earned' => $compulsoryEarned,
+            'elective_earned' => $electiveEarned,
+            'compulsory_remaining' => $compulsoryRemaining,
+            'elective_remaining' => $electiveRemaining,
+            'term_no' => $termNo,
+            'term_year' => $termYear,
+        ];
+
         return [
             'student' => [
                 'code' => $student->code,
@@ -295,6 +325,7 @@ final readonly class CourseRegistrationService
                 'line_id' => $student->lineId ?? '',
                 'address' => $student->currentAddress ?: $student->registeredAddress ?: '',
             ],
+            'student_info' => $studentInfo,
             'academic_term' => $targetTerm,
             'requirements' => [
                 'compulsory_required' => $compulsoryRequired,
@@ -317,7 +348,7 @@ final readonly class CourseRegistrationService
     /**
      * Save or update course registration for a student.
      *
-     * @param  array{academic_term: string, compulsory_subjects: list<array<string, mixed>>, elective_subjects: list<array<string, mixed>>, notes?: ?string}  $data
+     * @param  array{academic_term: string, student_info?: ?array<string, mixed>, compulsory_subjects: list<array<string, mixed>>, elective_subjects: list<array<string, mixed>>, notes?: ?string}  $data
      * @return array<string, mixed>
      */
     public function save(User $viewer, string $studentCode, array $data): array
@@ -361,6 +392,10 @@ final readonly class CourseRegistrationService
             ];
         }
 
+        $studentInfo = isset($data['student_info']) && is_array($data['student_info'])
+            ? $data['student_info']
+            : null;
+
         $notes = isset($data['notes']) ? trim((string) $data['notes']) : null;
 
         DB::table('learning_course_registrations')->updateOrInsert(
@@ -372,6 +407,7 @@ final readonly class CourseRegistrationService
             [
                 'education_level' => $student->level,
                 'group_code' => $student->groupCode,
+                'student_info' => $studentInfo ? json_encode($studentInfo, JSON_UNESCAPED_UNICODE) : null,
                 'compulsory_subjects' => json_encode($compulsorySanitized, JSON_UNESCAPED_UNICODE),
                 'elective_subjects' => json_encode($electiveSanitized, JSON_UNESCAPED_UNICODE),
                 'notes' => $notes,
@@ -382,5 +418,60 @@ final readonly class CourseRegistrationService
         );
 
         return $this->studentRegistration($viewer, $studentCode, $term) ?? [];
+    }
+
+    /**
+     * @return array{house_no: string, moo: string, subdistrict: string, district: string, province: string}
+     */
+    private function parseAddress(string $address): array
+    {
+        $houseNo = '';
+        $moo = '';
+        $subdistrict = '';
+        $district = '';
+        $province = '';
+
+        if (preg_match('/(?:บ้านเลขที่\s*|เลขที่\s*)([0-9\/\-]+)/u', $address, $m)) {
+            $houseNo = $m[1];
+        } elseif (preg_match('/^([0-9\/\-]+)/u', trim($address), $m)) {
+            $houseNo = $m[1];
+        }
+
+        if (preg_match('/(?:หมู่\s*ที่\s*|หมู่\s*)([0-9]+)/u', $address, $m)) {
+            $moo = $m[1];
+        }
+
+        if (preg_match('/(?:ตำบล|แขวง)\s*([^\s]+)/u', $address, $m)) {
+            $subdistrict = $m[1];
+        }
+
+        if (preg_match('/(?:อำเภอ|เขต)\s*([^\s]+)/u', $address, $m)) {
+            $district = $m[1];
+        }
+
+        if (preg_match('/(?:จังหวัด)\s*([^\s]+)/u', $address, $m)) {
+            $province = $m[1];
+        }
+
+        return [
+            'house_no' => $houseNo,
+            'moo' => $moo,
+            'subdistrict' => $subdistrict,
+            'district' => $district,
+            'province' => $province,
+        ];
+    }
+
+    /**
+     * @return array{0: string, 1: string}
+     */
+    private function splitTerm(string $term): array
+    {
+        $parts = explode('/', trim($term));
+
+        return [
+            trim($parts[0] ?? ''),
+            trim($parts[1] ?? ''),
+        ];
     }
 }

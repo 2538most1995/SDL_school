@@ -83,11 +83,47 @@ final readonly class CourseRegistrationExportService
         $reqs = $data['requirements'];
         $level = (int) $st['level'];
         $term = (string) $data['academic_term'];
+        $info = isset($data['student_info']) && is_array($data['student_info']) ? $data['student_info'] : [];
 
         [$termNo, $termYear] = $this->splitTerm($term);
-        $citizenDigits = $this->boxDigits((string) ($st['citizen_id_raw'] ?: $st['citizen_id']), 13);
-        $studentCodeDigits = $this->boxDigits((string) $st['code'], 10);
+        if (! empty($info['term_no'])) {
+            $termNo = (string) $info['term_no'];
+        }
+        if (! empty($info['term_year'])) {
+            $termYear = (string) $info['term_year'];
+        }
+
         $addrParts = $this->parseAddress((string) $st['address']);
+        $name = (string) ($info['name'] ?? $st['name']);
+        $phone = (string) ($info['phone'] ?? $st['phone']);
+        $facebook = (string) ($info['facebook'] ?? $st['facebook']);
+        $lineId = (string) ($info['line_id'] ?? $st['line_id']);
+        $houseNo = (string) ($info['house_no'] ?? $addrParts['house_no']);
+        $moo = (string) ($info['moo'] ?? $addrParts['moo']);
+        $subdistrict = (string) ($info['subdistrict'] ?? $addrParts['subdistrict']);
+        $district = (string) ($info['district'] ?? $addrParts['district']);
+        $province = (string) ($info['province'] ?? $addrParts['province']);
+        $group = (string) ($info['group'] ?? ($st['group_name'] ?: $st['group_code']));
+        $boxSubdistrict = (string) ($info['box_subdistrict'] ?? $subdistrict);
+
+        $citizenRaw = (string) ($info['citizen_id'] ?? ($st['citizen_id_raw'] ?: $st['citizen_id']));
+        $citizenDigits = $this->boxDigits($citizenRaw, 13);
+
+        $studentCodeRaw = (string) ($info['code'] ?? $st['code']);
+        $studentCodeDigits = $this->boxDigits($studentCodeRaw, 10);
+
+        $compulsoryEarned = isset($info['compulsory_earned']) && $info['compulsory_earned'] !== ''
+            ? $info['compulsory_earned']
+            : $reqs['compulsory_earned'];
+        $electiveEarned = isset($info['elective_earned']) && $info['elective_earned'] !== ''
+            ? $info['elective_earned']
+            : $reqs['elective_earned'];
+        $compulsoryRemaining = isset($info['compulsory_remaining']) && $info['compulsory_remaining'] !== ''
+            ? $info['compulsory_remaining']
+            : $reqs['compulsory_remaining'];
+        $electiveRemaining = isset($info['elective_remaining']) && $info['elective_remaining'] !== ''
+            ? $info['elective_remaining']
+            : $reqs['elective_remaining'];
 
         // Format compulsory subjects
         $compulsorySubjects = $data['compulsory_subjects'] ?? [];
@@ -120,25 +156,25 @@ final readonly class CourseRegistrationExportService
             'term_display' => $term,
             'term_no' => $termNo,
             'term_year' => $termYear,
-            'district_center_name' => 'ศูนย์ส่งเสริมการเรียนรู้ระดับอำเภอ' . ($st['district_name'] ?: '........................'),
+            'district_center_name' => CurriculumCatalog::formatDistrictCenterName($st['district_name'] ?? null),
             'student' => [
-                'name' => $st['name'],
-                'phone' => $st['phone'],
-                'facebook' => $st['facebook'],
-                'line_id' => $st['line_id'],
-                'house_no' => $addrParts['house_no'],
-                'moo' => $addrParts['moo'],
-                'subdistrict' => $addrParts['subdistrict'],
-                'district' => $addrParts['district'],
-                'province' => $addrParts['province'],
+                'name' => $name,
+                'phone' => $phone,
+                'facebook' => $facebook,
+                'line_id' => $lineId,
+                'house_no' => $houseNo,
+                'moo' => $moo,
+                'subdistrict' => $subdistrict,
+                'district' => $district,
+                'province' => $province,
                 'citizen_digits' => $citizenDigits,
                 'student_code_digits' => $studentCodeDigits,
-                'group' => $st['group_name'] ?: $st['group_code'],
-                'box_subdistrict' => $addrParts['subdistrict'],
-                'compulsory_earned' => $reqs['compulsory_earned'],
-                'elective_earned' => $reqs['elective_earned'],
-                'compulsory_remaining' => $reqs['compulsory_remaining'],
-                'elective_remaining' => $reqs['elective_remaining'],
+                'group' => $group,
+                'box_subdistrict' => $boxSubdistrict,
+                'compulsory_earned' => $compulsoryEarned,
+                'elective_earned' => $electiveEarned,
+                'compulsory_remaining' => $compulsoryRemaining,
+                'elective_remaining' => $electiveRemaining,
             ],
             'compulsory_total' => (int) $compulsoryTotal,
             'compulsory_subjects' => $compulsorySubjects,
@@ -182,7 +218,7 @@ final readonly class CourseRegistrationExportService
             'term_display' => $term,
             'term_no' => $termNo,
             'term_year' => $termYear,
-            'district_center_name' => 'ศูนย์ส่งเสริมการเรียนรู้ระดับอำเภอ' . ($districtName ?: '........................'),
+            'district_center_name' => CurriculumCatalog::formatDistrictCenterName($districtName ?: null),
             'student' => [
                 'name' => '',
                 'phone' => '',

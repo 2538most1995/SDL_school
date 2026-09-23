@@ -1,5 +1,7 @@
 import {
     ArrowLeft,
+    CaretDown,
+    CaretUp,
     Check,
     CheckCircle,
     FilePdf,
@@ -7,6 +9,7 @@ import {
     GraduationCap,
     MagnifyingGlass,
     Notebook,
+    PencilSimple,
     Plus,
     Printer,
     Student as StudentIcon,
@@ -65,6 +68,28 @@ type SubjectRow = {
     passed_term?: string | null;
 };
 
+type StudentInfoForm = {
+    name: string;
+    phone: string;
+    facebook: string;
+    line_id: string;
+    house_no: string;
+    moo: string;
+    subdistrict: string;
+    district: string;
+    province: string;
+    citizen_id: string;
+    code: string;
+    group: string;
+    box_subdistrict: string;
+    compulsory_earned: number | string;
+    elective_earned: number | string;
+    compulsory_remaining: number | string;
+    elective_remaining: number | string;
+    term_no: string;
+    term_year: string;
+};
+
 type StudentRegistrationData = {
     student: {
         code: string;
@@ -83,6 +108,7 @@ type StudentRegistrationData = {
         line_id: string;
         address: string;
     };
+    student_info?: StudentInfoForm;
     academic_term: string;
     requirements: {
         compulsory_required: number;
@@ -122,8 +148,21 @@ export function CourseRegistrationPage() {
     // Form editing state
     const [compulsoryRows, setCompulsoryRows] = useState<SubjectRow[]>([]);
     const [electiveRows, setElectiveRows] = useState<SubjectRow[]>([]);
+    const [studentInfo, setStudentInfo] = useState<StudentInfoForm | null>(null);
+    const [showEditInfo, setShowEditInfo] = useState(false);
     const [notes, setNotes] = useState('');
     const [isFormDirty, setIsFormDirty] = useState(false);
+
+    const handleStudentInfoChange = (field: keyof StudentInfoForm, value: string | number) => {
+        setStudentInfo((prev) => {
+            if (!prev) return null;
+            return {
+                ...prev,
+                [field]: value,
+            };
+        });
+        setIsFormDirty(true);
+    };
 
     const workspaceParams = useMemo(() => {
         const query = new URLSearchParams();
@@ -169,6 +208,29 @@ export function CourseRegistrationPage() {
         setCompulsoryRows(data.compulsory_subjects ?? []);
         setElectiveRows(data.elective_subjects ?? []);
         setNotes(data.notes ?? '');
+        setStudentInfo(
+            data.student_info ?? {
+                name: data.student.name,
+                phone: data.student.phone || '',
+                facebook: data.student.facebook || '',
+                line_id: data.student.line_id || '',
+                house_no: '',
+                moo: '',
+                subdistrict: '',
+                district: '',
+                province: '',
+                citizen_id: data.student.citizen_id || '',
+                code: data.student.code,
+                group: data.student.group_name || data.student.group_code || '',
+                box_subdistrict: '',
+                compulsory_earned: data.requirements.compulsory_earned,
+                elective_earned: data.requirements.elective_earned,
+                compulsory_remaining: data.requirements.compulsory_remaining,
+                elective_remaining: data.requirements.elective_remaining,
+                term_no: data.academic_term.split('/')[0] || '',
+                term_year: data.academic_term.split('/')[1] || '',
+            },
+        );
         setIsFormDirty(false);
     };
 
@@ -202,6 +264,7 @@ export function CourseRegistrationPage() {
             if (!selectedStudentCode || !studentDetail) return;
             const payload = {
                 academic_term: studentDetail.academic_term,
+                student_info: studentInfo,
                 compulsory_subjects: compulsoryRows,
                 elective_subjects: electiveRows,
                 notes,
@@ -571,44 +634,271 @@ export function CourseRegistrationPage() {
                                     <div>
                                         <div className="flex items-center gap-2">
                                             <h2 className="text-xl font-black text-slate-900">
-                                                {studentDetail.student.name}
+                                                {studentInfo?.name || studentDetail.student.name}
                                             </h2>
                                             <StatusBadge tone="brand">
                                                 {studentDetail.student.level_label}
                                             </StatusBadge>
                                         </div>
                                         <p className="mt-1 font-mono text-sm text-slate-500">
-                                            รหัสนักศึกษา: {studentDetail.student.code} | เลขบัตร ปชช: {studentDetail.student.citizen_id}
+                                            รหัสนักศึกษา: {studentInfo?.code || studentDetail.student.code} | เลขบัตร ปชช: {studentInfo?.citizen_id || studentDetail.student.citizen_id}
                                         </p>
                                     </div>
-                                    <div className="text-right">
-                                        <span className="inline-block rounded-xl bg-slate-100 px-3 py-1.5 text-xs font-bold text-slate-700">
-                                            ภาคเรียนที่ {studentDetail.academic_term}
-                                        </span>
-                                        <p className="mt-1 text-xs text-slate-500">
-                                            {studentDetail.student.group_name} ({studentDetail.student.group_code})
+                                    <div className="flex flex-col items-end gap-1.5">
+                                        <div className="flex items-center gap-2">
+                                            <span className="inline-block rounded-xl bg-slate-100 px-3 py-1.5 text-xs font-bold text-slate-700">
+                                                ภาคเรียนที่ {studentInfo?.term_no || studentDetail.academic_term.split('/')[0]}/{studentInfo?.term_year || studentDetail.academic_term.split('/')[1]}
+                                            </span>
+                                            <button
+                                                type="button"
+                                                onClick={() => setShowEditInfo(!showEditInfo)}
+                                                className="inline-flex items-center gap-1.5 rounded-xl border border-brand-300 bg-brand-50 px-3 py-1.5 text-xs font-bold text-brand-700 hover:bg-brand-100 transition-colors shadow-sm"
+                                            >
+                                                <PencilSimple size={15} />
+                                                {showEditInfo ? 'ซ่อนการแก้ไขข้อมูล' : 'แก้ไขข้อมูลส่วนตัว'}
+                                            </button>
+                                        </div>
+                                        <p className="text-xs text-slate-500">
+                                            กลุ่ม: {studentInfo?.group || studentDetail.student.group_name || studentDetail.student.group_code}
                                         </p>
                                     </div>
                                 </div>
 
-                                <div className="grid gap-3 text-xs sm:grid-cols-3">
-                                    <div>
-                                        <span className="text-slate-400">เบอร์โทรศัพท์:</span>{' '}
-                                        <span className="font-bold text-slate-700">{studentDetail.student.phone || '-'}</span>
+                                {/* Editable Student Info Form */}
+                                {showEditInfo ? (
+                                    <div className="rounded-xl border border-brand-200 bg-brand-50/40 p-4 space-y-4">
+                                        <div className="flex items-center justify-between border-b border-brand-100 pb-2">
+                                            <h4 className="text-xs font-bold text-brand-900 uppercase tracking-wider flex items-center gap-1.5">
+                                                <PencilSimple size={15} /> แก้ไขข้อมูลส่วนตัวบนใบลงทะเบียนเรียน
+                                            </h4>
+                                            <span className="text-[11px] text-brand-600">
+                                                * ข้อมูลที่แก้ไขจะถูกบันทึกและนำไปพิมพ์ลงบนใบลงทะเบียนเรียน (PDF)
+                                            </span>
+                                        </div>
+
+                                        {/* Row 1: ชื่อ, เลข ปชช, รหัส นศ */}
+                                        <div className="grid gap-3 sm:grid-cols-3">
+                                            <div>
+                                                <label className="block text-[11px] font-bold text-slate-700 mb-1">ชื่อ - สกุล</label>
+                                                <input
+                                                    type="text"
+                                                    value={studentInfo?.name || ''}
+                                                    onChange={(e) => handleStudentInfoChange('name', e.target.value)}
+                                                    className="w-full rounded-lg border border-slate-300 bg-white p-2 text-xs font-medium focus:border-brand-500 focus:outline-none"
+                                                />
+                                            </div>
+                                            <div>
+                                                <label className="block text-[11px] font-bold text-slate-700 mb-1">เลขประจำตัวประชาชน (13 หลัก)</label>
+                                                <input
+                                                    type="text"
+                                                    maxLength={13}
+                                                    value={studentInfo?.citizen_id || ''}
+                                                    onChange={(e) => handleStudentInfoChange('citizen_id', e.target.value)}
+                                                    className="w-full rounded-lg border border-slate-300 bg-white p-2 text-xs font-mono font-medium focus:border-brand-500 focus:outline-none"
+                                                />
+                                            </div>
+                                            <div>
+                                                <label className="block text-[11px] font-bold text-slate-700 mb-1">รหัสประจำตัวนักศึกษา (10 หลัก)</label>
+                                                <input
+                                                    type="text"
+                                                    maxLength={10}
+                                                    value={studentInfo?.code || ''}
+                                                    onChange={(e) => handleStudentInfoChange('code', e.target.value)}
+                                                    className="w-full rounded-lg border border-slate-300 bg-white p-2 text-xs font-mono font-medium focus:border-brand-500 focus:outline-none"
+                                                />
+                                            </div>
+                                        </div>
+
+                                        {/* Row 2: ติดต่อ */}
+                                        <div className="grid gap-3 sm:grid-cols-3">
+                                            <div>
+                                                <label className="block text-[11px] font-bold text-slate-700 mb-1">เบอร์โทรศัพท์</label>
+                                                <input
+                                                    type="text"
+                                                    value={studentInfo?.phone || ''}
+                                                    onChange={(e) => handleStudentInfoChange('phone', e.target.value)}
+                                                    className="w-full rounded-lg border border-slate-300 bg-white p-2 text-xs focus:border-brand-500 focus:outline-none"
+                                                />
+                                            </div>
+                                            <div>
+                                                <label className="block text-[11px] font-bold text-slate-700 mb-1">Facebook</label>
+                                                <input
+                                                    type="text"
+                                                    value={studentInfo?.facebook || ''}
+                                                    onChange={(e) => handleStudentInfoChange('facebook', e.target.value)}
+                                                    className="w-full rounded-lg border border-slate-300 bg-white p-2 text-xs focus:border-brand-500 focus:outline-none"
+                                                />
+                                            </div>
+                                            <div>
+                                                <label className="block text-[11px] font-bold text-slate-700 mb-1">ID Line</label>
+                                                <input
+                                                    type="text"
+                                                    value={studentInfo?.line_id || ''}
+                                                    onChange={(e) => handleStudentInfoChange('line_id', e.target.value)}
+                                                    className="w-full rounded-lg border border-slate-300 bg-white p-2 text-xs focus:border-brand-500 focus:outline-none"
+                                                />
+                                            </div>
+                                        </div>
+
+                                        {/* Row 3: ที่อยู่ */}
+                                        <div className="grid gap-2 sm:grid-cols-5">
+                                            <div>
+                                                <label className="block text-[11px] font-bold text-slate-700 mb-1">บ้านเลขที่</label>
+                                                <input
+                                                    type="text"
+                                                    value={studentInfo?.house_no || ''}
+                                                    onChange={(e) => handleStudentInfoChange('house_no', e.target.value)}
+                                                    className="w-full rounded-lg border border-slate-300 bg-white p-2 text-xs focus:border-brand-500 focus:outline-none"
+                                                />
+                                            </div>
+                                            <div>
+                                                <label className="block text-[11px] font-bold text-slate-700 mb-1">หมู่ที่</label>
+                                                <input
+                                                    type="text"
+                                                    value={studentInfo?.moo || ''}
+                                                    onChange={(e) => handleStudentInfoChange('moo', e.target.value)}
+                                                    className="w-full rounded-lg border border-slate-300 bg-white p-2 text-xs focus:border-brand-500 focus:outline-none"
+                                                />
+                                            </div>
+                                            <div>
+                                                <label className="block text-[11px] font-bold text-slate-700 mb-1">ตำบล</label>
+                                                <input
+                                                    type="text"
+                                                    value={studentInfo?.subdistrict || ''}
+                                                    onChange={(e) => handleStudentInfoChange('subdistrict', e.target.value)}
+                                                    className="w-full rounded-lg border border-slate-300 bg-white p-2 text-xs focus:border-brand-500 focus:outline-none"
+                                                />
+                                            </div>
+                                            <div>
+                                                <label className="block text-[11px] font-bold text-slate-700 mb-1">อำเภอ</label>
+                                                <input
+                                                    type="text"
+                                                    value={studentInfo?.district || ''}
+                                                    onChange={(e) => handleStudentInfoChange('district', e.target.value)}
+                                                    className="w-full rounded-lg border border-slate-300 bg-white p-2 text-xs focus:border-brand-500 focus:outline-none"
+                                                />
+                                            </div>
+                                            <div>
+                                                <label className="block text-[11px] font-bold text-slate-700 mb-1">จังหวัด</label>
+                                                <input
+                                                    type="text"
+                                                    value={studentInfo?.province || ''}
+                                                    onChange={(e) => handleStudentInfoChange('province', e.target.value)}
+                                                    className="w-full rounded-lg border border-slate-300 bg-white p-2 text-xs focus:border-brand-500 focus:outline-none"
+                                                />
+                                            </div>
+                                        </div>
+
+                                        {/* Row 4: ข้อมูลสังกัดบนใบลงทะเบียน (กล่องขวา) & ภาคเรียน */}
+                                        <div className="grid gap-3 sm:grid-cols-4">
+                                            <div>
+                                                <label className="block text-[11px] font-bold text-slate-700 mb-1">กลุ่ม (กล่องขวา)</label>
+                                                <input
+                                                    type="text"
+                                                    value={studentInfo?.group || ''}
+                                                    onChange={(e) => handleStudentInfoChange('group', e.target.value)}
+                                                    className="w-full rounded-lg border border-slate-300 bg-white p-2 text-xs focus:border-brand-500 focus:outline-none"
+                                                />
+                                            </div>
+                                            <div>
+                                                <label className="block text-[11px] font-bold text-slate-700 mb-1">ตำบล (กล่องขวา)</label>
+                                                <input
+                                                    type="text"
+                                                    value={studentInfo?.box_subdistrict || ''}
+                                                    onChange={(e) => handleStudentInfoChange('box_subdistrict', e.target.value)}
+                                                    className="w-full rounded-lg border border-slate-300 bg-white p-2 text-xs focus:border-brand-500 focus:outline-none"
+                                                />
+                                            </div>
+                                            <div>
+                                                <label className="block text-[11px] font-bold text-slate-700 mb-1">ภาคเรียนที่</label>
+                                                <input
+                                                    type="text"
+                                                    value={studentInfo?.term_no || ''}
+                                                    onChange={(e) => handleStudentInfoChange('term_no', e.target.value)}
+                                                    placeholder="1"
+                                                    className="w-full rounded-lg border border-slate-300 bg-white p-2 text-xs focus:border-brand-500 focus:outline-none"
+                                                />
+                                            </div>
+                                            <div>
+                                                <label className="block text-[11px] font-bold text-slate-700 mb-1">ปีการศึกษา</label>
+                                                <input
+                                                    type="text"
+                                                    value={studentInfo?.term_year || ''}
+                                                    onChange={(e) => handleStudentInfoChange('term_year', e.target.value)}
+                                                    placeholder="2569"
+                                                    className="w-full rounded-lg border border-slate-300 bg-white p-2 text-xs focus:border-brand-500 focus:outline-none"
+                                                />
+                                            </div>
+                                        </div>
+
+                                        {/* Row 5: หน่วยกิตสะสมและคงเหลือ */}
+                                        <div className="grid gap-2 sm:grid-cols-4 pt-1">
+                                            <div>
+                                                <label className="block text-[11px] font-bold text-slate-700 mb-1">บังคับได้สะสม (นก.)</label>
+                                                <input
+                                                    type="number"
+                                                    step="0.5"
+                                                    value={studentInfo?.compulsory_earned ?? ''}
+                                                    onChange={(e) => handleStudentInfoChange('compulsory_earned', e.target.value)}
+                                                    className="w-full rounded-lg border border-slate-300 bg-white p-2 text-xs focus:border-brand-500 focus:outline-none"
+                                                />
+                                            </div>
+                                            <div>
+                                                <label className="block text-[11px] font-bold text-slate-700 mb-1">เลือกได้สะสม (นก.)</label>
+                                                <input
+                                                    type="number"
+                                                    step="0.5"
+                                                    value={studentInfo?.elective_earned ?? ''}
+                                                    onChange={(e) => handleStudentInfoChange('elective_earned', e.target.value)}
+                                                    className="w-full rounded-lg border border-slate-300 bg-white p-2 text-xs focus:border-brand-500 focus:outline-none"
+                                                />
+                                            </div>
+                                            <div>
+                                                <label className="block text-[11px] font-bold text-slate-700 mb-1">บังคับคงเหลือ (นก.)</label>
+                                                <input
+                                                    type="number"
+                                                    step="0.5"
+                                                    value={studentInfo?.compulsory_remaining ?? ''}
+                                                    onChange={(e) => handleStudentInfoChange('compulsory_remaining', e.target.value)}
+                                                    className="w-full rounded-lg border border-slate-300 bg-white p-2 text-xs focus:border-brand-500 focus:outline-none"
+                                                />
+                                            </div>
+                                            <div>
+                                                <label className="block text-[11px] font-bold text-slate-700 mb-1">เลือกคงเหลือ (นก.)</label>
+                                                <input
+                                                    type="number"
+                                                    step="0.5"
+                                                    value={studentInfo?.elective_remaining ?? ''}
+                                                    onChange={(e) => handleStudentInfoChange('elective_remaining', e.target.value)}
+                                                    className="w-full rounded-lg border border-slate-300 bg-white p-2 text-xs focus:border-brand-500 focus:outline-none"
+                                                />
+                                            </div>
+                                        </div>
                                     </div>
-                                    <div>
-                                        <span className="text-slate-400">Facebook:</span>{' '}
-                                        <span className="font-bold text-slate-700">{studentDetail.student.facebook || '-'}</span>
+                                ) : (
+                                    <div className="grid gap-3 text-xs sm:grid-cols-3">
+                                        <div>
+                                            <span className="text-slate-400">เบอร์โทรศัพท์:</span>{' '}
+                                            <span className="font-bold text-slate-700">{studentInfo?.phone || studentDetail.student.phone || '-'}</span>
+                                        </div>
+                                        <div>
+                                            <span className="text-slate-400">Facebook:</span>{' '}
+                                            <span className="font-bold text-slate-700">{studentInfo?.facebook || studentDetail.student.facebook || '-'}</span>
+                                        </div>
+                                        <div>
+                                            <span className="text-slate-400">LINE ID:</span>{' '}
+                                            <span className="font-bold text-slate-700">{studentInfo?.line_id || studentDetail.student.line_id || '-'}</span>
+                                        </div>
+                                        <div className="sm:col-span-3">
+                                            <span className="text-slate-400">ที่อยู่บนใบลงทะเบียน:</span>{' '}
+                                            <span className="font-medium text-slate-700">
+                                                {studentInfo?.house_no
+                                                    ? `${studentInfo.house_no} ${studentInfo.moo ? `หมู่ ${studentInfo.moo}` : ''} ต.${studentInfo.subdistrict} อ.${studentInfo.district} จ.${studentInfo.province}`
+                                                    : (studentDetail.student.address || '-')}
+                                            </span>
+                                        </div>
                                     </div>
-                                    <div>
-                                        <span className="text-slate-400">LINE ID:</span>{' '}
-                                        <span className="font-bold text-slate-700">{studentDetail.student.line_id || '-'}</span>
-                                    </div>
-                                    <div className="sm:col-span-3">
-                                        <span className="text-slate-400">ที่อยู่:</span>{' '}
-                                        <span className="font-medium text-slate-700">{studentDetail.student.address || '-'}</span>
-                                    </div>
-                                </div>
+                                )}
 
                                 {/* Credit Requirements Summary */}
                                 <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 pt-2 border-t border-slate-100">

@@ -132,4 +132,38 @@ final class CurriculumCatalog
             default => [],
         };
     }
+
+    public static function formatDistrictCenterName(?string $rawName): string
+    {
+        $name = trim((string) $rawName);
+        if ($name === '') {
+            return 'ศูนย์ส่งเสริมการเรียนรู้ระดับอำเภอ........................';
+        }
+
+        $prefixes = [
+            'ศูนย์ส่งเสริมการเรียนรู้ระดับอำเภอ',
+            'ศูนย์ส่งเสริมการเรียนรู้อำเภอ',
+            'สกร.ระดับอำเภอ',
+            'สกร.อำเภอ',
+            'สกร.อ.',
+            'กศน.ระดับอำเภอ',
+            'กศน.อำเภอ',
+            'กศน.อ.',
+            'อำเภอ',
+        ];
+
+        $changed = true;
+        while ($changed) {
+            $changed = false;
+            foreach ($prefixes as $p) {
+                if (str_starts_with($name, $p)) {
+                    $name = trim(substr($name, strlen($p)));
+                    $changed = true;
+                    break;
+                }
+            }
+        }
+
+        return 'ศูนย์ส่งเสริมการเรียนรู้ระดับอำเภอ' . $name;
+    }
 }

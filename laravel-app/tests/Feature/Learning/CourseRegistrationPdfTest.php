@@ -96,6 +96,25 @@ final class CourseRegistrationPdfTest extends TestCase
         $this->assertStringContainsString('รายวิชาเลือก', $content);
         $this->assertStringContainsString('รหัสประจำตัวประชาชน', $content);
         $this->assertStringContainsString('รหัสประจำตัวนักศึกษา', $content);
+        $this->assertStringContainsString('side-box-table', $content);
+        $this->assertStringNotContainsString('Facebook &nbsp;', $content);
+        $this->assertStringNotContainsString('ID Line &nbsp;', $content);
+    }
+
+    public function test_format_district_center_name_removes_duplicate_prefixes(): void
+    {
+        $this->assertSame(
+            'ศูนย์ส่งเสริมการเรียนรู้ระดับอำเภอเสนา',
+            \App\Domain\Students\Support\CurriculumCatalog::formatDistrictCenterName('สกร.ระดับอำเภอเสนา')
+        );
+        $this->assertSame(
+            'ศูนย์ส่งเสริมการเรียนรู้ระดับอำเภอเสนา',
+            \App\Domain\Students\Support\CurriculumCatalog::formatDistrictCenterName('ศูนย์ส่งเสริมการเรียนรู้ระดับอำเภอสกร.ระดับอำเภอเสนา')
+        );
+        $this->assertSame(
+            'ศูนย์ส่งเสริมการเรียนรู้ระดับอำเภอไพศาลี',
+            \App\Domain\Students\Support\CurriculumCatalog::formatDistrictCenterName('อำเภอไพศาลี')
+        );
     }
 
     /** @param list<string> $groups */

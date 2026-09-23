@@ -127,6 +127,53 @@ final class CourseRegistrationTest extends TestCase
         $response->assertNotFound();
     }
 
+    public function test_teacher_can_save_and_retrieve_custom_student_info(): void
+    {
+        $teacher = $this->viewer('teacher', ['SENA-P1-A']);
+        Sanctum::actingAs($teacher);
+
+        $payload = [
+            'academic_term' => '1/2569',
+            'compulsory_subjects' => [],
+            'elective_subjects' => [],
+            'student_info' => [
+                'name' => 'นายทดสอบ สมมุติ',
+                'citizen_id' => '1234567890123',
+                'code' => '6650100001',
+                'phone' => '0891234567',
+                'facebook' => 'Test FB',
+                'line_id' => 'testline',
+                'house_no' => '99/9',
+                'moo' => '1',
+                'subdistrict' => 'ดอนลาน',
+                'district' => 'เสนา',
+                'province' => 'พระนครศรีอยุธยา',
+                'group' => 'ศกร.ระดับตำบลเจ้าเสด็จ',
+                'box_subdistrict' => 'ดอนลาน',
+                'compulsory_earned' => 20,
+                'elective_earned' => 10,
+                'compulsory_remaining' => 16,
+                'elective_remaining' => 2,
+                'term_no' => '1',
+                'term_year' => '2569',
+            ],
+            'notes' => 'แก้ไขข้อมูลส่วนตัวสำเร็จ',
+        ];
+
+        $response = $this->postJson('/api/v1/learning/registration/student/6650100001', $payload);
+
+        $response->assertOk()
+            ->assertJsonPath('data.student_info.name', 'นายทดสอบ สมมุติ')
+            ->assertJsonPath('data.student_info.phone', '0891234567')
+            ->assertJsonPath('data.student_info.group', 'ศกร.ระดับตำบลเจ้าเสด็จ');
+
+        // Check get endpoint returns saved student_info
+        $getRes = $this->getJson('/api/v1/learning/registration/student/6650100001?term=1/2569');
+        $getRes->assertOk()
+            ->assertJsonPath('data.student_info.name', 'นายทดสอบ สมมุติ')
+            ->assertJsonPath('data.student_info.house_no', '99/9');
+    }
+
     /** @param list<string> $groups */
     private function viewer(string $role, array $groups = [], ?string $username = null): User
     {

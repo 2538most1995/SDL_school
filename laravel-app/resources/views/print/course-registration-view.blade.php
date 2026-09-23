@@ -122,28 +122,36 @@
             vertical-align: middle;
             padding: 3px 0;
         }
-        .side-box {
-            border: 1.5px solid #0f172a;
-            border-radius: 4px;
-            padding: 6px 10px;
+        .side-box-table {
+            border: 1.5px solid #000;
+            border-collapse: collapse;
             width: 200px;
+        }
+        .side-box-table td {
+            border: none !important;
+            padding: 6px 10px;
             font-size: 15px;
             line-height: 1.35;
+            vertical-align: middle;
         }
         .digit-table {
             border-collapse: collapse;
-            display: inline-table;
-            vertical-align: middle;
-            margin-left: 6px;
+            margin: 0;
+            padding: 0;
         }
         .digit-cell {
             width: 20px;
             height: 22px;
-            border: 1.2px solid #1e293b;
+            border: 1.2px solid #000;
             text-align: center;
             vertical-align: middle;
             font-size: 15px;
             font-weight: bold;
+            padding: 0;
+        }
+        .digit-gap {
+            width: 6px;
+            border: none !important;
             padding: 0;
         }
         .main-table {
@@ -248,7 +256,7 @@
                         ใบลงทะเบียน {{ $document['level_title'] }}
                     </td>
                     <td style="width: 25%;" class="term-title">
-                        ภาคเรียนที่<span class="dotted-line" style="min-width: 32px; text-align: center;">{{ $document['term_no'] ?: '&nbsp;&nbsp;&nbsp;&nbsp;' }}</span>/<span class="dotted-line" style="min-width: 44px; text-align: center;">{{ $document['term_year'] ?: '&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;' }}</span>
+                        ภาคเรียนที่<span class="dotted-line" style="min-width: 32px; text-align: center;">{!! $document['term_no'] !== '' ? e($document['term_no']) : '&nbsp;&nbsp;&nbsp;&nbsp;' !!}</span>/<span class="dotted-line" style="min-width: 44px; text-align: center;">{!! $document['term_year'] !== '' ? e($document['term_year']) : '&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;' !!}</span>
                     </td>
                 </tr>
             </table>
@@ -260,59 +268,91 @@
             <table class="student-info-table">
                 <tr>
                     <td colspan="2">
-                        ชื่อ - สกุล<span class="dotted-line" style="min-width: 580px;">&nbsp;{{ $st['name'] ?: '&nbsp;' }}&nbsp;</span>
+                        ชื่อ - สกุล<span class="dotted-line" style="min-width: 580px;">{!! $st['name'] !== '' ? e($st['name']) : '&nbsp;' !!}</span>
                     </td>
                 </tr>
                 <tr>
                     <td colspan="2">
-                        เบอร์โทร<span class="dotted-line" style="min-width: 140px; text-align: center;">&nbsp;{{ $st['phone'] ?: '&nbsp;' }}&nbsp;</span>
-                        Facebook<span class="dotted-line" style="min-width: 190px; text-align: center;">&nbsp;{{ $st['facebook'] ?: '&nbsp;' }}&nbsp;</span>
-                        ID Line<span class="dotted-line" style="min-width: 160px; text-align: center;">&nbsp;{{ $st['line_id'] ?: '&nbsp;' }}&nbsp;</span>
+                        เบอร์โทร<span class="dotted-line" style="min-width: 140px; text-align: center;">{!! $st['phone'] !== '' ? e($st['phone']) : '&nbsp;' !!}</span>
+                        Facebook<span class="dotted-line" style="min-width: 190px; text-align: center;">{!! $st['facebook'] !== '' ? e($st['facebook']) : '&nbsp;' !!}</span>
+                        ID Line<span class="dotted-line" style="min-width: 160px; text-align: center;">{!! $st['line_id'] !== '' ? e($st['line_id']) : '&nbsp;' !!}</span>
                     </td>
                 </tr>
                 <tr>
                     <td colspan="2">
-                        บ้านเลขที่<span class="dotted-line" style="min-width: 60px; text-align: center;">&nbsp;{{ $st['house_no'] ?: '&nbsp;' }}&nbsp;</span>
-                        หมู่<span class="dotted-line" style="min-width: 44px; text-align: center;">&nbsp;{{ $st['moo'] ?: '&nbsp;' }}&nbsp;</span>
-                        ตำบล<span class="dotted-line" style="min-width: 110px; text-align: center;">&nbsp;{{ $st['subdistrict'] ?: '&nbsp;' }}&nbsp;</span>
-                        อำเภอ<span class="dotted-line" style="min-width: 110px; text-align: center;">&nbsp;{{ $st['district'] ?: '&nbsp;' }}&nbsp;</span>
-                        จังหวัด<span class="dotted-line" style="min-width: 110px; text-align: center;">&nbsp;{{ $st['province'] ?: '&nbsp;' }}&nbsp;</span>
+                        บ้านเลขที่<span class="dotted-line" style="min-width: 60px; text-align: center;">{!! $st['house_no'] !== '' ? e($st['house_no']) : '&nbsp;' !!}</span>
+                        หมู่<span class="dotted-line" style="min-width: 44px; text-align: center;">{!! $st['moo'] !== '' ? e($st['moo']) : '&nbsp;' !!}</span>
+                        ตำบล<span class="dotted-line" style="min-width: 110px; text-align: center;">{!! $st['subdistrict'] !== '' ? e($st['subdistrict']) : '&nbsp;' !!}</span>
+                        อำเภอ<span class="dotted-line" style="min-width: 110px; text-align: center;">{!! $st['district'] !== '' ? e($st['district']) : '&nbsp;' !!}</span>
+                        จังหวัด<span class="dotted-line" style="min-width: 110px; text-align: center;">{!! $st['province'] !== '' ? e($st['province']) : '&nbsp;' !!}</span>
                     </td>
                 </tr>
                 <tr>
-                    <td style="width: 70%; vertical-align: top; padding-top: 4px;">
-                        <div style="margin-bottom: 6px;">
-                            รหัสประจำตัวประชาชน
-                            <table class="digit-table">
-                                <tr>
-                                    @foreach ($st['citizen_digits'] as $d)
-                                        <td class="digit-cell">{{ $d !== '' ? $d : '&nbsp;' }}</td>
-                                    @endforeach
-                                </tr>
-                            </table>
-                        </div>
-                        <div>
-                            รหัสประจำตัวนักศึกษา
-                            <table class="digit-table" style="margin-left: 10px;">
-                                <tr>
-                                    @foreach ($st['student_code_digits'] as $d)
-                                        <td class="digit-cell">{{ $d !== '' ? $d : '&nbsp;' }}</td>
-                                    @endforeach
-                                </tr>
-                            </table>
-                        </div>
+                    <td style="width: 71%; vertical-align: top; padding: 4px 0;">
+                        <table style="width: 100%; border-collapse: collapse;">
+                            <tr>
+                                <td style="width: 150px; white-space: nowrap; vertical-align: middle; padding: 4px 0; font-size: 16px;">
+                                    รหัสประจำตัวประชาชน
+                                </td>
+                                <td style="vertical-align: middle; padding: 4px 0;">
+                                    <table class="digit-table">
+                                        <tr>
+                                            <td class="digit-cell">{{ $st['citizen_digits'][0] ?? '' }}</td>
+                                            <td class="digit-gap"></td>
+                                            <td class="digit-cell">{{ $st['citizen_digits'][1] ?? '' }}</td>
+                                            <td class="digit-cell">{{ $st['citizen_digits'][2] ?? '' }}</td>
+                                            <td class="digit-cell">{{ $st['citizen_digits'][3] ?? '' }}</td>
+                                            <td class="digit-cell">{{ $st['citizen_digits'][4] ?? '' }}</td>
+                                            <td class="digit-gap"></td>
+                                            <td class="digit-cell">{{ $st['citizen_digits'][5] ?? '' }}</td>
+                                            <td class="digit-cell">{{ $st['citizen_digits'][6] ?? '' }}</td>
+                                            <td class="digit-cell">{{ $st['citizen_digits'][7] ?? '' }}</td>
+                                            <td class="digit-cell">{{ $st['citizen_digits'][8] ?? '' }}</td>
+                                            <td class="digit-cell">{{ $st['citizen_digits'][9] ?? '' }}</td>
+                                            <td class="digit-gap"></td>
+                                            <td class="digit-cell">{{ $st['citizen_digits'][10] ?? '' }}</td>
+                                            <td class="digit-cell">{{ $st['citizen_digits'][11] ?? '' }}</td>
+                                            <td class="digit-gap"></td>
+                                            <td class="digit-cell">{{ $st['citizen_digits'][12] ?? '' }}</td>
+                                        </tr>
+                                    </table>
+                                </td>
+                            </tr>
+                            <tr>
+                                <td style="width: 150px; white-space: nowrap; vertical-align: middle; padding: 4px 0; font-size: 16px;">
+                                    รหัสประจำตัวนักศึกษา
+                                </td>
+                                <td style="vertical-align: middle; padding: 4px 0;">
+                                    <table class="digit-table">
+                                        <tr>
+                                            @for ($i = 0; $i < 10; $i++)
+                                                <td class="digit-cell">{{ $st['student_code_digits'][$i] ?? '' }}</td>
+                                            @endfor
+                                        </tr>
+                                    </table>
+                                </td>
+                            </tr>
+                        </table>
                     </td>
-                    <td style="width: 30%; text-align: right; vertical-align: top;">
-                        <div class="side-box" style="float: right; text-align: left;">
-                            กลุ่ม<span class="dotted-line" style="min-width: 130px;">&nbsp;{{ $st['group'] ?: '&nbsp;' }}&nbsp;</span><br>
-                            ตำบล<span class="dotted-line" style="min-width: 125px;">&nbsp;{{ $st['box_subdistrict'] ?: '&nbsp;' }}&nbsp;</span>
-                        </div>
+                    <td style="width: 29%; text-align: right; vertical-align: middle; padding: 4px 0 4px 12px;">
+                        <table class="side-box-table" style="margin-left: auto;">
+                            <tr>
+                                <td>
+                                    กลุ่ม<span class="dotted-line" style="min-width: 130px;">{!! $st['group'] !== '' ? e($st['group']) : '&nbsp;' !!}</span>
+                                </td>
+                            </tr>
+                            <tr>
+                                <td>
+                                    ตำบล<span class="dotted-line" style="min-width: 125px;">{!! $st['box_subdistrict'] !== '' ? e($st['box_subdistrict']) : '&nbsp;' !!}</span>
+                                </td>
+                            </tr>
+                        </table>
                     </td>
                 </tr>
                 <tr>
-                    <td colspan="2" style="padding-top: 6px;">
-                        จำนวนหน่วยกิตที่ได้&nbsp;&nbsp;วิชาบังคับ<span class="dotted-line" style="min-width: 60px; text-align: center;">&nbsp;{{ $st['compulsory_earned'] !== '' ? $st['compulsory_earned'] : '&nbsp;' }}&nbsp;</span>หน่วยกิต&nbsp;&nbsp;วิชาเลือก<span class="dotted-line" style="min-width: 60px; text-align: center;">&nbsp;{{ $st['elective_earned'] !== '' ? $st['elective_earned'] : '&nbsp;' }}&nbsp;</span>หน่วยกิต<br>
-                        เหลือ&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;วิชาบังคับ<span class="dotted-line" style="min-width: 60px; text-align: center;">&nbsp;{{ $st['compulsory_remaining'] !== '' ? $st['compulsory_remaining'] : '&nbsp;' }}&nbsp;</span>หน่วยกิต&nbsp;&nbsp;วิชาเลือก<span class="dotted-line" style="min-width: 60px; text-align: center;">&nbsp;{{ $st['elective_remaining'] !== '' ? $st['elective_remaining'] : '&nbsp;' }}&nbsp;</span>หน่วยกิต
+                    <td colspan="2" style="padding-top: 6px; font-size: 15px; line-height: 1.4;">
+                        จำนวนหน่วยกิตที่ได้&nbsp;&nbsp;วิชาบังคับ<span class="dotted-line" style="min-width: 60px; text-align: center;">{!! $st['compulsory_earned'] !== '' ? e($st['compulsory_earned']) : '&nbsp;' !!}</span>หน่วยกิต&nbsp;&nbsp;วิชาเลือก<span class="dotted-line" style="min-width: 60px; text-align: center;">{!! $st['elective_earned'] !== '' ? e($st['elective_earned']) : '&nbsp;' !!}</span>หน่วยกิต<br>
+                        เหลือ&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;วิชาบังคับ<span class="dotted-line" style="min-width: 60px; text-align: center;">{!! $st['compulsory_remaining'] !== '' ? e($st['compulsory_remaining']) : '&nbsp;' !!}</span>หน่วยกิต&nbsp;&nbsp;วิชาเลือก<span class="dotted-line" style="min-width: 60px; text-align: center;">{!! $st['elective_remaining'] !== '' ? e($st['elective_remaining']) : '&nbsp;' !!}</span>หน่วยกิต
                     </td>
                 </tr>
             </table>
