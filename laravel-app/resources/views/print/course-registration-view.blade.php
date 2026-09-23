@@ -422,21 +422,45 @@
 
             <table class="signature-table">
                 <tr>
-                    <td>
-                        ลงชื่อ...................................................นักศึกษา<br>
-                        @if (! empty($st['name']))
-                            ( {{ $st['name'] }} )
-                        @else
-                            (...................................................)
-                        @endif
+                    <td style="width: 50%; vertical-align: top; text-align: center;">
+                        <table style="margin: 0 auto; border-collapse: collapse;">
+                            <tr>
+                                <td style="white-space: nowrap; padding: 0 4px 0 0; text-align: right; vertical-align: bottom; font-size: 15px;">ลงชื่อ</td>
+                                <td style="white-space: nowrap; padding: 0 4px; text-align: center; vertical-align: bottom; font-size: 15px;">...................................................</td>
+                                <td style="white-space: nowrap; padding: 0 0 0 4px; text-align: left; vertical-align: bottom; font-size: 15px;">นักศึกษา</td>
+                            </tr>
+                            <tr>
+                                <td></td>
+                                <td style="text-align: center; white-space: nowrap; padding-top: 6px; font-size: 15px;">
+                                    @if (! empty($st['name']))
+                                        ( {{ $st['name'] }} )
+                                    @else
+                                        (...................................................)
+                                    @endif
+                                </td>
+                                <td></td>
+                            </tr>
+                        </table>
                     </td>
-                    <td>
-                        ลงชื่อ...................................................ครูประจำกลุ่ม<br>
-                        @if (! empty($document['teacher_name']))
-                            ( {{ $document['teacher_name'] }} )
-                        @else
-                            (...................................................)
-                        @endif
+                    <td style="width: 50%; vertical-align: top; text-align: center;">
+                        <table style="margin: 0 auto; border-collapse: collapse;">
+                            <tr>
+                                <td style="white-space: nowrap; padding: 0 4px 0 0; text-align: right; vertical-align: bottom; font-size: 15px;">ลงชื่อ</td>
+                                <td style="white-space: nowrap; padding: 0 4px; text-align: center; vertical-align: bottom; font-size: 15px;">...................................................</td>
+                                <td style="white-space: nowrap; padding: 0 0 0 4px; text-align: left; vertical-align: bottom; font-size: 15px;">ครูประจำกลุ่ม</td>
+                            </tr>
+                            <tr>
+                                <td></td>
+                                <td style="text-align: center; white-space: nowrap; padding-top: 6px; font-size: 15px;">
+                                    @if (! empty($document['teacher_name']))
+                                        ( {{ $document['teacher_name'] }} )
+                                    @else
+                                        (...................................................)
+                                    @endif
+                                </td>
+                                <td></td>
+                            </tr>
+                        </table>
                     </td>
                 </tr>
             </table>

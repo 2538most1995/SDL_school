@@ -79,6 +79,48 @@ final class AcademicTerm
         ]));
     }
 
+    /**
+     * Compute the next upcoming academic terms from a given term.
+     * E.g. nextTerms('1/2569', 3) => ['2/2569', '1/2570', '2/2570']
+     *
+     * @return list<string>
+     */
+    public static function nextTerms(?string $baseTerm, int $count = 3): array
+    {
+        $normalized = self::normalize($baseTerm);
+        if ($normalized === null) {
+            $currentYear = (int) date('Y') + 543;
+            $normalized = "1/{$currentYear}";
+        }
+
+        [$semester, $year] = array_map('intval', explode('/', $normalized));
+        $terms = [];
+
+        for ($i = 0; $i < $count; $i++) {
+            if ($semester === 1) {
+                $semester = 2;
+            } else {
+                $semester = 1;
+                $year++;
+            }
+            $terms[] = "{$semester}/{$year}";
+        }
+
+        return $terms;
+    }
+
+    public static function sortKey(string $term): int
+    {
+        $normalized = self::normalize($term);
+        if ($normalized === null) {
+            return 0;
+        }
+
+        [$semester, $year] = array_map('intval', explode('/', $normalized));
+
+        return ($year * 10) + $semester;
+    }
+
     private static function buddhistYear(int $year): int
     {
         if ($year < 100) {

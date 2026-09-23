@@ -40,8 +40,7 @@ final readonly class CourseRegistrationService
             }
         }
 
-        $termList = array_keys($terms);
-        usort($termList, static fn (string $a, string $b): int => AcademicTerm::sortKey($b) <=> AcademicTerm::sortKey($a));
+        $termList = $this->resolveWorkspaceTerms($terms);
         $selectedTerm = $filters['term'] ?? ($termList[0] ?? '1/2569');
 
         $filtered = array_values(array_filter($allStudents, function (Student $student) use ($filters): bool {
@@ -146,25 +145,188 @@ final readonly class CourseRegistrationService
 
         $targetTerm = $term ? trim($term) : ($student->currentTerm ?: '1/2569');
 
-        // Historical passed subjects & grades
         $allGrades = $this->repository->gradesFor($student);
-        $passedSubjects = [];
+
+        // Gather all terms for available_terms
+        $studentTerms = [];
+        if ($student->currentTerm !== '') {
+            $studentTerms[$student->currentTerm] = true;
+        }
+        foreach ($allGrades as $g) {
+            if ($g->term !== '') {
+                $studentTerms[$g->term] = true;
+            }
+        }
+        $availableTerms = $this->resolveWorkspaceTerms($studentTerms);
+        $targetTerm = $term ? trim($term) : ($student->currentTerm ?: ($availableTerms[0] ?? '1/2569'));
+
+        // Historical passed subjects, grades, and enrollments
+        $historyPassed = [];
+        $historyTransferred = [];
+        $historyFailed = [];
+        $historyPending = [];
         $historicalRegisteredInTerm = [];
 
         foreach ($allGrades as $grade) {
             $code = trim($grade->subjectCode);
-            if ($grade->isPassed()) {
-                $passedSubjects[$code] = [
+            if ($grade->term === $targetTerm) {
+                $historicalRegisteredInTerm[$code] = $grade;
+            }
+            if ($grade->transferred) {
+                $historyTransferred[$code] = [
+                    'term' => $grade->term,
+                    'name' => $grade->subjectName,
+                    'credits' => $grade->credits,
+                ];
+            } elseif ($grade->isPassed()) {
+                $historyPassed[$code] = [
                     'term' => $grade->term,
                     'grade' => $grade->grade,
                     'credits' => $grade->credits,
                     'name' => $grade->subjectName,
                 ];
-            }
-            if ($grade->term === $targetTerm) {
-                $historicalRegisteredInTerm[$code] = $grade;
+            } elseif ($grade->grade !== null && trim((string) $grade->grade) === '0') {
+                $historyFailed[$code] = [
+                    'term' => $grade->term,
+                    'grade' => $grade->grade,
+                    'credits' => $grade->credits,
+                    'name' => $grade->subjectName,
+                ];
+            } else {
+                $historyPending[$code] = [
+                    'term' => $grade->term,
+                    'name' => $grade->subjectName,
+                    'credits' => $grade->credits,
+                ];
             }
         }
+
+        // Active / pending registrations in other terms from learning_course_registrations
+        $learningPending = [];
+        $otherSavedRows = DB::table('learning_course_registrations')
+            ->where('district_id', $student->districtId)
+            ->where('student_code', $student->code)
+            ->where('academic_term', '!=', $targetTerm)
+            ->get(['academic_term', 'compulsory_subjects', 'elective_subjects']);
+
+        foreach ($otherSavedRows as $row) {
+            $comp = json_decode((string) $row->compulsory_subjects, true) ?: [];
+            $elec = json_decode((string) $row->elective_subjects, true) ?: [];
+            foreach (array_merge($comp, $elec) as $sub) {
+                if (! empty($sub['registered']) && ! empty($sub['code'])) {
+                    $c = trim((string) $sub['code']);
+                    if (! isset($historyPassed[$c]) && ! isset($historyTransferred[$c])) {
+                        $learningPending[$c] = [
+                            'term' => (string) $row->academic_term,
+                            'name' => (string) ($sub['name'] ?? ''),
+                        ];
+                    }
+                }
+            }
+        }
+
+        $resolveStatus = static function (string $code) use ($historyPassed, $historyTransferred, $historyPending, $learningPending, $historyFailed): array {
+            $code = trim($code);
+            if (isset($historyPassed[$code])) {
+                $p = $historyPassed[$code];
+                $grd = (string) $p['grade'];
+                $t = (string) $p['term'];
+
+                return [
+                    'status' => 'passed',
+                    'status_label' => "มีเกรดแล้ว: {$grd} (เทอม {$t})",
+                    'status_badge' => "มีเกรดแล้ว ({$grd})",
+                    'status_color' => 'emerald',
+                    'has_grade' => true,
+                    'is_pending' => false,
+                    'is_transferred' => false,
+                    'grade' => $grd,
+                    'term' => $t,
+                    'warning' => "วิชานี้มีผลการเรียนแล้ว (เกรด {$grd} เทอม {$t}) ไม่แนะนำให้ลงทะเบียนซ้ำ",
+                ];
+            }
+            if (isset($historyTransferred[$code])) {
+                $tr = $historyTransferred[$code];
+                $t = (string) $tr['term'];
+
+                return [
+                    'status' => 'transferred',
+                    'status_label' => $t !== '' ? "เทียบโอนแล้ว (เทอม {$t})" : 'เทียบโอนแล้ว',
+                    'status_badge' => 'เทียบโอนแล้ว',
+                    'status_color' => 'purple',
+                    'has_grade' => true,
+                    'is_pending' => false,
+                    'is_transferred' => true,
+                    'grade' => null,
+                    'term' => $t,
+                    'warning' => 'วิชานี้ได้รับการเทียบโอนแล้ว',
+                ];
+            }
+            if (isset($historyPending[$code])) {
+                $hp = $historyPending[$code];
+                $t = (string) $hp['term'];
+
+                return [
+                    'status' => 'pending_grade',
+                    'status_label' => "รอเกรดอยู่ (เทอม {$t})",
+                    'status_badge' => "รอเกรด (เทอม {$t})",
+                    'status_color' => 'amber',
+                    'has_grade' => false,
+                    'is_pending' => true,
+                    'is_transferred' => false,
+                    'grade' => null,
+                    'term' => $t,
+                    'warning' => "วิชานี้ลงทะเบียนไว้ในเทอม {$t} แล้วและกำลังรอผลการเรียน",
+                ];
+            }
+            if (isset($learningPending[$code])) {
+                $lp = $learningPending[$code];
+                $t = (string) $lp['term'];
+
+                return [
+                    'status' => 'pending_grade',
+                    'status_label' => "รอเกรดอยู่ (ลงทะเบียนเทอม {$t})",
+                    'status_badge' => "รอเกรด (เทอม {$t})",
+                    'status_color' => 'amber',
+                    'has_grade' => false,
+                    'is_pending' => true,
+                    'is_transferred' => false,
+                    'grade' => null,
+                    'term' => $t,
+                    'warning' => "วิชานี้ได้บันทึกการลงทะเบียนในเทอม {$t} ไว้แล้วและกำลังรอผลการเรียน",
+                ];
+            }
+            if (isset($historyFailed[$code])) {
+                $hf = $historyFailed[$code];
+                $t = (string) $hf['term'];
+
+                return [
+                    'status' => 'failed',
+                    'status_label' => "ไม่ผ่าน (เกรด 0 เทอม {$t})",
+                    'status_badge' => 'เกรด 0 (ลงแก้ตัวได้)',
+                    'status_color' => 'rose',
+                    'has_grade' => true,
+                    'is_pending' => false,
+                    'is_transferred' => false,
+                    'grade' => '0',
+                    'term' => $t,
+                    'warning' => "เคยได้เกรด 0 ในเทอม {$t} (แนะนำให้ลงทะเบียนเพื่อแก้ผลการเรียน)",
+                ];
+            }
+
+            return [
+                'status' => 'not_taken',
+                'status_label' => 'ยังไม่ได้เรียน (แนะนำ)',
+                'status_badge' => 'ยังไม่ได้เรียน',
+                'status_color' => 'blue',
+                'has_grade' => false,
+                'is_pending' => false,
+                'is_transferred' => false,
+                'grade' => null,
+                'term' => null,
+                'warning' => null,
+            ];
+        };
 
         // Standard compulsory subjects for level
         $catalogCompulsory = CurriculumCatalog::compulsorySubjects($student->level);
@@ -196,7 +358,7 @@ final readonly class CourseRegistrationService
             foreach ($catalogCompulsory as $c) {
                 $code = $c['code'];
                 $s = $savedCompulsoryMap[$code] ?? null;
-                $passed = $passedSubjects[$code] ?? null;
+                $statusInfo = $resolveStatus($code);
 
                 $compulsoryList[] = [
                     'code' => $code,
@@ -205,9 +367,10 @@ final readonly class CourseRegistrationService
                     'registered' => ! empty($s['registered']),
                     'transferred' => ! empty($s['transferred']),
                     'remark' => (string) ($s['remark'] ?? ''),
-                    'is_passed' => $passed !== null,
-                    'passed_grade' => $passed['grade'] ?? null,
-                    'passed_term' => $passed['term'] ?? null,
+                    'is_passed' => $statusInfo['has_grade'] && $statusInfo['status'] === 'passed',
+                    'passed_grade' => $statusInfo['grade'],
+                    'passed_term' => $statusInfo['term'],
+                    'course_status' => $statusInfo,
                 ];
             }
 
@@ -216,7 +379,7 @@ final readonly class CourseRegistrationService
                 if ($code === '') {
                     continue;
                 }
-                $passed = $passedSubjects[$code] ?? null;
+                $statusInfo = $resolveStatus($code);
                 $electiveList[] = [
                     'code' => $code,
                     'name' => trim((string) ($e['name'] ?? '')),
@@ -224,16 +387,17 @@ final readonly class CourseRegistrationService
                     'registered' => ! empty($e['registered']),
                     'transferred' => ! empty($e['transferred']),
                     'remark' => (string) ($e['remark'] ?? ''),
-                    'is_passed' => $passed !== null,
-                    'passed_grade' => $passed['grade'] ?? null,
-                    'passed_term' => $passed['term'] ?? null,
+                    'is_passed' => $statusInfo['has_grade'] && $statusInfo['status'] === 'passed',
+                    'passed_grade' => $statusInfo['grade'],
+                    'passed_term' => $statusInfo['term'],
+                    'course_status' => $statusInfo,
                 ];
             }
         } else {
             // First time opening: populate from standard compulsory and pre-check any historical subject in this term
             foreach ($catalogCompulsory as $c) {
                 $code = $c['code'];
-                $passed = $passedSubjects[$code] ?? null;
+                $statusInfo = $resolveStatus($code);
                 $inTerm = $historicalRegisteredInTerm[$code] ?? null;
 
                 $compulsoryList[] = [
@@ -243,16 +407,17 @@ final readonly class CourseRegistrationService
                     'registered' => $inTerm !== null && ! $inTerm->transferred,
                     'transferred' => $inTerm !== null && $inTerm->transferred,
                     'remark' => '',
-                    'is_passed' => $passed !== null,
-                    'passed_grade' => $passed['grade'] ?? null,
-                    'passed_term' => $passed['term'] ?? null,
+                    'is_passed' => $statusInfo['has_grade'] && $statusInfo['status'] === 'passed',
+                    'passed_grade' => $statusInfo['grade'],
+                    'passed_term' => $statusInfo['term'],
+                    'course_status' => $statusInfo,
                 ];
             }
 
             // Check if student has electives in this term from historical data
             foreach ($historicalRegisteredInTerm as $code => $grade) {
                 if ($grade->subjectType === 'elective') {
-                    $passed = $passedSubjects[$code] ?? null;
+                    $statusInfo = $resolveStatus($code);
                     $electiveList[] = [
                         'code' => $code,
                         'name' => $grade->subjectName ?: $code,
@@ -260,9 +425,10 @@ final readonly class CourseRegistrationService
                         'registered' => ! $grade->transferred,
                         'transferred' => $grade->transferred,
                         'remark' => '',
-                        'is_passed' => $passed !== null,
-                        'passed_grade' => $passed['grade'] ?? null,
-                        'passed_term' => $passed['term'] ?? null,
+                        'is_passed' => $statusInfo['has_grade'] && $statusInfo['status'] === 'passed',
+                        'passed_grade' => $statusInfo['grade'],
+                        'passed_term' => $statusInfo['term'],
+                        'course_status' => $statusInfo,
                     ];
                 }
             }
@@ -360,6 +526,7 @@ final readonly class CourseRegistrationService
             ],
             'student_info' => $studentInfo,
             'academic_term' => $targetTerm,
+            'available_terms' => $availableTerms,
             'requirements' => [
                 'compulsory_required' => $compulsoryRequired,
                 'compulsory_earned' => $compulsoryEarned,
@@ -372,7 +539,14 @@ final readonly class CourseRegistrationService
             ],
             'compulsory_subjects' => $compulsoryList,
             'elective_subjects' => $electiveList,
-            'common_electives' => CurriculumCatalog::commonElectiveSubjects($student->level),
+            'common_electives' => array_map(static function (array $ce) use ($resolveStatus): array {
+                $code = trim((string) ($ce['code'] ?? ''));
+
+                return [
+                    ...$ce,
+                    'course_status' => $resolveStatus($code),
+                ];
+            }, CurriculumCatalog::commonElectiveSubjects($student->level)),
             'notes' => $notes,
             'is_saved' => $saved !== null,
         ];
@@ -506,5 +680,42 @@ final readonly class CourseRegistrationService
             trim($parts[0] ?? ''),
             trim($parts[1] ?? ''),
         ];
+    }
+
+    /**
+     * @param  array<string, bool>  $existingTerms
+     * @return list<string>
+     */
+    private function resolveWorkspaceTerms(array $existingTerms): array
+    {
+        $termsMap = $existingTerms;
+
+        // Also check any terms saved in learning_course_registrations
+        $savedTerms = DB::table('learning_course_registrations')
+            ->distinct()
+            ->pluck('academic_term')
+            ->filter()
+            ->all();
+        foreach ($savedTerms as $st) {
+            $normalized = AcademicTerm::normalize((string) $st);
+            if ($normalized !== null) {
+                $termsMap[$normalized] = true;
+            }
+        }
+
+        $termList = array_keys($termsMap);
+        usort($termList, static fn (string $a, string $b): int => AcademicTerm::sortKey($b) <=> AcademicTerm::sortKey($a));
+        $latestTerm = $termList[0] ?? '1/2569';
+
+        // Add upcoming future terms (e.g. 2/2569, 1/2570, 2/2570)
+        $futureTerms = AcademicTerm::nextTerms($latestTerm, 3);
+        foreach ($futureTerms as $ft) {
+            $termsMap[$ft] = true;
+        }
+
+        $finalList = array_keys($termsMap);
+        usort($finalList, static fn (string $a, string $b): int => AcademicTerm::sortKey($b) <=> AcademicTerm::sortKey($a));
+
+        return $finalList;
     }
 }

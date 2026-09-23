@@ -15,9 +15,11 @@ import {
     Student as StudentIcon,
     Trash,
     Users,
+    Warning,
+    WarningCircle,
 } from '@phosphor-icons/react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { DataTable } from '../../components/DataTable';
 import { Button } from '../../components/MaterialUI';
 import { PageHeader } from '../../components/PageHeader';
@@ -28,6 +30,19 @@ import { StatTile } from '../../components/StatTile';
 import { StatusBadge } from '../../components/StatusBadge';
 import { showErrorAlert, showSuccessAlert } from '../../lib/feedback';
 import { getFeatureDataWithDemo, sendFeatureData } from '../api';
+
+export interface CourseStatus {
+    status: 'passed' | 'transferred' | 'pending_grade' | 'failed' | 'not_taken';
+    status_label: string;
+    status_badge: string;
+    status_color: 'emerald' | 'purple' | 'amber' | 'rose' | 'blue';
+    has_grade: boolean;
+    is_pending: boolean;
+    is_transferred: boolean;
+    grade: string | null;
+    term: string | null;
+    warning: string | null;
+}
 
 type WorkspaceItem = {
     code: string;
@@ -66,6 +81,14 @@ type SubjectRow = {
     is_passed?: boolean;
     passed_grade?: string | null;
     passed_term?: string | null;
+    course_status?: CourseStatus;
+};
+
+type CommonElective = {
+    code: string;
+    name: string;
+    credits: number;
+    course_status?: CourseStatus;
 };
 
 type StudentInfoForm = {
@@ -111,6 +134,7 @@ type StudentRegistrationData = {
     };
     student_info?: StudentInfoForm;
     academic_term: string;
+    available_terms?: string[];
     requirements: {
         compulsory_required: number;
         compulsory_earned: number;
@@ -123,7 +147,7 @@ type StudentRegistrationData = {
     };
     compulsory_subjects: SubjectRow[];
     elective_subjects: SubjectRow[];
-    common_electives: Array<{ code: string; name: string; credits: number }>;
+    common_electives: CommonElective[];
     notes: string;
     is_saved: boolean;
 };
@@ -135,6 +159,40 @@ const emptyWorkspace: WorkspaceData = {
     total_students: 0,
     items: [],
 };
+
+function CourseStatusBadge({ status }: { status?: CourseStatus }) {
+    if (!status) return null;
+
+    let badgeClass = 'bg-slate-100 text-slate-700 border-slate-200';
+    let dotClass = 'bg-slate-400';
+
+    if (status.status === 'passed') {
+        badgeClass = 'bg-emerald-50 text-emerald-800 border-emerald-200';
+        dotClass = 'bg-emerald-500';
+    } else if (status.status === 'transferred') {
+        badgeClass = 'bg-purple-50 text-purple-800 border-purple-200';
+        dotClass = 'bg-purple-500';
+    } else if (status.status === 'pending_grade') {
+        badgeClass = 'bg-amber-50 text-amber-800 border-amber-300';
+        dotClass = 'bg-amber-500';
+    } else if (status.status === 'failed') {
+        badgeClass = 'bg-rose-50 text-rose-800 border-rose-200';
+        dotClass = 'bg-rose-500';
+    } else if (status.status === 'not_taken') {
+        badgeClass = 'bg-sky-50 text-sky-800 border-sky-200';
+        dotClass = 'bg-sky-500';
+    }
+
+    return (
+        <span
+            className={`inline-flex items-center gap-1.5 rounded-md border px-2 py-0.5 text-[11px] font-bold shrink-0 ${badgeClass}`}
+            title={status.status_label}
+        >
+            <span className={`inline-block size-1.5 rounded-full ${dotClass}`} />
+            <span>{status.status_badge}</span>
+        </span>
+    );
+}
 
 export function CourseRegistrationPage() {
     const queryClient = useQueryClient();
@@ -294,7 +352,11 @@ export function CourseRegistrationPage() {
             const q = new URLSearchParams({ scope: options.scope });
             if (options.scope === 'student' && options.student) {
                 q.set('student', options.student);
-                q.set('term', term || workspaceData.term);
+                const activeTerm =
+                    studentDetail && selectedStudentCode === options.student
+                        ? studentDetail.academic_term
+                        : term || workspaceData.term;
+                q.set('term', activeTerm);
             } else if (options.scope === 'group' && group) {
                 q.set('group', group);
                 if (level) q.set('level', level);
@@ -315,6 +377,17 @@ export function CourseRegistrationPage() {
         } catch (err: any) {
             showErrorAlert(err?.message || 'เกิดข้อผิดพลาดในการเปิดเอกสาร');
         }
+    };
+
+    // Helper to resolve status for any code based on catalog in studentDetail
+    const getCourseStatusForCode = (code: string): CourseStatus | undefined => {
+        const trimmed = code.trim();
+        if (!trimmed || !studentDetail) return undefined;
+        const foundElective = studentDetail.common_electives?.find((c) => c.code.trim() === trimmed);
+        if (foundElective?.course_status) return foundElective.course_status;
+        const foundCompulsory = studentDetail.compulsory_subjects?.find((c) => c.code.trim() === trimmed);
+        if (foundCompulsory?.course_status) return foundCompulsory.course_status;
+        return undefined;
     };
 
     // Table columns in list view
@@ -402,8 +475,8 @@ export function CourseRegistrationPage() {
     );
 
     // If studentDetail loads and form is clean, initialize form state
-    useMemo(() => {
-        if (studentDetail && !isFormDirty) {
+    useEffect(() => {
+        if (studentDetail) {
             loadStudentDataIntoForm(studentDetail);
         }
     }, [studentDetail]);
@@ -603,7 +676,31 @@ export function CourseRegistrationPage() {
                         >
                             กลับหน้ารายชื่อ
                         </Button>
-                        <div className="flex items-center gap-2">
+                        <div className="flex flex-wrap items-center gap-2">
+                            {/* Academic Term Selector for Student */}
+                            <div className="flex items-center gap-1.5 rounded-xl border border-slate-300 bg-white px-2.5 py-1.5 shadow-sm">
+                                <label htmlFor="student-term-select" className="text-xs font-bold text-slate-600">
+                                    ภาคเรียน:
+                                </label>
+                                <select
+                                    id="student-term-select"
+                                    value={term || studentDetail?.academic_term || workspaceData.term}
+                                    onChange={(e) => {
+                                        if (isFormDirty && !window.confirm('คุณมีข้อมูลที่ยังไม่ได้บันทึก หากเปลี่ยนภาคเรียนข้อมูลที่แก้ไขจะหายไป ต้องการเปลี่ยนหรือไม่?')) {
+                                            return;
+                                        }
+                                        setTerm(e.target.value);
+                                        setIsFormDirty(false);
+                                    }}
+                                    className="rounded-lg border-0 bg-transparent py-0 pl-1 pr-6 text-xs font-black text-brand-700 focus:ring-0 cursor-pointer"
+                                >
+                                    {(studentDetail?.available_terms || workspaceData.terms || []).map((t) => (
+                                        <option key={t} value={t}>
+                                            ภาคเรียนที่ {t}
+                                        </option>
+                                    ))}
+                                </select>
+                            </div>
                             <Button
                                 appearance="outline"
                                 icon={<Printer size={18} />}
@@ -648,8 +745,8 @@ export function CourseRegistrationPage() {
                                     </div>
                                     <div className="flex flex-col items-end gap-1.5">
                                         <div className="flex items-center gap-2">
-                                            <span className="inline-block rounded-xl bg-slate-100 px-3 py-1.5 text-xs font-bold text-slate-700">
-                                                ภาคเรียนที่ {studentInfo?.term_no || studentDetail.academic_term.split('/')[0]}/{studentInfo?.term_year || studentDetail.academic_term.split('/')[1]}
+                                            <span className="inline-block rounded-xl bg-brand-50 border border-brand-200 px-3 py-1.5 text-xs font-bold text-brand-800">
+                                                ภาคเรียนที่ {studentDetail.academic_term}
                                             </span>
                                             <button
                                                 type="button"
@@ -836,14 +933,39 @@ export function CourseRegistrationPage() {
                                         {/* Row 4.5: ครูประจำกลุ่ม */}
                                         <div className="grid gap-3 sm:grid-cols-2">
                                             <div>
-                                                <label className="block text-[11px] font-bold text-slate-700 mb-1">ชื่อครูประจำกลุ่ม (ผู้ลงชื่อในเอกสาร)</label>
+                                                <div className="flex items-center justify-between mb-1">
+                                                    <label className="block text-[11px] font-bold text-slate-700">
+                                                        ชื่อครูประจำกลุ่ม (ผู้ลงชื่อในเอกสาร)
+                                                    </label>
+                                                    {/* Quick prefix buttons */}
+                                                    <div className="flex items-center gap-1">
+                                                        <span className="text-[10px] text-slate-500">คำนำหน้า:</span>
+                                                        {['นาย', 'นาง', 'นางสาว'].map((pfx) => (
+                                                            <button
+                                                                key={pfx}
+                                                                type="button"
+                                                                onClick={() => {
+                                                                    const cur = (studentInfo?.teacher_name || '').trim();
+                                                                    const cleaned = cur.replace(/^(นางสาว|นาย|นาง|ครู)\s*/, '');
+                                                                    handleStudentInfoChange('teacher_name', `${pfx}${cleaned}`);
+                                                                }}
+                                                                className="rounded border border-slate-300 bg-white px-1.5 py-0.5 text-[10px] font-bold text-slate-700 hover:bg-brand-50 hover:text-brand-700 hover:border-brand-300 transition"
+                                                            >
+                                                                +{pfx}
+                                                            </button>
+                                                        ))}
+                                                    </div>
+                                                </div>
                                                 <input
                                                     type="text"
                                                     value={studentInfo?.teacher_name || ''}
                                                     onChange={(e) => handleStudentInfoChange('teacher_name', e.target.value)}
-                                                    placeholder="เช่น นายสมชาย ใจดี"
-                                                    className="w-full rounded-lg border border-slate-300 bg-white p-2 text-xs focus:border-brand-500 focus:outline-none"
+                                                    placeholder="เช่น นางสาวสุธาทิพย์ ดีจุ่น หรือ นายสมชาย ใจดี"
+                                                    className="w-full rounded-lg border border-slate-300 bg-white p-2 text-xs focus:border-brand-500 focus:outline-none font-medium"
                                                 />
+                                                <p className="mt-1 text-[10px] text-slate-500">
+                                                    * ระบุคำนำหน้าชื่อให้ครบถ้วน (เช่น นางสาว หรือ นาย) เพื่อให้ชื่อตรงกึ่งกลางช่องลงชื่อบนใบลงทะเบียนเรียน
+                                                </p>
                                             </div>
                                         </div>
 
@@ -1003,14 +1125,16 @@ export function CourseRegistrationPage() {
                                                     className={`hover:bg-slate-50/80 ${row.registered ? 'bg-blue-50/30' : ''}`}
                                                 >
                                                     <td className="p-3">
-                                                        <div className="font-bold text-slate-900 flex items-center gap-2">
-                                                            {row.name}
-                                                            {row.is_passed && (
-                                                                <span className="rounded bg-emerald-100 px-1.5 py-0.5 text-[10px] font-bold text-emerald-800">
-                                                                    ✓ ผ่านแล้ว ({row.passed_grade || 'ผ่าน'})
-                                                                </span>
-                                                            )}
+                                                        <div className="flex flex-wrap items-center gap-2">
+                                                            <span className="font-bold text-slate-900">{row.name}</span>
+                                                            <CourseStatusBadge status={row.course_status} />
                                                         </div>
+                                                        {row.registered && row.course_status?.warning && (
+                                                            <div className="mt-1 flex items-center gap-1.5 rounded-md bg-amber-50 px-2 py-0.5 text-[11px] font-medium text-amber-900 border border-amber-200">
+                                                                <Warning size={13} className="shrink-0 text-amber-600" />
+                                                                <span>{row.course_status.warning}</span>
+                                                            </div>
+                                                        )}
                                                     </td>
                                                     <td className="p-3 text-center font-mono text-xs font-bold text-slate-700">
                                                         {row.code}
@@ -1108,39 +1232,66 @@ export function CourseRegistrationPage() {
 
                                 {/* Common Electives Quick Add Chips */}
                                 {studentDetail.common_electives?.length > 0 && (
-                                    <div className="rounded-xl bg-slate-50 p-3">
-                                        <div className="text-xs font-bold text-slate-700 mb-1.5">
-                                            วิชาเลือกแนะนำสำหรับระดับนี้ (คลิกเพื่อเพิ่ม):
+                                    <div className="rounded-xl bg-slate-50 p-3 space-y-2">
+                                        <div className="flex items-center justify-between">
+                                            <span className="text-xs font-bold text-slate-700">
+                                                วิชาเลือกแนะนำสำหรับระดับนี้ (คลิกเพื่อเพิ่ม พร้อมตรวจสอบสถานะเกรด):
+                                            </span>
+                                            <span className="text-[11px] text-slate-500">
+                                                * คลิกวิชาเพื่อเพิ่มในรายการลงทะเบียน
+                                            </span>
                                         </div>
-                                        <div className="flex flex-wrap gap-1.5">
-                                            {studentDetail.common_electives.map((ce) => (
-                                                <button
-                                                    key={ce.code}
-                                                    type="button"
-                                                    onClick={() => {
-                                                        if (electiveRows.some((r) => r.code === ce.code)) {
-                                                            showErrorAlert(`วิชา ${ce.code} มีอยู่ในรายการแล้ว`);
-                                                            return;
-                                                        }
-                                                        setElectiveRows([
-                                                            ...electiveRows,
-                                                            {
-                                                                code: ce.code,
-                                                                name: ce.name,
-                                                                credits: ce.credits,
-                                                                registered: true,
-                                                                transferred: false,
-                                                                remark: '',
-                                                            },
-                                                        ]);
-                                                        setIsFormDirty(true);
-                                                    }}
-                                                    className="inline-flex items-center gap-1 rounded-lg border border-slate-200 bg-white px-2.5 py-1 text-xs font-semibold text-slate-700 hover:border-brand-500 hover:bg-brand-50 hover:text-brand-800 transition"
-                                                >
-                                                    <Plus size={12} />
-                                                    <span>{ce.code} {ce.name} ({ce.credits} นก.)</span>
-                                                </button>
-                                            ))}
+                                        <div className="flex flex-wrap gap-2">
+                                            {studentDetail.common_electives.map((ce) => {
+                                                const isAlreadyInList = electiveRows.some((r) => r.code === ce.code);
+                                                return (
+                                                    <button
+                                                        key={ce.code}
+                                                        type="button"
+                                                        onClick={() => {
+                                                            if (isAlreadyInList) {
+                                                                showErrorAlert(`วิชา ${ce.code} มีอยู่ในรายการแล้ว`);
+                                                                return;
+                                                            }
+                                                            if (ce.course_status?.status === 'passed') {
+                                                                if (!window.confirm(`คำเตือน: วิชา ${ce.code} มีผลการเรียนแล้ว (${ce.course_status.status_label}) คุณต้องการเลือกลงทะเบียนซ้ำหรือไม่?`)) {
+                                                                    return;
+                                                                }
+                                                            } else if (ce.course_status?.status === 'pending_grade') {
+                                                                if (!window.confirm(`คำเตือน: วิชา ${ce.code} อยู่ระหว่างรอผลการเรียน (${ce.course_status.status_label}) คุณต้องการเลือกลงทะเบียนซ้ำหรือไม่?`)) {
+                                                                    return;
+                                                                }
+                                                            }
+                                                            setElectiveRows([
+                                                                ...electiveRows,
+                                                                {
+                                                                    code: ce.code,
+                                                                    name: ce.name,
+                                                                    credits: ce.credits,
+                                                                    registered: true,
+                                                                    transferred: false,
+                                                                    remark: '',
+                                                                    course_status: ce.course_status,
+                                                                },
+                                                            ]);
+                                                            setIsFormDirty(true);
+                                                        }}
+                                                        className={`inline-flex items-center gap-1.5 rounded-lg border px-2.5 py-1.5 text-xs font-semibold shadow-2xs transition ${
+                                                            isAlreadyInList
+                                                                ? 'border-slate-200 bg-slate-100 text-slate-400 cursor-not-allowed'
+                                                                : ce.course_status?.status === 'not_taken'
+                                                                ? 'border-sky-300 bg-sky-50/60 text-sky-900 hover:bg-sky-100 hover:border-sky-400'
+                                                                : 'border-slate-200 bg-white text-slate-700 hover:border-brand-500 hover:bg-brand-50'
+                                                        }`}
+                                                    >
+                                                        <Plus size={13} className="shrink-0" />
+                                                        <span>
+                                                            {ce.code} {ce.name} ({ce.credits} นก.)
+                                                        </span>
+                                                        <CourseStatusBadge status={ce.course_status} />
+                                                    </button>
+                                                );
+                                            })}
                                         </div>
                                     </div>
                                 )}
@@ -1169,18 +1320,29 @@ export function CourseRegistrationPage() {
                                                 electiveRows.map((row, idx) => (
                                                     <tr key={idx} className="hover:bg-slate-50/80">
                                                         <td className="p-3">
-                                                            <input
-                                                                type="text"
-                                                                value={row.name}
-                                                                placeholder="ชื่อวิชาเลือก..."
-                                                                onChange={(e) => {
-                                                                    const updated = [...electiveRows];
-                                                                    updated[idx].name = e.target.value;
-                                                                    setElectiveRows(updated);
-                                                                    setIsFormDirty(true);
-                                                                }}
-                                                                className="w-full rounded-lg border border-slate-200 px-2 py-1 text-sm font-bold text-slate-800"
-                                                            />
+                                                            <div className="space-y-1">
+                                                                <input
+                                                                    type="text"
+                                                                    value={row.name}
+                                                                    placeholder="ชื่อวิชาเลือก..."
+                                                                    onChange={(e) => {
+                                                                        const updated = [...electiveRows];
+                                                                        updated[idx].name = e.target.value;
+                                                                        setElectiveRows(updated);
+                                                                        setIsFormDirty(true);
+                                                                    }}
+                                                                    className="w-full rounded-lg border border-slate-200 px-2 py-1 text-sm font-bold text-slate-800"
+                                                                />
+                                                                <div className="flex flex-wrap items-center gap-1.5">
+                                                                    <CourseStatusBadge status={row.course_status || getCourseStatusForCode(row.code)} />
+                                                                    {row.registered && (row.course_status?.warning || getCourseStatusForCode(row.code)?.warning) && (
+                                                                        <span className="flex items-center gap-1 text-[11px] font-medium text-amber-800 bg-amber-50 px-1.5 py-0.5 rounded border border-amber-200">
+                                                                            <Warning size={12} className="shrink-0 text-amber-600" />
+                                                                            <span>{row.course_status?.warning || getCourseStatusForCode(row.code)?.warning}</span>
+                                                                        </span>
+                                                                    )}
+                                                                </div>
+                                                            </div>
                                                         </td>
                                                         <td className="p-3">
                                                             <input
@@ -1189,7 +1351,12 @@ export function CourseRegistrationPage() {
                                                                 placeholder="รหัสวิชา"
                                                                 onChange={(e) => {
                                                                     const updated = [...electiveRows];
-                                                                    updated[idx].code = e.target.value;
+                                                                    const val = e.target.value;
+                                                                    updated[idx].code = val;
+                                                                    const resolved = getCourseStatusForCode(val);
+                                                                    if (resolved) {
+                                                                        updated[idx].course_status = resolved;
+                                                                    }
                                                                     setElectiveRows(updated);
                                                                     setIsFormDirty(true);
                                                                 }}

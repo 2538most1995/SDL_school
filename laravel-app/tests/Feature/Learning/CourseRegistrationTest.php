@@ -215,6 +215,75 @@ final class CourseRegistrationTest extends TestCase
             ->assertSee('เจ้าเสด็จ');
     }
 
+    public function test_future_terms_are_available_and_can_be_registered(): void
+    {
+        $teacher = $this->viewer('teacher', ['SENA-P1-A']);
+        Sanctum::actingAs($teacher);
+
+        // Fetch student registration detail
+        $res = $this->getJson('/api/v1/learning/registration/student/6650100001');
+        $res->assertOk();
+
+        $availableTerms = $res->json('data.available_terms');
+        $this->assertIsArray($availableTerms);
+        // Should contain future terms 2/2569, 1/2570
+        $this->assertContains('2/2569', $availableTerms);
+        $this->assertContains('1/2570', $availableTerms);
+
+        // Register for future term 2/2569
+        $payload = [
+            'academic_term' => '2/2569',
+            'compulsory_subjects' => [
+                ['code' => 'พท11001', 'name' => 'ภาษาไทย', 'credits' => 3, 'registered' => true, 'transferred' => false, 'remark' => 'ลงเรียนเทอมหน้า'],
+            ],
+            'elective_subjects' => [],
+            'notes' => 'แผนการลงทะเบียนล่วงหน้า ภาคเรียนที่ 2/2569',
+        ];
+
+        $saveRes = $this->postJson('/api/v1/learning/registration/student/6650100001', $payload);
+        $saveRes->assertOk()
+            ->assertJsonPath('data.academic_term', '2/2569')
+            ->assertJsonPath('data.is_saved', true);
+
+        // Verify retrieval for term 2/2569
+        $getFutureRes = $this->getJson('/api/v1/learning/registration/student/6650100001?term=2/2569');
+        $getFutureRes->assertOk()
+            ->assertJsonPath('data.academic_term', '2/2569')
+            ->assertJsonPath('data.is_saved', true)
+            ->assertJsonPath('data.notes', 'แผนการลงทะเบียนล่วงหน้า ภาคเรียนที่ 2/2569');
+    }
+
+    public function test_course_status_recommendation_and_duplicate_warning(): void
+    {
+        $admin = $this->viewer('admin');
+        Sanctum::actingAs($admin);
+
+        $res = $this->getJson('/api/v1/learning/registration/student/6650100001');
+        $res->assertOk();
+
+        $compulsory = $res->json('data.compulsory_subjects');
+        $this->assertNotEmpty($compulsory);
+
+        // Each compulsory subject must have course_status structure
+        foreach ($compulsory as $subject) {
+            $this->assertArrayHasKey('course_status', $subject);
+            $st = $subject['course_status'];
+            $this->assertArrayHasKey('status', $st);
+            $this->assertArrayHasKey('status_label', $st);
+            $this->assertArrayHasKey('status_badge', $st);
+            $this->assertArrayHasKey('status_color', $st);
+            $this->assertContains($st['status'], ['passed', 'transferred', 'pending_grade', 'failed', 'not_taken']);
+        }
+
+        // Common electives also have course_status
+        $commonElectives = $res->json('data.common_electives');
+        $this->assertNotEmpty($commonElectives);
+        foreach ($commonElectives as $ce) {
+            $this->assertArrayHasKey('course_status', $ce);
+            $this->assertContains($ce['course_status']['status'], ['passed', 'transferred', 'pending_grade', 'failed', 'not_taken']);
+        }
+    }
+
     /** @param list<string> $groups */
     private function viewer(string $role, array $groups = [], ?string $username = null): User
     {
