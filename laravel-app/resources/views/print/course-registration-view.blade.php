@@ -211,7 +211,7 @@
         }
         .signature-table td {
             vertical-align: bottom;
-            line-height: 1.3;
+            line-height: 1.0;
         }
         .w-subject { width: 44%; }
         .w-code { width: 16%; }
@@ -279,17 +279,8 @@
 
             <table class="student-info-table">
                 <tr>
-                    <td colspan="2" style="padding: 0;">
-                        <table style="width: 100%; border-collapse: collapse;">
-                            <tr>
-                                <td style="width: 80px; white-space: nowrap; vertical-align: bottom; font-size: 16px; padding: 0 0 4px 0;">
-                                    ชื่อ - สกุล &nbsp;&nbsp;
-                                </td>
-                                <td style="border-bottom: 1.5px dotted #0f172a; vertical-align: bottom; font-size: 16px; font-weight: bold; padding: 0 4px 2px 4px;">
-                                    {!! $st['name'] !== '' ? e($st['name']) : '&nbsp;' !!}
-                                </td>
-                            </tr>
-                        </table>
+                    <td colspan="2" style="padding: 0 0 3px 0; font-size: 16px;">
+                        ชื่อ - สกุล &nbsp;&nbsp;@if ($st['name'] !== '')<span class="dotted-line" style="min-width: 200px; text-align: left; padding: 0 6px;">{{ $st['name'] }}</span>@else .................................................... @endif
                     </td>
                 </tr>
                 <tr>
@@ -478,30 +469,30 @@
             <table class="signature-table">
                 <tr>
                     <td style="width: 6%; text-align: right; white-space: nowrap; font-size: 16pt;">ลงชื่อ</td>
-                    <td style="width: 34%; text-align: center; white-space: nowrap; font-size: 16pt;">..................................</td>
+                    <td style="width: 34%; text-align: center; white-space: nowrap; font-size: 16pt;">..........................</td>
                     <td style="width: 9%; text-align: left; white-space: nowrap; font-size: 16pt;">นักศึกษา</td>
                     <td style="width: 2%;"></td>
                     <td style="width: 6%; text-align: right; white-space: nowrap; font-size: 16pt;">ลงชื่อ</td>
-                    <td style="width: 32%; text-align: center; white-space: nowrap; font-size: 16pt;">..................................</td>
+                    <td style="width: 32%; text-align: center; white-space: nowrap; font-size: 16pt;">..........................</td>
                     <td style="width: 11%; text-align: left; white-space: nowrap; font-size: 16pt;">ครูประจำกลุ่ม</td>
                 </tr>
                 <tr>
                     <td></td>
-                    <td style="text-align: center; white-space: nowrap; padding-top: 6px; font-size: 16pt; font-family: 'TH Sarabun New', thsarabunnew, sans-serif;">
+                    <td style="text-align: center; white-space: nowrap; padding-top: 1px; font-size: 16pt; font-family: 'TH Sarabun New', thsarabunnew, sans-serif;">
                         @if (! empty($st['name']))
                             ( {{ $st['name'] }} )
                         @else
-                            (..................................)
+                            (..........................)
                         @endif
                     </td>
                     <td></td>
                     <td></td>
                     <td></td>
-                    <td style="text-align: center; white-space: nowrap; padding-top: 6px; font-size: 16pt; font-family: 'TH Sarabun New', thsarabunnew, sans-serif;">
+                    <td style="text-align: center; white-space: nowrap; padding-top: 1px; font-size: 16pt; font-family: 'TH Sarabun New', thsarabunnew, sans-serif;">
                         @if (! empty($document['teacher_name']))
                             ( {{ $document['teacher_name'] }} )
                         @else
-                            (..................................)
+                            (..........................)
                         @endif
                     </td>
                     <td></td>

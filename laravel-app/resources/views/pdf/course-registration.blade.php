@@ -149,7 +149,7 @@
         }
         .signature-table td {
             vertical-align: bottom;
-            line-height: 1.3;
+            line-height: 1.0;
         }
         .w-subject { width: 44%; }
         .w-code { width: 16%; }
@@ -183,17 +183,8 @@
 
         <table class="student-info-table">
             <tr>
-                <td colspan="2" style="padding: 0;">
-                    <table style="width: 100%; border-collapse: collapse;">
-                        <tr>
-                            <td style="width: 22mm; white-space: nowrap; vertical-align: bottom; font-size: 14pt; padding: 0 0 0.8mm 0;">
-                                ชื่อ - สกุล &nbsp;&nbsp;
-                            </td>
-                            <td style="border-bottom: 0.35mm dotted #000; vertical-align: bottom; font-size: 14pt; font-weight: bold; padding: 0 1mm 0.5mm 1mm;">
-                                {!! $st['name'] !== '' ? e($st['name']) : '&nbsp;' !!}
-                            </td>
-                        </tr>
-                    </table>
+                <td colspan="2" style="padding: 0 0 0.8mm 0; font-size: 14pt;">
+                    ชื่อ - สกุล &nbsp;&nbsp;@if ($st['name'] !== '')<span class="dotted-line" style="min-width: 52mm; text-align: left; padding: 0 1.5mm;">{{ $st['name'] }}</span>@else .................................................... @endif
                 </td>
             </tr>
             <tr>
@@ -382,30 +373,30 @@
         <table class="signature-table">
             <tr>
                 <td style="width: 6%; text-align: right; white-space: nowrap; font-size: 16pt;">ลงชื่อ</td>
-                <td style="width: 34%; text-align: center; white-space: nowrap; font-size: 16pt;">..................................</td>
+                <td style="width: 34%; text-align: center; white-space: nowrap; font-size: 16pt;">..........................</td>
                 <td style="width: 9%; text-align: left; white-space: nowrap; font-size: 16pt;">นักศึกษา</td>
                 <td style="width: 2%;"></td>
                 <td style="width: 6%; text-align: right; white-space: nowrap; font-size: 16pt;">ลงชื่อ</td>
-                <td style="width: 32%; text-align: center; white-space: nowrap; font-size: 16pt;">..................................</td>
+                <td style="width: 32%; text-align: center; white-space: nowrap; font-size: 16pt;">..........................</td>
                 <td style="width: 11%; text-align: left; white-space: nowrap; font-size: 16pt;">ครูประจำกลุ่ม</td>
             </tr>
             <tr>
                 <td></td>
-                <td style="text-align: center; white-space: nowrap; padding-top: 1.5mm; font-size: 16pt; font-family: thsarabunnew, sans-serif;">
+                <td style="text-align: center; white-space: nowrap; padding-top: 0; font-size: 16pt; font-family: thsarabunnew, sans-serif;">
                     @if (! empty($st['name']))
                         ( {{ $st['name'] }} )
                     @else
-                        (..................................)
+                        (..........................)
                     @endif
                 </td>
                 <td></td>
                 <td></td>
                 <td></td>
-                <td style="text-align: center; white-space: nowrap; padding-top: 1.5mm; font-size: 16pt; font-family: thsarabunnew, sans-serif;">
+                <td style="text-align: center; white-space: nowrap; padding-top: 0; font-size: 16pt; font-family: thsarabunnew, sans-serif;">
                     @if (! empty($document['teacher_name']))
                         ( {{ $document['teacher_name'] }} )
                     @else
-                        (..................................)
+                        (..........................)
                     @endif
                 </td>
                 <td></td>
