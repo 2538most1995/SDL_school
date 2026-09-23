@@ -81,11 +81,11 @@ final class AcademicTerm
 
     /**
      * Compute the next upcoming academic terms from a given term.
-     * E.g. nextTerms('1/2569', 3) => ['2/2569', '1/2570', '2/2570']
+     * E.g. nextTerms('1/2569', 1) => ['2/2569']
      *
      * @return list<string>
      */
-    public static function nextTerms(?string $baseTerm, int $count = 3): array
+    public static function nextTerms(?string $baseTerm, int $count = 1): array
     {
         $normalized = self::normalize($baseTerm);
         if ($normalized === null) {
@@ -107,6 +107,11 @@ final class AcademicTerm
         }
 
         return $terms;
+    }
+
+    public static function nextTerm(?string $baseTerm): string
+    {
+        return self::nextTerms($baseTerm, 1)[0];
     }
 
     public static function sortKey(string $term): int

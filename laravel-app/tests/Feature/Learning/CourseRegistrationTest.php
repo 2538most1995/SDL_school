@@ -226,9 +226,9 @@ final class CourseRegistrationTest extends TestCase
 
         $availableTerms = $res->json('data.available_terms');
         $this->assertIsArray($availableTerms);
-        // Should contain future terms 2/2569, 1/2570
+        // Should contain strictly the single upcoming term 2/2569, but NOT far future terms like 1/2570
         $this->assertContains('2/2569', $availableTerms);
-        $this->assertContains('1/2570', $availableTerms);
+        $this->assertNotContains('1/2570', $availableTerms);
 
         // Register for future term 2/2569
         $payload = [
@@ -251,6 +251,34 @@ final class CourseRegistrationTest extends TestCase
             ->assertJsonPath('data.academic_term', '2/2569')
             ->assertJsonPath('data.is_saved', true)
             ->assertJsonPath('data.notes', 'แผนการลงทะเบียนล่วงหน้า ภาคเรียนที่ 2/2569');
+    }
+
+    public function test_teacher_prefix_is_ensured_and_signature_font_size_is_16pt(): void
+    {
+        $teacher = $this->viewer('teacher', ['SENA-P1-A']);
+        Sanctum::actingAs($teacher);
+
+        // Save with teacher name missing prefix: "สุธาทิพย์ ดีจุ่น"
+        $payload = [
+            'academic_term' => '2/2569',
+            'compulsory_subjects' => [],
+            'elective_subjects' => [],
+            'student_info' => [
+                'name' => 'นางสาวบุญทิชา เกตุนุช',
+                'teacher_name' => 'สุธาทิพย์ ดีจุ่น',
+            ],
+        ];
+
+        $res = $this->postJson('/api/v1/learning/registration/student/6650100001', $payload);
+        $res->assertOk()
+            ->assertJsonPath('data.student_info.teacher_name', 'นางสาวสุธาทิพย์ ดีจุ่น');
+
+        // Check HTML print view renders font-size: 16pt and proper prefix
+        $htmlRes = $this->actingAs($teacher)->get('/learning/registration/view?scope=student&student=6650100001&term=2/2569');
+        $htmlRes->assertOk()
+            ->assertSee('นางสาวสุธาทิพย์ ดีจุ่น')
+            ->assertSee('นางสาวบุญทิชา เกตุนุช')
+            ->assertSee('font-size: 16pt;');
     }
 
     public function test_course_status_recommendation_and_duplicate_warning(): void

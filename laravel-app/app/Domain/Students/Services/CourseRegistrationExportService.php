@@ -33,7 +33,7 @@ final readonly class CourseRegistrationExportService
             }
             $term = $filters['term'] ?? '';
             $districtName = $this->resolveDistrictName($viewer);
-            $documents[] = $this->buildBlankDocument($level, $term, $districtName);
+            $documents[] = $this->buildBlankDocument($level, $term, $districtName, $viewer);
         } elseif ($scope === 'student') {
             $studentCode = (string) ($filters['student'] ?? '');
             $regData = $this->registrationService->studentRegistration($viewer, $studentCode, $filters['term'] ?? null);
@@ -230,7 +230,7 @@ final readonly class CourseRegistrationExportService
             'term_no' => $termNo,
             'term_year' => $termYear,
             'district_center_name' => CurriculumCatalog::formatDistrictCenterName($districtName ?: null),
-            'teacher_name' => ($viewer && $viewer->role === 'teacher') ? $viewer->name : '',
+            'teacher_name' => ($viewer && $viewer->role === 'teacher') ? CurriculumCatalog::ensureTeacherPrefix($viewer->name, $viewer->district_id) : '',
             'student' => [
                 'name' => '',
                 'phone' => '',
@@ -262,11 +262,11 @@ final readonly class CourseRegistrationExportService
     {
         $custom = trim((string) $customTeacherName);
         if ($custom !== '') {
-            return $custom;
+            return CurriculumCatalog::ensureTeacherPrefix($custom, $districtId);
         }
 
         if ($viewer->role === 'teacher') {
-            return $viewer->name;
+            return CurriculumCatalog::ensureTeacherPrefix($viewer->name, $districtId ?? $viewer->district_id);
         }
 
         if ($groupCode !== '') {
@@ -280,7 +280,7 @@ final readonly class CourseRegistrationExportService
                 });
 
             if ($teacher) {
-                return $teacher->name;
+                return CurriculumCatalog::ensureTeacherPrefix($teacher->name, $districtId);
             }
         }
 

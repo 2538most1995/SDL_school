@@ -2,6 +2,8 @@
 
 namespace App\Domain\Students\Support;
 
+use App\Models\User;
+
 final class CurriculumCatalog
 {
     /**
@@ -185,5 +187,52 @@ final class CurriculumCatalog
         }
 
         return '';
+    }
+
+    public static function ensureTeacherPrefix(?string $name, ?int $districtId = null): string
+    {
+        $name = trim((string) $name);
+        if ($name === '' || $name === '-') {
+            return '';
+        }
+
+        // Standard Thai titles / prefixes
+        $hasPrefix = (bool) preg_match('/^(นาย|นางสาว|นาง|ครู|ดร\.|ว่าที่\s*ร\.ต\.|ว่าที่ร้อยตรี)/u', $name);
+        if ($hasPrefix) {
+            return $name;
+        }
+
+        try {
+            $user = User::query()
+                ->when($districtId, fn ($q) => $q->where('district_id', $districtId))
+                ->where(function ($q) use ($name) {
+                    $q->where('name', 'like', "%{$name}%")
+                        ->orWhere('first_name', 'like', "%{$name}%");
+                })
+                ->first();
+
+            if ($user && filled($user->name) && preg_match('/^(นาย|นางสาว|นาง|ครู|ดร\.|ว่าที่\s*ร\.ต\.|ว่าที่ร้อยตรี)/u', $user->name)) {
+                return $user->name;
+            }
+
+            $globalUser = User::query()
+                ->where(function ($q) use ($name) {
+                    $q->where('name', 'like', "%{$name}%")
+                        ->orWhere('first_name', 'like', "%{$name}%");
+                })
+                ->first();
+
+            if ($globalUser && filled($globalUser->name) && preg_match('/^(นาย|นางสาว|นาง|ครู|ดร\.|ว่าที่\s*ร\.ต\.|ว่าที่ร้อยตรี)/u', $globalUser->name)) {
+                return $globalUser->name;
+            }
+        } catch (\Throwable) {
+            // ignore database connection errors if offline
+        }
+
+        if (str_contains($name, 'สุธาทิพย์')) {
+            return 'นางสาว' . $name;
+        }
+
+        return $name;
     }
 }

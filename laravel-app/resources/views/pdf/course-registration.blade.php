@@ -336,7 +336,7 @@
                         </tr>
                         <tr>
                             <td></td>
-                            <td style="text-align: center; white-space: nowrap; padding-top: 1.5mm; font-size: 13.5pt;">
+                            <td style="text-align: center; white-space: nowrap; padding-top: 1.5mm; font-size: 16pt; font-family: thsarabunnew, sans-serif;">
                                 @if (! empty($st['name']))
                                     ( {{ $st['name'] }} )
                                 @else
@@ -356,7 +356,7 @@
                         </tr>
                         <tr>
                             <td></td>
-                            <td style="text-align: center; white-space: nowrap; padding-top: 1.5mm; font-size: 13.5pt;">
+                            <td style="text-align: center; white-space: nowrap; padding-top: 1.5mm; font-size: 16pt; font-family: thsarabunnew, sans-serif;">
                                 @if (! empty($document['teacher_name']))
                                     ( {{ $document['teacher_name'] }} )
                                 @else

@@ -29,6 +29,7 @@ final readonly class CourseRegistrationService
         $allStudents = $this->directory->accessibleStudents($viewer);
         $groups = [];
         $terms = [];
+        $maxStudentTerm = null;
 
         foreach ($allStudents as $student) {
             $grp = trim($student->groupCode);
@@ -36,12 +37,17 @@ final readonly class CourseRegistrationService
                 $groups[$grp] = trim($student->groupName) ?: $grp;
             }
             if ($student->currentTerm !== '') {
-                $terms[$student->currentTerm] = true;
+                $norm = AcademicTerm::normalize($student->currentTerm) ?? $student->currentTerm;
+                $terms[$norm] = true;
+                if ($maxStudentTerm === null || AcademicTerm::sortKey($norm) > AcademicTerm::sortKey($maxStudentTerm)) {
+                    $maxStudentTerm = $norm;
+                }
             }
         }
 
-        $termList = $this->resolveWorkspaceTerms($terms);
-        $selectedTerm = $filters['term'] ?? ($termList[0] ?? '1/2569');
+        $termList = $this->resolveWorkspaceTerms($terms, $maxStudentTerm);
+        $nextRegisterableTerm = $termList[0] ?? AcademicTerm::nextTerm($maxStudentTerm ?? '1/2569');
+        $selectedTerm = $filters['term'] ?? $nextRegisterableTerm;
 
         $filtered = array_values(array_filter($allStudents, function (Student $student) use ($filters): bool {
             if (! empty($filters['group']) && $student->groupCode !== $filters['group']) {
@@ -143,22 +149,32 @@ final readonly class CourseRegistrationService
             return null;
         }
 
-        $targetTerm = $term ? trim($term) : ($student->currentTerm ?: '1/2569');
-
         $allGrades = $this->repository->gradesFor($student);
 
         // Gather all terms for available_terms
         $studentTerms = [];
+        $maxStudentTerm = null;
         if ($student->currentTerm !== '') {
-            $studentTerms[$student->currentTerm] = true;
+            $norm = AcademicTerm::normalize($student->currentTerm) ?? $student->currentTerm;
+            $studentTerms[$norm] = true;
+            $maxStudentTerm = $norm;
         }
         foreach ($allGrades as $g) {
             if ($g->term !== '') {
-                $studentTerms[$g->term] = true;
+                $norm = AcademicTerm::normalize($g->term) ?? $g->term;
+                $studentTerms[$norm] = true;
+                if ($maxStudentTerm === null || AcademicTerm::sortKey($norm) > AcademicTerm::sortKey($maxStudentTerm)) {
+                    $maxStudentTerm = $norm;
+                }
             }
         }
-        $availableTerms = $this->resolveWorkspaceTerms($studentTerms);
-        $targetTerm = $term ? trim($term) : ($student->currentTerm ?: ($availableTerms[0] ?? '1/2569'));
+        $availableTerms = $this->resolveWorkspaceTerms($studentTerms, $maxStudentTerm);
+        $nextRegisterableTerm = $availableTerms[0] ?? AcademicTerm::nextTerm($maxStudentTerm ?? '1/2569');
+        $targetTerm = $term ? trim($term) : $nextRegisterableTerm;
+        if (! in_array($targetTerm, $availableTerms, true)) {
+            $availableTerms[] = $targetTerm;
+            usort($availableTerms, static fn (string $a, string $b): int => AcademicTerm::sortKey($b) <=> AcademicTerm::sortKey($a));
+        }
 
         // Historical passed subjects, grades, and enrollments
         $historyPassed = [];
@@ -462,6 +478,7 @@ final readonly class CourseRegistrationService
                 $defaultTeacherName = $t->name;
             }
         }
+        $defaultTeacherName = CurriculumCatalog::ensureTeacherPrefix($defaultTeacherName, $student->districtId);
 
         $savedStudentInfo = null;
         if ($saved !== null && ! empty($saved->student_info)) {
@@ -472,6 +489,8 @@ final readonly class CourseRegistrationService
                 }
                 if (empty($savedStudentInfo['teacher_name']) && $defaultTeacherName !== '') {
                     $savedStudentInfo['teacher_name'] = $defaultTeacherName;
+                } elseif (! empty($savedStudentInfo['teacher_name'])) {
+                    $savedStudentInfo['teacher_name'] = CurriculumCatalog::ensureTeacherPrefix($savedStudentInfo['teacher_name'], $student->districtId);
                 }
                 if (empty($savedStudentInfo['facebook']) || $savedStudentInfo['facebook'] === '&nbsp;') {
                     $savedStudentInfo['facebook'] = '-';
@@ -603,6 +622,10 @@ final readonly class CourseRegistrationService
             ? $data['student_info']
             : null;
 
+        if ($studentInfo !== null && isset($studentInfo['teacher_name'])) {
+            $studentInfo['teacher_name'] = CurriculumCatalog::ensureTeacherPrefix((string) $studentInfo['teacher_name'], $student->districtId);
+        }
+
         $notes = isset($data['notes']) ? trim((string) $data['notes']) : null;
 
         DB::table('learning_course_registrations')->updateOrInsert(
@@ -686,9 +709,27 @@ final readonly class CourseRegistrationService
      * @param  array<string, bool>  $existingTerms
      * @return list<string>
      */
-    private function resolveWorkspaceTerms(array $existingTerms): array
+    private function resolveWorkspaceTerms(array $existingTerms, ?string $baseMaxTerm = null): array
     {
         $termsMap = $existingTerms;
+
+        if ($baseMaxTerm === null) {
+            foreach (array_keys($existingTerms) as $t) {
+                if ($baseMaxTerm === null || AcademicTerm::sortKey($t) > AcademicTerm::sortKey($baseMaxTerm)) {
+                    $baseMaxTerm = $t;
+                }
+            }
+        }
+
+        $baseTerm = $baseMaxTerm ?? '1/2569';
+        if (AcademicTerm::sortKey($baseTerm) < AcademicTerm::sortKey('1/2569')) {
+            $termsMap['1/2569'] = true;
+            $baseTerm = '1/2569';
+        }
+
+        // Add strictly the single next upcoming registerable term (e.g. 1/2569 -> 2/2569)
+        $nextTerm = AcademicTerm::nextTerm($baseTerm);
+        $termsMap[$nextTerm] = true;
 
         // Also check any terms saved in learning_course_registrations
         $savedTerms = DB::table('learning_course_registrations')
@@ -698,24 +739,15 @@ final readonly class CourseRegistrationService
             ->all();
         foreach ($savedTerms as $st) {
             $normalized = AcademicTerm::normalize((string) $st);
-            if ($normalized !== null) {
+            if ($normalized !== null && AcademicTerm::sortKey($normalized) <= AcademicTerm::sortKey($nextTerm)) {
                 $termsMap[$normalized] = true;
             }
         }
 
-        $termList = array_keys($termsMap);
-        usort($termList, static fn (string $a, string $b): int => AcademicTerm::sortKey($b) <=> AcademicTerm::sortKey($a));
-        $latestTerm = $termList[0] ?? '1/2569';
-
-        // Add upcoming future terms (e.g. 2/2569, 1/2570, 2/2570)
-        $futureTerms = AcademicTerm::nextTerms($latestTerm, 3);
-        foreach ($futureTerms as $ft) {
-            $termsMap[$ft] = true;
-        }
-
         $finalList = array_keys($termsMap);
+        $finalList = array_filter($finalList, static fn (string $t): bool => AcademicTerm::sortKey($t) <= AcademicTerm::sortKey($nextTerm));
         usort($finalList, static fn (string $a, string $b): int => AcademicTerm::sortKey($b) <=> AcademicTerm::sortKey($a));
 
-        return $finalList;
+        return array_values($finalList);
     }
 }
