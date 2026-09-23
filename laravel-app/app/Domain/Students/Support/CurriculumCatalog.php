@@ -166,4 +166,24 @@ final class CurriculumCatalog
 
         return 'ศูนย์ส่งเสริมการเรียนรู้ระดับอำเภอ' . $name;
     }
+
+    public static function resolveGroupSubdistrict(?string $groupName, ?string $groupCode = null): string
+    {
+        $candidates = [trim((string) $groupName), trim((string) $groupCode)];
+
+        foreach ($candidates as $name) {
+            if ($name === '') {
+                continue;
+            }
+
+            if (preg_match('/(?:ศกร\.ระดับตำบล|กศน\.ระดับตำบล|ศกร\.ตำบล|กศน\.ตำบล|ตำบล)\s*([^\s\(\)\/\-_0-9]+)/u', $name, $m)) {
+                $sub = trim($m[1]);
+                if ($sub !== '') {
+                    return $sub;
+                }
+            }
+        }
+
+        return '';
+    }
 }

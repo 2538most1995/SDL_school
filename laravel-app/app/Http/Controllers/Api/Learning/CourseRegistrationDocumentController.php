@@ -138,7 +138,7 @@ final class CourseRegistrationDocumentController extends Controller
 
     private function resolveUser(Request $request): User
     {
-        $user = $request->user('sanctum');
+        $user = $request->user() ?? $request->user('sanctum');
         if ($user !== null) {
             return $user;
         }

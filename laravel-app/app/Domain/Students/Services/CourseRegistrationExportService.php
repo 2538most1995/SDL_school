@@ -38,7 +38,7 @@ final readonly class CourseRegistrationExportService
             $studentCode = (string) ($filters['student'] ?? '');
             $regData = $this->registrationService->studentRegistration($viewer, $studentCode, $filters['term'] ?? null);
             abort_if($regData === null, 404, 'ไม่พบข้อมูลนักศึกษาหรือไม่มีสิทธิ์เข้าถึง');
-            $documents[] = $this->buildStudentDocument($regData);
+            $documents[] = $this->buildStudentDocument($regData, $viewer);
         } elseif ($scope === 'group') {
             $groupCode = (string) ($filters['group'] ?? '');
             $levelFilter = isset($filters['level']) ? (int) $filters['level'] : null;
@@ -61,7 +61,7 @@ final readonly class CourseRegistrationExportService
             foreach ($groupStudents as $student) {
                 $regData = $this->registrationService->studentRegistration($viewer, $student->code, $term);
                 if ($regData !== null) {
-                    $documents[] = $this->buildStudentDocument($regData);
+                    $documents[] = $this->buildStudentDocument($regData, $viewer);
                 }
             }
         }
@@ -77,7 +77,7 @@ final readonly class CourseRegistrationExportService
      * @param  array<string, mixed>  $data
      * @return array<string, mixed>
      */
-    private function buildStudentDocument(array $data): array
+    private function buildStudentDocument(array $data, User $viewer): array
     {
         $st = $data['student'];
         $reqs = $data['requirements'];
@@ -96,15 +96,29 @@ final readonly class CourseRegistrationExportService
         $addrParts = $this->parseAddress((string) $st['address']);
         $name = (string) ($info['name'] ?? $st['name']);
         $phone = (string) ($info['phone'] ?? $st['phone']);
-        $facebook = (string) ($info['facebook'] ?? $st['facebook']);
-        $lineId = (string) ($info['line_id'] ?? $st['line_id']);
+        
+        $facebook = trim((string) ($info['facebook'] ?? $st['facebook']));
+        if ($facebook === '' || $facebook === '&nbsp;') {
+            $facebook = '-';
+        }
+
+        $lineId = trim((string) ($info['line_id'] ?? $st['line_id']));
+        if ($lineId === '' || $lineId === '&nbsp;') {
+            $lineId = '-';
+        }
+
         $houseNo = (string) ($info['house_no'] ?? $addrParts['house_no']);
         $moo = (string) ($info['moo'] ?? $addrParts['moo']);
         $subdistrict = (string) ($info['subdistrict'] ?? $addrParts['subdistrict']);
         $district = (string) ($info['district'] ?? $addrParts['district']);
         $province = (string) ($info['province'] ?? $addrParts['province']);
         $group = (string) ($info['group'] ?? ($st['group_name'] ?: $st['group_code']));
-        $boxSubdistrict = (string) ($info['box_subdistrict'] ?? $subdistrict);
+
+        $groupSubdistrict = CurriculumCatalog::resolveGroupSubdistrict($group, (string) ($st['group_code'] ?? ''));
+        $boxSubdistrict = trim((string) ($info['box_subdistrict'] ?? ''));
+        if ($boxSubdistrict === '' || ($groupSubdistrict !== '' && $boxSubdistrict === $addrParts['subdistrict'])) {
+            $boxSubdistrict = $groupSubdistrict !== '' ? $groupSubdistrict : $subdistrict;
+        }
 
         $citizenRaw = (string) ($info['citizen_id'] ?? ($st['citizen_id_raw'] ?: $st['citizen_id']));
         $citizenDigits = $this->boxDigits($citizenRaw, 13);
@@ -125,30 +139,26 @@ final readonly class CourseRegistrationExportService
             ? $info['elective_remaining']
             : $reqs['elective_remaining'];
 
+        $teacherName = $this->resolveTeacherName(
+            $viewer,
+            (string) ($st['group_code'] ?? ''),
+            isset($st['district_id']) ? (int) $st['district_id'] : $viewer->district_id,
+            isset($info['teacher_name']) ? (string) $info['teacher_name'] : null
+        );
+
         // Format compulsory subjects
         $compulsorySubjects = $data['compulsory_subjects'] ?? [];
         $compulsoryTotal = $reqs['compulsory_required'] ?? 44.0;
 
-        // Format elective subjects and pad to 6-7 rows
-        $electiveSubjects = $data['elective_subjects'] ?? [];
+        // Format elective subjects: do NOT pad empty rows for student document (cuts out unused rows)
+        $rawElectives = $data['elective_subjects'] ?? [];
+        $filteredElectives = array_values(array_filter($rawElectives, static function (array $sub): bool {
+            return trim((string) ($sub['code'] ?? '')) !== ''
+                || trim((string) ($sub['name'] ?? '')) !== ''
+                || ! empty($sub['registered'])
+                || ! empty($sub['transferred']);
+        }));
         $electiveTotal = $reqs['elective_required'] ?? 32.0;
-
-        $targetElectiveRows = max(6, count($electiveSubjects));
-        $paddedElectives = [];
-        for ($i = 0; $i < $targetElectiveRows; $i++) {
-            if (isset($electiveSubjects[$i])) {
-                $paddedElectives[] = $electiveSubjects[$i];
-            } else {
-                $paddedElectives[] = [
-                    'code' => '',
-                    'name' => '',
-                    'credits' => '',
-                    'registered' => false,
-                    'transferred' => false,
-                    'remark' => '',
-                ];
-            }
-        }
 
         return [
             'level' => $level,
@@ -157,6 +167,7 @@ final readonly class CourseRegistrationExportService
             'term_no' => $termNo,
             'term_year' => $termYear,
             'district_center_name' => CurriculumCatalog::formatDistrictCenterName($st['district_name'] ?? null),
+            'teacher_name' => $teacherName,
             'student' => [
                 'name' => $name,
                 'phone' => $phone,
@@ -179,7 +190,7 @@ final readonly class CourseRegistrationExportService
             'compulsory_total' => (int) $compulsoryTotal,
             'compulsory_subjects' => $compulsorySubjects,
             'elective_total' => (int) $electiveTotal,
-            'elective_subjects' => $paddedElectives,
+            'elective_subjects' => $filteredElectives,
             'notes' => $data['notes'] ?? '',
         ];
     }
@@ -187,7 +198,7 @@ final readonly class CourseRegistrationExportService
     /**
      * @return array<string, mixed>
      */
-    private function buildBlankDocument(int $level, string $term, string $districtName): array
+    private function buildBlankDocument(int $level, string $term, string $districtName, ?User $viewer = null): array
     {
         [$termNo, $termYear] = $this->splitTerm($term);
         $reqs = CurriculumCatalog::creditRequirements($level);
@@ -201,7 +212,7 @@ final readonly class CourseRegistrationExportService
         ], CurriculumCatalog::compulsorySubjects($level));
 
         $paddedElectives = [];
-        for ($i = 0; $i < 6; $i++) {
+        for ($i = 0; $i < 5; $i++) {
             $paddedElectives[] = [
                 'code' => '',
                 'name' => '',
@@ -219,11 +230,12 @@ final readonly class CourseRegistrationExportService
             'term_no' => $termNo,
             'term_year' => $termYear,
             'district_center_name' => CurriculumCatalog::formatDistrictCenterName($districtName ?: null),
+            'teacher_name' => ($viewer && $viewer->role === 'teacher') ? $viewer->name : '',
             'student' => [
                 'name' => '',
                 'phone' => '',
-                'facebook' => '',
-                'line_id' => '',
+                'facebook' => '-',
+                'line_id' => '-',
                 'house_no' => '',
                 'moo' => '',
                 'subdistrict' => '',
@@ -244,6 +256,35 @@ final readonly class CourseRegistrationExportService
             'elective_subjects' => $paddedElectives,
             'notes' => '',
         ];
+    }
+
+    private function resolveTeacherName(User $viewer, string $groupCode, ?int $districtId, ?string $customTeacherName = null): string
+    {
+        $custom = trim((string) $customTeacherName);
+        if ($custom !== '') {
+            return $custom;
+        }
+
+        if ($viewer->role === 'teacher') {
+            return $viewer->name;
+        }
+
+        if ($groupCode !== '') {
+            $teacher = User::query()
+                ->where('role', 'teacher')
+                ->when($districtId, fn ($q) => $q->where('district_id', $districtId))
+                ->get()
+                ->first(static function (User $u) use ($groupCode): bool {
+                    $groups = (array) ($u->assigned_groups ?? []);
+                    return in_array($groupCode, $groups, true);
+                });
+
+            if ($teacher) {
+                return $teacher->name;
+            }
+        }
+
+        return '';
     }
 
     /**

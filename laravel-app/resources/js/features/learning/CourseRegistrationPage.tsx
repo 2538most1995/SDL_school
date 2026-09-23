@@ -82,6 +82,7 @@ type StudentInfoForm = {
     code: string;
     group: string;
     box_subdistrict: string;
+    teacher_name?: string;
     compulsory_earned: number | string;
     elective_earned: number | string;
     compulsory_remaining: number | string;
@@ -223,6 +224,7 @@ export function CourseRegistrationPage() {
                 code: data.student.code,
                 group: data.student.group_name || data.student.group_code || '',
                 box_subdistrict: '',
+                teacher_name: '',
                 compulsory_earned: data.requirements.compulsory_earned,
                 elective_earned: data.requirements.elective_earned,
                 compulsory_remaining: data.requirements.compulsory_remaining,
@@ -831,6 +833,20 @@ export function CourseRegistrationPage() {
                                             </div>
                                         </div>
 
+                                        {/* Row 4.5: ครูประจำกลุ่ม */}
+                                        <div className="grid gap-3 sm:grid-cols-2">
+                                            <div>
+                                                <label className="block text-[11px] font-bold text-slate-700 mb-1">ชื่อครูประจำกลุ่ม (ผู้ลงชื่อในเอกสาร)</label>
+                                                <input
+                                                    type="text"
+                                                    value={studentInfo?.teacher_name || ''}
+                                                    onChange={(e) => handleStudentInfoChange('teacher_name', e.target.value)}
+                                                    placeholder="เช่น นายสมชาย ใจดี"
+                                                    className="w-full rounded-lg border border-slate-300 bg-white p-2 text-xs focus:border-brand-500 focus:outline-none"
+                                                />
+                                            </div>
+                                        </div>
+
                                         {/* Row 5: หน่วยกิตสะสมและคงเหลือ */}
                                         <div className="grid gap-2 sm:grid-cols-4 pt-1">
                                             <div>
@@ -888,6 +904,14 @@ export function CourseRegistrationPage() {
                                         <div>
                                             <span className="text-slate-400">LINE ID:</span>{' '}
                                             <span className="font-bold text-slate-700">{studentInfo?.line_id || studentDetail.student.line_id || '-'}</span>
+                                        </div>
+                                        <div>
+                                            <span className="text-slate-400">กลุ่ม / ตำบล:</span>{' '}
+                                            <span className="font-bold text-slate-700">{studentInfo?.group || studentDetail.student.group_name || '-'} {studentInfo?.box_subdistrict ? `(ต.${studentInfo.box_subdistrict})` : ''}</span>
+                                        </div>
+                                        <div>
+                                            <span className="text-slate-400">ครูประจำกลุ่ม:</span>{' '}
+                                            <span className="font-bold text-slate-700">{studentInfo?.teacher_name || '-'}</span>
                                         </div>
                                         <div className="sm:col-span-3">
                                             <span className="text-slate-400">ที่อยู่บนใบลงทะเบียน:</span>{' '}

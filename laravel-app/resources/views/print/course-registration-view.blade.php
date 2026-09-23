@@ -125,14 +125,15 @@
         .side-box-table {
             border: 1.5px solid #000;
             border-collapse: collapse;
-            width: 200px;
+            width: 210px;
         }
         .side-box-table td {
             border: none !important;
-            padding: 6px 10px;
-            font-size: 15px;
+            padding: 8px 6px;
+            font-size: 14.5px;
             line-height: 1.35;
             vertical-align: middle;
+            text-align: center;
         }
         .digit-table {
             border-collapse: collapse;
@@ -274,8 +275,8 @@
                 <tr>
                     <td colspan="2">
                         เบอร์โทร<span class="dotted-line" style="min-width: 140px; text-align: center;">{!! $st['phone'] !== '' ? e($st['phone']) : '&nbsp;' !!}</span>
-                        Facebook<span class="dotted-line" style="min-width: 190px; text-align: center;">{!! $st['facebook'] !== '' ? e($st['facebook']) : '&nbsp;' !!}</span>
-                        ID Line<span class="dotted-line" style="min-width: 160px; text-align: center;">{!! $st['line_id'] !== '' ? e($st['line_id']) : '&nbsp;' !!}</span>
+                        Facebook<span class="dotted-line" style="min-width: 190px; text-align: center;">{!! (! empty($st['facebook']) && trim($st['facebook']) !== '') ? e($st['facebook']) : '-' !!}</span>
+                        ID Line<span class="dotted-line" style="min-width: 160px; text-align: center;">{!! (! empty($st['line_id']) && trim($st['line_id']) !== '') ? e($st['line_id']) : '-' !!}</span>
                     </td>
                 </tr>
                 <tr>
@@ -335,15 +336,19 @@
                         </table>
                     </td>
                     <td style="width: 29%; text-align: right; vertical-align: middle; padding: 4px 0 4px 12px;">
+                        @php
+                            $groupDisplay = ! empty($st['group']) ? (str_starts_with(trim($st['group']), 'กลุ่ม') ? trim($st['group']) : 'กลุ่ม ' . trim($st['group'])) : 'กลุ่ม ....................................';
+                            $subdistrictDisplay = ! empty($st['box_subdistrict']) ? (str_starts_with(trim($st['box_subdistrict']), 'ตำบล') ? trim($st['box_subdistrict']) : 'ตำบล ' . trim($st['box_subdistrict'])) : 'ตำบล ....................................';
+                        @endphp
                         <table class="side-box-table" style="margin-left: auto;">
                             <tr>
-                                <td>
-                                    กลุ่ม<span class="dotted-line" style="min-width: 130px;">{!! $st['group'] !== '' ? e($st['group']) : '&nbsp;' !!}</span>
-                                </td>
-                            </tr>
-                            <tr>
-                                <td>
-                                    ตำบล<span class="dotted-line" style="min-width: 125px;">{!! $st['box_subdistrict'] !== '' ? e($st['box_subdistrict']) : '&nbsp;' !!}</span>
+                                <td style="text-align: center; vertical-align: middle;">
+                                    <div style="text-align: center; font-size: 14.5px; line-height: 1.35;">
+                                        {{ $groupDisplay }}
+                                    </div>
+                                    <div style="text-align: center; font-size: 14.5px; line-height: 1.35; margin-top: 6px;">
+                                        {{ $subdistrictDisplay }}
+                                    </div>
                                 </td>
                             </tr>
                         </table>
@@ -419,11 +424,19 @@
                 <tr>
                     <td>
                         ลงชื่อ...................................................นักศึกษา<br>
-                        (...................................................)
+                        @if (! empty($st['name']))
+                            ( {{ $st['name'] }} )
+                        @else
+                            (...................................................)
+                        @endif
                     </td>
                     <td>
-                        ลงชื่อ...................................................ครูศูนย์การเรียนรู้<br>
-                        (...................................................)
+                        ลงชื่อ...................................................ครูประจำกลุ่ม<br>
+                        @if (! empty($document['teacher_name']))
+                            ( {{ $document['teacher_name'] }} )
+                        @else
+                            (...................................................)
+                        @endif
                     </td>
                 </tr>
             </table>

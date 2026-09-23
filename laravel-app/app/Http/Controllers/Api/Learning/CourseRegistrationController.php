@@ -79,6 +79,7 @@ final class CourseRegistrationController extends Controller
             'student_info.elective_remaining' => ['nullable'],
             'student_info.term_no' => ['nullable', 'string', 'max:16'],
             'student_info.term_year' => ['nullable', 'string', 'max:16'],
+            'student_info.teacher_name' => ['nullable', 'string', 'max:120'],
             'notes' => ['nullable', 'string', 'max:500'],
         ]);
 

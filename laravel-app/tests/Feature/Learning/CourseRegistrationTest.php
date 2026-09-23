@@ -174,6 +174,47 @@ final class CourseRegistrationTest extends TestCase
             ->assertJsonPath('data.student_info.house_no', '99/9');
     }
 
+    public function test_group_subdistrict_resolution_and_export_document(): void
+    {
+        $this->assertSame('เจ้าเสด็จ', \App\Domain\Students\Support\CurriculumCatalog::resolveGroupSubdistrict('กลุ่ม ศกร.ระดับตำบลเจ้าเสด็จ'));
+        $this->assertSame('เสนา', \App\Domain\Students\Support\CurriculumCatalog::resolveGroupSubdistrict('ศกร.ระดับตำบลเสนา'));
+        $this->assertSame('บ้านแพน', \App\Domain\Students\Support\CurriculumCatalog::resolveGroupSubdistrict('กศน.ตำบลบ้านแพน'));
+
+        $teacher = $this->viewer('teacher', ['SENA-P1-A']);
+        $teacher->name = 'คุณครู ทดสอบ';
+        $teacher->save();
+        Sanctum::actingAs($teacher);
+
+        $payload = [
+            'academic_term' => '1/2569',
+            'compulsory_subjects' => [
+                ['code' => 'ทร11001', 'name' => 'ทักษะการเรียนรู้', 'credits' => 5, 'registered' => true, 'transferred' => false, 'remark' => ''],
+            ],
+            'elective_subjects' => [
+                ['code' => 'พว12010', 'name' => 'การใช้พลังงานไฟฟ้าในชีวิตประจำวัน 1', 'credits' => 2, 'registered' => true, 'transferred' => false, 'remark' => ''],
+            ],
+            'student_info' => [
+                'name' => 'นายสมใจ เรียนดี',
+                'teacher_name' => 'คุณครู ประจำกลุ่ม',
+                'facebook' => '',
+                'line_id' => '',
+                'group' => 'กลุ่ม ศกร.ระดับตำบลเจ้าเสด็จ',
+                'box_subdistrict' => 'เจ้าเสด็จ',
+            ],
+        ];
+
+        $postRes = $this->postJson('/api/v1/learning/registration/student/6650100001', $payload);
+        $postRes->assertOk()
+            ->assertJsonPath('data.student_info.teacher_name', 'คุณครู ประจำกลุ่ม');
+
+        // Test export HTML preview contains teacher name, student name, and resolved box subdistrict
+        $htmlRes = $this->actingAs($teacher)->get('/learning/registration/view?scope=student&student=6650100001&term=1/2569');
+        $htmlRes->assertOk()
+            ->assertSee('นายสมใจ เรียนดี')
+            ->assertSee('คุณครู ประจำกลุ่ม')
+            ->assertSee('เจ้าเสด็จ');
+    }
+
     /** @param list<string> $groups */
     private function viewer(string $role, array $groups = [], ?string $username = null): User
     {

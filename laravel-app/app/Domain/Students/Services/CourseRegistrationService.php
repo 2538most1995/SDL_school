@@ -279,16 +279,48 @@ final readonly class CourseRegistrationService
         $addrParts = $this->parseAddress($student->currentAddress ?: $student->registeredAddress ?: '');
         [$termNo, $termYear] = $this->splitTerm($targetTerm);
 
+        $groupSubdistrict = CurriculumCatalog::resolveGroupSubdistrict($student->groupName ?: $student->groupCode);
+        $defaultBoxSubdistrict = $groupSubdistrict !== '' ? $groupSubdistrict : $addrParts['subdistrict'];
+
+        $defaultTeacherName = $viewer->role === 'teacher' ? $viewer->name : '';
+        if ($defaultTeacherName === '' && $student->groupCode !== '') {
+            $t = User::query()
+                ->where('role', 'teacher')
+                ->where('district_id', $student->districtId)
+                ->get()
+                ->first(static function (User $u) use ($student): bool {
+                    $groups = (array) ($u->assigned_groups ?? []);
+                    return in_array($student->groupCode, $groups, true);
+                });
+            if ($t) {
+                $defaultTeacherName = $t->name;
+            }
+        }
+
         $savedStudentInfo = null;
         if ($saved !== null && ! empty($saved->student_info)) {
             $savedStudentInfo = json_decode((string) $saved->student_info, true) ?: null;
+            if (is_array($savedStudentInfo)) {
+                if (empty($savedStudentInfo['box_subdistrict']) || ($groupSubdistrict !== '' && ($savedStudentInfo['box_subdistrict'] === $addrParts['subdistrict']))) {
+                    $savedStudentInfo['box_subdistrict'] = $defaultBoxSubdistrict;
+                }
+                if (empty($savedStudentInfo['teacher_name']) && $defaultTeacherName !== '') {
+                    $savedStudentInfo['teacher_name'] = $defaultTeacherName;
+                }
+                if (empty($savedStudentInfo['facebook']) || $savedStudentInfo['facebook'] === '&nbsp;') {
+                    $savedStudentInfo['facebook'] = '-';
+                }
+                if (empty($savedStudentInfo['line_id']) || $savedStudentInfo['line_id'] === '&nbsp;') {
+                    $savedStudentInfo['line_id'] = '-';
+                }
+            }
         }
 
         $studentInfo = $savedStudentInfo ?? [
             'name' => $student->fullName(),
             'phone' => $student->phone ?? '',
-            'facebook' => $student->facebookUrl ?? '',
-            'line_id' => $student->lineId ?? '',
+            'facebook' => $student->facebookUrl ?: '-',
+            'line_id' => $student->lineId ?: '-',
             'house_no' => $addrParts['house_no'],
             'moo' => $addrParts['moo'],
             'subdistrict' => $addrParts['subdistrict'],
@@ -297,7 +329,8 @@ final readonly class CourseRegistrationService
             'citizen_id' => $student->citizenId ?? '',
             'code' => $student->code,
             'group' => $student->groupName ?: $student->groupCode,
-            'box_subdistrict' => $addrParts['subdistrict'],
+            'box_subdistrict' => $defaultBoxSubdistrict,
+            'teacher_name' => $defaultTeacherName,
             'compulsory_earned' => $compulsoryEarned,
             'elective_earned' => $electiveEarned,
             'compulsory_remaining' => $compulsoryRemaining,
