@@ -179,7 +179,7 @@ final readonly class CourseRegistrationService
         // Historical passed subjects, grades, and enrollments
         $historyPassed = [];
         $historyTransferred = [];
-        $historyFailed = [];
+        $historyUnpassed = []; // Tracks latest attempt of failed ('0') or absent ('ข')
         $historyPending = [];
         $historicalRegisteredInTerm = [];
 
@@ -188,6 +188,11 @@ final readonly class CourseRegistrationService
             if ($grade->term === $targetTerm) {
                 $historicalRegisteredInTerm[$code] = $grade;
             }
+
+            $rawGrade = $grade->grade !== null ? trim((string) $grade->grade) : '';
+            $isAbsent = in_array($rawGrade, ['ข', 'ขาดสอบ'], true) || (! $grade->examAttended && in_array($rawGrade, ['ข', 'ม', ''], true));
+            $isFailedZero = $rawGrade === '0';
+
             if ($grade->transferred) {
                 $historyTransferred[$code] = [
                     'term' => $grade->term,
@@ -201,13 +206,26 @@ final readonly class CourseRegistrationService
                     'credits' => $grade->credits,
                     'name' => $grade->subjectName,
                 ];
-            } elseif ($grade->grade !== null && trim((string) $grade->grade) === '0') {
-                $historyFailed[$code] = [
-                    'term' => $grade->term,
-                    'grade' => $grade->grade,
-                    'credits' => $grade->credits,
-                    'name' => $grade->subjectName,
-                ];
+            } elseif ($isAbsent) {
+                if (! isset($historyUnpassed[$code]) || AcademicTerm::compare($grade->term, $historyUnpassed[$code]['term']) >= 0) {
+                    $historyUnpassed[$code] = [
+                        'type' => 'absent_exam',
+                        'term' => $grade->term,
+                        'grade' => 'ข',
+                        'credits' => $grade->credits,
+                        'name' => $grade->subjectName,
+                    ];
+                }
+            } elseif ($isFailedZero) {
+                if (! isset($historyUnpassed[$code]) || AcademicTerm::compare($grade->term, $historyUnpassed[$code]['term']) >= 0) {
+                    $historyUnpassed[$code] = [
+                        'type' => 'failed',
+                        'term' => $grade->term,
+                        'grade' => '0',
+                        'credits' => $grade->credits,
+                        'name' => $grade->subjectName,
+                    ];
+                }
             } else {
                 $historyPending[$code] = [
                     'term' => $grade->term,
@@ -241,7 +259,7 @@ final readonly class CourseRegistrationService
             }
         }
 
-        $resolveStatus = static function (string $code) use ($historyPassed, $historyTransferred, $historyPending, $learningPending, $historyFailed): array {
+        $resolveStatus = static function (string $code) use ($historyPassed, $historyTransferred, $historyPending, $learningPending, $historyUnpassed): array {
             $code = trim($code);
             if (isset($historyPassed[$code])) {
                 $p = $historyPassed[$code];
@@ -312,9 +330,24 @@ final readonly class CourseRegistrationService
                     'warning' => "วิชานี้ได้บันทึกการลงทะเบียนในเทอม {$t} ไว้แล้วและกำลังรอผลการเรียน",
                 ];
             }
-            if (isset($historyFailed[$code])) {
-                $hf = $historyFailed[$code];
-                $t = (string) $hf['term'];
+            if (isset($historyUnpassed[$code])) {
+                $unp = $historyUnpassed[$code];
+                $t = (string) $unp['term'];
+
+                if ($unp['type'] === 'absent_exam') {
+                    return [
+                        'status' => 'absent_exam',
+                        'status_label' => "ขาดสอบ (เกรด \"ข\" เทอม {$t})",
+                        'status_badge' => 'เกรด "ข" ขาดสอบ (ลงเรียนใหม่ได้)',
+                        'status_color' => 'orange',
+                        'has_grade' => true,
+                        'is_pending' => false,
+                        'is_transferred' => false,
+                        'grade' => 'ข',
+                        'term' => $t,
+                        'warning' => "เคยขาดสอบ (เกรด \"ข\" ในเทอม {$t}) แนะนำให้ลงทะเบียนเรียนใหม่",
+                    ];
+                }
 
                 return [
                     'status' => 'failed',
@@ -558,14 +591,34 @@ final readonly class CourseRegistrationService
             ],
             'compulsory_subjects' => $compulsoryList,
             'elective_subjects' => $electiveList,
-            'common_electives' => array_map(static function (array $ce) use ($resolveStatus): array {
-                $code = trim((string) ($ce['code'] ?? ''));
+            'common_electives' => (function () use ($student, $catalogCompulsory, $historyUnpassed, $resolveStatus): array {
+                $commonElectives = CurriculumCatalog::commonElectiveSubjects($student->level);
+                $existingCodes = array_flip(array_map(static fn ($e) => trim((string) $e['code']), $commonElectives));
+                $compulsoryCodes = array_flip(array_map(static fn ($c) => trim((string) $c['code']), $catalogCompulsory));
 
-                return [
-                    ...$ce,
-                    'course_status' => $resolveStatus($code),
-                ];
-            }, CurriculumCatalog::commonElectiveSubjects($student->level)),
+                $extraElectives = [];
+                foreach ($historyUnpassed as $code => $unp) {
+                    if (! isset($compulsoryCodes[$code]) && ! isset($existingCodes[$code])) {
+                        $extraElectives[] = [
+                            'code' => $code,
+                            'name' => $unp['name'] ?: $code,
+                            'credits' => $unp['credits'] > 0 ? (float) $unp['credits'] : 2.0,
+                        ];
+                        $existingCodes[$code] = true;
+                    }
+                }
+
+                $merged = array_merge($extraElectives, $commonElectives);
+
+                return array_map(static function (array $ce) use ($resolveStatus): array {
+                    $code = trim((string) ($ce['code'] ?? ''));
+
+                    return [
+                        ...$ce,
+                        'course_status' => $resolveStatus($code),
+                    ];
+                }, $merged);
+            })(),
             'notes' => $notes,
             'is_saved' => $saved !== null,
         ];

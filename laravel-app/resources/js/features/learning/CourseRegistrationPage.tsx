@@ -32,10 +32,10 @@ import { showErrorAlert, showSuccessAlert } from '../../lib/feedback';
 import { getFeatureDataWithDemo, sendFeatureData } from '../api';
 
 export interface CourseStatus {
-    status: 'passed' | 'transferred' | 'pending_grade' | 'failed' | 'not_taken';
+    status: 'passed' | 'transferred' | 'pending_grade' | 'failed' | 'absent_exam' | 'not_taken';
     status_label: string;
     status_badge: string;
-    status_color: 'emerald' | 'purple' | 'amber' | 'rose' | 'blue';
+    status_color: 'emerald' | 'purple' | 'amber' | 'rose' | 'orange' | 'blue';
     has_grade: boolean;
     is_pending: boolean;
     is_transferred: boolean;
@@ -175,6 +175,9 @@ function CourseStatusBadge({ status }: { status?: CourseStatus }) {
     } else if (status.status === 'pending_grade') {
         badgeClass = 'bg-amber-50 text-amber-800 border-amber-300';
         dotClass = 'bg-amber-500';
+    } else if (status.status === 'absent_exam') {
+        badgeClass = 'bg-orange-50 text-orange-800 border-orange-300';
+        dotClass = 'bg-orange-500';
     } else if (status.status === 'failed') {
         badgeClass = 'bg-rose-50 text-rose-800 border-rose-200';
         dotClass = 'bg-rose-500';
@@ -1090,6 +1093,29 @@ export function CourseRegistrationPage() {
                                 </div>
                             </div>
 
+                            {/* Status Badges Legend */}
+                            <div className="flex flex-wrap items-center gap-2 rounded-2xl bg-white border border-slate-200/80 p-3 shadow-2xs text-xs">
+                                <span className="font-bold text-slate-700 text-xs mr-1">สัญลักษณ์สถานะรายวิชา:</span>
+                                <span className="inline-flex items-center gap-1.5 rounded-md border border-emerald-200 bg-emerald-50 px-2 py-0.5 text-[11px] font-bold text-emerald-800">
+                                    <span className="size-1.5 rounded-full bg-emerald-500" /> มีเกรดแล้ว
+                                </span>
+                                <span className="inline-flex items-center gap-1.5 rounded-md border border-purple-200 bg-purple-50 px-2 py-0.5 text-[11px] font-bold text-purple-800">
+                                    <span className="size-1.5 rounded-full bg-purple-500" /> เทียบโอนแล้ว
+                                </span>
+                                <span className="inline-flex items-center gap-1.5 rounded-md border border-amber-300 bg-amber-50 px-2 py-0.5 text-[11px] font-bold text-amber-800">
+                                    <span className="size-1.5 rounded-full bg-amber-500" /> รอเกรด
+                                </span>
+                                <span className="inline-flex items-center gap-1.5 rounded-md border border-orange-300 bg-orange-50 px-2 py-0.5 text-[11px] font-bold text-orange-800">
+                                    <span className="size-1.5 rounded-full bg-orange-500" /> เกรด "ข" ขาดสอบ
+                                </span>
+                                <span className="inline-flex items-center gap-1.5 rounded-md border border-rose-200 bg-rose-50 px-2 py-0.5 text-[11px] font-bold text-rose-800">
+                                    <span className="size-1.5 rounded-full bg-rose-500" /> เกรด 0 (ลงแก้ตัวได้)
+                                </span>
+                                <span className="inline-flex items-center gap-1.5 rounded-md border border-sky-200 bg-sky-50 px-2 py-0.5 text-[11px] font-bold text-sky-800">
+                                    <span className="size-1.5 rounded-full bg-sky-500" /> ยังไม่ได้เรียน (แนะนำ)
+                                </span>
+                            </div>
+
                             {/* Section 1: Compulsory Subjects */}
                             <div className="rounded-2xl border border-slate-200 bg-white p-6 shadow-sm space-y-4">
                                 <div className="flex items-center justify-between border-b border-slate-100 pb-3">
@@ -1130,8 +1156,20 @@ export function CourseRegistrationPage() {
                                                             <CourseStatusBadge status={row.course_status} />
                                                         </div>
                                                         {row.registered && row.course_status?.warning && (
-                                                            <div className="mt-1 flex items-center gap-1.5 rounded-md bg-amber-50 px-2 py-0.5 text-[11px] font-medium text-amber-900 border border-amber-200">
-                                                                <Warning size={13} className="shrink-0 text-amber-600" />
+                                                            <div className={`mt-1 flex items-center gap-1.5 rounded-md px-2 py-0.5 text-[11px] font-medium border ${
+                                                                row.course_status.status === 'absent_exam'
+                                                                    ? 'bg-orange-50 text-orange-950 border-orange-200'
+                                                                    : row.course_status.status === 'failed'
+                                                                    ? 'bg-rose-50 text-rose-950 border-rose-200'
+                                                                    : 'bg-amber-50 text-amber-950 border-amber-200'
+                                                            }`}>
+                                                                <Warning size={13} className={`shrink-0 ${
+                                                                    row.course_status.status === 'absent_exam'
+                                                                        ? 'text-orange-600'
+                                                                        : row.course_status.status === 'failed'
+                                                                        ? 'text-rose-600'
+                                                                        : 'text-amber-600'
+                                                                }`} />
                                                                 <span>{row.course_status.warning}</span>
                                                             </div>
                                                         )}
@@ -1281,6 +1319,10 @@ export function CourseRegistrationPage() {
                                                                 ? 'border-slate-200 bg-slate-100 text-slate-400 cursor-not-allowed'
                                                                 : ce.course_status?.status === 'not_taken'
                                                                 ? 'border-sky-300 bg-sky-50/60 text-sky-900 hover:bg-sky-100 hover:border-sky-400'
+                                                                : ce.course_status?.status === 'absent_exam'
+                                                                ? 'border-orange-300 bg-orange-50/80 text-orange-950 hover:bg-orange-100 hover:border-orange-400'
+                                                                : ce.course_status?.status === 'failed'
+                                                                ? 'border-rose-300 bg-rose-50/80 text-rose-950 hover:bg-rose-100 hover:border-rose-400'
                                                                 : 'border-slate-200 bg-white text-slate-700 hover:border-brand-500 hover:bg-brand-50'
                                                         }`}
                                                     >
@@ -1336,8 +1378,20 @@ export function CourseRegistrationPage() {
                                                                 <div className="flex flex-wrap items-center gap-1.5">
                                                                     <CourseStatusBadge status={row.course_status || getCourseStatusForCode(row.code)} />
                                                                     {row.registered && (row.course_status?.warning || getCourseStatusForCode(row.code)?.warning) && (
-                                                                        <span className="flex items-center gap-1 text-[11px] font-medium text-amber-800 bg-amber-50 px-1.5 py-0.5 rounded border border-amber-200">
-                                                                            <Warning size={12} className="shrink-0 text-amber-600" />
+                                                                        <span className={`flex items-center gap-1 text-[11px] font-medium px-1.5 py-0.5 rounded border ${
+                                                                            (row.course_status?.status || getCourseStatusForCode(row.code)?.status) === 'absent_exam'
+                                                                                ? 'text-orange-950 bg-orange-50 border-orange-200'
+                                                                                : (row.course_status?.status || getCourseStatusForCode(row.code)?.status) === 'failed'
+                                                                                ? 'text-rose-950 bg-rose-50 border-rose-200'
+                                                                                : 'text-amber-950 bg-amber-50 border-amber-200'
+                                                                        }`}>
+                                                                            <Warning size={12} className={`shrink-0 ${
+                                                                                (row.course_status?.status || getCourseStatusForCode(row.code)?.status) === 'absent_exam'
+                                                                                    ? 'text-orange-600'
+                                                                                    : (row.course_status?.status || getCourseStatusForCode(row.code)?.status) === 'failed'
+                                                                                    ? 'text-rose-600'
+                                                                                    : 'text-amber-600'
+                                                                            }`} />
                                                                             <span>{row.course_status?.warning || getCourseStatusForCode(row.code)?.warning}</span>
                                                                         </span>
                                                                     )}

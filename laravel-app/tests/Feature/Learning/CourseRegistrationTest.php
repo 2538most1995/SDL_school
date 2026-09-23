@@ -310,7 +310,7 @@ final class CourseRegistrationTest extends TestCase
             $this->assertArrayHasKey('status_label', $st);
             $this->assertArrayHasKey('status_badge', $st);
             $this->assertArrayHasKey('status_color', $st);
-            $this->assertContains($st['status'], ['passed', 'transferred', 'pending_grade', 'failed', 'not_taken']);
+            $this->assertContains($st['status'], ['passed', 'transferred', 'pending_grade', 'failed', 'absent_exam', 'not_taken']);
         }
 
         // Common electives also have course_status
@@ -318,8 +318,64 @@ final class CourseRegistrationTest extends TestCase
         $this->assertNotEmpty($commonElectives);
         foreach ($commonElectives as $ce) {
             $this->assertArrayHasKey('course_status', $ce);
-            $this->assertContains($ce['course_status']['status'], ['passed', 'transferred', 'pending_grade', 'failed', 'not_taken']);
+            $this->assertContains($ce['course_status']['status'], ['passed', 'transferred', 'pending_grade', 'failed', 'absent_exam', 'not_taken']);
         }
+    }
+
+    public function test_course_status_identifies_grade_kh_as_absent_exam_with_orange_color(): void
+    {
+        $admin = $this->viewer('admin');
+        Sanctum::actingAs($admin);
+
+        // Bind custom repository providing a grade 'ข' (absent) for ทร11001
+        $demoRepo = $this->app->make(\App\Domain\Students\Repositories\DemoStudentRepository::class);
+        $customRepo = new class($demoRepo) implements \App\Domain\Students\Repositories\StudentRepository {
+            public function __construct(private readonly \App\Domain\Students\Repositories\DemoStudentRepository $inner) {}
+            public function students(?array $districtIds = null): array { return $this->inner->students($districtIds); }
+            public function find(string $code, ?int $districtId = null, ?int $level = null): ?\App\Domain\Students\Models\Student {
+                return $this->inner->find($code, $districtId, $level);
+            }
+            public function gradesFor(\App\Domain\Students\Models\Student $student): array {
+                $grades = $this->inner->gradesFor($student);
+                $grades[] = new \App\Domain\Students\Models\Grade(
+                    studentCode: $student->code,
+                    subjectCode: 'ทร11001',
+                    subjectName: 'ทักษะการเรียนรู้',
+                    credits: 5.0,
+                    subjectType: 'compulsory',
+                    term: '1/2568',
+                    grade: 'ข',
+                    transferred: false,
+                    examAttended: false,
+                );
+                return $grades;
+            }
+            public function gradesForMany(array $students): array { return $this->inner->gradesForMany($students); }
+            public function subjectsFor(\App\Domain\Students\Models\Student $student): array { return $this->inner->subjectsFor($student); }
+            public function kpchFor(\App\Domain\Students\Models\Student $student): array { return $this->inner->kpchFor($student); }
+            public function moralFor(\App\Domain\Students\Models\Student $student): array { return $this->inner->moralFor($student); }
+        };
+
+        $this->app->instance(\App\Domain\Students\Repositories\StudentRepository::class, $customRepo);
+
+        $res = $this->getJson('/api/v1/learning/registration/student/6650100001');
+        $res->assertOk();
+
+        $compulsory = $res->json('data.compulsory_subjects');
+        $foundKh = null;
+        foreach ($compulsory as $sub) {
+            if ($sub['code'] === 'ทร11001') {
+                $foundKh = $sub['course_status'];
+                break;
+            }
+        }
+
+        $this->assertNotNull($foundKh);
+        $this->assertSame('absent_exam', $foundKh['status']);
+        $this->assertSame('orange', $foundKh['status_color']);
+        $this->assertSame('เกรด "ข" ขาดสอบ (ลงเรียนใหม่ได้)', $foundKh['status_badge']);
+        $this->assertStringContainsString('ขาดสอบ', $foundKh['status_label']);
+        $this->assertStringContainsString('แนะนำให้ลงทะเบียนเรียนใหม่', $foundKh['warning']);
     }
 
     /** @param list<string> $groups */
