@@ -119,7 +119,7 @@ final class CourseRegistrationDocumentController extends Controller
         $mpdf->SetTitle('ใบลงทะเบียนเรียน');
         $mpdf->SetAuthor('SDL School');
         $mpdf->showImageErrors = false;
-        $mpdf->shrink_tables_to_fit = 1;
+        $mpdf->shrink_tables_to_fit = 0;
         $mpdf->keep_table_proportions = true;
         $mpdf->packTableData = false;
 

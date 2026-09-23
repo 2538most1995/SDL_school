@@ -279,6 +279,16 @@ final class CourseRegistrationTest extends TestCase
             ->assertSee('นางสาวสุธาทิพย์ ดีจุ่น')
             ->assertSee('นางสาวบุญทิชา เกตุนุช')
             ->assertSee('font-size: 16pt;');
+
+        // Check PDF download generation returns 200 with valid application/pdf
+        $signedUrlRes = $this->getJson('/api/v1/learning/registration/signed-url?scope=student&student=6650100001&term=2/2569');
+        $signedUrlRes->assertOk();
+        $pdfUrl = $signedUrlRes->json('data.url');
+        $this->assertNotEmpty($pdfUrl);
+
+        $pdfRes = $this->get($pdfUrl);
+        $pdfRes->assertOk()
+            ->assertHeader('Content-Type', 'application/pdf');
     }
 
     public function test_course_status_recommendation_and_duplicate_warning(): void

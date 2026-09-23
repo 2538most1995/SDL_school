@@ -195,7 +195,12 @@ final class LegacyStudentRepository implements StudentRepository
             return null;
         }
 
-        $sets = $this->sets($districtId === null ? null : [$districtId]);
+        $sets = [];
+        foreach ($this->activeDistricts($districtId === null ? null : [$districtId]) as $district) {
+            foreach ($this->tableSetsForDistrict((int) $district['id'], (string) $district['name']) as $s) {
+                $sets[] = $s;
+            }
+        }
         foreach ($sets as $set) {
             if ($level !== null && $set->level !== $level) {
                 continue;

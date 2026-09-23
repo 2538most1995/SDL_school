@@ -133,13 +133,12 @@
             width: 100%;
             border-collapse: collapse;
             margin-top: 4.5mm;
-            font-size: 13.5pt;
+            font-size: 16pt;
+            font-family: "TH Sarabun New", thsarabunnew, sans-serif;
         }
         .signature-table td {
-            text-align: center;
-            vertical-align: top;
-            width: 50%;
-            line-height: 1.4;
+            vertical-align: bottom;
+            line-height: 1.3;
         }
         .w-subject { width: 44%; }
         .w-code { width: 16%; }
@@ -327,46 +326,34 @@
 
         <table class="signature-table">
             <tr>
-                <td style="width: 50%; vertical-align: top; text-align: center;">
-                    <table style="margin: 0 auto; border-collapse: collapse;">
-                        <tr>
-                            <td style="white-space: nowrap; padding: 0 1mm 0 0; text-align: right; vertical-align: bottom; font-size: 13.5pt;">ลงชื่อ</td>
-                            <td style="white-space: nowrap; padding: 0 1mm; text-align: center; vertical-align: bottom; font-size: 13.5pt;">...................................................</td>
-                            <td style="white-space: nowrap; padding: 0 0 0 1mm; text-align: left; vertical-align: bottom; font-size: 13.5pt;">นักศึกษา</td>
-                        </tr>
-                        <tr>
-                            <td></td>
-                            <td style="text-align: center; white-space: nowrap; padding-top: 1.5mm; font-size: 16pt; font-family: thsarabunnew, sans-serif;">
-                                @if (! empty($st['name']))
-                                    ( {{ $st['name'] }} )
-                                @else
-                                    (...................................................)
-                                @endif
-                            </td>
-                            <td></td>
-                        </tr>
-                    </table>
+                <td style="width: 6%; text-align: right; white-space: nowrap; font-size: 16pt;">ลงชื่อ</td>
+                <td style="width: 34%; text-align: center; white-space: nowrap; font-size: 16pt;">..................................</td>
+                <td style="width: 9%; text-align: left; white-space: nowrap; font-size: 16pt;">นักศึกษา</td>
+                <td style="width: 2%;"></td>
+                <td style="width: 6%; text-align: right; white-space: nowrap; font-size: 16pt;">ลงชื่อ</td>
+                <td style="width: 32%; text-align: center; white-space: nowrap; font-size: 16pt;">..................................</td>
+                <td style="width: 11%; text-align: left; white-space: nowrap; font-size: 16pt;">ครูประจำกลุ่ม</td>
+            </tr>
+            <tr>
+                <td></td>
+                <td style="text-align: center; white-space: nowrap; padding-top: 1.5mm; font-size: 16pt; font-family: thsarabunnew, sans-serif;">
+                    @if (! empty($st['name']))
+                        ( {{ $st['name'] }} )
+                    @else
+                        (..................................)
+                    @endif
                 </td>
-                <td style="width: 50%; vertical-align: top; text-align: center;">
-                    <table style="margin: 0 auto; border-collapse: collapse;">
-                        <tr>
-                            <td style="white-space: nowrap; padding: 0 1mm 0 0; text-align: right; vertical-align: bottom; font-size: 13.5pt;">ลงชื่อ</td>
-                            <td style="white-space: nowrap; padding: 0 1mm; text-align: center; vertical-align: bottom; font-size: 13.5pt;">...................................................</td>
-                            <td style="white-space: nowrap; padding: 0 0 0 1mm; text-align: left; vertical-align: bottom; font-size: 13.5pt;">ครูประจำกลุ่ม</td>
-                        </tr>
-                        <tr>
-                            <td></td>
-                            <td style="text-align: center; white-space: nowrap; padding-top: 1.5mm; font-size: 16pt; font-family: thsarabunnew, sans-serif;">
-                                @if (! empty($document['teacher_name']))
-                                    ( {{ $document['teacher_name'] }} )
-                                @else
-                                    (...................................................)
-                                @endif
-                            </td>
-                            <td></td>
-                        </tr>
-                    </table>
+                <td></td>
+                <td></td>
+                <td></td>
+                <td style="text-align: center; white-space: nowrap; padding-top: 1.5mm; font-size: 16pt; font-family: thsarabunnew, sans-serif;">
+                    @if (! empty($document['teacher_name']))
+                        ( {{ $document['teacher_name'] }} )
+                    @else
+                        (..................................)
+                    @endif
                 </td>
+                <td></td>
             </tr>
         </table>
     </section>
