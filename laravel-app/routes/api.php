@@ -12,6 +12,8 @@ use App\Http\Controllers\Api\Auth\PublicBrandingController;
 use App\Http\Controllers\Api\Integrations\StudentDataController;
 use App\Http\Controllers\Api\Learning\AssignmentWorkflowController;
 use App\Http\Controllers\Api\Learning\CalendarController;
+use App\Http\Controllers\Api\Learning\CourseRegistrationController;
+use App\Http\Controllers\Api\Learning\CourseRegistrationDocumentController;
 use App\Http\Controllers\Api\Learning\ExamAttendanceController;
 use App\Http\Controllers\Api\Learning\ExamScheduleDocumentController;
 use App\Http\Controllers\Api\Learning\LearningContentController;
@@ -49,6 +51,8 @@ Route::prefix('v1')->group(function (): void {
     Route::get('/auth/branding/assets/{slot}', [PublicBrandingController::class, 'asset'])->whereIn('slot', ['logo', 'dashboard-hero']);
     Route::get('/learning/exam-schedule/view', [ExamScheduleDocumentController::class, 'html'])->name('api.learning.exam-schedule.view');
     Route::get('/learning/exam-schedule/pdf', [ExamScheduleDocumentController::class, 'pdf'])->name('api.learning.exam-schedule.pdf');
+    Route::get('/learning/registration/view', [CourseRegistrationDocumentController::class, 'html'])->name('api.learning.registration.view');
+    Route::get('/learning/registration/pdf', [CourseRegistrationDocumentController::class, 'pdf'])->name('api.learning.registration.pdf');
 
     if ((bool) config('sena.demo_mode')) {
         Route::get('/portal-demo', PortalDemoController::class);
@@ -132,6 +136,10 @@ Route::prefix('v1')->group(function (): void {
         Route::get('/learning/exam-attendance/workspace', [ExamAttendanceController::class, 'workspace'])->middleware(['learning.schema', 'role:student,teacher,admin,super_admin']);
         Route::put('/learning/exam-attendance', [ExamAttendanceController::class, 'save'])->middleware(['learning.schema', 'role:teacher,admin,super_admin']);
         Route::get('/learning/exam-schedule/signed-url', [ExamScheduleDocumentController::class, 'signedUrl']);
+        Route::get('/learning/registration/signed-url', [CourseRegistrationDocumentController::class, 'signedUrl']);
+        Route::get('/learning/registration/workspace', [CourseRegistrationController::class, 'workspace'])->middleware('role:teacher,admin,super_admin');
+        Route::get('/learning/registration/student/{student}', [CourseRegistrationController::class, 'studentRegistration'])->middleware('role:teacher,admin,super_admin');
+        Route::post('/learning/registration/student/{student}', [CourseRegistrationController::class, 'saveRegistration'])->middleware('role:teacher,admin,super_admin');
         Route::get('/my-learning', [CurrentStudentController::class, 'profile']);
         Route::get('/grades', [CurrentStudentController::class, 'grades']);
         Route::get('/kpch', [CurrentStudentController::class, 'kpch']);

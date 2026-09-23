@@ -45,5 +45,7 @@ foreach ($legacyRedirects as $legacyPath => $newPath) {
 
 Route::get('/learning/schedule/view', [\App\Http\Controllers\Api\Learning\ExamScheduleDocumentController::class, 'html'])->name('learning.schedule.view');
 Route::get('/learning/schedule/pdf', [\App\Http\Controllers\Api\Learning\ExamScheduleDocumentController::class, 'pdf'])->name('learning.schedule.pdf');
+Route::get('/learning/registration/view', [\App\Http\Controllers\Api\Learning\CourseRegistrationDocumentController::class, 'html'])->name('learning.registration.view');
+Route::get('/learning/registration/pdf', [\App\Http\Controllers\Api\Learning\CourseRegistrationDocumentController::class, 'pdf'])->name('learning.registration.pdf');
 
-Route::view('/{path?}', 'app')->where('path', '^(?!api|sanctum|up|login|learning/schedule/view|learning/schedule/pdf$).*$');
+Route::view('/{path?}', 'app')->where('path', '^(?!api|sanctum|up|login|learning/schedule/view|learning/schedule/pdf|learning/registration/view|learning/registration/pdf$).*$');

@@ -16,6 +16,7 @@ const ExamEligibleStudentsPage = lazyWithReload(async () => ({ default: (await i
 const ExamAttendanceCheckPage = lazyWithReload(async () => ({ default: (await import('./learning/ExamAttendanceCheckPage')).ExamAttendanceCheckPage }));
 const LearningHomePage = lazyWithReload(async () => ({ default: (await import('./learning')).LearningHomePage }));
 const LearningListPage = lazyWithReload(async () => ({ default: (await import('./learning')).LearningListPage }));
+const CourseRegistrationPage = lazyWithReload(async () => ({ default: (await import('./learning/CourseRegistrationPage')).CourseRegistrationPage }));
 const AdminUsersPage = lazyWithReload(async () => ({ default: (await import('./admin')).AdminUsersPage }));
 const AdminAnnouncementsPage = lazyWithReload(async () => ({ default: (await import('./admin/AnnouncementsPage')).AdminAnnouncementsPage }));
 const AdminExamRoomsPage = lazyWithReload(async () => ({ default: (await import('./admin')).AdminExamRoomsPage }));
@@ -61,6 +62,7 @@ export const featureRouteCatalog: FeatureRoute[] = [
     { path: '/learning/lesson-plans', label: 'แผนการสอน', roles: ['teacher', 'admin', 'super_admin'], element: <LearningListPage kind="lesson-plans" /> },
     { path: '/learning/calendar', label: 'ปฏิทินพบกลุ่ม', roles: ['student', 'teacher', 'admin', 'super_admin'], element: <LearningListPage kind="calendar" /> },
     { path: '/learning/schedule', label: 'ตารางสอบ', roles: ['student', 'teacher', 'admin', 'super_admin'], element: <LearningListPage kind="schedule" /> },
+    { path: '/learning/registration', label: 'ลงทะเบียนเรียน', roles: ['teacher', 'admin', 'super_admin'], element: <CourseRegistrationPage /> },
     { path: '/learning/scores', label: 'คะแนน', roles: ['student', 'teacher', 'admin', 'super_admin'], element: <LearningListPage kind="scores" /> },
 
     { path: '/admin/users', label: 'ผู้ใช้งาน', roles: ['admin', 'super_admin'], element: <AdminUsersPage /> },
