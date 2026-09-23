@@ -43,11 +43,22 @@
             margin-bottom: 3mm;
         }
         .dotted-line {
-            border-bottom: 0.3mm dotted #334155;
+            border-bottom: 0.35mm dotted #000;
             display: inline-block;
             padding: 0 1.5mm;
+            line-height: 0.85;
+            vertical-align: baseline;
             font-weight: bold;
             color: #000;
+        }
+        .credits-table {
+            width: 100%;
+            border-collapse: collapse;
+            font-size: 13.5pt;
+        }
+        .credits-table td {
+            padding: 0.6mm 0;
+            vertical-align: middle;
         }
         .student-info-table {
             width: 100%;
@@ -161,7 +172,7 @@
                     ใบลงทะเบียน {{ $document['level_title'] }}
                 </td>
                 <td style="width: 25%;" class="term-title">
-                    ภาคเรียนที่<span class="dotted-line" style="min-width: 8mm; text-align: center;">{!! $document['term_no'] !== '' ? e($document['term_no']) : '&nbsp;&nbsp;&nbsp;&nbsp;' !!}</span>/<span class="dotted-line" style="min-width: 12mm; text-align: center;">{!! $document['term_year'] !== '' ? e($document['term_year']) : '&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;' !!}</span>
+                    ภาคเรียนที่ &nbsp;<span class="dotted-line" style="min-width: 8mm; text-align: center;">{!! $document['term_no'] !== '' ? e($document['term_no']) : '&nbsp;&nbsp;&nbsp;&nbsp;' !!}</span>&nbsp; / &nbsp;<span class="dotted-line" style="min-width: 12mm; text-align: center;">{!! $document['term_year'] !== '' ? e($document['term_year']) : '&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;' !!}</span>
                 </td>
             </tr>
         </table>
@@ -172,24 +183,50 @@
 
         <table class="student-info-table">
             <tr>
-                <td colspan="2">
-                    ชื่อ - สกุล<span class="dotted-line" style="min-width: 155mm;">{!! $st['name'] !== '' ? e($st['name']) : '&nbsp;' !!}</span>
+                <td colspan="2" style="padding: 0;">
+                    <table style="width: 100%; border-collapse: collapse;">
+                        <tr>
+                            <td style="width: 22mm; white-space: nowrap; vertical-align: bottom; font-size: 14pt; padding: 0 0 0.8mm 0;">
+                                ชื่อ - สกุล &nbsp;&nbsp;
+                            </td>
+                            <td style="border-bottom: 0.35mm dotted #000; vertical-align: bottom; font-size: 14pt; font-weight: bold; padding: 0 1mm 0.5mm 1mm;">
+                                {!! $st['name'] !== '' ? e($st['name']) : '&nbsp;' !!}
+                            </td>
+                        </tr>
+                    </table>
                 </td>
             </tr>
             <tr>
-                <td colspan="2">
-                    เบอร์โทร<span class="dotted-line" style="min-width: 38mm; text-align: center;">{!! $st['phone'] !== '' ? e($st['phone']) : '&nbsp;' !!}</span>
-                    Facebook<span class="dotted-line" style="min-width: 52mm; text-align: center;">{!! (! empty($st['facebook']) && trim($st['facebook']) !== '') ? e($st['facebook']) : '-' !!}</span>
-                    ID Line<span class="dotted-line" style="min-width: 44mm; text-align: center;">{!! (! empty($st['line_id']) && trim($st['line_id']) !== '') ? e($st['line_id']) : '-' !!}</span>
+                <td colspan="2" style="padding-top: 1mm;">
+                    <table style="width: 100%; border-collapse: collapse;">
+                        <tr>
+                            <td style="width: 30%; white-space: nowrap; padding: 0;">
+                                เบอร์โทร &nbsp;&nbsp;@if ($st['phone'] !== '')<span class="dotted-line" style="min-width: 28mm; text-align: center;">{{ $st['phone'] }}</span>@else ................................ @endif
+                            </td>
+                            <td style="width: 44%; white-space: nowrap; padding: 0;">
+                                @php
+                                    $isBlank = ! empty($document['is_blank']);
+                                    $fbVal = (! empty($st['facebook_display']) && trim($st['facebook_display']) !== '') ? trim($st['facebook_display']) : (! empty($st['facebook']) && trim($st['facebook']) !== '' ? trim($st['facebook']) : ($isBlank ? '' : '-'));
+                                @endphp
+                                Facebook &nbsp;&nbsp;@if ($isBlank && $fbVal === '') ................................................ @elseif ($fbVal !== '-')<span class="dotted-line" style="min-width: 45mm; text-align: center;">{{ $fbVal }}</span>@else - @endif
+                            </td>
+                            <td style="width: 26%; white-space: nowrap; padding: 0;">
+                                @php
+                                    $lineVal = (! empty($st['line_id_display']) && trim($st['line_id_display']) !== '') ? trim($st['line_id_display']) : (! empty($st['line_id']) && trim($st['line_id']) !== '' ? trim($st['line_id']) : ($isBlank ? '' : '-'));
+                                @endphp
+                                ID Line &nbsp;&nbsp;@if ($isBlank && $lineVal === '') ................................ @elseif ($lineVal !== '-')<span class="dotted-line" style="min-width: 22mm; text-align: center;">{{ $lineVal }}</span>@else - @endif
+                            </td>
+                        </tr>
+                    </table>
                 </td>
             </tr>
             <tr>
-                <td colspan="2">
-                    บ้านเลขที่<span class="dotted-line" style="min-width: 16mm; text-align: center;">{!! $st['house_no'] !== '' ? e($st['house_no']) : '&nbsp;' !!}</span>
-                    หมู่<span class="dotted-line" style="min-width: 12mm; text-align: center;">{!! $st['moo'] !== '' ? e($st['moo']) : '&nbsp;' !!}</span>
-                    ตำบล<span class="dotted-line" style="min-width: 32mm; text-align: center;">{!! $st['subdistrict'] !== '' ? e($st['subdistrict']) : '&nbsp;' !!}</span>
-                    อำเภอ<span class="dotted-line" style="min-width: 32mm; text-align: center;">{!! $st['district'] !== '' ? e($st['district']) : '&nbsp;' !!}</span>
-                    จังหวัด<span class="dotted-line" style="min-width: 32mm; text-align: center;">{!! $st['province'] !== '' ? e($st['province']) : '&nbsp;' !!}</span>
+                <td colspan="2" style="padding-top: 1mm;">
+                    บ้านเลขที่ &nbsp;@if ($st['house_no'] !== '')<span class="dotted-line" style="min-width: 12mm; text-align: center;">{{ $st['house_no'] }}</span>@else .................... @endif
+                    &nbsp;&nbsp;&nbsp;หมู่ที่ &nbsp;@if ($st['moo'] !== '')<span class="dotted-line" style="min-width: 8mm; text-align: center;">{{ $st['moo'] }}</span>@else .......... @endif
+                    &nbsp;&nbsp;&nbsp;ตำบล &nbsp;@if ($st['subdistrict'] !== '')<span class="dotted-line" style="min-width: 24mm; text-align: center;">{{ $st['subdistrict'] }}</span>@else ........................ @endif
+                    &nbsp;&nbsp;&nbsp;อำเภอ &nbsp;@if ($st['district'] !== '')<span class="dotted-line" style="min-width: 24mm; text-align: center;">{{ $st['district'] }}</span>@else ........................ @endif
+                    &nbsp;&nbsp;&nbsp;จังหวัด &nbsp;@if ($st['province'] !== '')<span class="dotted-line" style="min-width: 26mm; text-align: center;">{{ $st['province'] }}</span>@else ........................ @endif
                 </td>
             </tr>
             <tr>
@@ -259,9 +296,27 @@
                 </td>
             </tr>
             <tr>
-                <td colspan="2" style="padding-top: 1.5mm; font-size: 13.5pt; line-height: 1.3;">
-                    จำนวนหน่วยกิตที่ได้&nbsp;&nbsp;วิชาบังคับ<span class="dotted-line" style="min-width: 16mm; text-align: center;">{!! $st['compulsory_earned'] !== '' ? e($st['compulsory_earned']) : '&nbsp;' !!}</span>หน่วยกิต&nbsp;&nbsp;วิชาเลือก<span class="dotted-line" style="min-width: 16mm; text-align: center;">{!! $st['elective_earned'] !== '' ? e($st['elective_earned']) : '&nbsp;' !!}</span>หน่วยกิต<br>
-                    เหลือ&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;วิชาบังคับ<span class="dotted-line" style="min-width: 16mm; text-align: center;">{!! $st['compulsory_remaining'] !== '' ? e($st['compulsory_remaining']) : '&nbsp;' !!}</span>หน่วยกิต&nbsp;&nbsp;วิชาเลือก<span class="dotted-line" style="min-width: 16mm; text-align: center;">{!! $st['elective_remaining'] !== '' ? e($st['elective_remaining']) : '&nbsp;' !!}</span>หน่วยกิต
+                <td colspan="2" style="padding-top: 1mm;">
+                    <table class="credits-table">
+                        <tr>
+                            <td style="width: 36mm; white-space: nowrap;">จำนวนหน่วยกิตที่ได้</td>
+                            <td style="width: 56mm; white-space: nowrap;">
+                                วิชาบังคับ &nbsp;&nbsp;@if ($st['compulsory_earned'] !== '')<span class="dotted-line" style="min-width: 14mm; text-align: center;">{{ $st['compulsory_earned'] }}</span>@else .......... @endif&nbsp;&nbsp; หน่วยกิต
+                            </td>
+                            <td style="white-space: nowrap;">
+                                วิชาเลือก &nbsp;&nbsp;@if ($st['elective_earned'] !== '')<span class="dotted-line" style="min-width: 14mm; text-align: center;">{{ $st['elective_earned'] }}</span>@else .......... @endif&nbsp;&nbsp; หน่วยกิต
+                            </td>
+                        </tr>
+                        <tr>
+                            <td style="white-space: nowrap;">เหลือ</td>
+                            <td style="white-space: nowrap;">
+                                วิชาบังคับ &nbsp;&nbsp;@if ($st['compulsory_remaining'] !== '')<span class="dotted-line" style="min-width: 14mm; text-align: center;">{{ $st['compulsory_remaining'] }}</span>@else .......... @endif&nbsp;&nbsp; หน่วยกิต
+                            </td>
+                            <td style="white-space: nowrap;">
+                                วิชาเลือก &nbsp;&nbsp;@if ($st['elective_remaining'] !== '')<span class="dotted-line" style="min-width: 14mm; text-align: center;">{{ $st['elective_remaining'] }}</span>@else .......... @endif&nbsp;&nbsp; หน่วยกิต
+                            </td>
+                        </tr>
+                    </table>
                 </td>
             </tr>
         </table>
@@ -279,7 +334,7 @@
             </thead>
             <tbody>
                 <tr>
-                    <td colspan="6" class="subhead">รายวิชาบังคับ({{ $document['compulsory_total'] }} หน่วยกิต)</td>
+                    <td colspan="6" class="subhead">รายวิชาบังคับ ({{ $document['compulsory_total'] }} หน่วยกิต)</td>
                 </tr>
                 @foreach ($document['compulsory_subjects'] as $sub)
                     <tr>
@@ -301,7 +356,7 @@
                 @endforeach
 
                 <tr>
-                    <td colspan="6" class="subhead">รายวิชาเลือก({{ $document['elective_total'] }} หน่วยกิต)</td>
+                    <td colspan="6" class="subhead">รายวิชาเลือก ({{ $document['elective_total'] }} หน่วยกิต)</td>
                 </tr>
                 @foreach ($document['elective_subjects'] as $sub)
                     <tr>

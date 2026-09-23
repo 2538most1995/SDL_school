@@ -96,9 +96,8 @@ final class CourseRegistrationPdfTest extends TestCase
         $this->assertStringContainsString('รายวิชาเลือก', $content);
         $this->assertStringContainsString('รหัสประจำตัวประชาชน', $content);
         $this->assertStringContainsString('รหัสประจำตัวนักศึกษา', $content);
-        $this->assertStringContainsString('side-box-table', $content);
-        $this->assertStringNotContainsString('Facebook &nbsp;', $content);
-        $this->assertStringNotContainsString('ID Line &nbsp;', $content);
+        $this->assertStringContainsString('Facebook', $content);
+        $this->assertStringContainsString('ID Line', $content);
     }
 
     public function test_format_district_center_name_removes_duplicate_prefixes(): void

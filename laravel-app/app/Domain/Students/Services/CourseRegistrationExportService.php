@@ -101,10 +101,19 @@ final readonly class CourseRegistrationExportService
         if ($facebook === '' || $facebook === '&nbsp;') {
             $facebook = '-';
         }
+        $facebookDisplay = $facebook;
+        if ($facebookDisplay !== '-') {
+            $facebookDisplay = (string) preg_replace('#^https?://(www\.|m\.)?(facebook\.com|fb\.com)/#i', '', $facebookDisplay);
+            $facebookDisplay = rtrim($facebookDisplay, '/');
+        }
 
         $lineId = trim((string) ($info['line_id'] ?? $st['line_id']));
         if ($lineId === '' || $lineId === '&nbsp;') {
             $lineId = '-';
+        }
+        $lineIdDisplay = $lineId;
+        if ($lineIdDisplay !== '-') {
+            $lineIdDisplay = (string) preg_replace('#^https?://line\.me/ti/p/~?#i', '', $lineIdDisplay);
         }
 
         $houseNo = (string) ($info['house_no'] ?? $addrParts['house_no']);
@@ -172,7 +181,9 @@ final readonly class CourseRegistrationExportService
                 'name' => $name,
                 'phone' => $phone,
                 'facebook' => $facebook,
+                'facebook_display' => $facebookDisplay,
                 'line_id' => $lineId,
+                'line_id_display' => $lineIdDisplay,
                 'house_no' => $houseNo,
                 'moo' => $moo,
                 'subdistrict' => $subdistrict,
@@ -192,6 +203,7 @@ final readonly class CourseRegistrationExportService
             'elective_total' => (int) $electiveTotal,
             'elective_subjects' => $filteredElectives,
             'notes' => $data['notes'] ?? '',
+            'is_blank' => false,
         ];
     }
 
@@ -231,11 +243,14 @@ final readonly class CourseRegistrationExportService
             'term_year' => $termYear,
             'district_center_name' => CurriculumCatalog::formatDistrictCenterName($districtName ?: null),
             'teacher_name' => ($viewer && $viewer->role === 'teacher') ? CurriculumCatalog::ensureTeacherPrefix($viewer->name, $viewer->district_id) : '',
+            'is_blank' => true,
             'student' => [
                 'name' => '',
                 'phone' => '',
-                'facebook' => '-',
-                'line_id' => '-',
+                'facebook' => '',
+                'facebook_display' => '',
+                'line_id' => '',
+                'line_id_display' => '',
                 'house_no' => '',
                 'moo' => '',
                 'subdistrict' => '',
@@ -335,19 +350,19 @@ final readonly class CourseRegistrationExportService
             $houseNo = $m[1];
         }
 
-        if (preg_match('/(?:หมู่\s*ที่\s*|หมู่\s*)([0-9]+)/u', $address, $m)) {
+        if (preg_match('/(?:หมู่\s*ที่\s*|หมู่\s*|ม\.\s*)([0-9]+)/u', $address, $m)) {
             $moo = $m[1];
         }
 
-        if (preg_match('/(?:ตำบล|แขวง)\s*([^\s]+)/u', $address, $m)) {
+        if (preg_match('/(?:ตำบล|แขวง|ต\.)\s*([^\s,]+)/u', $address, $m)) {
             $subdistrict = $m[1];
         }
 
-        if (preg_match('/(?:อำเภอ|เขต)\s*([^\s]+)/u', $address, $m)) {
+        if (preg_match('/(?:อำเภอ|เขต|อ\.)\s*([^\s,]+)/u', $address, $m)) {
             $district = $m[1];
         }
 
-        if (preg_match('/(?:จังหวัด)\s*([^\s]+)/u', $address, $m)) {
+        if (preg_match('/(?:จังหวัด|จ\.)\s*([^\s,]+)/u', $address, $m)) {
             $province = $m[1];
         }
 
