@@ -66,10 +66,8 @@ final class NnetService
         }
 
         if ($user->role === 'student') {
-            $studentCitizen = $this->resolveStudentCitizenId($user);
-            if ($studentCitizen) {
-                $query->where('citizen_id', $studentCitizen);
-            } else {
+            $hasScope = $this->applyStudentScope($query, $user);
+            if (! $hasScope) {
                 return ['items' => [], 'total' => 0, 'meta' => []];
             }
         }
@@ -197,10 +195,7 @@ final class NnetService
         }
 
         if ($user->role === 'student') {
-            $studentCitizen = $this->resolveStudentCitizenId($user);
-            if ($studentCitizen) {
-                $query->where('citizen_id', $studentCitizen);
-            }
+            $this->applyStudentScope($query, $user);
         }
 
         /** @var Collection<int, NnetResult> $records */
@@ -813,32 +808,107 @@ final class NnetService
         return $user->district_id;
     }
 
-    private function resolveStudentCitizenId(User $user): ?string
+    /**
+     * @return array{citizen_ids: list<string>, student_codes: list<string>}
+     */
+    public function resolveStudentIdentifiers(User $user): array
     {
         if ($user->role !== 'student') {
-            return null;
+            return ['citizen_ids' => [], 'student_codes' => []];
         }
 
-        // Student's username or legacy identity is often citizen ID
-        $clean = preg_replace('/\D+/u', '', $user->username);
-        if (strlen($clean) > 0 && strlen($clean) < 13) {
-            $clean = str_pad($clean, 13, '0', STR_PAD_LEFT);
-        }
-        if (strlen($clean) === 13) {
-            return $clean;
+        $citizenIds = [];
+        $studentCodes = [];
+
+        if (! empty($user->student_code)) {
+            $studentCodes[] = trim((string) $user->student_code);
         }
 
-        if ($user->legacy_ref) {
-            $clean = preg_replace('/\D+/u', '', $user->legacy_ref);
-            if (strlen($clean) > 0 && strlen($clean) < 13) {
-                $clean = str_pad($clean, 13, '0', STR_PAD_LEFT);
+        $cleanUsername = preg_replace('/\D+/u', '', (string) $user->username);
+        if (strlen($cleanUsername) === 13) {
+            $citizenIds[] = $cleanUsername;
+        } elseif (strlen($cleanUsername) > 0 && strlen($cleanUsername) < 13) {
+            if (strlen($cleanUsername) >= 9 && strlen($cleanUsername) <= 12) {
+                $studentCodes[] = $cleanUsername;
             }
-            if (strlen($clean) === 13) {
-                return $clean;
+            $citizenIds[] = str_pad($cleanUsername, 13, '0', STR_PAD_LEFT);
+        }
+
+        if (! empty($user->legacy_ref)) {
+            $cleanRef = preg_replace('/\D+/u', '', (string) $user->legacy_ref);
+            if (strlen($cleanRef) === 13) {
+                $citizenIds[] = $cleanRef;
+            } elseif (strlen($cleanRef) > 0 && strlen($cleanRef) < 13) {
+                $citizenIds[] = str_pad($cleanRef, 13, '0', STR_PAD_LEFT);
             }
         }
 
-        return null;
+        try {
+            $lookupCode = $user->student_code ?: (string) $user->username;
+            if ($lookupCode !== '') {
+                $student = $this->studentRepository->find($lookupCode, $user->district_id);
+                if ($student !== null) {
+                    if (! empty($student->citizenId)) {
+                        $c = preg_replace('/\D+/u', '', (string) $student->citizenId);
+                        if (strlen($c) > 0 && strlen($c) < 13) {
+                            $c = str_pad($c, 13, '0', STR_PAD_LEFT);
+                        }
+                        if (strlen($c) === 13) {
+                            $citizenIds[] = $c;
+                        }
+                    }
+                    if (! empty($student->code)) {
+                        $studentCodes[] = trim((string) $student->code);
+                    }
+                }
+            }
+        } catch (\Throwable) {
+            // Ignore repository lookup exceptions
+        }
+
+        return [
+            'citizen_ids' => array_values(array_unique(array_filter($citizenIds))),
+            'student_codes' => array_values(array_unique(array_filter($studentCodes))),
+        ];
+    }
+
+    public function resolveStudentCitizenId(User $user): ?string
+    {
+        $identifiers = $this->resolveStudentIdentifiers($user);
+
+        return $identifiers['citizen_ids'][0] ?? null;
+    }
+
+    private function applyStudentScope(\Illuminate\Database\Eloquent\Builder $query, User $user): bool
+    {
+        if ($user->role !== 'student') {
+            return true;
+        }
+
+        $identifiers = $this->resolveStudentIdentifiers($user);
+        $citizenIds = $identifiers['citizen_ids'];
+        $studentCodes = $identifiers['student_codes'];
+
+        if (empty($citizenIds) && empty($studentCodes)) {
+            $query->whereRaw('1 = 0');
+
+            return false;
+        }
+
+        $query->where(function ($q) use ($citizenIds, $studentCodes): void {
+            if (! empty($citizenIds)) {
+                $q->whereIn('citizen_id', $citizenIds);
+            }
+            if (! empty($studentCodes)) {
+                if (! empty($citizenIds)) {
+                    $q->orWhereIn('student_code', $studentCodes);
+                } else {
+                    $q->whereIn('student_code', $studentCodes);
+                }
+            }
+        });
+
+        return true;
     }
 
     private function ensureCanAccessRecord(NnetResult $record, User $user): void
@@ -856,8 +926,11 @@ final class NnetService
         }
 
         if ($user->role === 'student') {
-            $citizen = $this->resolveStudentCitizenId($user);
-            if (! $citizen || $record->citizen_id !== $citizen) {
+            $identifiers = $this->resolveStudentIdentifiers($user);
+            $matchesCitizen = ! empty($identifiers['citizen_ids']) && in_array($record->citizen_id, $identifiers['citizen_ids'], true);
+            $matchesCode = ! empty($identifiers['student_codes']) && in_array($record->student_code, $identifiers['student_codes'], true);
+
+            if (! $matchesCitizen && ! $matchesCode) {
                 abort(403, 'คุณสามารถดูผลคะแนน N-NET ของตนเองได้เท่านั้น');
             }
 

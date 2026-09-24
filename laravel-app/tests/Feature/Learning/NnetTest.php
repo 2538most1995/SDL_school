@@ -575,5 +575,89 @@ class NnetTest extends TestCase
         $this->assertEquals(80.00, $response->json('data.max_total_score'));
         $this->assertEquals(100.00, $response->json('data.max_subject_score'));
     }
+
+    public function test_student_can_only_view_own_nnet_records_and_not_other_students(): void
+    {
+        $ownRecord = NnetResult::create([
+            'district_id' => $this->district->id,
+            'academic_year' => '2569',
+            'round' => 1,
+            'education_level' => 2,
+            'citizen_id' => '1100400123456',
+            'student_name' => 'สมศรี เรียนดี',
+            'total_score' => 162.00,
+            'has_score' => true,
+            'subject_codes' => ['411', '412', '413', '414', '415'],
+            'subject_scores' => [
+                '411' => 40.0,
+                '412' => 36.0,
+                '413' => 32.0,
+                '414' => 24.0,
+                '415' => 30.0,
+            ],
+            'subject_levels' => [
+                '411' => 'ผ่าน',
+                '412' => 'ควรพัฒนา',
+                '413' => 'ควรพัฒนา',
+                '414' => 'ควรพัฒนา',
+                '415' => 'ควรพัฒนา',
+            ],
+        ]);
+
+        $otherRecord = NnetResult::create([
+            'district_id' => $this->district->id,
+            'academic_year' => '2569',
+            'round' => 1,
+            'education_level' => 2,
+            'citizen_id' => '9999999999999',
+            'student_name' => 'นายอื่น คนอื่น',
+            'total_score' => 250.00,
+            'has_score' => true,
+            'subject_codes' => ['411', '412', '413', '414', '415'],
+            'subject_scores' => ['411' => 50.0, '412' => 50.0, '413' => 50.0, '414' => 50.0, '415' => 50.0],
+        ]);
+
+        Sanctum::actingAs($this->studentUser);
+
+        // Student lists records: should only see their own record
+        $response = $this->getJson('/api/v1/nnet/records')
+            ->assertOk()
+            ->assertJsonPath('data.total', 1)
+            ->assertJsonPath('data.items.0.id', $ownRecord->id)
+            ->assertJsonPath('data.items.0.citizen_id', '1100400123456')
+            ->assertJsonPath('data.items.0.student_name', 'สมศรี เรียนดี');
+
+        $this->assertCount(1, $response->json('data.items'));
+
+        // Student views their own record details
+        $this->getJson("/api/v1/nnet/records/{$ownRecord->id}")
+            ->assertOk()
+            ->assertJsonPath('data.id', $ownRecord->id)
+            ->assertJsonPath('data.student_name', 'สมศรี เรียนดี')
+            ->assertJsonPath('data.subject_levels.411', 'ผ่าน');
+
+        // Student attempts to view another student's record directly: 403 Forbidden
+        $this->getJson("/api/v1/nnet/records/{$otherRecord->id}")
+            ->assertForbidden();
+    }
+
+    public function test_student_with_no_nnet_record_gets_empty_items(): void
+    {
+        $newStudent = User::factory()->create([
+            'role' => 'student',
+            'district_id' => $this->district->id,
+            'username' => '1200500999999',
+        ]);
+
+        Sanctum::actingAs($newStudent);
+
+        $response = $this->getJson('/api/v1/nnet/records')
+            ->assertOk()
+            ->assertJsonPath('data.total', 0)
+            ->assertJsonPath('data.items', []);
+
+        $this->assertEmpty($response->json('data.items'));
+    }
 }
+
 

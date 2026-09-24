@@ -29,6 +29,9 @@ import { StatusBadge } from '../../components/StatusBadge';
 import { QuerySkeleton, QueryError, EmptyState } from '../../components/QueryState';
 import { getFeatureData, sendFeatureData } from '../api';
 import { downloadExcel } from '../../lib/excel';
+import { useDemoRole } from '../../context/DemoRoleContext';
+import { apiGet } from '../../lib/api';
+import { StudentNnetScoreView } from './StudentNnetScoreView';
 
 export interface NnetRecord {
     id: number;
@@ -92,6 +95,28 @@ const STANDARD_SUBJECT_NAMES = [
 
 export function NnetReportPage() {
     const queryClient = useQueryClient();
+    const { role } = useDemoRole();
+
+    const meQuery = useQuery({
+        queryKey: ['auth', 'me'],
+        queryFn: ({ signal }) => apiGet<{ role: string; name: string; username: string }>('/api/v1/me', signal).then((res) => res.data),
+        staleTime: 5 * 60_000,
+    });
+
+    const isStudent = role === 'student' || meQuery.data?.role === 'student';
+
+    const studentProfileQuery = useQuery({
+        queryKey: ['student', 'my-learning', 'profile'],
+        queryFn: ({ signal }) => apiGet<{
+            name: string;
+            code: string;
+            level: string;
+            group: string;
+            advisor?: string;
+        }>('/api/v1/my-learning', signal).then((res) => res.data),
+        enabled: isStudent,
+        retry: false,
+    });
 
     // Filters
     const [level, setLevel] = useState<number>(0); // Default to ทุกระดับชั้น
@@ -124,15 +149,17 @@ export function NnetReportPage() {
 
     // Queries
     const recordsQuery = useQuery({
-        queryKey: ['nnet', 'records', { level, year, round, statusFilter, group, search }],
+        queryKey: ['nnet', 'records', { isStudent, level, year, round, statusFilter, group, search }],
         queryFn: ({ signal }) => {
             const params = new URLSearchParams();
-            if (level > 0) params.set('education_level', String(level));
-            if (year) params.set('academic_year', year);
-            if (round > 0) params.set('round', String(round));
-            if (statusFilter) params.set('status', statusFilter);
-            if (group) params.set('group', group);
-            if (search.trim()) params.set('search', search.trim());
+            if (!isStudent) {
+                if (level > 0) params.set('education_level', String(level));
+                if (year) params.set('academic_year', year);
+                if (round > 0) params.set('round', String(round));
+                if (statusFilter) params.set('status', statusFilter);
+                if (group) params.set('group', group);
+                if (search.trim()) params.set('search', search.trim());
+            }
             params.set('page_size', '200');
 
             return getFeatureData<{
@@ -155,6 +182,7 @@ export function NnetReportPage() {
 
             return getFeatureData<NnetSummary>(`/api/v1/nnet/summary?${params.toString()}`, signal).then((res) => res.data);
         },
+        enabled: !isStudent,
     });
 
     const items = recordsQuery.data?.items ?? [];
@@ -372,6 +400,20 @@ export function NnetReportPage() {
             },
         ]);
     };
+
+    if (isStudent) {
+        return (
+            <StudentNnetScoreView
+                items={items}
+                isLoading={recordsQuery.isLoading}
+                isError={recordsQuery.isError}
+                onRetry={() => recordsQuery.refetch()}
+                studentProfile={studentProfileQuery.data}
+                currentUserName={meQuery.data?.name}
+                currentUserCode={meQuery.data?.username}
+            />
+        );
+    }
 
     return (
         <div className="space-y-6">
