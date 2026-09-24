@@ -223,6 +223,7 @@ final class NnetService
         $subjectStats = [];
         $bestSubject = null;
         $bestAvg = -1.0;
+        $totalScoresCount = 0;
 
         foreach ($subjectCodes as $idx => $code) {
             $codeStr = (string) $code;
@@ -239,11 +240,12 @@ final class NnetService
             }
 
             $count = count($scoresForSubject);
+            $totalScoresCount += $count;
             $avg = $count > 0 ? round(array_sum($scoresForSubject) / $count, 2) : 0.0;
             $max = $count > 0 ? max($scoresForSubject) : 0.0;
             $min = $count > 0 ? min($scoresForSubject) : 0.0;
 
-            if ($avg > $bestAvg) {
+            if ($count > 0 && $avg > $bestAvg) {
                 $bestAvg = $avg;
                 $bestSubject = [
                     'code' => $codeStr,
@@ -260,6 +262,15 @@ final class NnetService
                 'min' => $min,
                 'percentage' => min(100.0, max(0.0, $avg)),
             ];
+        }
+
+        // ค่าเฉลี่ยรวม: เอาคะแนนเฉลี่ยจำแนกตามแต่ละสาระบวกกัน แล้วหารด้วยจำนวนสาระ
+        $subjectAverages = array_column($subjectStats, 'average');
+        $subjectCount = count($subjectAverages);
+        if ($totalScoresCount > 0 && $subjectCount > 0) {
+            $avgTotalScore = round(array_sum($subjectAverages) / $subjectCount, 2);
+        } else {
+            $avgTotalScore = $scoredCount > 0 ? round((float) $scoredRecords->avg('total_score'), 2) : 0.0;
         }
 
         return [

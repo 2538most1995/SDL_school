@@ -451,5 +451,39 @@ class NnetTest extends TestCase
             'student_name' => 'นายทดสอบ เติมศูนย์',
         ]);
     }
+
+    public function test_summary_calculates_overall_average_by_averaging_subject_averages(): void
+    {
+        Sanctum::actingAs($this->teacher);
+
+        // Subject averages matching user screenshot:
+        // 411: 48.57, 412: 48.77, 413: 59.76, 414: 58.73, 415: 59.36
+        // Sum = 275.19 / 5 = 55.038 -> 55.04
+        // Individual total_score is 54.02 (old method). The new method must return 55.04!
+        NnetResult::create([
+            'district_id' => $this->district->id,
+            'academic_year' => '2569',
+            'round' => 1,
+            'education_level' => 2,
+            'citizen_id' => '1100400100001',
+            'student_name' => 'นักศึกษา คนที่ 1',
+            'total_score' => 54.02,
+            'has_score' => true,
+            'subject_codes' => ['411', '412', '413', '414', '415'],
+            'subject_scores' => [
+                '411' => 48.57,
+                '412' => 48.77,
+                '413' => 59.76,
+                '414' => 58.73,
+                '415' => 59.36,
+            ],
+        ]);
+
+        $response = $this->getJson('/api/v1/nnet/summary?education_level=2&academic_year=2569&round=1')
+            ->assertOk()
+            ->assertJsonPath('data.total_students', 1);
+
+        $this->assertEquals(55.04, $response->json('data.average_total_score'));
+    }
 }
 

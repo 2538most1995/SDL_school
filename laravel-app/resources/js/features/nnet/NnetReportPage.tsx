@@ -531,7 +531,9 @@ export function NnetReportPage() {
                                 {summary.average_total_score.toFixed(2)}
                             </div>
                         </div>
-                        <span className="text-xs text-slate-400">คะแนน</span>
+                        <span className="text-xs text-slate-400">
+                            เฉลี่ย {summary.subjects?.length ? `${summary.subjects.length} สาระ` : 'รายสาระ'}
+                        </span>
                     </Card>
 
                     <Card className="p-4 rounded-2xl bg-white border border-slate-200/80 shadow-sm flex flex-col justify-between">
