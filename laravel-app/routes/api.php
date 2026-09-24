@@ -140,6 +140,16 @@ Route::prefix('v1')->group(function (): void {
         Route::get('/learning/registration/workspace', [CourseRegistrationController::class, 'workspace'])->middleware('role:teacher,admin,super_admin');
         Route::get('/learning/registration/student/{student}', [CourseRegistrationController::class, 'studentRegistration'])->middleware('role:teacher,admin,super_admin');
         Route::post('/learning/registration/student/{student}', [CourseRegistrationController::class, 'saveRegistration'])->middleware('role:teacher,admin,super_admin');
+
+        Route::get('/nnet/records', [\App\Http\Controllers\Api\NnetController::class, 'index']);
+        Route::get('/nnet/summary', [\App\Http\Controllers\Api\NnetController::class, 'summary']);
+        Route::post('/nnet/import', [\App\Http\Controllers\Api\NnetController::class, 'import']);
+        Route::post('/nnet/records', [\App\Http\Controllers\Api\NnetController::class, 'store']);
+        Route::get('/nnet/records/{id}', [\App\Http\Controllers\Api\NnetController::class, 'show'])->whereNumber('id');
+        Route::put('/nnet/records/{id}', [\App\Http\Controllers\Api\NnetController::class, 'update'])->whereNumber('id');
+        Route::delete('/nnet/records/{id}', [\App\Http\Controllers\Api\NnetController::class, 'destroy'])->whereNumber('id');
+        Route::post('/nnet/clear', [\App\Http\Controllers\Api\NnetController::class, 'clear']);
+
         Route::get('/my-learning', [CurrentStudentController::class, 'profile']);
         Route::get('/grades', [CurrentStudentController::class, 'grades']);
         Route::get('/kpch', [CurrentStudentController::class, 'kpch']);

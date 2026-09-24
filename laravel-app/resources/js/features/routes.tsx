@@ -17,6 +17,8 @@ const ExamAttendanceCheckPage = lazyWithReload(async () => ({ default: (await im
 const LearningHomePage = lazyWithReload(async () => ({ default: (await import('./learning')).LearningHomePage }));
 const LearningListPage = lazyWithReload(async () => ({ default: (await import('./learning')).LearningListPage }));
 const CourseRegistrationPage = lazyWithReload(async () => ({ default: (await import('./learning/CourseRegistrationPage')).CourseRegistrationPage }));
+const NnetImportPage = lazyWithReload(async () => ({ default: (await import('./nnet')).NnetImportPage }));
+const NnetReportPage = lazyWithReload(async () => ({ default: (await import('./nnet')).NnetReportPage }));
 const AdminUsersPage = lazyWithReload(async () => ({ default: (await import('./admin')).AdminUsersPage }));
 const AdminAnnouncementsPage = lazyWithReload(async () => ({ default: (await import('./admin/AnnouncementsPage')).AdminAnnouncementsPage }));
 const AdminExamRoomsPage = lazyWithReload(async () => ({ default: (await import('./admin')).AdminExamRoomsPage }));
@@ -64,6 +66,10 @@ export const featureRouteCatalog: FeatureRoute[] = [
     { path: '/learning/schedule', label: 'ตารางสอบ', roles: ['student', 'teacher', 'admin', 'super_admin'], element: <LearningListPage kind="schedule" /> },
     { path: '/learning/registration', label: 'ลงทะเบียนเรียน', roles: ['teacher', 'admin', 'super_admin'], element: <CourseRegistrationPage /> },
     { path: '/learning/scores', label: 'คะแนน', roles: ['student', 'teacher', 'admin', 'super_admin'], element: <LearningListPage kind="scores" /> },
+
+    { path: '/n-net/import', label: 'นำเข้า N-NET', roles: ['teacher', 'admin', 'super_admin'], element: <NnetImportPage /> },
+    { path: '/n-net/report', label: 'รายงานผล N-NET', roles: ['student', 'teacher', 'admin', 'super_admin'], element: <NnetReportPage /> },
+    { path: '/n-net', label: 'รายงานผล N-NET', roles: ['student', 'teacher', 'admin', 'super_admin'], element: <NnetReportPage /> },
 
     { path: '/admin/users', label: 'ผู้ใช้งาน', roles: ['admin', 'super_admin'], element: <AdminUsersPage /> },
     { path: '/admin/announcements', label: 'ประกาศป๊อปอัปนักศึกษา', roles: ['admin', 'super_admin'], element: <AdminAnnouncementsPage /> },

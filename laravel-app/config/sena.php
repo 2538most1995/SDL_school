@@ -59,6 +59,15 @@ return [
             ],
         ],
         [
+            'key' => 'n-net',
+            'label' => 'N-NET',
+            'color' => 'indigo',
+            'items' => [
+                ['key' => 'nnet-import', 'label' => 'นำเข้า N-NET', 'description' => 'นำเข้าผลการทดสอบ N-NET จากไฟล์ Excel', 'route' => '/n-net/import', 'icon' => 'upload', 'roles' => ['teacher', 'admin', 'super_admin']],
+                ['key' => 'nnet-report', 'label' => 'รายงานผล N-NET', 'description' => 'ภาพรวมผลสอบ พร้อมวิเคราะห์รายสาระและรายบุคคล', 'route' => '/n-net/report', 'icon' => 'medal', 'roles' => ['student', 'teacher', 'admin', 'super_admin']],
+            ],
+        ],
+        [
             'key' => 'administration',
             'label' => 'จัดการระบบ',
             'color' => 'amber',
