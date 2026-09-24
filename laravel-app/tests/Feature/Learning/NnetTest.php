@@ -485,5 +485,92 @@ class NnetTest extends TestCase
 
         $this->assertEquals(55.04, $response->json('data.average_total_score'));
     }
+
+    public function test_summary_calculates_all_levels_by_averaging_across_levels(): void
+    {
+        Sanctum::actingAs($this->teacher);
+
+        // Level 1: ประถมศึกษา (Primary)
+        // Subject 0 (ทักษะการเรียนรู้) = 40.0, Overall avg = 60.0
+        NnetResult::create([
+            'district_id' => $this->district->id,
+            'academic_year' => '2569',
+            'round' => 1,
+            'education_level' => 1,
+            'citizen_id' => '1100400100011',
+            'student_name' => 'เด็กชายประถม',
+            'total_score' => 60.0,
+            'has_score' => true,
+            'subject_codes' => ['101', '102', '103', '104', '105'],
+            'subject_scores' => [
+                '101' => 40.0,
+                '102' => 50.0,
+                '103' => 60.0,
+                '104' => 70.0,
+                '105' => 80.0,
+            ],
+        ]);
+
+        // Level 2: มัธยมศึกษาตอนต้น (Lower Secondary)
+        // Subject 0 = 50.0, Overall avg = 70.0
+        NnetResult::create([
+            'district_id' => $this->district->id,
+            'academic_year' => '2569',
+            'round' => 1,
+            'education_level' => 2,
+            'citizen_id' => '1100400100022',
+            'student_name' => 'นายมัธยมต้น',
+            'total_score' => 70.0,
+            'has_score' => true,
+            'subject_codes' => ['201', '202', '203', '204', '205'],
+            'subject_scores' => [
+                '201' => 50.0,
+                '202' => 60.0,
+                '203' => 70.0,
+                '204' => 80.0,
+                '205' => 90.0,
+            ],
+        ]);
+
+        // Level 3: มัธยมศึกษาตอนปลาย (Upper Secondary)
+        // Subject 0 = 60.0, Overall avg = 80.0
+        NnetResult::create([
+            'district_id' => $this->district->id,
+            'academic_year' => '2569',
+            'round' => 1,
+            'education_level' => 3,
+            'citizen_id' => '1100400100033',
+            'student_name' => 'นางสาวมัธยมปลาย',
+            'total_score' => 80.0,
+            'has_score' => true,
+            'subject_codes' => ['401', '402', '403', '404', '405'],
+            'subject_scores' => [
+                '401' => 60.0,
+                '402' => 70.0,
+                '403' => 80.0,
+                '404' => 90.0,
+                '405' => 100.0,
+            ],
+        ]);
+
+        // Query "ทุกระดับชั้น" (no education_level filter)
+        $response = $this->getJson('/api/v1/nnet/summary?academic_year=2569&round=1')
+            ->assertOk()
+            ->assertJsonPath('data.total_students', 3)
+            ->assertJsonPath('data.scored_students', 3);
+
+        // Subject 0 (ทักษะการเรียนรู้) = (40 + 50 + 60) / 3 = 50.00
+        $subjects = $response->json('data.subjects');
+        $this->assertCount(5, $subjects);
+        $this->assertEquals('ทักษะการเรียนรู้', $subjects[0]['name']);
+        $this->assertEquals(50.00, $subjects[0]['average']);
+
+        // Subject 1 (ความรู้พื้นฐาน) = (50 + 60 + 70) / 3 = 60.00
+        $this->assertEquals('ความรู้พื้นฐาน', $subjects[1]['name']);
+        $this->assertEquals(60.00, $subjects[1]['average']);
+
+        // Overall Average = (60 + 70 + 80) / 3 = 70.00
+        $this->assertEquals(70.00, $response->json('data.average_total_score'));
+    }
 }
 

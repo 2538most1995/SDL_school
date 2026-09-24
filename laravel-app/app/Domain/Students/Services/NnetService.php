@@ -175,8 +175,9 @@ final class NnetService
             $query->where('district_id', $districtId);
         }
 
-        if (! empty($filters['education_level'])) {
-            $query->where('education_level', (int) $filters['education_level']);
+        $specificLevel = ! empty($filters['education_level']) ? (int) $filters['education_level'] : null;
+        if ($specificLevel !== null) {
+            $query->where('education_level', $specificLevel);
         }
 
         if (! empty($filters['academic_year'])) {
@@ -210,42 +211,158 @@ final class NnetService
         $scoredCount = $scoredRecords->count();
         $absentCount = $totalCount - $scoredCount;
 
-        $avgTotalScore = $scoredCount > 0 ? round((float) $scoredRecords->avg('total_score'), 2) : 0.0;
         $maxTotalScore = $scoredCount > 0 ? (float) $scoredRecords->max('total_score') : 0.0;
         $minTotalScore = $scoredCount > 0 ? (float) $scoredRecords->min('total_score') : 0.0;
 
-        // Subject breakdown
-        // Collect subject codes and names
-        $firstWithSubjects = $records->first(fn (NnetResult $r): bool => ! empty($r->subject_codes));
-        $subjectCodes = $firstWithSubjects?->subject_codes ?? ['411', '412', '413', '414', '415'];
-        $subjectNames = $firstWithSubjects?->subject_names ?? [];
+        // -----------------------------------------------------------------
+        // กรณีที่ 1: เลือกระดับชั้นเฉพาะ (ประถม, ม.ต้น หรือ ม.ปลาย)
+        // -----------------------------------------------------------------
+        if ($specificLevel !== null) {
+            $firstWithSubjects = $records->first(fn (NnetResult $r): bool => ! empty($r->subject_codes));
+            $subjectCodes = $firstWithSubjects?->subject_codes ?? ['411', '412', '413', '414', '415'];
+            $subjectNames = $firstWithSubjects?->subject_names ?? [];
+
+            $subjectStats = [];
+            $bestSubject = null;
+            $bestAvg = -1.0;
+            $totalScoresCount = 0;
+
+            foreach ($subjectCodes as $idx => $code) {
+                $codeStr = (string) $code;
+                $name = $subjectNames[$codeStr] ?? ($subjectNames[$idx] ?? (self::DEFAULT_SUBJECT_NAMES[$idx] ?? "สาระที่ {$codeStr}"));
+
+                $scoresForSubject = [];
+                foreach ($scoredRecords as $rec) {
+                    $score = $this->extractSubjectScore($rec, $idx, $codeStr);
+                    if ($score !== null) {
+                        $scoresForSubject[] = $score;
+                    }
+                }
+
+                $count = count($scoresForSubject);
+                $totalScoresCount += $count;
+                $avg = $count > 0 ? round(array_sum($scoresForSubject) / $count, 2) : 0.0;
+                $max = $count > 0 ? max($scoresForSubject) : 0.0;
+                $min = $count > 0 ? min($scoresForSubject) : 0.0;
+
+                if ($count > 0 && $avg > $bestAvg) {
+                    $bestAvg = $avg;
+                    $bestSubject = [
+                        'code' => $codeStr,
+                        'name' => $name,
+                        'avg' => $avg,
+                    ];
+                }
+
+                $subjectStats[] = [
+                    'code' => $codeStr,
+                    'name' => $name,
+                    'average' => $avg,
+                    'max' => $max,
+                    'min' => $min,
+                    'percentage' => min(100.0, max(0.0, $avg)),
+                ];
+            }
+
+            // ค่าเฉลี่ยรวม: เอาคะแนนเฉลี่ยจำแนกตามแต่ละสาระบวกกัน แล้วหารด้วยจำนวนสาระ
+            $subjectAverages = array_column($subjectStats, 'average');
+            $subjectCount = count($subjectAverages);
+            if ($totalScoresCount > 0 && $subjectCount > 0) {
+                $avgTotalScore = round(array_sum($subjectAverages) / $subjectCount, 2);
+            } else {
+                $avgTotalScore = $scoredCount > 0 ? round((float) $scoredRecords->avg('total_score'), 2) : 0.0;
+            }
+
+            return [
+                'total_students' => $totalCount,
+                'scored_students' => $scoredCount,
+                'absent_students' => $absentCount,
+                'average_total_score' => $avgTotalScore,
+                'max_total_score' => $maxTotalScore,
+                'min_total_score' => $minTotalScore,
+                'best_subject' => $bestSubject,
+                'subjects' => $subjectStats,
+            ];
+        }
+
+        // -----------------------------------------------------------------
+        // กรณีที่ 2: ทุกระดับชั้น (All Levels)
+        // ตามเงื่อนไข:
+        // - แต่ละสาระ ให้เอาคะแนนเฉลี่ยของ ประถม ม.ต้น ม.ปลาย บวกกันแล้วหาร 3
+        // - คะแนนรวมเฉลี่ย ให้เอา คะแนนรวมเฉลี่ยแต่ละระดับชั้นบวก แล้วหาร 3
+        // -----------------------------------------------------------------
+        $levelSubjectAverages = []; // [level => [0 => avg, 1 => avg, 2 => avg, 3 => avg, 4 => avg]]
+        $levelOverallAverages = []; // [level => avg]
+
+        $knownLevels = [1, 2, 3];
+        $distinctLevels = $records->pluck('education_level')->unique()->filter()->all();
+        $targetLevels = ! empty($distinctLevels)
+            ? array_values(array_unique(array_merge($knownLevels, $distinctLevels)))
+            : $knownLevels;
+
+        foreach ($targetLevels as $lvl) {
+            $lvlScored = $scoredRecords->where('education_level', $lvl);
+            if ($lvlScored->isEmpty()) {
+                continue;
+            }
+
+            $subAvgsForLvl = [];
+            $totalSubScoresCountForLvl = 0;
+
+            for ($idx = 0; $idx < 5; $idx++) {
+                $scoresForSub = [];
+                foreach ($lvlScored as $rec) {
+                    $score = $this->extractSubjectScore($rec, $idx);
+                    if ($score !== null) {
+                        $scoresForSub[] = $score;
+                    }
+                }
+
+                $cnt = count($scoresForSub);
+                $totalSubScoresCountForLvl += $cnt;
+                $subAvgsForLvl[$idx] = $cnt > 0 ? round(array_sum($scoresForSub) / $cnt, 2) : 0.0;
+            }
+
+            $levelSubjectAverages[$lvl] = $subAvgsForLvl;
+
+            // คะแนนรวมเฉลี่ยของระดับชั้นนี้ (เฉลี่ยจาก 5 สาระของระดับนั้น)
+            if ($totalSubScoresCountForLvl > 0) {
+                $levelOverallAverages[$lvl] = round(array_sum($subAvgsForLvl) / 5, 2);
+            } else {
+                $levelOverallAverages[$lvl] = round((float) $lvlScored->avg('total_score'), 2);
+            }
+        }
+
+        $activeLevelCount = count($levelSubjectAverages);
 
         $subjectStats = [];
         $bestSubject = null;
         $bestAvg = -1.0;
-        $totalScoresCount = 0;
 
-        foreach ($subjectCodes as $idx => $code) {
-            $codeStr = (string) $code;
-            $name = $subjectNames[$codeStr] ?? ($subjectNames[$idx] ?? (self::DEFAULT_SUBJECT_NAMES[$idx] ?? "สาระที่ {$codeStr}"));
+        for ($idx = 0; $idx < 5; $idx++) {
+            $name = self::DEFAULT_SUBJECT_NAMES[$idx] ?? "สาระที่ " . ($idx + 1);
+            $codeStr = "สาระที่ " . ($idx + 1);
 
-            $scoresForSubject = [];
-            foreach ($scoredRecords as $rec) {
-                $subScores = $rec->subject_scores ?? [];
-                if (isset($subScores[$codeStr]) && is_numeric($subScores[$codeStr])) {
-                    $scoresForSubject[] = (float) $subScores[$codeStr];
-                } elseif (isset($subScores[$idx]) && is_numeric($subScores[$idx])) {
-                    $scoresForSubject[] = (float) $subScores[$idx];
-                }
+            // เอาคะแนนเฉลี่ยของ ประถม ม.ต้น ม.ปลาย บวกกันแล้วหารจำนวนระดับชั้น (เช่น หาร 3)
+            $sumAcrossLevels = 0.0;
+            foreach ($levelSubjectAverages as $lvl => $subAvgs) {
+                $sumAcrossLevels += ($subAvgs[$idx] ?? 0.0);
             }
 
-            $count = count($scoresForSubject);
-            $totalScoresCount += $count;
-            $avg = $count > 0 ? round(array_sum($scoresForSubject) / $count, 2) : 0.0;
-            $max = $count > 0 ? max($scoresForSubject) : 0.0;
-            $min = $count > 0 ? min($scoresForSubject) : 0.0;
+            $avg = $activeLevelCount > 0 ? round($sumAcrossLevels / $activeLevelCount, 2) : 0.0;
 
-            if ($count > 0 && $avg > $bestAvg) {
+            // คะแนนสูงสุด/ต่ำสุดของสาระนี้จากนักศึกษาทุกคนในทุกระดับ
+            $allScoresForSub = [];
+            foreach ($scoredRecords as $rec) {
+                $score = $this->extractSubjectScore($rec, $idx);
+                if ($score !== null) {
+                    $allScoresForSub[] = $score;
+                }
+            }
+            $max = count($allScoresForSub) > 0 ? max($allScoresForSub) : 0.0;
+            $min = count($allScoresForSub) > 0 ? min($allScoresForSub) : 0.0;
+
+            if ($avg > $bestAvg) {
                 $bestAvg = $avg;
                 $bestSubject = [
                     'code' => $codeStr,
@@ -264,11 +381,9 @@ final class NnetService
             ];
         }
 
-        // ค่าเฉลี่ยรวม: เอาคะแนนเฉลี่ยจำแนกตามแต่ละสาระบวกกัน แล้วหารด้วยจำนวนสาระ
-        $subjectAverages = array_column($subjectStats, 'average');
-        $subjectCount = count($subjectAverages);
-        if ($totalScoresCount > 0 && $subjectCount > 0) {
-            $avgTotalScore = round(array_sum($subjectAverages) / $subjectCount, 2);
+        // คะแนนรวมเฉลี่ย: เอาคะแนนรวมเฉลี่ยแต่ละระดับชั้นบวก แล้วหาร 3 (หรือจำนวนระดับชั้นที่มีข้อมูล)
+        if ($activeLevelCount > 0) {
+            $avgTotalScore = round(array_sum($levelOverallAverages) / $activeLevelCount, 2);
         } else {
             $avgTotalScore = $scoredCount > 0 ? round((float) $scoredRecords->avg('total_score'), 2) : 0.0;
         }
@@ -722,5 +837,38 @@ final class NnetService
         }
 
         abort(403, 'คุณไม่มีสิทธิ์ในการจัดการข้อมูลนี้');
+    }
+
+    private function extractSubjectScore(NnetResult $rec, int $idx, ?string $code = null): ?float
+    {
+        $scores = $rec->subject_scores;
+        if (! is_array($scores)) {
+            return null;
+        }
+
+        // 1. Look up by provided code
+        if ($code !== null && isset($scores[$code]) && is_numeric($scores[$code])) {
+            return (float) $scores[$code];
+        }
+
+        // 2. Look up by record's own subject_codes at $idx
+        $recCodes = $rec->subject_codes;
+        if (is_array($recCodes) && isset($recCodes[$idx])) {
+            $recCode = (string) $recCodes[$idx];
+            if (isset($scores[$recCode]) && is_numeric($scores[$recCode])) {
+                return (float) $scores[$recCode];
+            }
+        }
+
+        // 3. Look up by index
+        if (isset($scores[$idx]) && is_numeric($scores[$idx])) {
+            return (float) $scores[$idx];
+        }
+
+        if (isset($scores[(string) $idx]) && is_numeric($scores[(string) $idx])) {
+            return (float) $scores[(string) $idx];
+        }
+
+        return null;
     }
 }

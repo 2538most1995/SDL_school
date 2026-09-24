@@ -323,7 +323,9 @@ export function NnetReportPage() {
         }
 
         const levelLabel = LEVEL_OPTIONS.find((l) => l.value === level)?.label ?? 'ทุกระดับ';
-        const subCodes = items[0]?.subject_codes || ['411', '412', '413', '414', '415'];
+        const subHeaders = level === 0
+            ? ['สาระที่ 1', 'สาระที่ 2', 'สาระที่ 3', 'สาระที่ 4', 'สาระที่ 5']
+            : (items[0]?.subject_codes || ['411', '412', '413', '414', '415']);
 
         const columns = [
             'ลำดับ',
@@ -334,7 +336,7 @@ export function NnetReportPage() {
             'ระดับชั้น',
             'กลุ่มเรียน',
             'คะแนนรวม',
-            ...subCodes.map((c, i) => `${c} (${STANDARD_SUBJECT_NAMES[i] ?? c})`),
+            ...subHeaders.map((c, i) => `${c} (${STANDARD_SUBJECT_NAMES[i] ?? c})`),
             'สถานะ',
         ];
 
@@ -349,8 +351,9 @@ export function NnetReportPage() {
                 r.education_level_label,
                 r.group_name || '',
                 r.has_score && r.total_score !== null ? r.total_score : '-',
-                ...subCodes.map((code) => {
-                    const score = subScores[code];
+                ...[0, 1, 2, 3, 4].map((sIdx) => {
+                    const code = r.subject_codes?.[sIdx];
+                    const score = (code ? subScores[code] : undefined) ?? (subScores as any)[sIdx];
                     return score !== undefined && score !== null ? score : '-';
                 }),
                 r.has_score ? 'มีผลคะแนน' : 'ไม่มีคะแนน',
@@ -532,7 +535,7 @@ export function NnetReportPage() {
                             </div>
                         </div>
                         <span className="text-xs text-slate-400">
-                            เฉลี่ย {summary.subjects?.length ? `${summary.subjects.length} สาระ` : 'รายสาระ'}
+                            {level === 0 ? 'เฉลี่ยรวมทุกระดับชั้น' : `เฉลี่ย ${summary.subjects?.length ? `${summary.subjects.length} สาระ` : 'รายสาระ'}`}
                         </span>
                     </Card>
 
@@ -655,11 +658,19 @@ export function NnetReportPage() {
                                     <th className="p-3 text-center font-bold text-indigo-700 bg-indigo-50/50">
                                         คะแนนรวม
                                     </th>
-                                    {items[0]?.subject_codes?.map((code, idx) => (
-                                        <th key={code} className="p-3 text-center">
-                                            {code}
-                                        </th>
-                                    ))}
+                                    {level === 0 ? (
+                                        ['สาระที่ 1', 'สาระที่ 2', 'สาระที่ 3', 'สาระที่ 4', 'สาระที่ 5'].map((label, idx) => (
+                                            <th key={label} className="p-3 text-center" title={STANDARD_SUBJECT_NAMES[idx]}>
+                                                {label}
+                                            </th>
+                                        ))
+                                    ) : (
+                                        items[0]?.subject_codes?.map((code, idx) => (
+                                            <th key={code} className="p-3 text-center" title={STANDARD_SUBJECT_NAMES[idx]}>
+                                                {code}
+                                            </th>
+                                        ))
+                                    )}
                                     <th className="p-3 text-center">สถานะ</th>
                                     <th className="p-3 text-center w-28">จัดการ</th>
                                 </tr>
@@ -704,11 +715,12 @@ export function NnetReportPage() {
                                                     ? r.total_score.toFixed(2)
                                                     : '-'}
                                             </td>
-                                            {r.subject_codes?.map((code) => {
-                                                const score = subScores[code];
+                                            {[0, 1, 2, 3, 4].map((sIdx) => {
+                                                const code = r.subject_codes?.[sIdx];
+                                                const score = (code ? subScores[code] : undefined) ?? (subScores as any)[sIdx];
                                                 return (
                                                     <td
-                                                        key={code}
+                                                        key={`${r.id}-sub-${sIdx}`}
                                                         className="p-3 text-center font-mono text-slate-700"
                                                     >
                                                         {score !== undefined && score !== null
