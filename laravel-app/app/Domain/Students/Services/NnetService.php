@@ -273,6 +273,17 @@ final class NnetService
                 $avgTotalScore = $scoredCount > 0 ? round((float) $scoredRecords->avg('total_score'), 2) : 0.0;
             }
 
+            $maxSubjectScore = 0.0;
+            $maxSubjectScoreName = '';
+            $maxSubjectScoreCode = '';
+            foreach ($subjectStats as $sub) {
+                if ($sub['max'] > $maxSubjectScore) {
+                    $maxSubjectScore = (float) $sub['max'];
+                    $maxSubjectScoreName = (string) $sub['name'];
+                    $maxSubjectScoreCode = (string) $sub['code'];
+                }
+            }
+
             return [
                 'total_students' => $totalCount,
                 'scored_students' => $scoredCount,
@@ -280,6 +291,9 @@ final class NnetService
                 'average_total_score' => $avgTotalScore,
                 'max_total_score' => $maxTotalScore,
                 'min_total_score' => $minTotalScore,
+                'max_subject_score' => $maxSubjectScore,
+                'max_subject_score_name' => $maxSubjectScoreName,
+                'max_subject_score_code' => $maxSubjectScoreCode,
                 'best_subject' => $bestSubject,
                 'subjects' => $subjectStats,
             ];
@@ -388,6 +402,17 @@ final class NnetService
             $avgTotalScore = $scoredCount > 0 ? round((float) $scoredRecords->avg('total_score'), 2) : 0.0;
         }
 
+        $maxSubjectScore = 0.0;
+        $maxSubjectScoreName = '';
+        $maxSubjectScoreCode = '';
+        foreach ($subjectStats as $sub) {
+            if ($sub['max'] > $maxSubjectScore) {
+                $maxSubjectScore = (float) $sub['max'];
+                $maxSubjectScoreName = (string) $sub['name'];
+                $maxSubjectScoreCode = (string) $sub['code'];
+            }
+        }
+
         return [
             'total_students' => $totalCount,
             'scored_students' => $scoredCount,
@@ -395,6 +420,9 @@ final class NnetService
             'average_total_score' => $avgTotalScore,
             'max_total_score' => $maxTotalScore,
             'min_total_score' => $minTotalScore,
+            'max_subject_score' => $maxSubjectScore,
+            'max_subject_score_name' => $maxSubjectScoreName,
+            'max_subject_score_code' => $maxSubjectScoreCode,
             'best_subject' => $bestSubject,
             'subjects' => $subjectStats,
         ];

@@ -230,6 +230,7 @@ class NnetTest extends TestCase
         $this->assertEquals(50.00, $response->json('data.average_total_score'));
         $this->assertEquals(60.00, $response->json('data.max_total_score'));
         $this->assertEquals(40.00, $response->json('data.min_total_score'));
+        $this->assertEquals(70.00, $response->json('data.max_subject_score'));
 
         $subjects = $response->json('data.subjects');
         $this->assertNotEmpty($subjects);
@@ -571,6 +572,8 @@ class NnetTest extends TestCase
 
         // Overall Average = (60 + 70 + 80) / 3 = 70.00
         $this->assertEquals(70.00, $response->json('data.average_total_score'));
+        $this->assertEquals(80.00, $response->json('data.max_total_score'));
+        $this->assertEquals(100.00, $response->json('data.max_subject_score'));
     }
 }
 

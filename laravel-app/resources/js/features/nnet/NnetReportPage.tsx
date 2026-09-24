@@ -61,6 +61,9 @@ interface NnetSummary {
     average_total_score: number;
     max_total_score: number;
     min_total_score: number;
+    max_subject_score?: number;
+    max_subject_score_name?: string | null;
+    max_subject_score_code?: string | null;
     best_subject: { code: string; name: string; avg: number } | null;
     subjects: Array<{
         code: string;
@@ -540,13 +543,28 @@ export function NnetReportPage() {
                     </Card>
 
                     <Card className="p-4 rounded-2xl bg-white border border-slate-200/80 shadow-sm flex flex-col justify-between">
-                        <span className="text-xs font-bold text-purple-600">คะแนนสูงสุด</span>
+                        <div className="flex items-center justify-between">
+                            <span className="text-xs font-bold text-purple-600">คะแนนรวมสูงสุด</span>
+                            <span className="text-[10px] px-1.5 py-0.5 rounded bg-purple-50 text-purple-700 font-semibold">
+                                รายบุคคล
+                            </span>
+                        </div>
                         <div className="my-2">
                             <div className="text-2xl lg:text-3xl font-black text-purple-600 font-mono">
                                 {summary.max_total_score.toFixed(2)}
                             </div>
                         </div>
-                        <span className="text-xs text-slate-400">คะแนน</span>
+                        <div className="text-xs text-slate-400 flex items-center justify-between gap-1">
+                            <span>อันดับ 1 ของกลุ่ม</span>
+                            {summary.max_subject_score !== undefined && summary.max_subject_score > 0 && (
+                                <span
+                                    className="text-[11px] text-purple-700 font-semibold truncate"
+                                    title={`คะแนนรายสาระสูงสุด: ${summary.max_subject_score.toFixed(2)} (${summary.max_subject_score_name || summary.max_subject_score_code || ''})`}
+                                >
+                                    สาระสูงสุด {summary.max_subject_score.toFixed(2)}
+                                </span>
+                            )}
+                        </div>
                     </Card>
 
                     <Card className="p-4 rounded-2xl bg-white border border-slate-200/80 shadow-sm flex flex-col justify-between">
