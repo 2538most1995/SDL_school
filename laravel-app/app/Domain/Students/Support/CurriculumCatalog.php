@@ -183,6 +183,11 @@ final class CurriculumCatalog
                 if ($sub !== '') {
                     return $sub;
                 }
+            } elseif (preg_match('/^([^\s0-9]+)\s*(?:กลุ่ม|ศูนย์)/u', $name, $m)) {
+                $sub = trim($m[1]);
+                if ($sub !== '') {
+                    return $sub;
+                }
             }
         }
 

@@ -661,6 +661,7 @@ export function CourseRegistrationPage() {
                                 columns={columns}
                                 emptyTitle="ไม่พบข้อมูลนักศึกษา"
                                 emptyDescription="ลองปรับเงื่อนไขตัวกรอง ภาคเรียน ระดับ หรือกลุ่มเรียน"
+                                responsiveMode="cards"
                             />
                         )}
                     </Panel>
@@ -1133,7 +1134,7 @@ export function CourseRegistrationPage() {
                                 </div>
 
                                 <div className="overflow-x-auto">
-                                    <table className="w-full text-left text-sm">
+                                    <table className="w-full min-w-[800px] text-left text-sm">
                                         <thead>
                                             <tr className="border-b border-slate-200 bg-slate-50 text-xs font-bold text-slate-700">
                                                 <th className="p-3">สาระการเรียนรู้</th>
@@ -1339,7 +1340,7 @@ export function CourseRegistrationPage() {
                                 )}
 
                                 <div className="overflow-x-auto">
-                                    <table className="w-full text-left text-sm">
+                                    <table className="w-full min-w-[800px] text-left text-sm">
                                         <thead>
                                             <tr className="border-b border-slate-200 bg-slate-50 text-xs font-bold text-slate-700">
                                                 <th className="p-3">สาระการเรียนรู้</th>
