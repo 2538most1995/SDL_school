@@ -365,8 +365,10 @@ export function NnetReportPage() {
     return (
         <div className="space-y-6">
             <PageHeader
+                category="N-NET"
                 title="รายงานผล N-NET"
-                subtitle="ภาพรวมผลสอบ พร้อมวิเคราะห์รายสาระและรายบุคคล"
+                description="ภาพรวมผลสอบ พร้อมวิเคราะห์รายสาระและรายบุคคล"
+                icon={Medal}
                 actions={(
                     <div className="flex flex-wrap items-center gap-2">
                         <Link to="/n-net/import">
@@ -375,7 +377,7 @@ export function NnetReportPage() {
                             </Button>
                         </Link>
                         <Button
-                            appearance="secondary"
+                            appearance="outline"
                             icon={<FileXls size={18} weight="bold" />}
                             onClick={handleExportExcel}
                             disabled={items.length === 0}
@@ -578,7 +580,7 @@ export function NnetReportPage() {
             {/* Individual Results Table Panel */}
             <Panel
                 title={`ผลรายบุคคล (${items.length.toLocaleString('th-TH')} รายการ)`}
-                actions={(
+                action={(
                     <div className="flex items-center gap-2">
                         {items.length > 0 && (
                             <Button
@@ -848,7 +850,7 @@ export function NnetReportPage() {
                         )}
 
                         <div className="flex justify-end pt-2">
-                            <Button appearance="secondary" onClick={() => setDetailRecord(null)}>
+                            <Button appearance="outline" onClick={() => setDetailRecord(null)}>
                                 ปิดหน้าต่าง
                             </Button>
                         </div>

@@ -293,12 +293,14 @@ export function NnetImportPage() {
     return (
         <div className="space-y-6">
             <PageHeader
+                category="N-NET"
                 title="นำเข้าผล N-NET"
-                subtitle="เลือกระดับชั้นก่อนอัปโหลดไฟล์ผลสอบ ระบบจะตรวจรูปแบบและอ่านคะแนน 5 สาระอัตโนมัติ"
+                description="เลือกระดับชั้นก่อนอัปโหลดไฟล์ผลสอบ ระบบจะตรวจรูปแบบและอ่านคะแนน 5 สาระอัตโนมัติ"
+                icon={UploadSimple}
                 actions={(
                     <div className="flex items-center gap-2">
                         <Link to="/n-net/report">
-                            <Button appearance="secondary" icon={<ChartLineUp size={18} />}>
+                            <Button appearance="outline" icon={<ChartLineUp size={18} />}>
                                 ไปยังรายงานผล N-NET
                             </Button>
                         </Link>
