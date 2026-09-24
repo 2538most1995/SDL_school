@@ -94,7 +94,7 @@ export function NnetReportPage() {
     const queryClient = useQueryClient();
 
     // Filters
-    const [level, setLevel] = useState<number>(2); // Default to ม.ต้น
+    const [level, setLevel] = useState<number>(0); // Default to ทุกระดับชั้น
     const [year, setYear] = useState<string>('2569');
     const [round, setRound] = useState<number>(1);
     const [statusFilter, setStatusFilter] = useState<string>('');
@@ -543,40 +543,55 @@ export function NnetReportPage() {
                     </Card>
 
                     <Card className="p-4 rounded-2xl bg-white border border-slate-200/80 shadow-sm flex flex-col justify-between">
-                        <div className="flex items-center justify-between">
+                        <div>
                             <span className="text-xs font-bold text-purple-600">คะแนนรวมสูงสุด</span>
-                            <span className="text-[10px] px-1.5 py-0.5 rounded bg-purple-50 text-purple-700 font-semibold">
-                                รายบุคคล
-                            </span>
-                        </div>
-                        <div className="my-2">
-                            <div className="text-2xl lg:text-3xl font-black text-purple-600 font-mono">
-                                {summary.max_total_score.toFixed(2)}
+                            <div className="my-2">
+                                <div className="text-2xl lg:text-3xl font-black text-purple-600 font-mono">
+                                    {summary.max_total_score.toFixed(2)}
+                                </div>
                             </div>
                         </div>
-                        <div className="text-xs text-slate-400 flex items-center justify-between gap-1">
-                            <span>อันดับ 1 ของกลุ่ม</span>
+                        <div className="text-xs space-y-1">
+                            <div className="text-slate-400">
+                                รายบุคคล (อันดับ 1)
+                            </div>
                             {summary.max_subject_score !== undefined && summary.max_subject_score > 0 && (
-                                <span
-                                    className="text-[11px] text-purple-700 font-semibold truncate"
+                                <div
+                                    className="text-purple-700 font-semibold text-xs bg-purple-50 border border-purple-100/80 px-2 py-1 rounded-lg"
                                     title={`คะแนนรายสาระสูงสุด: ${summary.max_subject_score.toFixed(2)} (${summary.max_subject_score_name || summary.max_subject_score_code || ''})`}
                                 >
-                                    สาระสูงสุด {summary.max_subject_score.toFixed(2)}
-                                </span>
+                                    <div>สาระสูงสุด {summary.max_subject_score.toFixed(2)}</div>
+                                    {(summary.max_subject_score_name || summary.max_subject_score_code) && (
+                                        <div className="text-[11px] font-normal text-purple-600 leading-tight">
+                                            {summary.max_subject_score_code && summary.max_subject_score_name
+                                                ? `${summary.max_subject_score_code} ${summary.max_subject_score_name}`
+                                                : (summary.max_subject_score_name ?? summary.max_subject_score_code)}
+                                        </div>
+                                    )}
+                                </div>
                             )}
                         </div>
                     </Card>
 
                     <Card className="p-4 rounded-2xl bg-white border border-slate-200/80 shadow-sm flex flex-col justify-between">
-                        <span className="text-xs font-bold text-blue-600">สาระเฉลี่ยสูงสุด</span>
-                        <div className="my-2">
-                            <div className="text-2xl lg:text-3xl font-black text-blue-600 font-mono">
-                                {summary.best_subject?.code ?? '-'}
+                        <div>
+                            <span className="text-xs font-bold text-blue-600">สาระเฉลี่ยสูงสุด</span>
+                            <div className="my-2">
+                                <div className="text-2xl lg:text-3xl font-black text-blue-600 font-mono">
+                                    {summary.best_subject?.code ?? '-'}
+                                </div>
                             </div>
                         </div>
-                        <span className="text-xs text-slate-600 truncate block">
-                            {summary.best_subject?.name ?? '-'}
-                        </span>
+                        <div className="text-xs space-y-1">
+                            <div className="text-slate-600 font-medium leading-tight">
+                                {summary.best_subject?.name ?? '-'}
+                            </div>
+                            {summary.best_subject?.avg !== undefined && summary.best_subject.avg > 0 && (
+                                <div className="text-blue-700 font-semibold text-xs bg-blue-50 border border-blue-100/80 px-2 py-1 rounded-lg">
+                                    เฉลี่ย {summary.best_subject.avg.toFixed(2)} คะแนน
+                                </div>
+                            )}
+                        </div>
                     </Card>
                 </div>
             )}
@@ -672,6 +687,7 @@ export function NnetReportPage() {
                                     <th className="p-3">เลขประจำตัวประชาชน</th>
                                     <th className="p-3">รหัสนักศึกษา</th>
                                     <th className="p-3">ชื่อ - สกุล</th>
+                                    {level === 0 && <th className="p-3 text-center">ระดับชั้น</th>}
                                     <th className="p-3">กลุ่มเรียน</th>
                                     <th className="p-3 text-center font-bold text-indigo-700 bg-indigo-50/50">
                                         คะแนนรวม
@@ -725,6 +741,13 @@ export function NnetReportPage() {
                                                     {r.student_name}
                                                 </button>
                                             </td>
+                                            {level === 0 && (
+                                                <td className="p-3 text-center">
+                                                    <span className="px-2 py-0.5 rounded-full text-[11px] font-semibold bg-slate-100 text-slate-700">
+                                                        {r.education_level_label}
+                                                    </span>
+                                                </td>
+                                            )}
                                             <td className="p-3 text-slate-600 truncate max-w-xs">
                                                 {r.group_name || '-'}
                                             </td>
