@@ -135,7 +135,10 @@ export function NnetImportPage() {
                     extracted.push({
                         no: r[0],
                         seat: r[1] ? String(r[1]).trim() : '',
-                        citizen: r[2] ? String(r[2]).trim().replace(/\D+/g, '') : '',
+                        citizen: (() => {
+                            const raw = r[2] !== undefined && r[2] !== null ? String(r[2]).trim().replace(/\D+/g, '') : '';
+                            return raw.length > 0 && raw.length < 13 ? raw.padStart(13, '0') : raw;
+                        })(),
                         name: String(r[3]).trim(),
                         total: r[4],
                         scores: [r[5], r[6], r[7], r[8], r[9]],

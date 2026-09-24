@@ -94,6 +94,14 @@ final class NnetService
             }
         }
 
+        if (! empty($filters['group'])) {
+            $grp = trim((string) $filters['group']);
+            $query->where(function ($q) use ($grp): void {
+                $q->where('group_code', $grp)
+                    ->orWhere('group_name', $grp);
+            });
+        }
+
         if (! empty($filters['search'])) {
             $s = trim((string) $filters['search']);
             $query->where(function ($q) use ($s): void {
@@ -132,6 +140,16 @@ final class NnetService
             ->values()
             ->all();
 
+        $availableGroups = NnetResult::query()
+            ->when($districtId !== null, fn ($q) => $q->where('district_id', $districtId))
+            ->whereNotNull('group_name')
+            ->where('group_name', '!=', '')
+            ->distinct()
+            ->pluck('group_name')
+            ->sort()
+            ->values()
+            ->all();
+
         return [
             'items' => $paginator->items(),
             'total' => $paginator->total(),
@@ -139,6 +157,7 @@ final class NnetService
             'last_page' => $paginator->lastPage(),
             'page_size' => $paginator->perPage(),
             'available_years' => $availableYears,
+            'available_groups' => $availableGroups,
         ];
     }
 
@@ -166,6 +185,14 @@ final class NnetService
 
         if (! empty($filters['round'])) {
             $query->where('round', (int) $filters['round']);
+        }
+
+        if (! empty($filters['group'])) {
+            $grp = trim((string) $filters['group']);
+            $query->where(function ($q) use ($grp): void {
+                $q->where('group_code', $grp)
+                    ->orWhere('group_name', $grp);
+            });
         }
 
         if ($user->role === 'student') {
@@ -292,6 +319,9 @@ final class NnetService
         foreach ($students as $st) {
             if ($st->citizenId) {
                 $cleanCitizen = preg_replace('/\D+/u', '', $st->citizenId);
+                if (strlen($cleanCitizen) > 0 && strlen($cleanCitizen) < 13) {
+                    $cleanCitizen = str_pad($cleanCitizen, 13, '0', STR_PAD_LEFT);
+                }
                 if (strlen($cleanCitizen) === 13) {
                     $studentByCitizen[$cleanCitizen] = $st;
                 }
@@ -310,6 +340,9 @@ final class NnetService
         foreach ($rows as $row) {
             $rawCitizen = trim((string) ($row['citizen'] ?? $row['citizen_id'] ?? ''));
             $cleanCitizen = preg_replace('/\D+/u', '', $rawCitizen);
+            if (strlen($cleanCitizen) > 0 && strlen($cleanCitizen) < 13) {
+                $cleanCitizen = str_pad($cleanCitizen, 13, '0', STR_PAD_LEFT);
+            }
 
             if (strlen($cleanCitizen) !== 13) {
                 continue; // Skip invalid citizen IDs
@@ -439,6 +472,9 @@ final class NnetService
         }
 
         $cleanCitizen = preg_replace('/\D+/u', '', (string) ($data['citizen_id'] ?? ''));
+        if (strlen($cleanCitizen) > 0 && strlen($cleanCitizen) < 13) {
+            $cleanCitizen = str_pad($cleanCitizen, 13, '0', STR_PAD_LEFT);
+        }
         if (strlen($cleanCitizen) !== 13) {
             throw ValidationException::withMessages(['citizen_id' => 'เลขประจำตัวประชาชนต้องมี 13 หลัก']);
         }
@@ -463,9 +499,15 @@ final class NnetService
         $students = $this->studentRepository->students([$districtId]);
         $matched = null;
         foreach ($students as $st) {
-            if ($st->citizenId && preg_replace('/\D+/u', '', $st->citizenId) === $cleanCitizen) {
-                $matched = $st;
-                break;
+            if ($st->citizenId) {
+                $stCit = preg_replace('/\D+/u', '', $st->citizenId);
+                if (strlen($stCit) > 0 && strlen($stCit) < 13) {
+                    $stCit = str_pad($stCit, 13, '0', STR_PAD_LEFT);
+                }
+                if ($stCit === $cleanCitizen) {
+                    $matched = $st;
+                    break;
+                }
             }
         }
 
@@ -625,12 +667,18 @@ final class NnetService
 
         // Student's username or legacy identity is often citizen ID
         $clean = preg_replace('/\D+/u', '', $user->username);
+        if (strlen($clean) > 0 && strlen($clean) < 13) {
+            $clean = str_pad($clean, 13, '0', STR_PAD_LEFT);
+        }
         if (strlen($clean) === 13) {
             return $clean;
         }
 
         if ($user->legacy_ref) {
             $clean = preg_replace('/\D+/u', '', $user->legacy_ref);
+            if (strlen($clean) > 0 && strlen($clean) < 13) {
+                $clean = str_pad($clean, 13, '0', STR_PAD_LEFT);
+            }
             if (strlen($clean) === 13) {
                 return $clean;
             }

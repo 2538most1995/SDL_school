@@ -316,4 +316,140 @@ class NnetTest extends TestCase
         $this->assertDatabaseMissing('nnet_results', ['citizen_id' => '1100400111111']);
         $this->assertDatabaseHas('nnet_results', ['citizen_id' => '1100400222222']);
     }
+
+    public function test_bulk_import_pads_citizen_id_with_leading_zeros_and_matches_student(): void
+    {
+        Sanctum::actingAs($this->teacher);
+
+        // Student with leading zeroes in citizen ID
+        $mockStudent = new Student(
+            code: '6650100999',
+            districtId: $this->district->id,
+            districtName: 'อำเภอเสนา',
+            prefix: 'นาย',
+            firstName: 'พงศกร',
+            lastName: 'ใฝ่รู้',
+            level: 2,
+            levelLabel: 'มัธยมศึกษาตอนต้น',
+            groupCode: '1260096',
+            groupName: 'กลุ่มเสนา 1',
+            enrollmentTerm: '1/2566',
+            currentTerm: '1/2569',
+            status: '1',
+            statusLabel: 'กำลังศึกษา',
+            gpax: 3.50,
+            creditsEarned: 40.0,
+            creditsRequired: 56.0,
+            kpchHours: 200.0,
+            moralResult: 'ผ่าน',
+            citizenId: '0014011023914',
+        );
+
+        $this->app->bind(StudentRepository::class, function () use ($mockStudent) {
+            $repo = $this->createMock(StudentRepository::class);
+            $repo->method('students')->willReturn([$mockStudent]);
+            return $repo;
+        });
+
+        // Payload with 11-digit citizen ID (Excel trimmed leading 00)
+        $payload = [
+            'education_level' => 2,
+            'academic_year' => '2569',
+            'round' => 1,
+            'rows' => [
+                [
+                    'seat_no' => '14001001',
+                    'citizen_id' => '14011023914', // 11 digits
+                    'name' => 'นายพงศกร ใฝ่รู้',
+                    'total_score' => 50.00,
+                    'scores' => [50, 50, 50, 50, 50],
+                    'levels' => ['ดี', 'ดี', 'ดี', 'ดี', 'ดี'],
+                ],
+            ],
+        ];
+
+        $response = $this->postJson('/api/v1/nnet/import', $payload)
+            ->assertOk()
+            ->assertJsonPath('data.total_processed', 1)
+            ->assertJsonPath('data.matched_students', 1);
+
+        $this->assertDatabaseHas('nnet_results', [
+            'district_id' => $this->district->id,
+            'citizen_id' => '0014011023914',
+            'student_code' => '6650100999',
+            'group_name' => 'กลุ่มเสนา 1',
+            'total_score' => 50.00,
+        ]);
+    }
+
+    public function test_can_filter_records_and_summary_by_group(): void
+    {
+        Sanctum::actingAs($this->teacher);
+
+        NnetResult::create([
+            'district_id' => $this->district->id,
+            'academic_year' => '2569',
+            'round' => 1,
+            'education_level' => 2,
+            'seat_no' => '14001001',
+            'citizen_id' => '0014011023914',
+            'student_name' => 'นายกนก กลุ่ม ก',
+            'group_code' => 'GRP-A',
+            'group_name' => 'กลุ่ม ก',
+            'total_score' => 60.00,
+            'has_score' => true,
+        ]);
+
+        NnetResult::create([
+            'district_id' => $this->district->id,
+            'academic_year' => '2569',
+            'round' => 1,
+            'education_level' => 2,
+            'seat_no' => '14001002',
+            'citizen_id' => '0014011023915',
+            'student_name' => 'นายขจร กลุ่ม ข',
+            'group_code' => 'GRP-B',
+            'group_name' => 'กลุ่ม ข',
+            'total_score' => 40.00,
+            'has_score' => true,
+        ]);
+
+        // Filter records by group
+        $this->getJson('/api/v1/nnet/records?group=' . urlencode('กลุ่ม ก'))
+            ->assertOk()
+            ->assertJsonPath('data.total', 1)
+            ->assertJsonPath('data.items.0.student_name', 'นายกนก กลุ่ม ก');
+
+        // Filter summary by group
+        $sumRes = $this->getJson('/api/v1/nnet/summary?education_level=2&academic_year=2569&round=1&group=' . urlencode('กลุ่ม ก'))
+            ->assertOk()
+            ->assertJsonPath('data.total_students', 1);
+        $this->assertEquals(60.0, $sumRes->json('data.average_total_score'));
+    }
+
+    public function test_create_record_pads_citizen_id(): void
+    {
+        Sanctum::actingAs($this->admin);
+
+        $payload = [
+            'education_level' => 2,
+            'academic_year' => '2569',
+            'round' => 1,
+            'citizen_id' => '14011023914', // 11 digits
+            'student_name' => 'นายทดสอบ เติมศูนย์',
+            'has_score' => true,
+            'total_score' => 45.00,
+        ];
+
+        $this->postJson('/api/v1/nnet/records', $payload)
+            ->assertCreated()
+            ->assertJsonPath('data.citizen_id', '0014011023914');
+
+        $this->assertDatabaseHas('nnet_results', [
+            'district_id' => $this->district->id,
+            'citizen_id' => '0014011023914',
+            'student_name' => 'นายทดสอบ เติมศูนย์',
+        ]);
+    }
 }
+

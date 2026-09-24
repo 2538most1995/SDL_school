@@ -95,6 +95,7 @@ export function NnetReportPage() {
     const [year, setYear] = useState<string>('2569');
     const [round, setRound] = useState<number>(1);
     const [statusFilter, setStatusFilter] = useState<string>('');
+    const [group, setGroup] = useState<string>('');
     const [search, setSearch] = useState<string>('');
 
     // Modal States
@@ -120,13 +121,14 @@ export function NnetReportPage() {
 
     // Queries
     const recordsQuery = useQuery({
-        queryKey: ['nnet', 'records', { level, year, round, statusFilter, search }],
+        queryKey: ['nnet', 'records', { level, year, round, statusFilter, group, search }],
         queryFn: ({ signal }) => {
             const params = new URLSearchParams();
             if (level > 0) params.set('education_level', String(level));
             if (year) params.set('academic_year', year);
             if (round > 0) params.set('round', String(round));
             if (statusFilter) params.set('status', statusFilter);
+            if (group) params.set('group', group);
             if (search.trim()) params.set('search', search.trim());
             params.set('page_size', '200');
 
@@ -134,17 +136,19 @@ export function NnetReportPage() {
                 items: NnetRecord[];
                 total: number;
                 available_years: string[];
+                available_groups: string[];
             }>(`/api/v1/nnet/records?${params.toString()}`, signal).then((res) => res.data);
         },
     });
 
     const summaryQuery = useQuery({
-        queryKey: ['nnet', 'summary', { level, year, round }],
+        queryKey: ['nnet', 'summary', { level, year, round, group }],
         queryFn: ({ signal }) => {
             const params = new URLSearchParams();
             if (level > 0) params.set('education_level', String(level));
             if (year) params.set('academic_year', year);
             if (round > 0) params.set('round', String(round));
+            if (group) params.set('group', group);
 
             return getFeatureData<NnetSummary>(`/api/v1/nnet/summary?${params.toString()}`, signal).then((res) => res.data);
         },
@@ -353,7 +357,8 @@ export function NnetReportPage() {
             ];
         });
 
-        downloadExcel(`รายงานผล_N-NET_${levelLabel}_${year}_ครั้งที่${round}`, [
+        const groupSuffix = group ? `_${group}` : '';
+        downloadExcel(`รายงานผล_N-NET_${levelLabel}_${year}_ครั้งที่${round}${groupSuffix}`, [
             {
                 name: 'ผลการทดสอบ N-NET',
                 columns,
@@ -397,7 +402,7 @@ export function NnetReportPage() {
 
             {/* Filter Bar */}
             <Panel className="p-4">
-                <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-5 items-end">
+                <div className="grid gap-3 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-6 items-end">
                     <div>
                         <label className="block text-xs font-bold text-slate-700 mb-1">ระดับชั้น</label>
                         <select
@@ -434,6 +439,22 @@ export function NnetReportPage() {
                             <option value={0}>ทุกครั้ง</option>
                             <option value={1}>ครั้งที่ 1</option>
                             <option value={2}>ครั้งที่ 2</option>
+                        </select>
+                    </div>
+
+                    <div>
+                        <label className="block text-xs font-bold text-slate-700 mb-1">กลุ่มเรียน</label>
+                        <select
+                            value={group}
+                            onChange={(e) => setGroup(e.target.value)}
+                            className="w-full rounded-xl border border-slate-300 p-2 text-sm bg-white focus:border-indigo-500 focus:ring-2 focus:ring-indigo-100 outline-none"
+                        >
+                            <option value="">ทุกกลุ่มเรียน</option>
+                            {recordsQuery.data?.available_groups?.map((grp) => (
+                                <option key={grp} value={grp}>
+                                    {grp}
+                                </option>
+                            ))}
                         </select>
                     </div>
 

@@ -20,6 +20,7 @@ final class NnetController extends Controller
             'education_level' => ['nullable', 'integer', 'in:1,2,3'],
             'academic_year' => ['nullable', 'string', 'max:8'],
             'round' => ['nullable', 'integer', 'in:1,2'],
+            'group' => ['nullable', 'string', 'max:120'],
             'status' => ['nullable', 'string', 'in:scored,absent'],
             'search' => ['nullable', 'string', 'max:120'],
             'sort_by' => ['nullable', 'string', 'max:32'],
@@ -42,6 +43,7 @@ final class NnetController extends Controller
             'education_level' => ['nullable', 'integer', 'in:1,2,3'],
             'academic_year' => ['nullable', 'string', 'max:8'],
             'round' => ['nullable', 'integer', 'in:1,2'],
+            'group' => ['nullable', 'string', 'max:120'],
         ]);
 
         $data = $this->service->summary($filters, $request->user());
