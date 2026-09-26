@@ -9,13 +9,16 @@ import {
     CalendarBlank,
     CaretRight,
     ChartBar,
+    CheckSquare,
     Clock,
     Database,
     GraduationCap,
     Heart,
     MapPin,
+    Megaphone,
     Sparkle,
     Student,
+    Trophy,
     UsersThree,
     WarningCircle,
     X,
@@ -101,9 +104,26 @@ type StudentMetricSpec = {
     tone: 'blue' | 'rose' | 'amber';
 };
 
+type StudentMenuSpec = {
+    label: string;
+    route: string;
+    icon: Icon;
+};
+
 const quickMenu: Array<{ label: string; description: string; route: string; icon: Icon; tone: DashboardTone }> = [
     { label: 'ตารางสอบ', description: 'วัน เวลา และห้องสอบ', route: '/learning/schedule', icon: Clock, tone: 'amber' },
     { label: 'วิชาที่ลงทะเบียน', description: 'รายวิชาตามภาคเรียน', route: '/reports/registered-subjects', icon: Books, tone: 'violet' },
+];
+
+const studentMenu: StudentMenuSpec[] = [
+    { label: 'ข้อมูลส่วนตัว', route: '/my-learning', icon: Student },
+    { label: 'พื้นที่การเรียนรู้', route: '/learning', icon: GraduationCap },
+    { label: 'งานและการส่งงาน', route: '/learning/assignments', icon: BookOpenText },
+    { label: 'คลังสื่อ', route: '/learning/resources', icon: Books },
+    { label: 'ปฏิทินพบกลุ่ม', route: '/learning/calendar', icon: CalendarBlank },
+    { label: 'ตารางสอบ', route: '/learning/schedule', icon: Clock },
+    { label: 'เช็คชื่อเข้าสอบ', route: '/learning/exam-attendance-check', icon: CheckSquare },
+    { label: 'รายงานผล N-NET', route: '/n-net/report', icon: Trophy },
 ];
 
 const formatNumber = (value: number | null, digits = 0) => value === null
@@ -451,11 +471,13 @@ function StudentDashboard({
     profile,
     events,
     calendarPending,
+    branding,
 }: {
     portal: PortalData;
     profile?: StudentProfile;
     events: CalendarItem[];
     calendarPending: boolean;
+    branding?: PublicBranding;
 }) {
     const [selectedActivity, setSelectedActivity] = useState<CalendarItem | null>(null);
     const [activityListOpen, setActivityListOpen] = useState(false);
@@ -465,55 +487,93 @@ function StudentDashboard({
         .sort((left, right) => eventTimestamp(right) - eventTimestamp(left));
     const latestActivity = calendarEvents.find((item) => item.featured_on_dashboard) ?? calendarEvents[0];
     const moralResult = analytics.moral.find((item) => item.value > 0)?.label ?? 'ยังไม่มีผล';
-    const viewedAt = new Intl.DateTimeFormat('th-TH', {
-        day: 'numeric', month: 'long', year: 'numeric', hour: '2-digit', minute: '2-digit',
+    const todayLabel = new Intl.DateTimeFormat('th-TH', {
+        weekday: 'long', day: 'numeric', month: 'long', year: 'numeric',
     }).format(new Date());
+    const heroImage = publicAssetUrl(branding?.dashboardHeroImageUrl) ?? withAppBasePath('/images/dashboard-hero-sena-v2.webp');
     const metrics: StudentMetricSpec[] = [
         {
             label: 'ผลการเรียน', eyebrow: 'คะแนนเฉลี่ยสะสม (GPA)', value: formatNumber(analytics.averages.gpax, 2),
             detail: analytics.current_term ? `ข้อมูลล่าสุดภาคเรียน ${analytics.current_term}` : 'คำนวณจากผลการเรียนล่าสุด',
-            route: '/grades', action: 'ดูรายละเอียดผลการเรียน', icon: ChartBar, tone: 'blue',
+            route: '/grades', action: 'ดูรายละเอียด', icon: ChartBar, tone: 'blue',
         },
         {
             label: 'กพช.', eyebrow: 'กิจกรรมพัฒนาคุณภาพชีวิต', value: formatNumber(analytics.averages.kpch_hours), suffix: ' ชั่วโมง',
-            detail: 'ชั่วโมงสะสมจากข้อมูลกิจกรรมของคุณ', route: '/kpch', action: 'ดูรายละเอียด กพช.', icon: Clock, tone: 'rose',
+            detail: 'ชั่วโมงสะสมจากข้อมูลกิจกรรมของคุณ', route: '/kpch', action: 'ดูรายละเอียด', icon: Clock, tone: 'rose',
         },
         {
             label: 'คุณธรรม', eyebrow: 'ผลการประเมินล่าสุด', value: moralResult,
-            detail: 'ระดับคุณธรรมจากข้อมูลภาคเรียนล่าสุด', route: '/moral', action: 'ดูรายละเอียดคุณธรรม', icon: Heart, tone: 'amber',
+            detail: 'ระดับคุณธรรมจากข้อมูลภาคเรียนล่าสุด', route: '/moral', action: 'ดูรายละเอียด', icon: Heart, tone: 'amber',
         },
     ];
 
     return (
-        <div className="space-y-6 pb-2">
-            <section className="student-dashboard-shell">
-                <div className="student-dashboard-shell__main">
-                    <header className="student-dashboard-intro">
-                        <p className="inline-flex items-center gap-2 text-sm font-black text-brand-700"><Sparkle size={18} weight="fill" aria-hidden="true" />สวัสดี {portal.viewer.name}</p>
-                        <h1 className="mt-3 text-3xl font-black leading-[1.18] tracking-[-0.035em] text-slate-950 sm:text-4xl">หน้าหลักนักศึกษา</h1>
-                        <p className="mt-3 max-w-[52ch] text-sm font-semibold leading-7 text-slate-600 sm:text-base">ติดตามผลการเรียน กิจกรรม และการพัฒนาตนเองให้ครบทุกด้านในที่เดียว</p>
-                    </header>
-                    <div className="student-dashboard-shell__content">
-                        <StudentCalendar events={events} />
-                        <StudentFeaturedActivity
-                            item={latestActivity}
-                            loading={calendarPending}
-                            onSelect={setSelectedActivity}
-                            onShowAll={() => setActivityListOpen(true)}
-                        />
-                    </div>
+        <div className="student-home space-y-6 pb-2">
+            <section className="student-home-hero" aria-labelledby="student-home-hero-title">
+                <img src={heroImage} alt="บรรยากาศการเรียนรู้ของนักศึกษา" fetchPriority="high" />
+                <span className="student-home-hero__scrim" aria-hidden="true" />
+                <div className="student-home-hero__content">
+                    <p className="student-home-hero__badge"><Megaphone size={17} weight="fill" aria-hidden="true" />ภาคเรียนปัจจุบัน</p>
+                    <h1 id="student-home-hero-title">พร้อมเรียนรู้ไปด้วยกัน</h1>
+                    <p>{analytics.current_term ? `ภาคเรียน ${analytics.current_term}` : 'ติดตามข้อมูลการเรียนล่าสุด'}<br />{branding?.districtName ?? portal.viewer.district}</p>
+                    <Link to="/learning" className="student-home-hero__action">เข้าสู่พื้นที่การเรียนรู้ <ArrowRight size={17} weight="bold" aria-hidden="true" /></Link>
                 </div>
-                <StudentTermPanel term={analytics.current_term} profile={profile} viewedAt={viewedAt} />
+            </section>
+
+            <section className="student-welcome" aria-labelledby="student-welcome-title">
+                <div className="student-welcome__copy">
+                    <p>สวัสดี</p>
+                    <h2 id="student-welcome-title">{portal.viewer.name}</h2>
+                    <span>ยินดีต้อนรับสู่ {branding?.portalName ?? 'SDL School'}</span>
+                    {profile && <small>{profile.level} / {profile.group}</small>}
+                </div>
+                <Link to="/learning/calendar" className="student-today-card">
+                    <span className="student-today-card__icon"><CalendarBlank size={23} weight="duotone" aria-hidden="true" /></span>
+                    <span>
+                        <small>วันนี้</small>
+                        <strong>{todayLabel}</strong>
+                        <em>{profile?.nextMeeting || 'ดูปฏิทินของฉัน'}</em>
+                    </span>
+                    <CaretRight size={20} weight="bold" aria-hidden="true" />
+                </Link>
             </section>
 
             <section aria-labelledby="student-metrics-title">
-                <div className="mb-4">
-                    <h2 id="student-metrics-title" className="text-xl font-black tracking-[-0.02em] text-slate-950">สรุปการเรียนของคุณ</h2>
-                    <p className="mt-1 text-sm text-slate-500">ข้อมูลส่วนตัวล่าสุดตามภาคเรียนและสิทธิ์บัญชีนักศึกษา</p>
-                </div>
-                <div className="grid gap-4 md:grid-cols-3">
+                <h2 id="student-metrics-title" className="sr-only">สรุปการเรียนของคุณ</h2>
+                <div className="student-metric-grid">
                     {metrics.map((card) => <StudentMetricCard key={card.label} card={card} />)}
                 </div>
+            </section>
+
+            <section className="student-menu-panel" aria-labelledby="student-menu-title">
+                <div className="student-section-heading">
+                    <div>
+                        <span className="student-section-heading__icon"><Books size={21} weight="duotone" aria-hidden="true" /></span>
+                        <h2 id="student-menu-title">เมนูการใช้งาน</h2>
+                    </div>
+                    <button type="button" onClick={() => setActivityListOpen(true)} className="student-text-link">ดูกิจกรรม <CaretRight size={15} weight="bold" aria-hidden="true" /></button>
+                </div>
+                <div className="student-menu-grid">
+                    {studentMenu.map((item) => {
+                        const MenuIcon = item.icon;
+                        return (
+                            <Link key={item.route} to={item.route} className="student-menu-link">
+                                <span><MenuIcon size={27} weight="duotone" aria-hidden="true" /></span>
+                                <strong>{item.label}</strong>
+                            </Link>
+                        );
+                    })}
+                </div>
+            </section>
+
+            <section className="student-home-updates" aria-label="ปฏิทินและกิจกรรมล่าสุด">
+                <StudentCalendar events={events} />
+                <StudentFeaturedActivity
+                    item={latestActivity}
+                    loading={calendarPending}
+                    onSelect={setSelectedActivity}
+                    onShowAll={() => setActivityListOpen(true)}
+                />
             </section>
             {activityListOpen && (
                 <StudentActivityList
@@ -693,6 +753,7 @@ export function DashboardHomePage() {
                 profile={studentProfile.data}
                 events={events}
                 calendarPending={calendar.isPending}
+                branding={branding.data}
             />
         );
     }

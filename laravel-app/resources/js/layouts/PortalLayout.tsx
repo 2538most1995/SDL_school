@@ -122,6 +122,16 @@ const roleOptions: Array<{ value: DemoRole; label: string; short: string }> = [
     { value: 'super_admin', label: 'ผู้ดูแลส่วนกลาง', short: 'สก' },
 ];
 
+const studentPrimaryNavigation = [
+    { route: '/app', label: 'หน้าหลัก', icon: House },
+    { route: '/my-learning', label: 'ข้อมูลส่วนตัว', icon: User },
+    { route: '/grades', label: 'ผลการเรียน', icon: ChartLineUp },
+    { route: '/kpch', label: 'กพช', icon: Medal },
+    { route: '/learning/schedule', label: 'ตารางสอบ', icon: Clock },
+] as const;
+
+const studentBottomNavigation = studentPrimaryNavigation.slice(1);
+
 function SidebarSkeleton() {
     return (
         <div className="animate-pulse space-y-3 px-2 py-3">
@@ -177,6 +187,14 @@ export function PortalLayout() {
         setSelectedDistrictId(nextDistrict);
     }, [me.data]);
 
+    useEffect(() => {
+        window.scrollTo({ top: 0, left: 0, behavior: 'auto' });
+        setSidebarOpen(false);
+        setRoleMenuOpen(false);
+        setNotificationOpen(false);
+        setSearchOpen(false);
+    }, [location.pathname]);
+
     const catalog = useQuery({
         queryKey: ['system', 'catalog', me.data?.role],
         queryFn: ({ signal }) => apiGet<Catalog>('/api/v1/system/catalog', signal).then((response) => response.data),
@@ -208,6 +226,7 @@ export function PortalLayout() {
         .flatMap((group) => group.items)
         .find((item) => item.route === location.pathname);
     const currentRole = roleOptions.find((option) => option.value === (me.data?.role ?? role)) ?? roleOptions[0];
+    const isStudent = me.data?.role === 'student';
     const availableDistricts = me.data?.districts ?? [];
     const currentDistrict = availableDistricts.find((district) => String(district.id) === selectedDistrictId);
     const searchableItems = catalog.data?.groups.flatMap((group) => group.items) ?? [];
@@ -242,9 +261,13 @@ export function PortalLayout() {
 
     return (
         <div className="portal-shell">
-            {me.data.role === 'student' && <StudentAnnouncementModal />}
-            {sidebarOpen && <button className="fixed inset-0 z-30 bg-slate-950/30 lg:hidden" onClick={() => setSidebarOpen(false)} aria-label="ปิดเมนู" />}
-            <aside className={`portal-sidebar fixed inset-y-0 left-0 z-40 flex w-[282px] flex-col overflow-hidden text-white transition-transform lg:w-[266px] lg:translate-x-0 ${sidebarOpen ? 'translate-x-0' : '-translate-x-full'}`}>
+            {isStudent && <StudentAnnouncementModal />}
+            {sidebarOpen && <button className={`fixed inset-0 z-30 bg-slate-950/30 ${isStudent ? '' : 'lg:hidden'}`} onClick={() => setSidebarOpen(false)} aria-label="ปิดเมนู" />}
+            <aside
+                className={`portal-sidebar fixed inset-y-0 left-0 z-40 flex w-[282px] flex-col overflow-hidden text-white transition-transform lg:w-[266px] ${isStudent ? (sidebarOpen ? 'translate-x-0' : '-translate-x-full') : `${sidebarOpen ? 'translate-x-0' : '-translate-x-full'} lg:translate-x-0`}`}
+                aria-hidden={isStudent && !sidebarOpen}
+                inert={isStudent && !sidebarOpen}
+            >
                 <div className="flex h-[78px] items-center justify-between border-b border-white/10 px-4">
                     <Link to="/app" className="flex items-center gap-2.5">
                         <span className="grid size-11 place-items-center overflow-hidden rounded-2xl border border-white/70 bg-white text-brand-700 shadow-[0_10px_26px_rgb(3_15_52_/_0.22)]">
@@ -255,7 +278,7 @@ export function PortalLayout() {
                             <span className="block max-w-40 truncate text-[10px] font-semibold text-brand-100">{branding.data?.districtName ?? currentDistrict?.name ?? 'Digital Campus'}</span>
                         </span>
                     </Link>
-                    <span className="lg:hidden">
+                    <span className={isStudent ? '' : 'lg:hidden'}>
                         <Button appearance="subtle" icon={<X size={20} />} onClick={() => setSidebarOpen(false)} className="sidebar-icon-button" aria-label="ปิดเมนู" />
                     </span>
                 </div>
@@ -302,7 +325,62 @@ export function PortalLayout() {
                 </nav>
             </aside>
 
-            <div className="lg:pl-[266px]">
+            <div className={isStudent ? 'student-portal' : 'lg:pl-[266px]'}>
+                {isStudent ? (
+                    <header className="student-portal-header sticky top-0 z-20 border-b backdrop-blur-xl">
+                        <div className="mx-auto flex h-[72px] max-w-[1440px] items-center gap-3 px-4 sm:px-6 lg:px-8">
+                            <Link to="/app" className="student-brand-link flex min-w-0 items-center gap-2.5" aria-label="กลับหน้าหลักนักศึกษา">
+                                <span className="grid size-10 shrink-0 place-items-center overflow-hidden rounded-[14px] border border-brand-100 bg-white text-brand-700 shadow-sm">
+                                    {branding.data?.logoImageUrl ? <img src={publicAssetUrl(branding.data.logoImageUrl) ?? ''} alt="" className="size-full object-contain p-1" /> : <GraduationCap size={22} weight="fill" aria-hidden="true" />}
+                                </span>
+                                <span className="min-w-0 leading-tight">
+                                    <strong className="block truncate text-[15px] font-black tracking-[-0.025em] text-brand-950 sm:text-[17px]">{branding.data?.portalName ?? 'SDL School'}</strong>
+                                    <span className="block truncate text-[10px] font-semibold text-slate-500 sm:text-[11px]">{branding.data?.districtName ?? currentDistrict?.name ?? 'ศูนย์การเรียนรู้'}</span>
+                                </span>
+                            </Link>
+
+                            <nav aria-label="เมนูนักศึกษา" className="student-desktop-navigation ml-4 hidden min-w-0 flex-1 items-center justify-center gap-1 lg:flex">
+                                {studentPrimaryNavigation.map((item) => {
+                                    const NavIcon = item.icon;
+                                    return (
+                                        <NavLink
+                                            key={item.route}
+                                            to={item.route}
+                                            end={item.route === '/app'}
+                                            className={({ isActive }) => `student-desktop-navigation__link ${isActive ? 'is-active' : ''}`}
+                                        >
+                                            <NavIcon size={17} weight="duotone" aria-hidden="true" />
+                                            <span>{item.label}</span>
+                                        </NavLink>
+                                    );
+                                })}
+                            </nav>
+
+                            <div className="ml-auto flex items-center gap-1 sm:gap-2">
+                                <div className="relative">
+                                    <Button appearance="subtle" icon={<Bell size={20} weight="duotone" />} onClick={() => { setNotificationOpen((open) => !open); setRoleMenuOpen(false); }} aria-label="การแจ้งเตือน" aria-expanded={notificationOpen} />
+                                    {notificationOpen && <Card className="absolute right-0 top-[48px] w-72 p-4 text-center"><Bell size={28} weight="duotone" className="mx-auto text-brand-700" /><p className="mt-2 text-sm font-bold text-slate-900">ยังไม่มีการแจ้งเตือนใหม่</p><Text as="p" size={200} className="mt-1 leading-5 text-slate-500">ประกาศและงานที่ต้องติดตามจะแสดงที่นี่</Text></Card>}
+                                </div>
+                                <div className="relative hidden sm:block">
+                                    <Button appearance="subtle" onClick={() => { setRoleMenuOpen((open) => !open); setNotificationOpen(false); }} className="user-menu-trigger font-bold" aria-expanded={roleMenuOpen} aria-haspopup="menu">
+                                        <Avatar name={me.data.name} image={me.data.avatar_url ? { src: withAppBasePath(me.data.avatar_url) } : undefined} size={34} color="colorful" />
+                                        <span className="hidden max-w-28 truncate xl:inline">{me.data.name}</span>
+                                        <CaretDown size={14} />
+                                    </Button>
+                                    {roleMenuOpen && (
+                                        <Card role="menu" className="absolute right-0 top-[48px] w-56 p-2">
+                                            <div className="px-3 py-2"><p className="truncate text-sm font-bold text-slate-900">{me.data.name}</p><p className="mt-0.5 truncate text-xs text-slate-500">{me.data.username} · {currentRole.label}</p></div>
+                                            <Link to="/settings/profile" role="menuitem" onClick={() => setRoleMenuOpen(false)} className="flex w-full items-center gap-3 rounded-xl px-3 py-2.5 text-sm font-bold text-slate-700 hover:bg-slate-50"><User size={19} />โปรไฟล์ของฉัน</Link>
+                                            <Link to="/settings/appearance" role="menuitem" onClick={() => setRoleMenuOpen(false)} className="flex w-full items-center gap-3 rounded-xl px-3 py-2.5 text-sm font-bold text-slate-700 hover:bg-brand-50"><PaintBrush size={19} />รูปแบบการแสดงผล</Link>
+                                            <button type="button" role="menuitem" disabled={logout.isPending} onClick={() => logout.mutate()} className="mt-1 flex w-full items-center gap-3 rounded-xl px-3 py-2.5 text-left text-sm font-bold text-rose-700 hover:bg-rose-50 disabled:opacity-60"><SignOut size={19} />{logout.isPending ? 'กำลังออกจากระบบ' : 'ออกจากระบบ'}</button>
+                                        </Card>
+                                    )}
+                                </div>
+                                <Button appearance="subtle" icon={<List size={22} />} onClick={() => setSidebarOpen(true)} aria-label="เปิดเมนูทั้งหมด" />
+                            </div>
+                        </div>
+                    </header>
+                ) : (
                 <header className="portal-topbar sticky top-0 z-20 flex h-[78px] items-center gap-3 border-b px-4 backdrop-blur-xl sm:px-7 lg:px-8">
                     <span className="lg:hidden">
                         <Button appearance="subtle" icon={<List size={22} />} onClick={() => setSidebarOpen(true)} aria-label="เปิดเมนู" />
@@ -353,13 +431,29 @@ export function PortalLayout() {
                         </div>
                     </div>
                 </header>
+                )}
 
-                <main className="portal-content relative min-h-[calc(100dvh-78px)] overflow-hidden">
-                    <div className="relative mx-auto max-w-[1500px] px-4 py-5 sm:px-6 lg:px-7 lg:py-7">
+                <main className={`portal-content relative overflow-hidden ${isStudent ? 'min-h-[calc(100dvh-72px)] pb-[calc(5.5rem+env(safe-area-inset-bottom))] md:pb-0' : 'min-h-[calc(100dvh-78px)]'}`}>
+                    <div className={`relative mx-auto px-4 py-5 sm:px-6 lg:px-8 lg:py-7 ${isStudent ? 'max-w-[1440px]' : 'max-w-[1500px]'}`}>
                         {role !== me.data.role ? <SidebarSkeleton /> : me.data.role !== 'super_admin' || selectedDistrictId ? <Outlet /> : <div className="rounded-3xl border border-amber-200 bg-amber-50 p-6 font-bold text-amber-900">กรุณาเลือกอำเภอเพื่อดูข้อมูล</div>}
                     </div>
                 </main>
             </div>
+            {isStudent && (
+                <nav className="student-bottom-navigation md:hidden" aria-label="เมนูด่วนสำหรับนักศึกษา">
+                    <div className="student-bottom-navigation__inner">
+                        {studentBottomNavigation.map((item) => {
+                            const NavIcon = item.icon;
+                            return (
+                                <NavLink key={item.route} to={item.route} className={({ isActive }) => `student-bottom-navigation__link ${isActive ? 'is-active' : ''}`}>
+                                    <span className="student-bottom-navigation__icon"><NavIcon size={22} weight="duotone" aria-hidden="true" /></span>
+                                    <span>{item.label}</span>
+                                </NavLink>
+                            );
+                        })}
+                    </div>
+                </nav>
+            )}
         </div>
     );
 }
