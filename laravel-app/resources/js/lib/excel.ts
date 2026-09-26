@@ -1,4 +1,5 @@
 import { strToU8, zipSync } from 'fflate';
+import { apiPost } from './api';
 
 export type ExcelCell = string | number | boolean | null | undefined;
 
@@ -116,6 +117,19 @@ export function downloadExcel(fileName: string, sheets: ExcelSheet[]): void {
     anchor.click();
     anchor.remove();
     URL.revokeObjectURL(url);
+
+    try {
+        const totalRows = sheets.reduce((acc, sheet) => acc + (sheet.rows?.length ?? 0), 0);
+        apiPost('/api/v1/reports/audit-export', {
+            report_name: fileName,
+            row_count: totalRows,
+            sheets: sheets.map((s) => ({ name: s.name, rows: s.rows?.length ?? 0 })),
+        }).catch(() => {
+            // Silently ignore audit log failure on frontend so export isn't blocked
+        });
+    } catch {
+        // Silently ignore
+    }
 }
 
 export function createExcelFileBytes(sheets: ExcelSheet[]): Uint8Array {

@@ -16,3 +16,9 @@ tmp/
 *.tbk
 *.TBK
 *.BAK
+*.log
+query_*.php
+test_*.php
+read_dbf.php
+scratch/
+

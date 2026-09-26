@@ -44,4 +44,13 @@ class RoleMiddlewareTest extends TestCase
         $this->getJson('/api/v1/reports/students/exam-attendance')->assertForbidden();
         $this->getJson('/api/v1/reports/students/exam-eligible')->assertForbidden();
     }
+
+    public function test_student_is_denied_from_nnet_mutation_routes(): void
+    {
+        Sanctum::actingAs(User::factory()->create(['role' => 'student']));
+
+        $this->postJson('/api/v1/nnet/clear', [])->assertForbidden();
+        $this->postJson('/api/v1/nnet/records', [])->assertForbidden();
+        $this->postJson('/api/v1/nnet/import', [])->assertForbidden();
+    }
 }

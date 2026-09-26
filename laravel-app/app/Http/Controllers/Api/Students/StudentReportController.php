@@ -5,6 +5,7 @@ namespace App\Http\Controllers\Api\Students;
 use App\Domain\Students\Services\LegacyStudentReportService;
 use App\Domain\Students\Services\StudentReportService;
 use App\Http\Resources\Students\StudentReportResource;
+use App\Services\AuditService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Validation\Rule;
@@ -88,7 +89,39 @@ final class StudentReportController extends StudentsApiController
             ? $this->legacyReports->registrationStatistics($request->user(), (int) $request->attributes->get('district_id'), $filters)
             : $this->reports->registrationStatistics($request->user(), $filters);
 
+        if ($request->is('*export-data*')) {
+            AuditService::logFromRequest(
+                $request,
+                'reports.registration_statistics.exported',
+                'student_reports',
+                null,
+                [
+                    'filters' => array_filter($filters),
+                    'record_count' => count($data['items'] ?? $data['data'] ?? []),
+                ]
+            );
+        }
+
         return $this->reportResponse($request, $data, false);
+    }
+
+    public function auditExport(Request $request): JsonResponse
+    {
+        $validated = $request->validate([
+            'report_name' => ['required', 'string', 'max:150'],
+            'row_count' => ['nullable', 'integer', 'min:0'],
+            'sheets' => ['nullable', 'array'],
+        ]);
+
+        AuditService::logFromRequest(
+            $request,
+            'reports.data_exported',
+            'export',
+            null,
+            $validated
+        );
+
+        return response()->json(['success' => true]);
     }
 
     public function examAttendance(Request $request): JsonResponse

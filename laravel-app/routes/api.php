@@ -142,13 +142,15 @@ Route::prefix('v1')->group(function (): void {
         Route::post('/learning/registration/student/{student}', [CourseRegistrationController::class, 'saveRegistration'])->middleware('role:teacher,admin,super_admin');
 
         Route::get('/nnet/records', [\App\Http\Controllers\Api\NnetController::class, 'index']);
-        Route::get('/nnet/summary', [\App\Http\Controllers\Api\NnetController::class, 'summary']);
-        Route::post('/nnet/import', [\App\Http\Controllers\Api\NnetController::class, 'import']);
-        Route::post('/nnet/records', [\App\Http\Controllers\Api\NnetController::class, 'store']);
         Route::get('/nnet/records/{id}', [\App\Http\Controllers\Api\NnetController::class, 'show'])->whereNumber('id');
-        Route::put('/nnet/records/{id}', [\App\Http\Controllers\Api\NnetController::class, 'update'])->whereNumber('id');
-        Route::delete('/nnet/records/{id}', [\App\Http\Controllers\Api\NnetController::class, 'destroy'])->whereNumber('id');
-        Route::post('/nnet/clear', [\App\Http\Controllers\Api\NnetController::class, 'clear']);
+        Route::middleware('role:teacher,admin,super_admin')->group(function (): void {
+            Route::get('/nnet/summary', [\App\Http\Controllers\Api\NnetController::class, 'summary']);
+            Route::post('/nnet/import', [\App\Http\Controllers\Api\NnetController::class, 'import']);
+            Route::post('/nnet/records', [\App\Http\Controllers\Api\NnetController::class, 'store']);
+            Route::put('/nnet/records/{id}', [\App\Http\Controllers\Api\NnetController::class, 'update'])->whereNumber('id');
+            Route::delete('/nnet/records/{id}', [\App\Http\Controllers\Api\NnetController::class, 'destroy'])->whereNumber('id');
+            Route::post('/nnet/clear', [\App\Http\Controllers\Api\NnetController::class, 'clear']);
+        });
 
         Route::get('/my-learning', [CurrentStudentController::class, 'profile']);
         Route::get('/grades', [CurrentStudentController::class, 'grades']);
@@ -178,6 +180,7 @@ Route::prefix('v1')->group(function (): void {
             Route::get('/reports/students/grades-above-two', [StudentReportController::class, 'gradesAboveTwo']);
             Route::get('/reports/students/exam-attendance', [StudentReportController::class, 'examAttendance']);
             Route::get('/reports/students/exam-eligible', [StudentReportController::class, 'examEligibleStudents']);
+            Route::post('/reports/audit-export', [StudentReportController::class, 'auditExport']);
         });
         Route::get('/settings/profile', [ProfileController::class, 'show']);
         Route::patch('/settings/profile', [ProfileController::class, 'update']);

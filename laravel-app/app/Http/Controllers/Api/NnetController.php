@@ -4,6 +4,7 @@ namespace App\Http\Controllers\Api;
 
 use App\Domain\Students\Services\NnetService;
 use App\Http\Controllers\Controller;
+use App\Services\AuditService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 
@@ -79,6 +80,15 @@ final class NnetController extends Controller
 
         $result = $this->service->bulkImport($validated, $request->user());
 
+        AuditService::logFromRequest($request, 'nnet.records_imported', 'nnet_result', null, [
+            'education_level' => $validated['education_level'],
+            'academic_year' => $validated['academic_year'],
+            'round' => $validated['round'],
+            'imported' => $result['imported'] ?? 0,
+            'updated' => $result['updated'] ?? 0,
+            'total_processed' => $result['total_processed'] ?? 0,
+        ]);
+
         return response()->json([
             'message' => 'นำเข้าข้อมูลผลสอบ N-NET สำเร็จ',
             'data' => $result,
@@ -110,6 +120,13 @@ final class NnetController extends Controller
         ]);
 
         $record = $this->service->createRecord($validated, $request->user());
+
+        AuditService::logFromRequest($request, 'nnet.record_created', 'nnet_result', $record->id, [
+            'student_name' => $record->student_name,
+            'education_level' => $record->education_level,
+            'academic_year' => $record->academic_year,
+            'round' => $record->round,
+        ]);
 
         return response()->json([
             'message' => 'เพิ่มข้อมูล N-NET สำเร็จ',
@@ -144,6 +161,11 @@ final class NnetController extends Controller
 
         $record = $this->service->updateRecord($id, $validated, $request->user());
 
+        AuditService::logFromRequest($request, 'nnet.record_updated', 'nnet_result', $id, [
+            'student_name' => $record->student_name,
+            'updated_fields' => array_keys($validated),
+        ]);
+
         return response()->json([
             'message' => 'บันทึกการแก้ไขข้อมูลสำเร็จ',
             'data' => $record,
@@ -154,7 +176,14 @@ final class NnetController extends Controller
     {
         abort_unless(in_array($request->user()->role, ['teacher', 'admin', 'super_admin'], true), 403, 'ไม่มีสิทธิ์ลบข้อมูล N-NET');
 
+        $record = $this->service->getRecord($id, $request->user());
         $this->service->deleteRecord($id, $request->user());
+
+        AuditService::logFromRequest($request, 'nnet.record_deleted', 'nnet_result', $id, [
+            'student_name' => $record->student_name,
+            'academic_year' => $record->academic_year,
+            'round' => $record->round,
+        ]);
 
         return response()->json([
             'message' => 'ลบข้อมูลผลสอบเรียบร้อยแล้ว',
@@ -173,6 +202,11 @@ final class NnetController extends Controller
         ]);
 
         $count = $this->service->clearRecords($filters, $request->user());
+
+        AuditService::logFromRequest($request, 'nnet.records_cleared', 'nnet_result', null, [
+            'filters' => array_filter($filters),
+            'deleted_count' => $count,
+        ]);
 
         return response()->json([
             'message' => "ล้างข้อมูลเรียบร้อยแล้วทั้งหมด {$count} รายการ",
