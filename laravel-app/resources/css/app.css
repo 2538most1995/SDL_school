@@ -841,7 +841,7 @@ textarea {
 .student-bottom-navigation__inner {
     display: grid;
     max-width: 34rem;
-    grid-template-columns: repeat(4, minmax(0, 1fr));
+    grid-template-columns: repeat(5, minmax(0, 1fr));
     gap: 0.25rem;
     margin-inline: auto;
 }
@@ -884,94 +884,6 @@ textarea {
 
 .student-bottom-navigation__link:active {
     transform: scale(0.97);
-}
-
-.student-home-hero {
-    position: relative;
-    min-height: clamp(15.5rem, 31vw, 23rem);
-    overflow: hidden;
-    border: 1px solid color-mix(in srgb, var(--ui-accent-200) 78%, var(--ui-border));
-    border-radius: 22px;
-    background: var(--ui-accent-100);
-    box-shadow: 0 18px 44px color-mix(in srgb, var(--ui-accent-800) 12%, transparent);
-    isolation: isolate;
-}
-
-.student-home-hero > img {
-    position: absolute;
-    inset: 0;
-    width: 100%;
-    height: 100%;
-    object-fit: cover;
-    object-position: 66% center;
-}
-
-.student-home-hero__scrim {
-    position: absolute;
-    inset: 0;
-    background: linear-gradient(90deg, rgb(239 246 255 / 0.98) 0%, rgb(239 246 255 / 0.9) 37%, rgb(239 246 255 / 0.14) 70%);
-}
-
-.student-home-hero__content {
-    position: relative;
-    display: flex;
-    width: min(55%, 38rem);
-    min-height: inherit;
-    flex-direction: column;
-    align-items: flex-start;
-    justify-content: center;
-    padding: clamp(1.4rem, 4vw, 3.5rem);
-}
-
-.student-home-hero__badge {
-    display: inline-flex;
-    align-items: center;
-    gap: 0.45rem;
-    border-radius: 999px;
-    background: var(--ui-accent-600);
-    color: white;
-    padding: 0.45rem 0.8rem;
-    font-size: 0.75rem;
-    font-weight: 900;
-    box-shadow: 0 8px 18px color-mix(in srgb, var(--ui-accent-700) 20%, transparent);
-}
-
-.student-home-hero h1 {
-    max-width: 13ch;
-    margin-block-start: 1rem;
-    color: var(--ui-accent-950);
-    font-size: clamp(1.85rem, 4vw, 3.35rem);
-    font-weight: 900;
-    line-height: 1.14;
-    letter-spacing: -0.04em;
-}
-
-.student-home-hero__content > p:not(.student-home-hero__badge) {
-    margin-block-start: 0.75rem;
-    color: var(--ui-accent-900);
-    font-size: clamp(0.82rem, 1.5vw, 1.05rem);
-    font-weight: 700;
-    line-height: 1.7;
-}
-
-.student-home-hero__action {
-    display: inline-flex;
-    min-height: 2.75rem;
-    align-items: center;
-    gap: 0.45rem;
-    margin-block-start: 1.15rem;
-    border-radius: 999px;
-    background: var(--ui-accent-700);
-    color: white;
-    padding-inline: 1.1rem;
-    font-size: 0.78rem;
-    font-weight: 900;
-    box-shadow: 0 9px 20px color-mix(in srgb, var(--ui-accent-800) 20%, transparent);
-    transition: background-color 150ms ease, transform 150ms var(--ui-ease-out);
-}
-
-.student-home-hero__action:active {
-    transform: scale(0.98);
 }
 
 .student-welcome {
@@ -1156,19 +1068,10 @@ textarea {
     transform: scale(0.96);
 }
 
-.student-home-updates {
-    display: grid;
-    gap: 1rem;
-}
-
 @media (hover: hover) and (pointer: fine) {
     .student-desktop-navigation__link:not(.is-active):hover {
         background: var(--ui-accent-50);
         color: var(--ui-accent-800);
-    }
-
-    .student-home-hero__action:hover {
-        background: var(--ui-accent-800);
     }
 
     .student-menu-link:hover > span {
@@ -1186,47 +1089,9 @@ textarea {
         grid-template-columns: repeat(8, minmax(0, 1fr));
     }
 
-    .student-home-updates {
-        grid-template-columns: minmax(16rem, 0.8fr) minmax(0, 1.35fr);
-    }
 }
 
 @media (max-width: 639px) {
-    .student-home-hero {
-        min-height: 15rem;
-        border-radius: 18px;
-    }
-
-    .student-home-hero > img {
-        object-position: 61% center;
-    }
-
-    .student-home-hero__scrim {
-        background: linear-gradient(90deg, rgb(239 246 255 / 0.98) 0%, rgb(239 246 255 / 0.9) 48%, rgb(239 246 255 / 0.18) 100%);
-    }
-
-    .student-home-hero__content {
-        width: 68%;
-        padding: 1.15rem;
-    }
-
-    .student-home-hero h1 {
-        margin-block-start: 0.75rem;
-        font-size: 1.7rem;
-    }
-
-    .student-home-hero__content > p:not(.student-home-hero__badge) {
-        font-size: 0.74rem;
-        line-height: 1.55;
-    }
-
-    .student-home-hero__action {
-        min-height: 2.5rem;
-        margin-block-start: 0.8rem;
-        padding-inline: 0.9rem;
-        font-size: 0.7rem;
-    }
-
     .student-metric-grid {
         gap: 0.55rem;
     }
@@ -1237,10 +1102,6 @@ textarea {
         max-width: 10.2rem;
     }
 
-    .student-home-hero__content {
-        width: 74%;
-    }
-
     .student-menu-grid {
         grid-template-columns: repeat(3, minmax(0, 1fr));
     }
@@ -1249,15 +1110,6 @@ textarea {
 [data-ui-mode='dark'] .student-portal-header,
 [data-ui-mode='dark'] .student-bottom-navigation {
     background: color-mix(in srgb, var(--ui-surface) 95%, transparent);
-}
-
-[data-ui-mode='dark'] .student-home-hero__scrim {
-    background: linear-gradient(90deg, rgb(8 15 30 / 0.98) 0%, rgb(8 15 30 / 0.9) 42%, rgb(8 15 30 / 0.18) 75%);
-}
-
-[data-ui-mode='dark'] .student-home-hero h1,
-[data-ui-mode='dark'] .student-home-hero__content > p:not(.student-home-hero__badge) {
-    color: #eff6ff;
 }
 
 .student-dashboard-shell {

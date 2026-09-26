@@ -1,0 +1,1 @@
+import{Ft as e,ot as t}from"./app-DTrhS4GX.js";var n=e(),r={success:`success`,warning:`warning`,danger:`danger`,info:`informative`,neutral:`subtle`};function i({children:e,tone:i=`neutral`}){return(0,n.jsx)(t,{appearance:`tint`,color:r[i],size:`medium`,className:`ui-status-badge whitespace-nowrap font-bold`,children:e})}export{i as t};

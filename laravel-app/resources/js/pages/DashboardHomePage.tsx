@@ -15,7 +15,6 @@ import {
     GraduationCap,
     Heart,
     MapPin,
-    Megaphone,
     Sparkle,
     Student,
     Trophy,
@@ -271,8 +270,8 @@ function StudentFeaturedActivity({
         <section className="student-feature" aria-labelledby="student-feature-title">
             <div className="flex items-center justify-between gap-3">
                 <div>
-                    <p className="text-xs font-bold text-brand-700">อัปเดตล่าสุด</p>
-                    <h2 id="student-feature-title" className="mt-1 text-lg font-black text-slate-950">กิจกรรมล่าสุด</h2>
+                    <p className="text-xs font-bold text-brand-700">ข้อมูลล่าสุด</p>
+                    <h2 id="student-feature-title" className="mt-1 text-lg font-black text-slate-950">อัปเดตกิจกรรม</h2>
                 </div>
                 <button type="button" onClick={onShowAll} className="student-text-link" aria-haspopup="dialog">
                     ดูทั้งหมด <CaretRight size={15} weight="bold" aria-hidden="true" />
@@ -301,7 +300,7 @@ function StudentFeaturedActivity({
                     <strong>{item.title}</strong>
                     <span>
                         {formatEventDate(item.starts_at)}
-                        {item.location ? ` · ${item.location}` : ''}
+                        {item.location ? ` / ${item.location}` : ''}
                     </span>
                 </button>
             ) : (
@@ -490,7 +489,6 @@ function StudentDashboard({
     const todayLabel = new Intl.DateTimeFormat('th-TH', {
         weekday: 'long', day: 'numeric', month: 'long', year: 'numeric',
     }).format(new Date());
-    const heroImage = publicAssetUrl(branding?.dashboardHeroImageUrl) ?? withAppBasePath('/images/dashboard-hero-sena-v2.webp');
     const metrics: StudentMetricSpec[] = [
         {
             label: 'ผลการเรียน', eyebrow: 'คะแนนเฉลี่ยสะสม (GPA)', value: formatNumber(analytics.averages.gpax, 2),
@@ -509,16 +507,12 @@ function StudentDashboard({
 
     return (
         <div className="student-home space-y-6 pb-2">
-            <section className="student-home-hero" aria-labelledby="student-home-hero-title">
-                <img src={heroImage} alt="บรรยากาศการเรียนรู้ของนักศึกษา" fetchPriority="high" />
-                <span className="student-home-hero__scrim" aria-hidden="true" />
-                <div className="student-home-hero__content">
-                    <p className="student-home-hero__badge"><Megaphone size={17} weight="fill" aria-hidden="true" />ภาคเรียนปัจจุบัน</p>
-                    <h1 id="student-home-hero-title">พร้อมเรียนรู้ไปด้วยกัน</h1>
-                    <p>{analytics.current_term ? `ภาคเรียน ${analytics.current_term}` : 'ติดตามข้อมูลการเรียนล่าสุด'}<br />{branding?.districtName ?? portal.viewer.district}</p>
-                    <Link to="/learning" className="student-home-hero__action">เข้าสู่พื้นที่การเรียนรู้ <ArrowRight size={17} weight="bold" aria-hidden="true" /></Link>
-                </div>
-            </section>
+            <StudentFeaturedActivity
+                item={latestActivity}
+                loading={calendarPending}
+                onSelect={setSelectedActivity}
+                onShowAll={() => setActivityListOpen(true)}
+            />
 
             <section className="student-welcome" aria-labelledby="student-welcome-title">
                 <div className="student-welcome__copy">
@@ -566,15 +560,7 @@ function StudentDashboard({
                 </div>
             </section>
 
-            <section className="student-home-updates" aria-label="ปฏิทินและกิจกรรมล่าสุด">
-                <StudentCalendar events={events} />
-                <StudentFeaturedActivity
-                    item={latestActivity}
-                    loading={calendarPending}
-                    onSelect={setSelectedActivity}
-                    onShowAll={() => setActivityListOpen(true)}
-                />
-            </section>
+            <StudentCalendar events={events} />
             {activityListOpen && (
                 <StudentActivityList
                     items={calendarEvents}

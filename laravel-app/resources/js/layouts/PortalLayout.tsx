@@ -130,7 +130,7 @@ const studentPrimaryNavigation = [
     { route: '/learning/schedule', label: 'ตารางสอบ', icon: Clock },
 ] as const;
 
-const studentBottomNavigation = studentPrimaryNavigation.slice(1);
+const studentBottomNavigation = studentPrimaryNavigation;
 
 function SidebarSkeleton() {
     return (
