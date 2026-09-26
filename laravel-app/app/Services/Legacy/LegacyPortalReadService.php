@@ -182,6 +182,8 @@ final class LegacyPortalReadService
                 $startsAt = Carbon::parse($row->starts_at);
                 $endsAt = filled($row->ends_at ?? null) ? Carbon::parse($row->ends_at) : $startsAt;
                 $dailySchedule = $this->calendarDailySchedule($row, $startsAt, $endsAt);
+                $firstSchedule = $dailySchedule[0] ?? null;
+                $lastSchedule = $dailySchedule[array_key_last($dailySchedule)] ?? null;
                 $externalUrl = $this->safeHttpUrl((string) ($row->external_url ?? ''));
 
                 return [
@@ -204,7 +206,8 @@ final class LegacyPortalReadService
                     'raw' => [
                         'title' => (string) $row->title, 'event_date' => $startsAt->format('Y-m-d'),
                         'end_date' => $endsAt->format('Y-m-d'),
-                        'start_time' => $startsAt->format('H:i'), 'end_time' => $endsAt->format('H:i'),
+                        'start_time' => (string) ($firstSchedule['start_time'] ?? $startsAt->format('H:i')),
+                        'end_time' => (string) ($lastSchedule['end_time'] ?? $endsAt->format('H:i')),
                         'event_type' => (string) ($row->event_type ?? 'meeting'),
                         'location' => (string) ($row->location ?? ''), 'target_group' => (string) ($row->target_value ?? ''),
                         'notes' => (string) ($row->description ?? ''), 'external_url' => $externalUrl ?? '',
@@ -241,16 +244,20 @@ final class LegacyPortalReadService
         if (is_array($decoded) && $decoded !== []) {
             $schedule = [];
             foreach ($decoded as $day) {
-                if (! is_array($day)
-                    || preg_match('/^\d{4}-\d{2}-\d{2}$/', (string) ($day['date'] ?? '')) !== 1
-                    || preg_match('/^\d{2}:\d{2}$/', (string) ($day['start_time'] ?? '')) !== 1
-                    || preg_match('/^\d{2}:\d{2}$/', (string) ($day['end_time'] ?? '')) !== 1) {
+                if (! is_array($day)) {
+                    continue;
+                }
+                $startTime = trim((string) ($day['start_time'] ?? ''));
+                $endTime = trim((string) ($day['end_time'] ?? ''));
+                if (preg_match('/^\d{4}-\d{2}-\d{2}$/', (string) ($day['date'] ?? '')) !== 1
+                    || $startTime === '' || mb_strlen($startTime) > 80
+                    || $endTime === '' || mb_strlen($endTime) > 80) {
                     continue;
                 }
                 $schedule[] = [
                     'date' => (string) $day['date'],
-                    'start_time' => (string) $day['start_time'],
-                    'end_time' => (string) $day['end_time'],
+                    'start_time' => $startTime,
+                    'end_time' => $endTime,
                 ];
             }
             if ($schedule !== []) {

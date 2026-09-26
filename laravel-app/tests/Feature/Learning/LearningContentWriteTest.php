@@ -547,6 +547,48 @@ final class LearningContentWriteTest extends TestCase
         ])->assertUnprocessable()->assertJsonValidationErrors('daily_schedule');
     }
 
+    public function test_calendar_activity_accepts_free_text_schedule_labels(): void
+    {
+        $teacher = User::factory()->create([
+            'role' => 'teacher',
+            'district_id' => $this->district->id,
+            'assigned_groups' => [],
+        ]);
+        Sanctum::actingAs($teacher);
+
+        $created = $this->postJson('/api/v1/learning/calendar', [
+            'title' => 'กิจกรรมตามบริบทชุมชน',
+            'event_type' => 'activity',
+            'event_date' => '2026-08-21',
+            'end_date' => '2026-08-22',
+            'start_time' => 'หลังเคารพธงชาติ',
+            'end_time' => 'ก่อนพักกลางวัน',
+            'daily_schedule' => [
+                ['date' => '2026-08-21', 'start_time' => 'หลังเคารพธงชาติ', 'end_time' => 'ก่อนพักกลางวัน'],
+                ['date' => '2026-08-22', 'start_time' => 'ช่วงบ่าย', 'end_time' => 'จนเสร็จกิจกรรม'],
+            ],
+            'target_group' => '',
+        ])->assertCreated()
+            ->assertJsonPath('data.daily_schedule.0.start_time', 'หลังเคารพธงชาติ')
+            ->assertJsonPath('data.daily_schedule.1.end_time', 'จนเสร็จกิจกรรม');
+        $eventId = (int) $created->json('data.id');
+
+        $this->assertDatabaseHas('learning_calendar_events', [
+            'id' => $eventId,
+            'starts_at' => '2026-08-21 00:00:00',
+            'ends_at' => '2026-08-22 23:59:00',
+        ]);
+        $storedSchedule = json_decode((string) DB::table('learning_calendar_events')->where('id', $eventId)->value('daily_schedule'), true, 512, JSON_THROW_ON_ERROR);
+        $this->assertSame('หลังเคารพธงชาติ', $storedSchedule[0]['start_time']);
+        $this->assertSame('จนเสร็จกิจกรรม', $storedSchedule[1]['end_time']);
+
+        $this->getJson('/api/v1/learning/calendar')
+            ->assertOk()
+            ->assertJsonPath('data.0.raw.start_time', 'หลังเคารพธงชาติ')
+            ->assertJsonPath('data.0.raw.end_time', 'จนเสร็จกิจกรรม')
+            ->assertJsonPath('data.0.schedule_days.1.start_time', 'ช่วงบ่าย');
+    }
+
     public function test_admin_can_choose_one_dashboard_event_and_teacher_cannot_replace_it(): void
     {
         $admin = User::factory()->create([

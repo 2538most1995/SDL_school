@@ -125,7 +125,7 @@ function scheduleDateRange(start: string, end: string): string[] {
     return dates;
 }
 
-function scheduleForRange(start: string, end: string, existing: CalendarDaySchedule[], defaultStart = '09:00', defaultEnd = '12:00'): CalendarDaySchedule[] {
+function scheduleForRange(start: string, end: string, existing: CalendarDaySchedule[], defaultStart = '', defaultEnd = ''): CalendarDaySchedule[] {
     const byDate = new Map(existing.map((day) => [day.date, day]));
 
     return scheduleDateRange(start, end).map((date) => byDate.get(date) ?? { date, start_time: defaultStart, end_time: defaultEnd });
@@ -136,6 +136,12 @@ function formatScheduleDate(value: string): string {
     if (Number.isNaN(date.getTime())) return value;
 
     return new Intl.DateTimeFormat('th-TH', { weekday: 'short', day: 'numeric', month: 'short', year: 'numeric' }).format(date);
+}
+
+function formatScheduleTimeRange(start: string, end: string): string {
+    const isClockRange = /^(?:[01]\d|2[0-3]):[0-5]\d$/.test(start) && /^(?:[01]\d|2[0-3]):[0-5]\d$/.test(end);
+
+    return isClockRange ? `${start}-${end} น.` : `${start} - ${end}`;
 }
 
 function eventDateKeys(event: CalendarEvent, month: Date): string[] {
@@ -246,7 +252,7 @@ function CalendarDetail({ event, canManage, onClose, onEdit, onDelete }: {
                     <div className="mt-5 rounded-2xl bg-slate-50 p-4 text-sm">
                         <h3 className="font-black text-slate-900">วันและเวลาของกิจกรรม</h3>
                         <dl className="mt-3 divide-y divide-slate-200">
-                            {scheduleDays.length > 0 ? scheduleDays.map((day) => <div key={day.date} className="flex flex-wrap items-center justify-between gap-2 py-2.5 first:pt-0 last:pb-0"><dt className="font-bold text-slate-600">{formatScheduleDate(day.date)}</dt><dd className="font-black text-slate-900">{day.start_time}–{day.end_time} น.</dd></div>) : <><div><dt className="font-bold text-slate-500">วันและเวลาเริ่ม</dt><dd className="mt-1 font-black text-slate-900">{formatEventDateTime(event.starts_at)}</dd></div><div className="mt-3"><dt className="font-bold text-slate-500">วันและเวลาสิ้นสุด</dt><dd className="mt-1 font-black text-slate-900">{formatEventDateTime(event.ends_at)}</dd></div></>}
+                            {scheduleDays.length > 0 ? scheduleDays.map((day) => <div key={day.date} className="flex flex-wrap items-center justify-between gap-2 py-2.5 first:pt-0 last:pb-0"><dt className="font-bold text-slate-600">{formatScheduleDate(day.date)}</dt><dd className="font-black text-slate-900">{formatScheduleTimeRange(day.start_time, day.end_time)}</dd></div>) : <><div><dt className="font-bold text-slate-500">วันและเวลาเริ่ม</dt><dd className="mt-1 font-black text-slate-900">{formatEventDateTime(event.starts_at)}</dd></div><div className="mt-3"><dt className="font-bold text-slate-500">วันและเวลาสิ้นสุด</dt><dd className="mt-1 font-black text-slate-900">{formatEventDateTime(event.ends_at)}</dd></div></>}
                         </dl>
                         <div className="mt-4 border-t border-slate-200 pt-3"><span className="font-bold text-slate-500">สถานที่</span><strong className="mt-1 block text-slate-900">{event.location || 'ไม่ระบุสถานที่'}</strong></div>
                     </div>
@@ -283,8 +289,8 @@ function CalendarEditor({ event, pending, error, onClose, onSubmit, availableGro
         event_type: (raw?.event_type as CalendarDraft['event_type'] | undefined) ?? 'activity',
         event_date: initialDate,
         end_date: initialEndDate,
-        start_time: raw?.start_time ?? '09:00',
-        end_time: raw?.end_time ?? '12:00',
+        start_time: raw?.start_time ?? '',
+        end_time: raw?.end_time ?? '',
         location: raw?.location ?? '',
         target_group: matchedGroup?.code ?? raw?.target_group ?? '',
         notes: raw?.notes ?? '',
@@ -295,8 +301,8 @@ function CalendarEditor({ event, pending, error, onClose, onSubmit, availableGro
         initialDate,
         initialEndDate,
         existingSchedule,
-        raw?.start_time ?? '09:00',
-        raw?.end_time ?? '12:00',
+        raw?.start_time ?? '',
+        raw?.end_time ?? '',
     ));
     const [image, setImage] = useState<File | null>(null);
     const [removeImage, setRemoveImage] = useState(false);
@@ -346,8 +352,8 @@ function CalendarEditor({ event, pending, error, onClose, onSubmit, availableGro
                     <Field label="วันที่เริ่ม" required><Input type="date" value={draft.event_date} onChange={(_, data) => { const nextEnd = draft.end_date < data.value ? data.value : draft.end_date; setDraft({ ...draft, event_date: data.value, end_date: nextEnd }); setDailySchedule(scheduleForRange(data.value, nextEnd, dailySchedule, draft.start_time, draft.end_time)); }} required /></Field>
                     <Field label="วันที่สิ้นสุด" hint="กำหนดต่อเนื่องได้สูงสุด 31 วัน" required><Input type="date" min={draft.event_date} max={maxEndDate} value={draft.end_date} onChange={(_, data) => { setDraft({ ...draft, end_date: data.value }); setDailySchedule(scheduleForRange(draft.event_date, data.value, dailySchedule, draft.start_time, draft.end_time)); }} required /></Field>
                     <div className="rounded-2xl border border-slate-200 bg-slate-50 p-4 sm:col-span-2">
-                        <div><h3 className="text-sm font-black text-slate-900">เวลาเริ่มและสิ้นสุดในแต่ละวัน</h3><p className="mt-1 text-xs leading-5 text-slate-500">ปรับเวลาแยกกันได้ทุกวันที่อยู่ในช่วงกิจกรรม</p></div>
-                        <div className="mt-4 space-y-3">{dailySchedule.map((day, index) => <div key={day.date} className="grid gap-3 rounded-xl border border-slate-200 bg-white p-3 sm:grid-cols-[minmax(150px,1fr)_140px_140px] sm:items-end"><div><span className="text-xs font-bold text-slate-500">วันที่</span><strong className="mt-1 block text-sm text-slate-900">{formatScheduleDate(day.date)}</strong></div><Field label="เวลาเริ่ม" required><Input type="time" value={day.start_time} onChange={(_, data) => setDailySchedule((current) => current.map((item, itemIndex) => itemIndex === index ? { ...item, start_time: data.value } : item))} required /></Field><Field label="เวลาสิ้นสุด" required><Input type="time" value={day.end_time} onChange={(_, data) => setDailySchedule((current) => current.map((item, itemIndex) => itemIndex === index ? { ...item, end_time: data.value } : item))} required /></Field></div>)}</div>
+                        <div><h3 className="text-sm font-black text-slate-900">เวลาเริ่มและสิ้นสุดในแต่ละวัน</h3><p className="mt-1 text-xs leading-5 text-slate-500">พิมพ์ระบุได้อย่างอิสระ เช่น 09:00, ช่วงเช้า หรือหลังเลิกเรียน</p></div>
+                        <div className="mt-4 space-y-3">{dailySchedule.map((day, index) => <div key={day.date} className="grid gap-3 rounded-xl border border-slate-200 bg-white p-3 sm:grid-cols-[minmax(150px,1fr)_minmax(160px,1fr)_minmax(160px,1fr)] sm:items-end"><div><span className="text-xs font-bold text-slate-500">วันที่</span><strong className="mt-1 block text-sm text-slate-900">{formatScheduleDate(day.date)}</strong></div><Field label="เวลาเริ่ม" required><Input value={day.start_time} onChange={(_, data) => setDailySchedule((current) => current.map((item, itemIndex) => itemIndex === index ? { ...item, start_time: data.value } : item))} placeholder="เช่น 09:00 หรือ ช่วงเช้า" maxLength={80} required /></Field><Field label="เวลาสิ้นสุด" required><Input value={day.end_time} onChange={(_, data) => setDailySchedule((current) => current.map((item, itemIndex) => itemIndex === index ? { ...item, end_time: data.value } : item))} placeholder="เช่น 12:00 หรือ ก่อนพักเที่ยง" maxLength={80} required /></Field></div>)}</div>
                     </div>
                     <Field label="สถานที่"><Input value={draft.location} onChange={(_, data) => setDraft({ ...draft, location: data.value })} maxLength={255} /></Field>
                     <Field label="กลุ่มเป้าหมาย" hint="เลือกทุกกลุ่มเพื่อให้นักศึกษาทั้งอำเภอมองเห็น"><Select value={draft.target_group} onChange={(_, data) => setDraft({ ...draft, target_group: data.value })}><option value="">ทุกกลุ่มเรียนในอำเภอ</option>{availableGroups.map((group) => <option key={group.code} value={group.code}>{group.label} · รหัส {group.code}</option>)}</Select></Field>

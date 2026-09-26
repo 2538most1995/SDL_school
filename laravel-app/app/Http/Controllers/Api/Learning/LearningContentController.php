@@ -199,15 +199,15 @@ final class LearningContentController extends Controller
             'calendar' => [
                 'title' => ['required', 'string', 'max:220'], 'event_date' => ['required', 'date_format:Y-m-d'],
                 'end_date' => ['nullable', 'date_format:Y-m-d', 'after_or_equal:event_date'],
-                'start_time' => ['required', 'date_format:H:i'], 'end_time' => ['required', 'date_format:H:i'],
+                'start_time' => ['required', 'string', 'max:80'], 'end_time' => ['required', 'string', 'max:80'],
                 'event_type' => ['sometimes', Rule::in(['meeting', 'activity', 'exam'])],
                 'location' => ['nullable', 'string', 'max:255'], 'target_group' => ['nullable', 'string', 'max:120'],
                 'external_url' => ['nullable', 'url:http,https', 'max:2000'],
                 'featured_on_dashboard' => ['sometimes', 'boolean'],
                 'daily_schedule' => ['nullable', 'array', 'max:31'],
                 'daily_schedule.*.date' => ['required', 'date_format:Y-m-d'],
-                'daily_schedule.*.start_time' => ['required', 'date_format:H:i'],
-                'daily_schedule.*.end_time' => ['required', 'date_format:H:i'],
+                'daily_schedule.*.start_time' => ['required', 'string', 'max:80'],
+                'daily_schedule.*.end_time' => ['required', 'string', 'max:80'],
                 'notes' => ['nullable', 'string', 'max:5000'], 'remove_image' => ['sometimes', 'boolean'],
                 'image' => ['nullable', 'file', 'image', 'mimes:jpg,jpeg,png,webp', 'max:6144', 'dimensions:min_width=480,min_height=270,max_width=6000,max_height=6000'],
             ],
@@ -312,8 +312,8 @@ final class LearningContentController extends Controller
                 'title' => $values['title'],
                 'description' => $values['notes'] ?? null,
                 'event_type' => $values['event_type'] ?? 'meeting',
-                'starts_at' => $values['event_date'].' '.$values['start_time'].':00',
-                'ends_at' => $values['end_date'].' '.$values['end_time'].':00',
+                'starts_at' => $values['event_date'].' '.$this->sortableScheduleTime((string) $values['start_time'], '00:00').':00',
+                'ends_at' => $values['end_date'].' '.$this->sortableScheduleTime((string) $values['end_time'], '23:59').':00',
                 'location' => $values['location'] ?? null,
                 'target_type' => filled($values['target_group'] ?? null) ? 'group' : 'all',
                 'target_value' => ($values['target_group'] ?? null) ?: null,
@@ -428,10 +428,12 @@ final class LearningContentController extends Controller
             ]);
         }
 
-        return array_map(static function (array $day, int $index) use ($usesDailySchedule): array {
-            $startsAt = Carbon::createFromFormat('Y-m-d H:i', $day['date'].' '.$day['start_time']);
-            $endsAt = Carbon::createFromFormat('Y-m-d H:i', $day['date'].' '.$day['end_time']);
-            if (! $endsAt->greaterThan($startsAt)) {
+        return array_map(function (array $day, int $index) use ($usesDailySchedule): array {
+            $startTime = trim((string) $day['start_time']);
+            $endTime = trim((string) $day['end_time']);
+            $sortableStart = $this->sortableScheduleTime($startTime);
+            $sortableEnd = $this->sortableScheduleTime($endTime);
+            if ($sortableStart !== null && $sortableEnd !== null && $sortableEnd <= $sortableStart) {
                 throw ValidationException::withMessages([
                     $usesDailySchedule ? "daily_schedule.{$index}.end_time" : 'end_time' => 'เวลาสิ้นสุดของแต่ละวันต้องอยู่หลังเวลาเริ่ม',
                 ]);
@@ -439,10 +441,17 @@ final class LearningContentController extends Controller
 
             return [
                 'date' => (string) $day['date'],
-                'start_time' => (string) $day['start_time'],
-                'end_time' => (string) $day['end_time'],
+                'start_time' => $startTime,
+                'end_time' => $endTime,
             ];
         }, $provided, array_keys($provided));
+    }
+
+    private function sortableScheduleTime(string $value, ?string $fallback = null): ?string
+    {
+        $time = trim($value);
+
+        return preg_match('/^(?:[01]\d|2[0-3]):[0-5]\d$/', $time) === 1 ? $time : $fallback;
     }
 
     /** @param array<string, mixed> $values */

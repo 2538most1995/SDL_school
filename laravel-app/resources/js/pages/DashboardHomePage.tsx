@@ -179,6 +179,12 @@ const eventTimestamp = (item: CalendarItem) => {
     return Number.isNaN(value) ? 0 : value;
 };
 
+const formatScheduleTimeRange = (start: string, end: string) => {
+    const isClockRange = /^(?:[01]\d|2[0-3]):[0-5]\d$/.test(start) && /^(?:[01]\d|2[0-3]):[0-5]\d$/.test(end);
+
+    return isClockRange ? `${start}-${end} น.` : `${start} - ${end}`;
+};
+
 const eventDaysForMonth = (item: CalendarItem, year: number, month: number): number[] => {
     const start = new Date(item.starts_at.replace(' ', 'T'));
     const parsedEnd = new Date((item.ends_at || item.starts_at).replace(' ', 'T'));
@@ -343,7 +349,7 @@ function StudentActivityDetail({ item, onClose }: { item: CalendarItem; onClose:
                                 {scheduleDays.map((day) => (
                                     <div key={day.date}>
                                         <dt>{formatScheduleDate(day.date)}</dt>
-                                        <dd>{day.start_time}-{day.end_time} น.</dd>
+                                        <dd>{formatScheduleTimeRange(day.start_time, day.end_time)}</dd>
                                     </div>
                                 ))}
                             </dl>
