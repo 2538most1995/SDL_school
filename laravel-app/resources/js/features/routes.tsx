@@ -21,6 +21,7 @@ const NnetImportPage = lazyWithReload(async () => ({ default: (await import('./n
 const NnetReportPage = lazyWithReload(async () => ({ default: (await import('./nnet')).NnetReportPage }));
 const AdminUsersPage = lazyWithReload(async () => ({ default: (await import('./admin')).AdminUsersPage }));
 const AdminAnnouncementsPage = lazyWithReload(async () => ({ default: (await import('./admin/AnnouncementsPage')).AdminAnnouncementsPage }));
+const AdminPublicRelationsPage = lazyWithReload(async () => ({ default: (await import('./admin/PublicRelationsPage')).AdminPublicRelationsPage }));
 const AdminExamRoomsPage = lazyWithReload(async () => ({ default: (await import('./admin')).AdminExamRoomsPage }));
 const AdminImportsPage = lazyWithReload(async () => ({ default: (await import('./admin')).AdminImportsPage }));
 const AdminDataMaintenancePage = lazyWithReload(async () => ({ default: (await import('./admin')).AdminDataMaintenancePage }));
@@ -28,6 +29,7 @@ const SuperAdminDistrictsPage = lazyWithReload(async () => ({ default: (await im
 const SuperAdminBrandingPage = lazyWithReload(async () => ({ default: (await import('./admin')).SuperAdminBrandingPage }));
 const ProfileSettingsPage = lazyWithReload(async () => ({ default: (await import('./settings')).ProfileSettingsPage }));
 const AppearanceSettingsPage = lazyWithReload(async () => ({ default: (await import('./settings')).AppearanceSettingsPage }));
+const PublicRelationsPage = lazyWithReload(async () => ({ default: (await import('./publicRelations/PublicRelationsPage')).PublicRelationsPage }));
 
 export type FeatureRole = 'student' | 'teacher' | 'admin' | 'super_admin';
 
@@ -45,6 +47,7 @@ export const featureRouteCatalog: FeatureRoute[] = [
     { path: '/grades', label: 'ผลการเรียน', roles: ['student', 'teacher', 'admin', 'super_admin'], element: <GradesPage /> },
     { path: '/kpch', label: 'กิจกรรม กพช.', roles: ['student', 'teacher', 'admin', 'super_admin'], element: <AchievementPage kind="kpch" /> },
     { path: '/moral', label: 'คุณธรรม', roles: ['student', 'teacher', 'admin', 'super_admin'], element: <AchievementPage kind="moral" /> },
+    { path: '/public-relations', label: 'ข่าวประชาสัมพันธ์', roles: ['student'], element: <PublicRelationsPage /> },
 
     { path: '/reports/overview', label: 'รายงานสถิติ', roles: ['teacher', 'admin', 'super_admin'], element: <StatisticsOverviewPage /> },
     { path: '/reports/registration-statistics', label: 'สถิตินักศึกษาลงทะเบียน', roles: ['teacher', 'admin', 'super_admin'], element: <RegistrationStatisticsPage /> },
@@ -73,6 +76,7 @@ export const featureRouteCatalog: FeatureRoute[] = [
 
     { path: '/admin/users', label: 'ผู้ใช้งาน', roles: ['admin', 'super_admin'], element: <AdminUsersPage /> },
     { path: '/admin/announcements', label: 'ประกาศป๊อปอัปนักศึกษา', roles: ['admin', 'super_admin'], element: <AdminAnnouncementsPage /> },
+    { path: '/admin/public-relations', label: 'ข่าวประชาสัมพันธ์', roles: ['admin', 'super_admin'], element: <AdminPublicRelationsPage /> },
     { path: '/admin/exam-rooms', label: 'ห้องสอบ', roles: ['teacher', 'admin', 'super_admin'], element: <AdminExamRoomsPage /> },
     { path: '/admin/imports', label: 'นำเข้าข้อมูล', roles: ['admin', 'super_admin'], element: <AdminImportsPage /> },
     { path: '/admin/data-maintenance', label: 'ดูแลข้อมูล', roles: ['admin', 'super_admin'], element: <AdminDataMaintenancePage /> },

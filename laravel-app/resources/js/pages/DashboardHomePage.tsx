@@ -1,8 +1,6 @@
 import { useQuery } from '@tanstack/react-query';
 import {
     ArrowRight,
-    ArrowSquareOut,
-    ArrowsOut,
     Bell,
     BookOpenText,
     Books,
@@ -15,15 +13,15 @@ import {
     GraduationCap,
     Heart,
     MapPin,
+    Newspaper,
     Sparkle,
     Student,
     Trophy,
     UsersThree,
     WarningCircle,
-    X,
 } from '@phosphor-icons/react';
 import type { Icon } from '@phosphor-icons/react';
-import { useState, type ReactNode } from 'react';
+import { type ReactNode } from 'react';
 import { Link } from 'react-router-dom';
 import { useDemoRole, type DemoRole } from '../context/DemoRoleContext';
 import { apiGet } from '../lib/api';
@@ -108,6 +106,16 @@ type StudentMenuSpec = {
     description: string;
     route: string;
     icon: Icon;
+    tone: 'blue' | 'violet' | 'rose' | 'teal' | 'amber' | 'sky' | 'emerald' | 'indigo';
+};
+
+type PublicRelationsPost = {
+    id: number;
+    title: string;
+    description: string;
+    image_url: string | null;
+    published_at: string | null;
+    updated_at: string | null;
 };
 
 const quickMenu: Array<{ label: string; description: string; route: string; icon: Icon; tone: DashboardTone }> = [
@@ -116,14 +124,14 @@ const quickMenu: Array<{ label: string; description: string; route: string; icon
 ];
 
 const studentMenu: StudentMenuSpec[] = [
-    { label: 'ข้อมูลส่วนตัว', description: 'โปรไฟล์และสถานะการศึกษา', route: '/my-learning', icon: Student },
-    { label: 'พื้นที่การเรียนรู้', description: 'ภาพรวมงานและบทเรียน', route: '/learning', icon: GraduationCap },
-    { label: 'งานและการส่งงาน', description: 'ติดตามกำหนดและส่งงาน', route: '/learning/assignments', icon: BookOpenText },
-    { label: 'คลังสื่อ', description: 'เอกสารและสื่อการเรียน', route: '/learning/resources', icon: Books },
-    { label: 'ปฏิทินพบกลุ่ม', description: 'กิจกรรมและวันนัดหมาย', route: '/learning/calendar', icon: CalendarBlank },
-    { label: 'ตารางสอบ', description: 'วัน เวลา และห้องสอบ', route: '/learning/schedule', icon: Clock },
-    { label: 'เช็คชื่อเข้าสอบ', description: 'ตรวจสอบสถานะการเข้าสอบ', route: '/learning/exam-attendance-check', icon: CheckSquare },
-    { label: 'รายงานผล N-NET', description: 'ดูผลสอบรายสาระ', route: '/n-net/report', icon: Trophy },
+    { label: 'ข้อมูลส่วนตัว', description: 'โปรไฟล์และสถานะการศึกษา', route: '/my-learning', icon: Student, tone: 'blue' },
+    { label: 'พื้นที่การเรียนรู้', description: 'ภาพรวมงานและบทเรียน', route: '/learning', icon: GraduationCap, tone: 'violet' },
+    { label: 'งานและการส่งงาน', description: 'ติดตามกำหนดและส่งงาน', route: '/learning/assignments', icon: BookOpenText, tone: 'rose' },
+    { label: 'คลังสื่อ', description: 'เอกสารและสื่อการเรียน', route: '/learning/resources', icon: Books, tone: 'teal' },
+    { label: 'ข่าวประชาสัมพันธ์', description: 'ข่าวและข้อมูลสำคัญ', route: '/public-relations', icon: Newspaper, tone: 'amber' },
+    { label: 'ตารางสอบ', description: 'วัน เวลา และห้องสอบ', route: '/learning/schedule', icon: Clock, tone: 'sky' },
+    { label: 'เช็คชื่อเข้าสอบ', description: 'ตรวจสอบสถานะการเข้าสอบ', route: '/learning/exam-attendance-check', icon: CheckSquare, tone: 'emerald' },
+    { label: 'รายงานผล N-NET', description: 'ดูผลสอบรายสาระ', route: '/n-net/report', icon: Trophy, tone: 'indigo' },
 ];
 
 const formatNumber = (value: number | null, digits = 0) => value === null
@@ -135,22 +143,6 @@ const formatEventDate = (value: string) => {
     if (Number.isNaN(date.getTime())) return value || '-';
 
     return new Intl.DateTimeFormat('th-TH', { day: 'numeric', month: 'short', year: '2-digit' }).format(date);
-};
-
-const formatEventDateTime = (value: string) => {
-    const date = new Date(value.replace(' ', 'T'));
-    if (Number.isNaN(date.getTime())) return value || '-';
-
-    return new Intl.DateTimeFormat('th-TH', {
-        day: 'numeric', month: 'long', year: 'numeric', hour: '2-digit', minute: '2-digit',
-    }).format(date);
-};
-
-const formatScheduleDate = (value: string) => {
-    const date = new Date(`${value}T00:00:00`);
-    if (Number.isNaN(date.getTime())) return value;
-
-    return new Intl.DateTimeFormat('th-TH', { weekday: 'short', day: 'numeric', month: 'short', year: 'numeric' }).format(date);
 };
 
 const shortLevelLabel = (label: string) => ({
@@ -174,17 +166,6 @@ function DashboardSkeleton() {
 }
 
 const calendarWeekdays = ['อา', 'จ', 'อ', 'พ', 'พฤ', 'ศ', 'ส'];
-
-const eventTimestamp = (item: CalendarItem) => {
-    const value = new Date(item.starts_at.replace(' ', 'T')).getTime();
-    return Number.isNaN(value) ? 0 : value;
-};
-
-const formatScheduleTimeRange = (start: string, end: string) => {
-    const isClockRange = /^(?:[01]\d|2[0-3]):[0-5]\d$/.test(start) && /^(?:[01]\d|2[0-3]):[0-5]\d$/.test(end);
-
-    return isClockRange ? `${start}-${end} น.` : `${start} - ${end}`;
-};
 
 const eventDaysForMonth = (item: CalendarItem, year: number, month: number): number[] => {
     const start = new Date(item.starts_at.replace(' ', 'T'));
@@ -253,171 +234,49 @@ function StudentCalendar({ events }: { events: CalendarItem[] }) {
     );
 }
 
-const calendarTypeLabel: Record<CalendarItem['type'], string> = {
-    assignment: 'งาน',
-    activity: 'กิจกรรม',
-    meeting: 'พบกลุ่ม',
-    exam: 'สอบ',
-};
-
-function StudentFeaturedActivity({
-    item,
-    loading,
-    onSelect,
-    onShowAll,
-}: {
-    item?: CalendarItem;
-    loading: boolean;
-    onSelect: (item: CalendarItem) => void;
-    onShowAll: () => void;
-}) {
+function StudentFeaturedNews({ item, loading }: { item?: PublicRelationsPost; loading: boolean }) {
     const imageUrl = item?.image_url ? withAppBasePath(item.image_url) : null;
-    const FeatureIcon = item?.type === 'exam' ? Bell : CalendarBlank;
 
     return (
         <section className="student-feature" aria-labelledby="student-feature-title">
             <div className="flex items-center justify-between gap-3">
                 <div>
-                    <p className="text-xs font-bold text-brand-700">ข้อมูลล่าสุด</p>
-                    <h2 id="student-feature-title" className="mt-1 text-lg font-black text-slate-950">อัปเดตกิจกรรม</h2>
+                    <p className="text-xs font-bold text-sky-700">ข่าวสารล่าสุด</p>
+                    <h2 id="student-feature-title" className="mt-1 text-lg font-black text-slate-950">ข่าวประชาสัมพันธ์</h2>
                 </div>
-                <button type="button" onClick={onShowAll} className="student-text-link" aria-haspopup="dialog">
+                <Link to="/public-relations" className="student-text-link">
                     ดูทั้งหมด <CaretRight size={15} weight="bold" aria-hidden="true" />
-                </button>
+                </Link>
             </div>
             {loading ? (
                 <div className="mt-5 aspect-[16/9] animate-pulse rounded-[16px] bg-slate-100" />
             ) : item && imageUrl ? (
-                <button type="button" onClick={() => onSelect(item)} className="student-feature__media group mt-5 text-left" aria-haspopup="dialog" aria-label={`ดูรายละเอียด ${item.title}`}>
-                    <img src={imageUrl} alt={`ภาพประกอบ ${item.title}`} className="size-full object-cover" />
+                <Link to="/public-relations" className="student-feature__media group mt-5 text-left" aria-label={`อ่านข่าว ${item.title}`}>
+                    <img src={imageUrl} alt={`ภาพข่าว ${item.title}`} className="size-full object-cover" />
                     <span className="student-feature__scrim" aria-hidden="true" />
                     <span className="student-feature__caption">
                         <strong className="block text-base font-black leading-6 text-white sm:text-lg">{item.title}</strong>
-                        <span className="mt-1.5 flex flex-wrap items-center gap-x-3 gap-y-1 text-xs font-semibold text-white/85">
-                            <time dateTime={item.starts_at}>{formatEventDate(item.starts_at)}</time>
-                            {item.location && <span>{item.location}</span>}
-                        </span>
+                        <span className="mt-1.5 block max-w-[60ch] overflow-hidden text-xs font-semibold leading-5 text-white/85">{item.description}</span>
                     </span>
-                </button>
+                </Link>
             ) : item ? (
-                <button type="button" onClick={() => onSelect(item)} className="student-feature__spotlight mt-5 w-full text-left" aria-haspopup="dialog">
-                    <span className="student-feature__spotlight-visual" aria-hidden="true">
-                        <FeatureIcon size={58} weight="duotone" />
-                    </span>
+                <Link to="/public-relations" className="student-feature__spotlight mt-5 w-full text-left">
+                    <span className="student-feature__spotlight-visual" aria-hidden="true"><Newspaper size={58} weight="duotone" /></span>
                     <span className="student-feature__spotlight-copy">
-                        <span className="student-feature__spotlight-type">{calendarTypeLabel[item.type]}</span>
+                        <span className="student-feature__spotlight-type">ประชาสัมพันธ์</span>
                         <strong>{item.title}</strong>
-                        <span className="student-feature__spotlight-meta">
-                            <time dateTime={item.starts_at}>{formatEventDate(item.starts_at)}</time>
-                            {item.location && <span>{item.location}</span>}
-                        </span>
-                        <span className="student-feature__spotlight-action">ดูรายละเอียด <ArrowRight size={17} weight="bold" /></span>
+                        <span className="student-feature__spotlight-meta">{item.description}</span>
+                        <span className="student-feature__spotlight-action">อ่านรายละเอียด <ArrowRight size={17} weight="bold" /></span>
                     </span>
-                </button>
+                </Link>
             ) : (
                 <div className="student-feature__empty mt-5">
-                    <CalendarBlank size={30} weight="duotone" aria-hidden="true" />
-                    <strong>ยังไม่มีกิจกรรมล่าสุด</strong>
-                    <span>เมื่อครูเพิ่มกิจกรรม รายการล่าสุดจะแสดงที่นี่</span>
+                    <Newspaper size={30} weight="duotone" aria-hidden="true" />
+                    <strong>ยังไม่มีข่าวประชาสัมพันธ์</strong>
+                    <span>ข่าวใหม่จากผู้ดูแลอำเภอจะแสดงที่นี่</span>
                 </div>
             )}
         </section>
-    );
-}
-
-function StudentActivityDetail({ item, onClose }: { item: CalendarItem; onClose: () => void }) {
-    const [imageOpen, setImageOpen] = useState(false);
-    const imageUrl = item.image_url ? withAppBasePath(item.image_url) : null;
-    const scheduleDays = item.schedule_days ?? [];
-
-    return (
-        <div className="student-activity-overlay" role="dialog" aria-modal="true" aria-labelledby="student-activity-detail-title">
-            <section className="student-activity-dialog">
-                {imageUrl && (
-                    <button type="button" onClick={() => setImageOpen(true)} className="student-activity-dialog__image group" aria-label={`เปิดดูรูป ${item.title} ขนาดเต็ม`}>
-                        <img src={imageUrl} alt={`ภาพกิจกรรม ${item.title}`} />
-                        <span><ArrowsOut size={16} weight="bold" aria-hidden="true" />คลิกดูรูปเต็ม</span>
-                    </button>
-                )}
-                <div className="student-activity-dialog__body">
-                    <div className="flex items-start justify-between gap-4">
-                        <div className="min-w-0">
-                            <span className="student-activity-type">{calendarTypeLabel[item.type]}</span>
-                            <h2 id="student-activity-detail-title" className="mt-3 text-xl font-black leading-8 text-slate-950 sm:text-2xl">{item.title}</h2>
-                        </div>
-                        <button type="button" onClick={onClose} className="student-activity-dialog__close" aria-label="ปิดรายละเอียด"><X size={22} weight="bold" /></button>
-                    </div>
-                    <div className="student-activity-dialog__schedule">
-                        <h3>วันและเวลาของกิจกรรม</h3>
-                        {scheduleDays.length > 0 ? (
-                            <dl>
-                                {scheduleDays.map((day) => (
-                                    <div key={day.date}>
-                                        <dt>{formatScheduleDate(day.date)}</dt>
-                                        <dd>{formatScheduleTimeRange(day.start_time, day.end_time)}</dd>
-                                    </div>
-                                ))}
-                            </dl>
-                        ) : (
-                            <dl>
-                                <div><dt>เริ่ม</dt><dd>{formatEventDateTime(item.starts_at)}</dd></div>
-                                <div><dt>สิ้นสุด</dt><dd>{formatEventDateTime(item.ends_at)}</dd></div>
-                            </dl>
-                        )}
-                        <p><MapPin size={17} weight="duotone" aria-hidden="true" /><span><strong>สถานที่</strong>{item.location || 'ไม่ระบุสถานที่'}</span></p>
-                    </div>
-                    {item.description && <p className="student-activity-dialog__description">{item.description}</p>}
-                    <div className="mt-5 flex flex-wrap justify-end gap-2">
-                        {item.external_url && <a href={item.external_url} target="_blank" rel="noopener noreferrer" className="student-activity-dialog__link"><ArrowSquareOut size={18} weight="bold" />เปิดลิงก์กิจกรรม</a>}
-                        <button type="button" onClick={onClose} className="student-activity-dialog__primary">ปิด</button>
-                    </div>
-                </div>
-            </section>
-            {imageOpen && imageUrl && (
-                <div className="student-activity-image-viewer" role="dialog" aria-modal="true" aria-label={`รูป ${item.title} ขนาดเต็ม`} onClick={() => setImageOpen(false)}>
-                    <button type="button" onClick={() => setImageOpen(false)} aria-label="ปิดรูปขนาดเต็ม"><X size={25} weight="bold" /></button>
-                    <img src={imageUrl} alt={`ภาพกิจกรรม ${item.title}`} onClick={(event) => event.stopPropagation()} />
-                </div>
-            )}
-        </div>
-    );
-}
-
-function StudentActivityList({ items, onClose, onSelect }: {
-    items: CalendarItem[];
-    onClose: () => void;
-    onSelect: (item: CalendarItem) => void;
-}) {
-    return (
-        <div className="student-activity-overlay" role="dialog" aria-modal="true" aria-labelledby="student-activity-list-title">
-            <section className="student-activity-dialog student-activity-dialog--list">
-                <header className="student-activity-dialog__list-header">
-                    <div>
-                        <p>กิจกรรมของฉัน</p>
-                        <h2 id="student-activity-list-title">รายละเอียดกิจกรรมทั้งหมด</h2>
-                    </div>
-                    <button type="button" onClick={onClose} className="student-activity-dialog__close" aria-label="ปิดรายการกิจกรรม"><X size={22} weight="bold" /></button>
-                </header>
-                <div className="student-activity-list">
-                    {items.length > 0 ? items.map((item) => {
-                        const imageUrl = item.image_url ? withAppBasePath(item.image_url) : null;
-                        return (
-                            <article key={item.id} className="student-activity-list__item">
-                                {imageUrl && <img src={imageUrl} alt={`ภาพกิจกรรม ${item.title}`} loading="lazy" />}
-                                <div>
-                                    <span className="student-activity-type">{calendarTypeLabel[item.type]}</span>
-                                    <h3>{item.title}</h3>
-                                    <p><Clock size={16} weight="duotone" aria-hidden="true" />{formatEventDateTime(item.starts_at)}</p>
-                                    <p><MapPin size={16} weight="duotone" aria-hidden="true" />{item.location || 'ไม่ระบุสถานที่'}</p>
-                                    {item.description && <div className="student-activity-list__description">{item.description}</div>}
-                                    <button type="button" onClick={() => onSelect(item)}>ดูรายละเอียดทั้งหมด <CaretRight size={16} weight="bold" /></button>
-                                </div>
-                            </article>
-                        );
-                    }) : <div className="student-activity-list__empty"><CalendarBlank size={36} weight="duotone" /><strong>ยังไม่มีกิจกรรม</strong><span>เมื่อมีการเผยแพร่กิจกรรม รายการจะแสดงที่นี่</span></div>}
-                </div>
-            </section>
-        </div>
     );
 }
 
@@ -480,22 +339,18 @@ function StudentDashboard({
     portal,
     profile,
     events,
-    calendarPending,
+    news,
+    newsPending,
     branding,
 }: {
     portal: PortalData;
     profile?: StudentProfile;
     events: CalendarItem[];
-    calendarPending: boolean;
+    news: PublicRelationsPost[];
+    newsPending: boolean;
     branding?: PublicBranding;
 }) {
-    const [selectedActivity, setSelectedActivity] = useState<CalendarItem | null>(null);
-    const [activityListOpen, setActivityListOpen] = useState(false);
     const analytics = portal.analytics;
-    const calendarEvents = events
-        .filter((item) => item.type !== 'assignment')
-        .sort((left, right) => eventTimestamp(right) - eventTimestamp(left));
-    const latestActivity = calendarEvents.find((item) => item.featured_on_dashboard) ?? calendarEvents[0];
     const moralResult = analytics.moral.find((item) => item.value > 0)?.label ?? 'ยังไม่มีผล';
     const todayLabel = new Intl.DateTimeFormat('th-TH', {
         weekday: 'long', day: 'numeric', month: 'long', year: 'numeric',
@@ -519,12 +374,7 @@ function StudentDashboard({
 
     return (
         <div className="student-home space-y-6 pb-2">
-            <StudentFeaturedActivity
-                item={latestActivity}
-                loading={calendarPending}
-                onSelect={setSelectedActivity}
-                onShowAll={() => setActivityListOpen(true)}
-            />
+            <StudentFeaturedNews item={news[0]} loading={newsPending} />
 
             <section className="student-welcome" aria-labelledby="student-welcome-title">
                 <div className="student-welcome__identity">
@@ -568,13 +418,13 @@ function StudentDashboard({
                                 <p>เข้าถึงข้อมูลและงานที่ใช้บ่อย</p>
                             </div>
                         </div>
-                        <button type="button" onClick={() => setActivityListOpen(true)} className="student-text-link">ดูกิจกรรม <CaretRight size={15} weight="bold" aria-hidden="true" /></button>
+                        <Link to="/public-relations" className="student-text-link">ดูข่าว <CaretRight size={15} weight="bold" aria-hidden="true" /></Link>
                     </div>
                     <div className="student-menu-grid">
                         {studentMenu.map((item) => {
                             const MenuIcon = item.icon;
                             return (
-                                <Link key={item.route} to={item.route} className="student-menu-link">
+                                <Link key={item.route} to={item.route} className={`student-menu-link student-menu-link--${item.tone}`}>
                                     <span className="student-menu-link__icon"><MenuIcon size={24} weight="duotone" aria-hidden="true" /></span>
                                     <span className="student-menu-link__copy">
                                         <strong>{item.label}</strong>
@@ -589,17 +439,6 @@ function StudentDashboard({
 
                 <StudentCalendar events={events} />
             </div>
-            {activityListOpen && (
-                <StudentActivityList
-                    items={calendarEvents}
-                    onClose={() => setActivityListOpen(false)}
-                    onSelect={(item) => {
-                        setActivityListOpen(false);
-                        setSelectedActivity(item);
-                    }}
-                />
-            )}
-            {selectedActivity && <StudentActivityDetail item={selectedActivity} onClose={() => setSelectedActivity(null)} />}
         </div>
     );
 }
@@ -697,6 +536,12 @@ export function DashboardHomePage() {
         queryFn: ({ signal }) => apiGet<CalendarItem[]>('/api/v1/learning/calendar', signal).then((response) => response.data),
         staleTime: 2 * 60_000,
     });
+    const publicRelations = useQuery({
+        queryKey: ['public-relations', districtId],
+        queryFn: ({ signal }) => apiGet<PublicRelationsPost[]>('/api/v1/public-relations', signal).then((response) => response.data),
+        enabled: role === 'student',
+        staleTime: 2 * 60_000,
+    });
     const studentProfile = useQuery({
         queryKey: ['dashboard', 'student-profile', districtId],
         queryFn: ({ signal }) => apiGet<StudentProfile>('/api/v1/my-learning', signal).then((response) => response.data),
@@ -766,7 +611,8 @@ export function DashboardHomePage() {
                 portal={portal.data}
                 profile={studentProfile.data}
                 events={events}
-                calendarPending={calendar.isPending}
+                news={publicRelations.data ?? []}
+                newsPending={publicRelations.isPending}
                 branding={branding.data}
             />
         );

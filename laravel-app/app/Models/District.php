@@ -28,4 +28,9 @@ class District extends Model
     {
         return $this->hasMany(Announcement::class);
     }
+
+    public function publicRelationsPosts(): HasMany
+    {
+        return $this->hasMany(PublicRelationsPost::class);
+    }
 }

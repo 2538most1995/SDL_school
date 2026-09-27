@@ -6,6 +6,7 @@ use App\Http\Controllers\Api\Admin\DistrictController;
 use App\Http\Controllers\Api\Admin\ExamRoomController;
 use App\Http\Controllers\Api\Admin\ImportController;
 use App\Http\Controllers\Api\Admin\ImportSafetyController;
+use App\Http\Controllers\Api\Admin\PublicRelationsController;
 use App\Http\Controllers\Api\Admin\UserController;
 use App\Http\Controllers\Api\Auth\DistrictOptionsController;
 use App\Http\Controllers\Api\Auth\PublicBrandingController;
@@ -23,6 +24,7 @@ use App\Http\Controllers\Api\Learning\ResourceController;
 use App\Http\Controllers\Api\Learning\ResourceFileController;
 use App\Http\Controllers\Api\Learning\ScheduleController;
 use App\Http\Controllers\Api\Learning\ScoreController;
+use App\Http\Controllers\Api\NnetController;
 use App\Http\Controllers\Api\PortalController;
 use App\Http\Controllers\Api\PortalDemoController;
 use App\Http\Controllers\Api\Settings\AppearanceController;
@@ -36,6 +38,7 @@ use App\Http\Controllers\Api\Students\StudentExamScheduleController;
 use App\Http\Controllers\Api\Students\StudentGradesController;
 use App\Http\Controllers\Api\Students\StudentKpchController;
 use App\Http\Controllers\Api\Students\StudentMoralController;
+use App\Http\Controllers\Api\Students\StudentPublicRelationsController;
 use App\Http\Controllers\Api\Students\StudentReportController;
 use App\Http\Controllers\Api\Students\StudentSocialProfileController;
 use App\Http\Controllers\Api\Students\StudentSubjectsController;
@@ -141,15 +144,15 @@ Route::prefix('v1')->group(function (): void {
         Route::get('/learning/registration/student/{student}', [CourseRegistrationController::class, 'studentRegistration'])->middleware('role:teacher,admin,super_admin');
         Route::post('/learning/registration/student/{student}', [CourseRegistrationController::class, 'saveRegistration'])->middleware('role:teacher,admin,super_admin');
 
-        Route::get('/nnet/records', [\App\Http\Controllers\Api\NnetController::class, 'index']);
-        Route::get('/nnet/records/{id}', [\App\Http\Controllers\Api\NnetController::class, 'show'])->whereNumber('id');
+        Route::get('/nnet/records', [NnetController::class, 'index']);
+        Route::get('/nnet/records/{id}', [NnetController::class, 'show'])->whereNumber('id');
         Route::middleware('role:teacher,admin,super_admin')->group(function (): void {
-            Route::get('/nnet/summary', [\App\Http\Controllers\Api\NnetController::class, 'summary']);
-            Route::post('/nnet/import', [\App\Http\Controllers\Api\NnetController::class, 'import']);
-            Route::post('/nnet/records', [\App\Http\Controllers\Api\NnetController::class, 'store']);
-            Route::put('/nnet/records/{id}', [\App\Http\Controllers\Api\NnetController::class, 'update'])->whereNumber('id');
-            Route::delete('/nnet/records/{id}', [\App\Http\Controllers\Api\NnetController::class, 'destroy'])->whereNumber('id');
-            Route::post('/nnet/clear', [\App\Http\Controllers\Api\NnetController::class, 'clear']);
+            Route::get('/nnet/summary', [NnetController::class, 'summary']);
+            Route::post('/nnet/import', [NnetController::class, 'import']);
+            Route::post('/nnet/records', [NnetController::class, 'store']);
+            Route::put('/nnet/records/{id}', [NnetController::class, 'update'])->whereNumber('id');
+            Route::delete('/nnet/records/{id}', [NnetController::class, 'destroy'])->whereNumber('id');
+            Route::post('/nnet/clear', [NnetController::class, 'clear']);
         });
 
         Route::get('/my-learning', [CurrentStudentController::class, 'profile']);
@@ -158,6 +161,8 @@ Route::prefix('v1')->group(function (): void {
         Route::get('/moral', [CurrentStudentController::class, 'moral']);
         Route::get('/student/announcements/active', [StudentAnnouncementController::class, 'active'])->middleware('role:student');
         Route::get('/student/announcements/image', [StudentAnnouncementController::class, 'image'])->middleware('role:student');
+        Route::get('/public-relations', [StudentPublicRelationsController::class, 'index'])->middleware('role:student');
+        Route::get('/public-relations/{post}/image', [StudentPublicRelationsController::class, 'image'])->middleware('role:student')->whereNumber('post');
         Route::get('/students', [StudentDirectoryController::class, 'index']);
         Route::get('/students.php', [StudentDirectoryController::class, 'index']);
         Route::get('/students/{student}', [StudentDirectoryController::class, 'show']);
@@ -203,6 +208,12 @@ Route::prefix('v1')->group(function (): void {
             Route::patch('/admin/announcements/{announcement}/status', [AnnouncementController::class, 'updateStatus'])->whereNumber('announcement');
             Route::delete('/admin/announcements/{announcement}', [AnnouncementController::class, 'destroy'])->whereNumber('announcement');
             Route::get('/admin/announcements/{announcement}/image', [AnnouncementController::class, 'image'])->whereNumber('announcement');
+            Route::get('/admin/public-relations', [PublicRelationsController::class, 'index']);
+            Route::post('/admin/public-relations', [PublicRelationsController::class, 'store']);
+            Route::patch('/admin/public-relations/{post}', [PublicRelationsController::class, 'update'])->whereNumber('post');
+            Route::patch('/admin/public-relations/{post}/status', [PublicRelationsController::class, 'updateStatus'])->whereNumber('post');
+            Route::delete('/admin/public-relations/{post}', [PublicRelationsController::class, 'destroy'])->whereNumber('post');
+            Route::get('/admin/public-relations/{post}/image', [PublicRelationsController::class, 'image'])->whereNumber('post');
         });
 
     Route::middleware(['auth:sanctum', 'active', 'district', 'role:admin,super_admin'])

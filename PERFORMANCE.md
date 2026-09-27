@@ -89,6 +89,7 @@
 6. import batch/history joins: ตรวจ FK/index ของ `import_history_id`, (`district_id`, `batch_key`) และ ordering latest batch
 7. `announcements`: migration มี (`district_id`, `is_active`, `updated_at`) เพื่ออ่านประกาศที่เปิดล่าสุดโดยไม่สแกนข้ามอำเภอ และหน้า admin จำกัดผลลัพธ์ล่าสุดไว้ 100 รายการ; live cardinality และ MySQL plan ยัง `Not verified`
 8. `statistics_report_preferences`: unique (`user_id`, `district_id`, `report_key`) รองรับการโหลด/บันทึกรูปแบบรายงานหนึ่งแถวต่อ scope โดยตรง; live MySQL plan ยัง `Not verified`
+9. `public_relations_posts`: composite index (`district_id`, `is_published`, `published_at`) รองรับการอ่านข่าวที่เผยแพร่ล่าสุดของนักศึกษา หน้า admin จำกัด 100 รายการและหน้า student จำกัด 50 รายการ; รูปตอบด้วย private cache 1 ชั่วโมง แต่ live cardinality, response time และ MySQL plan ยัง `Not verified`
 
 ผลของ index ต่อ INSERT/UPDATE/DELETE และ execution plan จริง: `Not verified`.
 

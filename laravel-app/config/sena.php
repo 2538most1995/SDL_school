@@ -49,6 +49,7 @@ return [
             'color' => 'violet',
             'items' => [
                 ['key' => 'learning-home', 'label' => 'พื้นที่การเรียนรู้', 'description' => 'ภาพรวมการเรียนและการสอน', 'route' => '/learning', 'icon' => 'planet', 'roles' => ['student', 'teacher', 'admin', 'super_admin']],
+                ['key' => 'public-relations', 'label' => 'ข่าวประชาสัมพันธ์', 'description' => 'ข่าวสาร รูปภาพ และข้อมูลสำคัญจากอำเภอ', 'route' => '/public-relations', 'icon' => 'newspaper', 'roles' => ['student']],
                 ['key' => 'assignments', 'label' => 'งานและการส่งงาน', 'description' => 'มอบหมาย ส่ง ตรวจ และให้คะแนนงาน', 'route' => '/learning/assignments', 'icon' => 'assignment', 'roles' => ['student', 'teacher', 'admin', 'super_admin']],
                 ['key' => 'resources', 'label' => 'คลังสื่อ', 'description' => 'เอกสารและสื่อประกอบการเรียน', 'route' => '/learning/resources', 'icon' => 'folder', 'roles' => ['student', 'teacher', 'admin', 'super_admin']],
                 ['key' => 'lesson-plans', 'label' => 'แผนการสอน', 'description' => 'แผนการจัดการเรียนรู้ของครู', 'route' => '/learning/lesson-plans', 'icon' => 'notebook', 'roles' => ['teacher', 'admin', 'super_admin']],
@@ -75,6 +76,7 @@ return [
                 ['key' => 'districts', 'label' => 'ทะเบียนอำเภอ', 'description' => 'เพิ่มพื้นที่ใหม่ก่อนสร้างผู้ดูแลและนำเข้าข้อมูล', 'route' => '/super-admin/districts', 'icon' => 'buildings', 'roles' => ['super_admin']],
                 ['key' => 'users', 'label' => 'ผู้ใช้งาน', 'description' => 'สิทธิ์ ครู ผู้ดูแล และขอบเขตกลุ่ม', 'route' => '/admin/users', 'icon' => 'users-three', 'roles' => ['admin', 'super_admin']],
                 ['key' => 'announcements', 'label' => 'ประกาศป๊อปอัปนักศึกษา', 'description' => 'สร้างและเปิดป๊อปอัปประกาศพร้อมปุ่มลิงก์สำหรับนักศึกษาในอำเภอ', 'route' => '/admin/announcements', 'icon' => 'megaphone', 'roles' => ['admin', 'super_admin']],
+                ['key' => 'public-relations-admin', 'label' => 'ข่าวประชาสัมพันธ์', 'description' => 'อัปโหลดรูป เขียนรายละเอียด และเผยแพร่ข่าวให้นักศึกษาในอำเภอ', 'route' => '/admin/public-relations', 'icon' => 'newspaper', 'roles' => ['admin', 'super_admin']],
                 ['key' => 'exam-rooms', 'label' => 'ห้องสอบ', 'description' => 'จัดห้องสอบและตรวจสอบรายชื่อ', 'route' => '/admin/exam-rooms', 'icon' => 'door', 'roles' => ['teacher', 'admin', 'super_admin']],
                 ['key' => 'imports', 'label' => 'นำเข้าข้อมูล', 'description' => 'ZIP, DBF, batch และผล validation', 'route' => '/admin/imports', 'icon' => 'upload', 'roles' => ['admin', 'super_admin']],
                 ['key' => 'maintenance', 'label' => 'ดูแลข้อมูล', 'description' => 'ประวัติ batch และพื้นที่อันตราย', 'route' => '/admin/data-maintenance', 'icon' => 'database', 'roles' => ['admin', 'super_admin']],
