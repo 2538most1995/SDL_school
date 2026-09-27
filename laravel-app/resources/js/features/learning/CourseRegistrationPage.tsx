@@ -739,7 +739,7 @@ export function CourseRegistrationPage() {
                                             <h2 className="text-xl font-black text-slate-900">
                                                 {studentInfo?.name || studentDetail.student.name}
                                             </h2>
-                                            <StatusBadge tone="brand">
+                                            <StatusBadge tone="info">
                                                 {studentDetail.student.level_label}
                                             </StatusBadge>
                                         </div>

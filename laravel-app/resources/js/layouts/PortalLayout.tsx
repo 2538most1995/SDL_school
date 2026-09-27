@@ -349,8 +349,12 @@ export function PortalLayout() {
                                             end={item.route === '/app'}
                                             className={({ isActive }) => `student-desktop-navigation__link ${isActive ? 'is-active' : ''}`}
                                         >
-                                            <NavIcon size={17} weight="duotone" aria-hidden="true" />
-                                            <span>{item.label}</span>
+                                            {({ isActive }) => (
+                                                <>
+                                                    <NavIcon size={17} weight={isActive ? 'fill' : 'duotone'} aria-hidden="true" />
+                                                    <span>{item.label}</span>
+                                                </>
+                                            )}
                                         </NavLink>
                                     );
                                 })}
@@ -446,8 +450,12 @@ export function PortalLayout() {
                             const NavIcon = item.icon;
                             return (
                                 <NavLink key={item.route} to={item.route} className={({ isActive }) => `student-bottom-navigation__link ${isActive ? 'is-active' : ''}`}>
-                                    <span className="student-bottom-navigation__icon"><NavIcon size={22} weight="duotone" aria-hidden="true" /></span>
-                                    <span>{item.label}</span>
+                                    {({ isActive }) => (
+                                        <>
+                                            <span className="student-bottom-navigation__icon"><NavIcon size={22} weight={isActive ? 'fill' : 'duotone'} aria-hidden="true" /></span>
+                                            <span>{item.label}</span>
+                                        </>
+                                    )}
                                 </NavLink>
                             );
                         })}

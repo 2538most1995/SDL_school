@@ -794,8 +794,24 @@ textarea {
 
 .student-portal-header {
     border-color: color-mix(in srgb, var(--ui-accent-200) 65%, var(--ui-border));
-    background: color-mix(in srgb, var(--ui-page-top) 94%, transparent);
-    box-shadow: 0 8px 24px rgb(var(--ui-shadow) / 0.055);
+    background: color-mix(in srgb, var(--ui-page-top) 88%, transparent);
+    box-shadow: 0 10px 32px rgb(var(--ui-shadow) / 0.07);
+}
+
+.student-portal .portal-content {
+    background:
+        radial-gradient(circle at 8% 2%, color-mix(in srgb, var(--ui-accent-100) 54%, transparent), transparent 24rem),
+        radial-gradient(circle at 92% 12%, rgb(125 211 252 / 0.12), transparent 22rem),
+        var(--ui-page);
+}
+
+.student-desktop-navigation {
+    width: fit-content;
+    max-width: 41rem;
+    border: 1px solid color-mix(in srgb, var(--ui-accent-100) 64%, var(--ui-border));
+    border-radius: 15px;
+    background: color-mix(in srgb, var(--ui-surface-muted) 78%, transparent);
+    padding: 0.2rem;
 }
 
 .student-brand-link {
@@ -817,9 +833,9 @@ textarea {
 }
 
 .student-desktop-navigation__link.is-active {
-    background: var(--ui-accent-600);
+    background: linear-gradient(145deg, var(--ui-accent-500), var(--ui-accent-700));
     color: white;
-    box-shadow: 0 8px 18px color-mix(in srgb, var(--ui-accent-700) 22%, transparent);
+    box-shadow: 0 8px 20px color-mix(in srgb, var(--ui-accent-700) 24%, transparent), inset 0 1px 0 rgb(255 255 255 / 0.24);
 }
 
 .student-desktop-navigation__link:active {
@@ -828,14 +844,15 @@ textarea {
 
 .student-bottom-navigation {
     position: fixed;
-    inset-inline: 0;
-    inset-block-end: 0;
+    inset-inline: 0.75rem;
+    inset-block-end: max(0.65rem, env(safe-area-inset-bottom));
     z-index: 25;
-    border-block-start: 1px solid color-mix(in srgb, var(--ui-accent-200) 58%, var(--ui-border));
-    background: color-mix(in srgb, var(--ui-surface) 96%, transparent);
-    padding: 0.42rem 0.55rem max(0.42rem, env(safe-area-inset-bottom));
-    box-shadow: 0 -12px 30px rgb(var(--ui-shadow) / 0.1);
-    backdrop-filter: blur(18px);
+    border: 1px solid color-mix(in srgb, var(--ui-accent-200) 60%, var(--ui-border));
+    border-radius: 21px;
+    background: color-mix(in srgb, var(--ui-surface) 90%, transparent);
+    padding: 0.35rem;
+    box-shadow: 0 18px 48px rgb(var(--ui-shadow) / 0.2), inset 0 1px 0 rgb(255 255 255 / 0.52);
+    backdrop-filter: blur(22px) saturate(145%);
 }
 
 .student-bottom-navigation__inner {
@@ -849,12 +866,12 @@ textarea {
 .student-bottom-navigation__link {
     display: flex;
     min-width: 0;
-    min-height: 4.2rem;
+    min-height: 3.9rem;
     flex-direction: column;
     align-items: center;
     justify-content: center;
     gap: 0.2rem;
-    border-radius: 14px;
+    border-radius: 16px;
     color: var(--ui-text-soft);
     font-size: 0.64rem;
     font-weight: 800;
@@ -872,7 +889,7 @@ textarea {
 }
 
 .student-bottom-navigation__link.is-active {
-    background: color-mix(in srgb, var(--ui-accent-50) 78%, var(--ui-surface));
+    background: color-mix(in srgb, var(--ui-accent-100) 72%, var(--ui-surface));
     color: var(--ui-accent-800);
 }
 
@@ -890,43 +907,75 @@ textarea {
     display: grid;
     align-items: stretch;
     gap: 1rem;
+    overflow: hidden;
+    border: 1px solid color-mix(in srgb, var(--ui-accent-200) 60%, var(--ui-border));
+    border-radius: 20px;
+    background:
+        linear-gradient(120deg, color-mix(in srgb, var(--ui-accent-50) 86%, var(--ui-surface)), var(--ui-surface) 70%);
+    padding: clamp(1rem, 2vw, 1.4rem);
+    box-shadow: var(--ui-shadow-card);
+}
+
+.student-welcome__identity {
+    display: flex;
+    min-width: 0;
+    align-items: center;
+    gap: 1rem;
+}
+
+.student-welcome__avatar {
+    display: grid;
+    width: 4.25rem;
+    height: 4.25rem;
+    flex: 0 0 auto;
+    place-items: center;
+    border: 5px solid color-mix(in srgb, var(--ui-accent-100) 75%, var(--ui-surface));
+    border-radius: 18px;
+    background: linear-gradient(145deg, var(--ui-accent-500), var(--ui-accent-700));
+    color: white;
+    box-shadow: 0 12px 26px color-mix(in srgb, var(--ui-accent-700) 22%, transparent), inset 0 1px 0 rgb(255 255 255 / 0.3);
+    font-size: 1rem;
+    font-weight: 900;
 }
 
 .student-welcome__copy {
-    padding: 0.4rem 0.2rem;
+    min-width: 0;
 }
 
 .student-welcome__copy > p {
-    color: var(--ui-accent-700);
-    font-size: 0.9rem;
+    color: var(--ui-text-muted);
+    font-size: 0.76rem;
     font-weight: 800;
 }
 
 .student-welcome__copy h2 {
     margin-block-start: 0.2rem;
     color: var(--ui-text);
-    font-size: clamp(1.65rem, 3vw, 2.5rem);
+    font-size: clamp(1.45rem, 3vw, 2.25rem);
     font-weight: 900;
     line-height: 1.25;
     letter-spacing: -0.035em;
 }
 
-.student-welcome__copy > span,
-.student-welcome__copy > small {
-    display: block;
-    color: var(--ui-text-muted);
-    font-weight: 650;
-    line-height: 1.65;
+.student-welcome__chips {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.4rem;
+    margin-block-start: 0.6rem;
 }
 
-.student-welcome__copy > span {
-    margin-block-start: 0.2rem;
-    font-size: 0.88rem;
-}
-
-.student-welcome__copy > small {
-    margin-block-start: 0.15rem;
-    font-size: 0.72rem;
+.student-welcome__chips span {
+    display: inline-flex;
+    min-height: 1.8rem;
+    align-items: center;
+    gap: 0.35rem;
+    border: 1px solid color-mix(in srgb, var(--ui-accent-200) 60%, var(--ui-border));
+    border-radius: 999px;
+    background: color-mix(in srgb, var(--ui-surface) 84%, transparent);
+    color: var(--ui-accent-800);
+    padding-inline: 0.65rem;
+    font-size: 0.68rem;
+    font-weight: 800;
 }
 
 .student-today-card {
@@ -936,11 +985,12 @@ textarea {
     align-items: center;
     gap: 0.8rem;
     border: 1px solid color-mix(in srgb, var(--ui-accent-200) 62%, var(--ui-border));
-    border-radius: 18px;
-    background: var(--ui-surface);
+    border-radius: 16px;
+    background: color-mix(in srgb, var(--ui-surface) 86%, var(--ui-accent-50));
     color: var(--ui-accent-700);
     padding: 1rem;
-    box-shadow: var(--ui-shadow-card);
+    box-shadow: inset 0 1px 0 rgb(255 255 255 / 0.6);
+    transition: border-color 160ms ease, transform 160ms var(--ui-ease-out), box-shadow 160ms ease;
 }
 
 .student-today-card__icon {
@@ -986,7 +1036,7 @@ textarea {
 
 .student-metric-grid {
     display: grid;
-    grid-template-columns: repeat(3, minmax(0, 1fr));
+    grid-template-columns: 1.15fr 1fr 0.9fr;
     gap: 0.75rem;
 }
 
@@ -1027,44 +1077,78 @@ textarea {
     font-weight: 900;
 }
 
+.student-section-heading p {
+    margin-block-start: 0.15rem;
+    color: var(--ui-text-muted);
+    font-size: 0.7rem;
+    font-weight: 650;
+}
+
 .student-menu-grid {
     display: grid;
-    grid-template-columns: repeat(4, minmax(0, 1fr));
-    gap: 1rem 0.55rem;
-    margin-block-start: 1.35rem;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 0.65rem;
+    margin-block-start: 1.1rem;
 }
 
 .student-menu-link {
-    display: flex;
-    min-width: 0;
-    flex-direction: column;
-    align-items: center;
-    gap: 0.55rem;
-    color: var(--ui-text);
-    text-align: center;
-}
-
-.student-menu-link > span {
     display: grid;
-    width: clamp(3.2rem, 9vw, 4.2rem);
-    height: clamp(3.2rem, 9vw, 4.2rem);
+    min-width: 0;
+    min-height: 4.8rem;
+    grid-template-columns: auto minmax(0, 1fr) auto;
+    align-items: center;
+    gap: 0.7rem;
+    border: 1px solid color-mix(in srgb, var(--ui-accent-100) 58%, var(--ui-border));
+    border-radius: 16px;
+    background: color-mix(in srgb, var(--ui-surface-muted) 70%, var(--ui-surface));
+    color: var(--ui-text);
+    padding: 0.75rem;
+    text-align: start;
+    transition: border-color 160ms ease, background-color 160ms ease, transform 160ms var(--ui-ease-out), box-shadow 160ms ease;
+}
+
+.student-menu-link__icon {
+    display: grid;
+    width: 2.85rem;
+    height: 2.85rem;
+    flex: 0 0 auto;
     place-items: center;
-    border: 4px solid color-mix(in srgb, var(--ui-accent-100) 72%, var(--ui-surface));
-    border-radius: 999px;
-    background: linear-gradient(145deg, var(--ui-accent-500), var(--ui-accent-700));
-    color: white;
-    box-shadow: 0 10px 20px color-mix(in srgb, var(--ui-accent-700) 18%, transparent), inset 0 1px 0 rgb(255 255 255 / 0.28);
-    transition: transform 150ms var(--ui-ease-out), box-shadow 150ms ease;
+    border-radius: 14px;
+    background: color-mix(in srgb, var(--ui-accent-100) 78%, var(--ui-surface));
+    color: var(--ui-accent-700);
+    box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--ui-accent-200) 65%, transparent);
 }
 
-.student-menu-link strong {
-    max-width: 9rem;
-    font-size: 0.7rem;
-    font-weight: 800;
-    line-height: 1.4;
+.student-menu-link__copy {
+    min-width: 0;
 }
 
-.student-menu-link:active > span {
+.student-menu-link__copy strong,
+.student-menu-link__copy small {
+    display: block;
+}
+
+.student-menu-link__copy strong {
+    color: var(--ui-text);
+    font-size: 0.76rem;
+    font-weight: 900;
+    line-height: 1.45;
+}
+
+.student-menu-link__copy small {
+    display: none;
+    margin-block-start: 0.15rem;
+    color: var(--ui-text-muted);
+    font-size: 0.64rem;
+    font-weight: 650;
+    line-height: 1.45;
+}
+
+.student-menu-link__arrow {
+    color: var(--ui-text-soft);
+}
+
+.student-menu-link:active {
     transform: scale(0.96);
 }
 
@@ -1074,26 +1158,41 @@ textarea {
         color: var(--ui-accent-800);
     }
 
-    .student-menu-link:hover > span {
+    .student-today-card:hover,
+    .student-menu-link:hover {
+        border-color: var(--ui-accent-300);
         transform: translateY(-2px);
-        box-shadow: 0 14px 26px color-mix(in srgb, var(--ui-accent-700) 23%, transparent), inset 0 1px 0 rgb(255 255 255 / 0.28);
+        box-shadow: 0 12px 24px color-mix(in srgb, var(--ui-accent-700) 10%, transparent);
+    }
+
+    .student-menu-link:hover {
+        background: color-mix(in srgb, var(--ui-accent-50) 72%, var(--ui-surface));
     }
 }
 
 @media (min-width: 640px) {
     .student-welcome {
-        grid-template-columns: minmax(0, 1fr) minmax(18rem, 0.72fr);
+        grid-template-columns: minmax(0, 1fr) minmax(19rem, 0.72fr);
     }
 
-    .student-menu-grid {
-        grid-template-columns: repeat(8, minmax(0, 1fr));
+    .student-menu-link__copy small {
+        display: block;
     }
 
 }
 
 @media (max-width: 639px) {
     .student-metric-grid {
+        grid-template-columns: repeat(2, minmax(0, 1fr));
         gap: 0.55rem;
+    }
+
+    .student-metric-card:first-child {
+        grid-column: 1 / -1;
+    }
+
+    .student-menu-link__arrow {
+        display: none;
     }
 }
 
@@ -1103,7 +1202,7 @@ textarea {
     }
 
     .student-menu-grid {
-        grid-template-columns: repeat(3, minmax(0, 1fr));
+        grid-template-columns: minmax(0, 1fr);
     }
 }
 
@@ -1281,6 +1380,111 @@ textarea {
     overflow-wrap: anywhere;
 }
 
+.student-feature__spotlight {
+    display: grid;
+    min-height: clamp(14rem, 28vw, 19rem);
+    grid-template-columns: minmax(11rem, 0.72fr) minmax(0, 1.28fr);
+    overflow: hidden;
+    border: 1px solid color-mix(in srgb, var(--ui-accent-300) 68%, transparent);
+    border-radius: 17px;
+    background:
+        radial-gradient(circle at 14% 14%, rgb(255 255 255 / 0.2), transparent 12rem),
+        linear-gradient(135deg, var(--ui-accent-700), color-mix(in srgb, var(--ui-accent-950) 86%, #0e7490));
+    color: white;
+    box-shadow: 0 18px 38px color-mix(in srgb, var(--ui-accent-900) 22%, transparent), inset 0 1px 0 rgb(255 255 255 / 0.2);
+    transition: transform 180ms var(--ui-ease-out), box-shadow 180ms ease;
+}
+
+.student-feature__spotlight-visual {
+    position: relative;
+    display: grid;
+    min-height: 100%;
+    place-items: center;
+    overflow: hidden;
+    color: rgb(255 255 255 / 0.92);
+}
+
+.student-feature__spotlight-visual::before,
+.student-feature__spotlight-visual::after {
+    content: "";
+    position: absolute;
+    border: 1px solid rgb(255 255 255 / 0.18);
+    border-radius: 999px;
+}
+
+.student-feature__spotlight-visual::before {
+    width: 10rem;
+    height: 10rem;
+}
+
+.student-feature__spotlight-visual::after {
+    width: 7.25rem;
+    height: 7.25rem;
+    background: rgb(255 255 255 / 0.08);
+    box-shadow: inset 0 1px 0 rgb(255 255 255 / 0.18);
+}
+
+.student-feature__spotlight-visual svg {
+    position: relative;
+    z-index: 1;
+}
+
+.student-feature__spotlight-copy {
+    display: flex;
+    min-width: 0;
+    flex-direction: column;
+    align-items: flex-start;
+    justify-content: center;
+    padding: clamp(1.25rem, 4vw, 2.5rem);
+}
+
+.student-feature__spotlight-type {
+    display: inline-flex;
+    min-height: 1.75rem;
+    align-items: center;
+    border: 1px solid rgb(255 255 255 / 0.22);
+    border-radius: 999px;
+    background: rgb(255 255 255 / 0.12);
+    padding-inline: 0.7rem;
+    color: rgb(255 255 255 / 0.88);
+    font-size: 0.68rem;
+    font-weight: 850;
+}
+
+.student-feature__spotlight-copy > strong {
+    max-width: 24ch;
+    margin-block-start: 0.75rem;
+    font-size: clamp(1.25rem, 3vw, 2rem);
+    font-weight: 900;
+    line-height: 1.35;
+    letter-spacing: -0.02em;
+    overflow-wrap: anywhere;
+}
+
+.student-feature__spotlight-meta {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.35rem 1rem;
+    margin-block-start: 0.65rem;
+    color: rgb(255 255 255 / 0.72);
+    font-size: 0.76rem;
+    font-weight: 650;
+}
+
+.student-feature__spotlight-action {
+    display: inline-flex;
+    min-height: 2.45rem;
+    align-items: center;
+    gap: 0.45rem;
+    margin-block-start: 1.1rem;
+    border-radius: 12px;
+    background: white;
+    color: var(--ui-accent-800);
+    padding-inline: 0.9rem;
+    font-size: 0.76rem;
+    font-weight: 900;
+}
+
 .student-feature__empty {
     display: grid;
     min-height: 13rem;
@@ -1303,6 +1507,13 @@ textarea {
     max-width: 30ch;
     font-size: 0.75rem;
     line-height: 1.45;
+}
+
+.student-dashboard-grid {
+    display: grid;
+    min-width: 0;
+    gap: 1rem;
+    align-items: start;
 }
 
 .student-activity-overlay {
@@ -1703,10 +1914,24 @@ textarea {
     --student-metric-soft: #dbeafe;
     position: relative;
     overflow: hidden;
-    min-height: 15.5rem;
+    min-height: 13.8rem;
     padding: 1.2rem;
     border-color: color-mix(in srgb, var(--student-metric-accent) 28%, var(--ui-border));
     background: linear-gradient(145deg, color-mix(in srgb, var(--student-metric-soft) 74%, var(--ui-surface)), var(--ui-surface) 78%);
+    transition: transform 180ms var(--ui-ease-out), border-color 180ms ease, box-shadow 180ms ease;
+}
+
+.student-metric-card::after {
+    content: "";
+    position: absolute;
+    inset-inline-end: -2.4rem;
+    inset-block-start: -2.8rem;
+    width: 8rem;
+    height: 8rem;
+    border: 1px solid color-mix(in srgb, var(--student-metric-accent) 16%, transparent);
+    border-radius: 999px;
+    box-shadow: inset 0 0 0 1.15rem color-mix(in srgb, var(--student-metric-accent) 4%, transparent);
+    pointer-events: none;
 }
 
 .student-metric-card--rose {
@@ -1768,6 +1993,12 @@ textarea {
         transform: scale(1.025);
     }
 
+    .student-feature__spotlight:hover,
+    .student-metric-card:hover {
+        transform: translateY(-2px);
+        box-shadow: 0 18px 40px color-mix(in srgb, var(--student-metric-accent, var(--ui-accent-800)) 14%, transparent), 0 2px 5px rgb(var(--ui-shadow) / 0.05);
+    }
+
     .student-metric-card__action:hover {
         color: var(--student-metric-ink);
     }
@@ -1798,6 +2029,23 @@ textarea {
     }
 }
 
+@media (min-width: 960px) {
+    .student-menu-grid {
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+    }
+}
+
+@media (min-width: 1180px) {
+    .student-dashboard-grid {
+        grid-template-columns: minmax(0, 1.7fr) minmax(18rem, 0.75fr);
+    }
+
+    .student-dashboard-grid .student-calendar {
+        position: sticky;
+        inset-block-start: 6.3rem;
+    }
+}
+
 @media (min-width: 1280px) {
     .student-dashboard-shell {
         grid-template-columns: minmax(0, 1fr) clamp(15rem, 21vw, 19rem);
@@ -1818,6 +2066,29 @@ textarea {
         aspect-ratio: 4 / 3;
     }
 
+    .student-feature__spotlight {
+        min-height: 18.5rem;
+        grid-template-columns: 6.75rem minmax(0, 1fr);
+    }
+
+    .student-feature__spotlight-visual::before {
+        width: 7.5rem;
+        height: 7.5rem;
+    }
+
+    .student-feature__spotlight-visual::after {
+        width: 5.6rem;
+        height: 5.6rem;
+    }
+
+    .student-feature__spotlight-copy {
+        padding: 1rem;
+    }
+
+    .student-feature__spotlight-copy > strong {
+        font-size: 1.15rem;
+    }
+
     .student-calendar,
     .student-feature,
     .student-term-panel,
@@ -1826,7 +2097,7 @@ textarea {
     }
 
     .student-metric-card {
-        min-height: 13.7rem;
+        min-height: 11.6rem;
         padding: 0.85rem;
     }
 
@@ -1875,6 +2146,16 @@ textarea {
 
 [data-ui-mode='dark'] :where(.student-dashboard-shell, .student-calendar, .student-feature, .student-term-panel, .student-metric-card) {
     background: var(--ui-surface);
+}
+
+[data-ui-mode='dark'] .student-welcome,
+[data-ui-mode='dark'] .student-menu-panel {
+    background: color-mix(in srgb, var(--ui-surface) 94%, var(--ui-accent-950));
+}
+
+[data-ui-mode='dark'] .student-menu-link,
+[data-ui-mode='dark'] .student-today-card {
+    background: color-mix(in srgb, var(--ui-surface-muted) 82%, var(--ui-surface));
 }
 
 [data-ui-mode='dark'] .student-metric-card {

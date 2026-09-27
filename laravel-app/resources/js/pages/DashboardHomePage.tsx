@@ -105,6 +105,7 @@ type StudentMetricSpec = {
 
 type StudentMenuSpec = {
     label: string;
+    description: string;
     route: string;
     icon: Icon;
 };
@@ -115,14 +116,14 @@ const quickMenu: Array<{ label: string; description: string; route: string; icon
 ];
 
 const studentMenu: StudentMenuSpec[] = [
-    { label: 'ข้อมูลส่วนตัว', route: '/my-learning', icon: Student },
-    { label: 'พื้นที่การเรียนรู้', route: '/learning', icon: GraduationCap },
-    { label: 'งานและการส่งงาน', route: '/learning/assignments', icon: BookOpenText },
-    { label: 'คลังสื่อ', route: '/learning/resources', icon: Books },
-    { label: 'ปฏิทินพบกลุ่ม', route: '/learning/calendar', icon: CalendarBlank },
-    { label: 'ตารางสอบ', route: '/learning/schedule', icon: Clock },
-    { label: 'เช็คชื่อเข้าสอบ', route: '/learning/exam-attendance-check', icon: CheckSquare },
-    { label: 'รายงานผล N-NET', route: '/n-net/report', icon: Trophy },
+    { label: 'ข้อมูลส่วนตัว', description: 'โปรไฟล์และสถานะการศึกษา', route: '/my-learning', icon: Student },
+    { label: 'พื้นที่การเรียนรู้', description: 'ภาพรวมงานและบทเรียน', route: '/learning', icon: GraduationCap },
+    { label: 'งานและการส่งงาน', description: 'ติดตามกำหนดและส่งงาน', route: '/learning/assignments', icon: BookOpenText },
+    { label: 'คลังสื่อ', description: 'เอกสารและสื่อการเรียน', route: '/learning/resources', icon: Books },
+    { label: 'ปฏิทินพบกลุ่ม', description: 'กิจกรรมและวันนัดหมาย', route: '/learning/calendar', icon: CalendarBlank },
+    { label: 'ตารางสอบ', description: 'วัน เวลา และห้องสอบ', route: '/learning/schedule', icon: Clock },
+    { label: 'เช็คชื่อเข้าสอบ', description: 'ตรวจสอบสถานะการเข้าสอบ', route: '/learning/exam-attendance-check', icon: CheckSquare },
+    { label: 'รายงานผล N-NET', description: 'ดูผลสอบรายสาระ', route: '/n-net/report', icon: Trophy },
 ];
 
 const formatNumber = (value: number | null, digits = 0) => value === null
@@ -271,6 +272,7 @@ function StudentFeaturedActivity({
     onShowAll: () => void;
 }) {
     const imageUrl = item?.image_url ? withAppBasePath(item.image_url) : null;
+    const FeatureIcon = item?.type === 'exam' ? Bell : CalendarBlank;
 
     return (
         <section className="student-feature" aria-labelledby="student-feature-title">
@@ -298,15 +300,18 @@ function StudentFeaturedActivity({
                     </span>
                 </button>
             ) : item ? (
-                <button type="button" onClick={() => onSelect(item)} className="student-feature__empty mt-5 w-full" aria-haspopup="dialog">
-                    {item.type === 'exam'
-                        ? <Bell size={30} weight="duotone" aria-hidden="true" />
-                        : <CalendarBlank size={30} weight="duotone" aria-hidden="true" />}
-                    <span>{calendarTypeLabel[item.type]}</span>
-                    <strong>{item.title}</strong>
-                    <span>
-                        {formatEventDate(item.starts_at)}
-                        {item.location ? ` / ${item.location}` : ''}
+                <button type="button" onClick={() => onSelect(item)} className="student-feature__spotlight mt-5 w-full text-left" aria-haspopup="dialog">
+                    <span className="student-feature__spotlight-visual" aria-hidden="true">
+                        <FeatureIcon size={58} weight="duotone" />
+                    </span>
+                    <span className="student-feature__spotlight-copy">
+                        <span className="student-feature__spotlight-type">{calendarTypeLabel[item.type]}</span>
+                        <strong>{item.title}</strong>
+                        <span className="student-feature__spotlight-meta">
+                            <time dateTime={item.starts_at}>{formatEventDate(item.starts_at)}</time>
+                            {item.location && <span>{item.location}</span>}
+                        </span>
+                        <span className="student-feature__spotlight-action">ดูรายละเอียด <ArrowRight size={17} weight="bold" /></span>
                     </span>
                 </button>
             ) : (
@@ -495,6 +500,7 @@ function StudentDashboard({
     const todayLabel = new Intl.DateTimeFormat('th-TH', {
         weekday: 'long', day: 'numeric', month: 'long', year: 'numeric',
     }).format(new Date());
+    const studentInitials = portal.viewer.name.trim().split(/\s+/).slice(0, 2).map((part) => part.charAt(0)).join('') || 'นศ';
     const metrics: StudentMetricSpec[] = [
         {
             label: 'ผลการเรียน', eyebrow: 'คะแนนเฉลี่ยสะสม (GPA)', value: formatNumber(analytics.averages.gpax, 2),
@@ -521,11 +527,18 @@ function StudentDashboard({
             />
 
             <section className="student-welcome" aria-labelledby="student-welcome-title">
-                <div className="student-welcome__copy">
-                    <p>สวัสดี</p>
-                    <h2 id="student-welcome-title">{portal.viewer.name}</h2>
-                    <span>ยินดีต้อนรับสู่ {branding?.portalName ?? 'SDL School'}</span>
-                    {profile && <small>{profile.level} / {profile.group}</small>}
+                <div className="student-welcome__identity">
+                    <span className="student-welcome__avatar" aria-hidden="true">{studentInitials}</span>
+                    <div className="student-welcome__copy">
+                        <p>สวัสดี ยินดีต้อนรับสู่ {branding?.portalName ?? 'SDL School'}</p>
+                        <h2 id="student-welcome-title">{portal.viewer.name}</h2>
+                        {profile && (
+                            <div className="student-welcome__chips" aria-label="ข้อมูลการศึกษา">
+                                <span><GraduationCap size={16} weight="duotone" aria-hidden="true" />{profile.level}</span>
+                                <span><UsersThree size={16} weight="duotone" aria-hidden="true" />{profile.group}</span>
+                            </div>
+                        )}
+                    </div>
                 </div>
                 <Link to="/learning/calendar" className="student-today-card">
                     <span className="student-today-card__icon"><CalendarBlank size={23} weight="duotone" aria-hidden="true" /></span>
@@ -545,28 +558,37 @@ function StudentDashboard({
                 </div>
             </section>
 
-            <section className="student-menu-panel" aria-labelledby="student-menu-title">
-                <div className="student-section-heading">
-                    <div>
-                        <span className="student-section-heading__icon"><Books size={21} weight="duotone" aria-hidden="true" /></span>
-                        <h2 id="student-menu-title">เมนูการใช้งาน</h2>
+            <div className="student-dashboard-grid">
+                <section className="student-menu-panel" aria-labelledby="student-menu-title">
+                    <div className="student-section-heading">
+                        <div>
+                            <span className="student-section-heading__icon"><Books size={21} weight="duotone" aria-hidden="true" /></span>
+                            <div>
+                                <h2 id="student-menu-title">เมนูการใช้งาน</h2>
+                                <p>เข้าถึงข้อมูลและงานที่ใช้บ่อย</p>
+                            </div>
+                        </div>
+                        <button type="button" onClick={() => setActivityListOpen(true)} className="student-text-link">ดูกิจกรรม <CaretRight size={15} weight="bold" aria-hidden="true" /></button>
                     </div>
-                    <button type="button" onClick={() => setActivityListOpen(true)} className="student-text-link">ดูกิจกรรม <CaretRight size={15} weight="bold" aria-hidden="true" /></button>
-                </div>
-                <div className="student-menu-grid">
-                    {studentMenu.map((item) => {
-                        const MenuIcon = item.icon;
-                        return (
-                            <Link key={item.route} to={item.route} className="student-menu-link">
-                                <span><MenuIcon size={27} weight="duotone" aria-hidden="true" /></span>
-                                <strong>{item.label}</strong>
-                            </Link>
-                        );
-                    })}
-                </div>
-            </section>
+                    <div className="student-menu-grid">
+                        {studentMenu.map((item) => {
+                            const MenuIcon = item.icon;
+                            return (
+                                <Link key={item.route} to={item.route} className="student-menu-link">
+                                    <span className="student-menu-link__icon"><MenuIcon size={24} weight="duotone" aria-hidden="true" /></span>
+                                    <span className="student-menu-link__copy">
+                                        <strong>{item.label}</strong>
+                                        <small>{item.description}</small>
+                                    </span>
+                                    <CaretRight className="student-menu-link__arrow" size={17} weight="bold" aria-hidden="true" />
+                                </Link>
+                            );
+                        })}
+                    </div>
+                </section>
 
-            <StudentCalendar events={events} />
+                <StudentCalendar events={events} />
+            </div>
             {activityListOpen && (
                 <StudentActivityList
                     items={calendarEvents}
