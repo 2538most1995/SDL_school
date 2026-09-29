@@ -177,7 +177,7 @@ final class LegacyStudentReportServiceTest extends TestCase
         $queries = [];
         $connection = Mockery::mock(ConnectionInterface::class);
         $connection->shouldReceive('selectOne')
-            ->times(3)
+            ->times(5)
             ->andReturn((object) ['batch_key' => $batch]);
         $connection->shouldReceive('select')->andReturnUsing(
             function (string $query, array $bindings = [], bool $useReadPdo = true) use ($batch, &$queries): array {
@@ -206,7 +206,7 @@ final class LegacyStudentReportServiceTest extends TestCase
                             'typ_code' => '',
                             'subject_name' => 'เศรษฐกิจพอเพียง',
                             'subject_credit' => '2',
-                            'subject_type' => '1',
+                            'subject_type' => '2',
                             'prename' => 'นางสาว',
                             'first_name' => 'นักศึกษาเก่า',
                             'last_name' => 'ทดสอบ',
@@ -292,6 +292,26 @@ final class LegacyStudentReportServiceTest extends TestCase
         $this->assertSame(3, $gradeReport['summary']['registered_records']);
         $this->assertSame(1, $gradeReport['summary']['grade_two_or_above']);
         $this->assertSame(33.3, $gradeReport['summary']['success_rate']);
+
+        $compulsoryGradeReport = $service->gradesAboveTwo($teacher, 1, [
+            'term' => '2/2568',
+            'view' => 'subject',
+            'subject_type' => 'compulsory',
+        ]);
+        $this->assertSame(2, $compulsoryGradeReport['summary']['registered_records']);
+        $this->assertSame(0, $compulsoryGradeReport['summary']['grade_two_or_above']);
+        $this->assertTrue(collect($compulsoryGradeReport['items'])->every(
+            static fn (array $item): bool => $item['subject']['type'] === 'compulsory',
+        ));
+
+        $electiveGradeReport = $service->gradesAboveTwo($teacher, 1, [
+            'term' => '2/2568',
+            'view' => 'student',
+            'subject_type' => 'elective',
+        ]);
+        $this->assertSame(1, $electiveGradeReport['summary']['registered_records']);
+        $this->assertSame(1, $electiveGradeReport['summary']['successful_records']);
+        $this->assertSame(1, $electiveGradeReport['items'][0]['registered_subjects']);
 
         $attendanceReport = $service->examAttendance($teacher, 1, [
             'term' => '2/2568',

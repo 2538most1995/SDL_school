@@ -251,6 +251,35 @@ final class StudentApiTest extends TestCase
             ->assertJsonPath('data.items.0.term', '1/2568');
     }
 
+    public function test_grade_threshold_report_filters_compulsory_and_elective_subjects(): void
+    {
+        Sanctum::actingAs($this->viewer('admin'));
+
+        $compulsory = $this->getJson('/api/v1/reports/students/grades-above-two?term=2/2568&view=subject&level=3&subject_type=compulsory')
+            ->assertOk()
+            ->assertJsonPath('data.summary.subject_count', 1);
+        $this->assertNotEmpty($compulsory->json('data.items'));
+        $this->assertTrue(collect($compulsory->json('data.items'))->every(
+            static fn (array $item): bool => $item['subject']['type'] === 'compulsory',
+        ));
+
+        $elective = $this->getJson('/api/v1/reports/students/grades-above-two?term=2/2568&view=subject&level=3&subject_type=elective')
+            ->assertOk()
+            ->assertJsonPath('data.summary.subject_count', 2);
+        $this->assertNotEmpty($elective->json('data.items'));
+        $this->assertTrue(collect($elective->json('data.items'))->every(
+            static fn (array $item): bool => $item['subject']['type'] === 'elective',
+        ));
+
+        $this->getJson('/api/v1/reports/students/grades-above-two?term=2/2568&view=student&level=3&subject_type=elective')
+            ->assertOk()
+            ->assertJsonPath('data.items.0.registered_subjects', 2)
+            ->assertJsonPath('data.summary.subject_count', null);
+
+        $this->getJson('/api/v1/reports/students/grades-above-two?subject_type=required')
+            ->assertUnprocessable();
+    }
+
     public function test_expected_graduates_honours_the_selected_academic_term(): void
     {
         Sanctum::actingAs($this->viewer('admin'));

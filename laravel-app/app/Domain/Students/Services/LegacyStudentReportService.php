@@ -1123,6 +1123,13 @@ final readonly class LegacyStudentReportService
         $registrations = $selectedTerm === null
             ? []
             : $this->registeredSubjectRows($viewer, $sets, $filters, $selectedTerm);
+        $subjectType = trim((string) ($filters['subject_type'] ?? ''));
+        if ($kind === 'grade-threshold' && $subjectType !== '') {
+            $registrations = array_values(array_filter(
+                $registrations,
+                static fn (array $registration): bool => ($registration['subject_type'] ?? '') === $subjectType,
+            ));
+        }
 
         if (($filters['view'] ?? 'subject') === 'student') {
             return $this->historicalAcademicStudents($registrations, $terms, $selectedTerm, $kind);

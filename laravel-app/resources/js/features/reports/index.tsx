@@ -39,6 +39,7 @@ type ReportRow = {
     registeredCount?: number;
     successfulCount?: number;
     absentCount?: number;
+    subjectType?: 'compulsory' | 'elective';
 };
 
 type ReportPayload = {
@@ -52,6 +53,7 @@ type ReportPayload = {
 };
 
 type ViewMode = 'subject' | 'student';
+type SubjectTypeFilter = '' | 'compulsory' | 'elective';
 type FilterOption = { value: string | number; label: string };
 type AcademicSubjectRow = {
     id: string;
@@ -196,6 +198,7 @@ function normalizeReportPayload(kind: ReportKind, payload: unknown, fallback: Re
         const level = item.level && typeof item.level === 'object' ? item.level as Record<string, unknown> : {};
         const registered = Number(item.registered_students ?? 0);
         const successful = Number(kind === 'exam-attendance' ? item.attended_students : item.grade_two_or_above ?? 0);
+        const subjectType = String(subject.type ?? '') === 'elective' ? 'elective' : 'compulsory';
         return {
             id: `${String(item.term ?? 'term')}-${String(subject.code ?? index)}`,
             primary: String(subject.name ?? 'รายวิชา'),
@@ -205,6 +208,7 @@ function normalizeReportPayload(kind: ReportKind, payload: unknown, fallback: Re
             registeredCount: registered,
             successfulCount: successful,
             absentCount: Number(item.absent_students ?? 0),
+            subjectType,
         };
     });
     const summary = canonical.summary ?? {};
@@ -300,7 +304,7 @@ function academicStatCards(kind: ReportKind, viewMode: ViewMode, payload: Report
     ];
 }
 
-function AcademicStudentDetailDialog({ kind, student, term, onClose }: { kind: ReportKind; student: ReportRow; term: string; onClose: () => void }) {
+function AcademicStudentDetailDialog({ kind, student, term, subjectType, onClose }: { kind: ReportKind; student: ReportRow; term: string; subjectType: SubjectTypeFilter; onClose: () => void }) {
     const endpoint = kind === 'registered-subjects'
         ? `/api/v1/students/${encodeURIComponent(student.secondary)}/subjects?term=${encodeURIComponent(term)}`
         : `/api/v1/students/${encodeURIComponent(student.secondary)}/grades?term=${encodeURIComponent(term)}`;
@@ -320,11 +324,11 @@ function AcademicStudentDetailDialog({ kind, student, term, onClose }: { kind: R
             code,
             name,
             credits: Number(nestedSubject?.credits ?? item.credits ?? 0),
-            type: isElective ? 'elective' : 'compulsory',
+            type: isElective ? 'elective' as const : 'compulsory' as const,
             grade,
             attended: Boolean(item.exam_attended),
         };
-    }), [detail.data, term]);
+    }).filter((row) => subjectType === '' || row.type === subjectType), [detail.data, subjectType, term]);
 
     const creditSummary = useMemo(() => {
         let compulsory = 0;
@@ -469,6 +473,7 @@ export function ReportPage({ kind }: { kind: ReportKind }) {
     const [level, setLevel] = useState('');
     const [group, setGroup] = useState('');
     const [examStatus, setExamStatus] = useState('');
+    const [subjectType, setSubjectType] = useState<SubjectTypeFilter>('');
     const [viewMode, setViewMode] = useState<ViewMode>('subject');
     const [selectedStudent, setSelectedStudent] = useState<ReportRow | null>(null);
     const [selectedSubject, setSelectedSubject] = useState<ReportRow | null>(null);
@@ -487,7 +492,7 @@ export function ReportPage({ kind }: { kind: ReportKind }) {
         return { groups: meta?.filter_options?.groups ?? [] };
     }, [directoryOptions.data]);
     const report = useQuery({
-        queryKey: ['report', kind, term, deferredSearch, level, canFilterGroups ? group : '', viewMode, examStatus],
+        queryKey: ['report', kind, term, deferredSearch, level, canFilterGroups ? group : '', viewMode, examStatus, subjectType],
         queryFn: async ({ signal }) => {
             const params = new URLSearchParams({ search: deferredSearch });
             if (term) params.set('term', term);
@@ -497,6 +502,7 @@ export function ReportPage({ kind }: { kind: ReportKind }) {
             if (level) params.set('level', level);
             if (canFilterGroups && group) params.set('group', group);
             if (kind === 'expected-graduates' && examStatus) params.set('exam_status', examStatus);
+            if (kind === 'grade-threshold' && subjectType) params.set('subject_type', subjectType);
             const response = await getFeatureDataWithDemo<unknown>(`${config.endpoint}?${params.toString()}`, config.demo, signal);
             return { ...response, data: normalizeReportPayload(kind, response.data, { total: 0, active: 0, groups: 0, rows: [] }, viewMode) };
         },
@@ -517,6 +523,13 @@ export function ReportPage({ kind }: { kind: ReportKind }) {
             cell: ({ row }) => <div><p className="font-bold text-slate-950">{row.original.primary}</p><p className="mt-0.5 text-xs text-slate-500">{row.original.secondary}</p></div>,
         },
         { accessorKey: 'group', header: isAcademicReport && viewMode === 'student' ? 'ระดับ / กลุ่มเรียน' : config.groupLabel, size: 230, meta: { compactSize: 116 } },
+        ...(kind === 'grade-threshold' && viewMode === 'subject' ? [{
+            accessorKey: 'subjectType', header: 'ประเภทวิชา', size: 130, meta: { compactSize: 78, compactTextAlign: 'center' },
+            cell: ({ getValue }: { getValue: () => unknown }) => {
+                const isElective = getValue() === 'elective';
+                return <StatusBadge tone={isElective ? 'warning' : 'info'}>{isElective ? 'วิชาเลือก' : 'วิชาบังคับ'}</StatusBadge>;
+            },
+        } as ColumnDef<ReportRow>] : []),
         { accessorKey: 'metric', header: isAcademicReport && viewMode === 'student' ? (kind === 'registered-subjects' ? 'วิชาลงทะเบียน' : config.metricLabel) : config.metricLabel, size: 170, meta: { compactSize: 84, compactTextAlign: 'center' } },
         ...(kind === 'expected-graduates' ? [{
             id: 'exam_status',
@@ -593,7 +606,7 @@ export function ReportPage({ kind }: { kind: ReportKind }) {
                     </div>
                 </div>}
 
-                <div className={`mb-5 grid gap-3 ${kind === 'expected-graduates' ? (canFilterGroups ? 'md:grid-cols-4' : 'md:grid-cols-3') : (canFilterGroups ? 'md:grid-cols-3' : 'md:grid-cols-2')}`}>
+                <div className={`mb-5 grid gap-3 ${kind === 'expected-graduates' || kind === 'grade-threshold' ? (canFilterGroups ? 'md:grid-cols-4' : 'md:grid-cols-3') : (canFilterGroups ? 'md:grid-cols-3' : 'md:grid-cols-2')}`}>
                     <label>
                         <span className="mb-2 block text-sm font-bold text-slate-700">ค้นหาในรายงาน</span>
                         <span className="relative block">
@@ -603,6 +616,16 @@ export function ReportPage({ kind }: { kind: ReportKind }) {
                     </label>
                     <label><span className="mb-2 block text-sm font-bold text-slate-700">ระดับการศึกษา</span><select value={level} onChange={(event) => { setLevel(event.target.value); setGroup(''); }} className="h-11 w-full rounded-xl border border-slate-300 bg-white px-3 text-sm"><option value="">ทุกระดับ</option><option value="1">ประถมศึกษา</option><option value="2">มัธยมศึกษาตอนต้น</option><option value="3">มัธยมศึกษาตอนปลาย</option></select></label>
                     {canFilterGroups && <label><span className="mb-2 block text-sm font-bold text-slate-700">กลุ่มเรียน</span><select value={group} onChange={(event) => setGroup(event.target.value)} className="h-11 w-full rounded-xl border border-slate-300 bg-white px-3 text-sm"><option value="">ทุกกลุ่มเรียน</option>{filterOptions.groups.map((option) => <option key={String(option.value)} value={String(option.value)}>{option.label}</option>)}</select></label>}
+                    {kind === 'grade-threshold' && (
+                        <label>
+                            <span className="mb-2 block text-sm font-bold text-slate-700">ประเภทวิชา</span>
+                            <select value={subjectType} onChange={(event) => setSubjectType(event.target.value as SubjectTypeFilter)} className="h-11 w-full rounded-xl border border-slate-300 bg-white px-3 text-sm">
+                                <option value="">ทุกประเภทวิชา</option>
+                                <option value="compulsory">วิชาบังคับ</option>
+                                <option value="elective">วิชาเลือก</option>
+                            </select>
+                        </label>
+                    )}
                     {kind === 'expected-graduates' && (
                         <label>
                             <span className="mb-2 block text-sm font-bold text-slate-700">สถานะ N-Net / E-Exam</span>
@@ -616,9 +639,9 @@ export function ReportPage({ kind }: { kind: ReportKind }) {
                 </div>
                 {report.isPending && <QuerySkeleton />}
                 {report.isError && <QueryError onRetry={() => report.refetch()} />}
-                {payload && <DataTable data={rows} columns={columns} minWidth={isAcademicReport ? 'wide' : 'default'} emptyTitle="ไม่พบข้อมูลในรายงาน" emptyDescription="ลองเปลี่ยนภาคเรียน ระดับ กลุ่มเรียน หรือคำค้นหา" />}
+                {payload && <DataTable data={rows} columns={columns} minWidth={isAcademicReport ? 'wide' : 'default'} emptyTitle="ไม่พบข้อมูลในรายงาน" emptyDescription="ลองเปลี่ยนภาคเรียน ระดับ กลุ่มเรียน ประเภทวิชา หรือคำค้นหา" />}
             </Panel>
-            {selectedStudent && <AcademicStudentDetailDialog kind={kind} student={selectedStudent} term={term} onClose={() => setSelectedStudent(null)} />}
+            {selectedStudent && <AcademicStudentDetailDialog kind={kind} student={selectedStudent} term={term} subjectType={kind === 'grade-threshold' ? subjectType : ''} onClose={() => setSelectedStudent(null)} />}
             {selectedSubject && <AcademicSubjectStudentsDialog kind={kind} subject={selectedSubject} term={term} level={level} group={canFilterGroups ? group : ''} endpoint={config.endpoint} onClose={() => setSelectedSubject(null)} />}
         </div>
     );

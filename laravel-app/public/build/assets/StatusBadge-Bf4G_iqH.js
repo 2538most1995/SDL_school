@@ -1,0 +1,1 @@
+import{It as e,st as t}from"./app-CK6dvp08.js";var n=e(),r={success:`success`,warning:`warning`,danger:`danger`,info:`informative`,neutral:`subtle`};function i({children:e,tone:i=`neutral`}){return(0,n.jsx)(t,{appearance:`tint`,color:r[i],size:`medium`,className:`ui-status-badge whitespace-nowrap font-bold`,children:e})}export{i as t};

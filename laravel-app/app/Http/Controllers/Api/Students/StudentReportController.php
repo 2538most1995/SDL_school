@@ -155,6 +155,7 @@ final class StudentReportController extends StudentsApiController
             'term' => ['nullable', 'regex:/^[12]\/25\d{2}$/'],
             'search' => ['nullable', 'string', 'max:100'],
             'subject' => ['nullable', 'string', 'max:30'],
+            'subject_type' => ['nullable', Rule::in(['compulsory', 'elective'])],
             'view' => ['nullable', Rule::in(['subject', 'student'])],
             'exam_status' => ['nullable', 'string', Rule::in(['taken', 'eligible'])],
             'category' => ['nullable', Rule::in(['target_group', 'group', 'gender', 'level', 'occupation', 'nationality', 'age'])],

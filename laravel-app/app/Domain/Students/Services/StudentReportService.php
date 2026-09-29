@@ -549,6 +549,7 @@ final readonly class StudentReportService
             foreach ($this->studentGrades($gradesByStudent, $student) as $grade) {
                 if (($term !== '' && $grade->term !== $term)
                     || (isset($filters['subject']) && $filters['subject'] !== '' && $grade->subjectCode !== $filters['subject'])
+                    || ! $this->matchesSubjectType($grade, $filters)
                     || ! $this->matchesSubjectSearch($grade->subjectCode, $grade->subjectName, $filters)) {
                     continue;
                 }
@@ -619,7 +620,8 @@ final readonly class StudentReportService
 
             foreach ($this->studentGrades($gradesByStudent, $student) as $grade) {
                 if (($term !== '' && $grade->term !== $term)
-                    || (isset($filters['subject']) && $filters['subject'] !== '' && $grade->subjectCode !== $filters['subject'])) {
+                    || (isset($filters['subject']) && $filters['subject'] !== '' && $grade->subjectCode !== $filters['subject'])
+                    || ($kind === 'grade-threshold' && ! $this->matchesSubjectType($grade, $filters))) {
                     continue;
                 }
 
@@ -735,6 +737,14 @@ final readonly class StudentReportService
         $search = mb_strtolower(trim((string) ($filters['search'] ?? '')));
 
         return $search === '' || str_contains(mb_strtolower($code.' '.$name), $search);
+    }
+
+    /** @param array<string, mixed> $filters */
+    private function matchesSubjectType(Grade $grade, array $filters): bool
+    {
+        $subjectType = trim((string) ($filters['subject_type'] ?? ''));
+
+        return $subjectType === '' || $grade->subjectType === $subjectType;
     }
 
     /**
