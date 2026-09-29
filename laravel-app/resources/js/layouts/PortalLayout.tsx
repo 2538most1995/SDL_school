@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { useMutation, useQuery } from '@tanstack/react-query';
+import { useQuery } from '@tanstack/react-query';
 import { Avatar, Button, Card, Input, Select, Spinner, Text } from '../components/MaterialUI';
 import {
     Bell,
@@ -45,6 +45,7 @@ import { applyAppearance, DEFAULT_APPEARANCE, type AppearanceSettings } from '..
 import { showSuccessAlert } from '../lib/feedback';
 import { publicAssetUrl, publicBrandingPath, type PublicBranding } from '../lib/publicBranding';
 import { withAppBasePath } from '../lib/urls';
+import { useLogout } from '../lib/useLogout';
 import { queryClient } from '../query';
 import { useDemoRole, type DemoRole } from '../context/DemoRoleContext';
 import { StudentAnnouncementModal } from '../components/StudentAnnouncementModal';
@@ -211,18 +212,7 @@ export function PortalLayout() {
         staleTime: 5 * 60_000,
     });
 
-    const logout = useMutation({
-        meta: { notification: { success: 'ออกจากระบบเรียบร้อยแล้ว' } },
-        mutationFn: () => apiPost<{ logged_out: boolean }>('/auth/logout'),
-        onSettled: async () => {
-            window.localStorage.removeItem('sena-district-id');
-            window.localStorage.removeItem('sena-appearance');
-            applyAppearance(DEFAULT_APPEARANCE, false);
-            await queryClient.cancelQueries();
-            queryClient.removeQueries();
-            navigate('/login', { replace: true });
-        },
-    });
+    const logout = useLogout();
 
     const activeItem = catalog.data?.groups
         .flatMap((group) => group.items)
@@ -325,6 +315,38 @@ export function PortalLayout() {
                         </section>
                     ))}
                 </nav>
+
+                <div className="border-t border-white/10 bg-black/15 p-3">
+                    <div className="flex items-center gap-2.5 px-1 py-1">
+                        <Avatar name={me.data.name} image={me.data.avatar_url ? { src: withAppBasePath(me.data.avatar_url) } : undefined} size={36} color="colorful" />
+                        <div className="min-w-0 flex-1">
+                            <p className="truncate text-xs font-bold text-white">{me.data.name}</p>
+                            <p className="truncate text-[10px] text-brand-200">{me.data.username} · {currentRole.label}</p>
+                        </div>
+                    </div>
+                    <div className="mt-2.5 flex items-center gap-2">
+                        <Link
+                            to="/settings/profile"
+                            onClick={() => setSidebarOpen(false)}
+                            className="flex flex-1 items-center justify-center gap-1.5 rounded-xl bg-white/10 py-2 text-center text-xs font-bold text-white hover:bg-white/20 active:scale-[0.98]"
+                        >
+                            <User size={15} />
+                            <span>โปรไฟล์</span>
+                        </Link>
+                        <button
+                            type="button"
+                            disabled={logout.isPending}
+                            onClick={() => {
+                                setSidebarOpen(false);
+                                logout.mutate();
+                            }}
+                            className="flex flex-1 items-center justify-center gap-1.5 rounded-xl bg-rose-500/25 py-2 text-center text-xs font-bold text-rose-100 hover:bg-rose-500/40 hover:text-white disabled:opacity-60 active:scale-[0.98]"
+                        >
+                            <SignOut size={15} />
+                            <span>{logout.isPending ? 'กำลังออก...' : 'ออกจากระบบ'}</span>
+                        </button>
+                    </div>
+                </div>
             </aside>
 
             <div className={isStudent ? 'student-portal' : 'lg:pl-[266px]'}>
@@ -365,21 +387,33 @@ export function PortalLayout() {
                             <div className="ml-auto flex items-center gap-1 sm:gap-2">
                                 <div className="relative">
                                     <Button appearance="subtle" icon={<Bell size={20} weight="duotone" />} onClick={() => { setNotificationOpen((open) => !open); setRoleMenuOpen(false); }} aria-label="การแจ้งเตือน" aria-expanded={notificationOpen} />
-                                    {notificationOpen && <Card className="absolute right-0 top-[48px] w-72 p-4 text-center"><Bell size={28} weight="duotone" className="mx-auto text-brand-700" /><p className="mt-2 text-sm font-bold text-slate-900">ยังไม่มีการแจ้งเตือนใหม่</p><Text as="p" size={200} className="mt-1 leading-5 text-slate-500">ประกาศและงานที่ต้องติดตามจะแสดงที่นี่</Text></Card>}
+                                    {notificationOpen && (
+                                        <>
+                                            <button type="button" className="fixed inset-0 z-30 bg-transparent" onClick={() => setNotificationOpen(false)} aria-label="ปิดการแจ้งเตือน" />
+                                            <Card className="absolute right-0 top-[48px] z-40 w-72 p-4 text-center shadow-xl">
+                                                <Bell size={28} weight="duotone" className="mx-auto text-brand-700" />
+                                                <p className="mt-2 text-sm font-bold text-slate-900">ยังไม่มีการแจ้งเตือนใหม่</p>
+                                                <Text as="p" size={200} className="mt-1 leading-5 text-slate-500">ประกาศและงานที่ต้องติดตามจะแสดงที่นี่</Text>
+                                            </Card>
+                                        </>
+                                    )}
                                 </div>
-                                <div className="relative hidden sm:block">
+                                <div className="relative">
                                     <Button appearance="subtle" onClick={() => { setRoleMenuOpen((open) => !open); setNotificationOpen(false); }} className="user-menu-trigger font-bold" aria-expanded={roleMenuOpen} aria-haspopup="menu">
                                         <Avatar name={me.data.name} image={me.data.avatar_url ? { src: withAppBasePath(me.data.avatar_url) } : undefined} size={34} color="colorful" />
                                         <span className="hidden max-w-28 truncate xl:inline">{me.data.name}</span>
-                                        <CaretDown size={14} />
+                                        <CaretDown size={14} className="hidden sm:inline" />
                                     </Button>
                                     {roleMenuOpen && (
-                                        <Card role="menu" className="absolute right-0 top-[48px] w-56 p-2">
-                                            <div className="px-3 py-2"><p className="truncate text-sm font-bold text-slate-900">{me.data.name}</p><p className="mt-0.5 truncate text-xs text-slate-500">{me.data.username} · {currentRole.label}</p></div>
-                                            <Link to="/settings/profile" role="menuitem" onClick={() => setRoleMenuOpen(false)} className="flex w-full items-center gap-3 rounded-xl px-3 py-2.5 text-sm font-bold text-slate-700 hover:bg-slate-50"><User size={19} />โปรไฟล์ของฉัน</Link>
-                                            <Link to="/settings/appearance" role="menuitem" onClick={() => setRoleMenuOpen(false)} className="flex w-full items-center gap-3 rounded-xl px-3 py-2.5 text-sm font-bold text-slate-700 hover:bg-brand-50"><PaintBrush size={19} />รูปแบบการแสดงผล</Link>
-                                            <button type="button" role="menuitem" disabled={logout.isPending} onClick={() => logout.mutate()} className="mt-1 flex w-full items-center gap-3 rounded-xl px-3 py-2.5 text-left text-sm font-bold text-rose-700 hover:bg-rose-50 disabled:opacity-60"><SignOut size={19} />{logout.isPending ? 'กำลังออกจากระบบ' : 'ออกจากระบบ'}</button>
-                                        </Card>
+                                        <>
+                                            <button type="button" className="fixed inset-0 z-30 bg-transparent" onClick={() => setRoleMenuOpen(false)} aria-label="ปิดเมนูผู้ใช้งาน" />
+                                            <Card role="menu" className="absolute right-0 top-[48px] z-40 w-56 p-2 shadow-xl">
+                                                <div className="px-3 py-2"><p className="truncate text-sm font-bold text-slate-900">{me.data.name}</p><p className="mt-0.5 truncate text-xs text-slate-500">{me.data.username} · {currentRole.label}</p></div>
+                                                <Link to="/settings/profile" role="menuitem" onClick={() => setRoleMenuOpen(false)} className="flex w-full items-center gap-3 rounded-xl px-3 py-2.5 text-sm font-bold text-slate-700 hover:bg-slate-50"><User size={19} />โปรไฟล์ของฉัน</Link>
+                                                <Link to="/settings/appearance" role="menuitem" onClick={() => setRoleMenuOpen(false)} className="flex w-full items-center gap-3 rounded-xl px-3 py-2.5 text-sm font-bold text-slate-700 hover:bg-brand-50"><PaintBrush size={19} />รูปแบบการแสดงผล</Link>
+                                                <button type="button" role="menuitem" disabled={logout.isPending} onClick={() => { setRoleMenuOpen(false); logout.mutate(); }} className="mt-1 flex w-full items-center gap-3 rounded-xl px-3 py-2.5 text-left text-sm font-bold text-rose-700 hover:bg-rose-50 disabled:opacity-60"><SignOut size={19} />{logout.isPending ? 'กำลังออกจากระบบ' : 'ออกจากระบบ'}</button>
+                                            </Card>
+                                        </>
                                     )}
                                 </div>
                                 <Button appearance="subtle" icon={<List size={22} />} onClick={() => setSidebarOpen(true)} aria-label="เปิดเมนูทั้งหมด" />
@@ -411,8 +445,17 @@ export function PortalLayout() {
                             </span>
                         )}
                         <div className="relative">
-                        <Button appearance="subtle" icon={<Bell size={20} weight="duotone" />} onClick={() => { setNotificationOpen((open) => !open); setRoleMenuOpen(false); }} aria-label="การแจ้งเตือน" aria-expanded={notificationOpen} />
-                        {notificationOpen && <Card className="absolute right-0 top-[48px] w-72 p-4 text-center"><Bell size={28} weight="duotone" className="mx-auto text-brand-700" /><p className="mt-2 text-sm font-bold text-slate-900">ยังไม่มีการแจ้งเตือนใหม่</p><Text as="p" size={200} className="mt-1 leading-5 text-slate-500">ประกาศและงานที่ต้องติดตามจะแสดงที่นี่</Text></Card>}
+                            <Button appearance="subtle" icon={<Bell size={20} weight="duotone" />} onClick={() => { setNotificationOpen((open) => !open); setRoleMenuOpen(false); }} aria-label="การแจ้งเตือน" aria-expanded={notificationOpen} />
+                            {notificationOpen && (
+                                <>
+                                    <button type="button" className="fixed inset-0 z-30 bg-transparent" onClick={() => setNotificationOpen(false)} aria-label="ปิดการแจ้งเตือน" />
+                                    <Card className="absolute right-0 top-[48px] z-40 w-72 p-4 text-center shadow-xl">
+                                        <Bell size={28} weight="duotone" className="mx-auto text-brand-700" />
+                                        <p className="mt-2 text-sm font-bold text-slate-900">ยังไม่มีการแจ้งเตือนใหม่</p>
+                                        <Text as="p" size={200} className="mt-1 leading-5 text-slate-500">ประกาศและงานที่ต้องติดตามจะแสดงที่นี่</Text>
+                                    </Card>
+                                </>
+                            )}
                         </div>
                         <div className="relative">
                             <Button
@@ -424,15 +467,18 @@ export function PortalLayout() {
                             >
                                 <Avatar name={me.data.name} image={me.data.avatar_url ? { src: withAppBasePath(me.data.avatar_url) } : undefined} size={36} color="colorful" />
                                 <span className="hidden max-w-32 truncate sm:inline">{me.data.name}</span>
-                                <CaretDown size={14} />
+                                <CaretDown size={14} className="hidden sm:inline" />
                             </Button>
                             {roleMenuOpen && (
-                                <Card role="menu" className="absolute right-0 top-[48px] w-56 p-2">
-                                    <div className="px-3 py-2"><p className="truncate text-sm font-bold text-slate-900">{me.data.name}</p><p className="mt-0.5 truncate text-xs text-slate-500">{me.data.username} · {currentRole.label}</p></div>
-                                    <Link to="/settings/profile" role="menuitem" onClick={() => setRoleMenuOpen(false)} className="flex w-full items-center gap-3 rounded-xl px-3 py-2.5 text-sm font-bold text-slate-700 hover:bg-slate-50"><User size={19} />โปรไฟล์ของฉัน</Link>
-                                    <Link to="/settings/appearance" role="menuitem" onClick={() => setRoleMenuOpen(false)} className="flex w-full items-center gap-3 rounded-xl px-3 py-2.5 text-sm font-bold text-slate-700 hover:bg-brand-50"><PaintBrush size={19} />รูปแบบการแสดงผล</Link>
-                                    <button type="button" role="menuitem" disabled={logout.isPending} onClick={() => logout.mutate()} className="mt-1 flex w-full items-center gap-3 rounded-xl px-3 py-2.5 text-left text-sm font-bold text-rose-700 hover:bg-rose-50 disabled:opacity-60"><SignOut size={19} />{logout.isPending ? 'กำลังออกจากระบบ' : 'ออกจากระบบ'}</button>
-                                </Card>
+                                <>
+                                    <button type="button" className="fixed inset-0 z-30 bg-transparent" onClick={() => setRoleMenuOpen(false)} aria-label="ปิดเมนูผู้ใช้งาน" />
+                                    <Card role="menu" className="absolute right-0 top-[48px] z-40 w-56 p-2 shadow-xl">
+                                        <div className="px-3 py-2"><p className="truncate text-sm font-bold text-slate-900">{me.data.name}</p><p className="mt-0.5 truncate text-xs text-slate-500">{me.data.username} · {currentRole.label}</p></div>
+                                        <Link to="/settings/profile" role="menuitem" onClick={() => setRoleMenuOpen(false)} className="flex w-full items-center gap-3 rounded-xl px-3 py-2.5 text-sm font-bold text-slate-700 hover:bg-slate-50"><User size={19} />โปรไฟล์ของฉัน</Link>
+                                        <Link to="/settings/appearance" role="menuitem" onClick={() => setRoleMenuOpen(false)} className="flex w-full items-center gap-3 rounded-xl px-3 py-2.5 text-sm font-bold text-slate-700 hover:bg-brand-50"><PaintBrush size={19} />รูปแบบการแสดงผล</Link>
+                                        <button type="button" role="menuitem" disabled={logout.isPending} onClick={() => { setRoleMenuOpen(false); logout.mutate(); }} className="mt-1 flex w-full items-center gap-3 rounded-xl px-3 py-2.5 text-left text-sm font-bold text-rose-700 hover:bg-rose-50 disabled:opacity-60"><SignOut size={19} />{logout.isPending ? 'กำลังออกจากระบบ' : 'ออกจากระบบ'}</button>
+                                    </Card>
+                                </>
                             )}
                         </div>
                     </div>

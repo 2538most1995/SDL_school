@@ -8,6 +8,7 @@ import {
     Moon,
     PaintBrush,
     ShieldCheck,
+    SignOut,
     Sun,
     Trash,
     UploadSimple,
@@ -21,6 +22,7 @@ import { QueryError, QuerySkeleton } from '../../components/QueryState';
 import { StatusBadge } from '../../components/StatusBadge';
 import { applyAppearance, DEFAULT_APPEARANCE, type AppearanceSettings, type ColorScheme } from '../../lib/appearance';
 import { withAppBasePath } from '../../lib/urls';
+import { useLogout } from '../../lib/useLogout';
 import { getFeatureDataWithDemo, sendFeatureData } from '../api';
 
 type ProfileSettings = {
@@ -39,6 +41,7 @@ const demoProfile: ProfileSettings = {
 };
 
 export function ProfileSettingsPage() {
+    const logout = useLogout();
     const queryClient = useQueryClient();
     const profile = useQuery({ queryKey: ['settings', 'profile'], queryFn: ({ signal }) => getFeatureDataWithDemo<ProfileSettings>('/api/v1/settings/profile', demoProfile, signal) });
     const [draft, setDraft] = useState<ProfileSettings | null>(null);
@@ -92,7 +95,26 @@ export function ProfileSettingsPage() {
 
     return (
         <div>
-            <PageHeader category="การตั้งค่า" title="โปรไฟล์และความปลอดภัย" description="ดูข้อมูลบัญชี แก้ไขช่องทางติดต่อ และเปลี่ยนรหัสผ่านอย่างปลอดภัย" icon={UserCircle} actions={<StatusBadge tone="success">{values.roleLabel}</StatusBadge>} />
+            <PageHeader
+                category="การตั้งค่า"
+                title="โปรไฟล์และความปลอดภัย"
+                description="ดูข้อมูลบัญชี แก้ไขช่องทางติดต่อ และเปลี่ยนรหัสผ่านอย่างปลอดภัย"
+                icon={UserCircle}
+                actions={(
+                    <div className="flex items-center gap-2">
+                        <StatusBadge tone="success">{values.roleLabel}</StatusBadge>
+                        <button
+                            type="button"
+                            disabled={logout.isPending}
+                            onClick={() => logout.mutate()}
+                            className="inline-flex items-center gap-1.5 rounded-xl border border-rose-200 bg-rose-50 px-3 py-1.5 text-xs font-bold text-rose-700 hover:bg-rose-100 disabled:opacity-60 active:scale-[0.98]"
+                        >
+                            <SignOut size={15} />
+                            <span>{logout.isPending ? 'กำลังออกจากระบบ...' : 'ออกจากระบบ'}</span>
+                        </button>
+                    </div>
+                )}
+            />
             {profile.isPending && <QuerySkeleton rows={6} />}
             {profile.isError && <QueryError onRetry={() => profile.refetch()} />}
             {profile.data && (

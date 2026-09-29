@@ -11,10 +11,13 @@ import {
     IdentificationCard,
     Eye,
     MagnifyingGlass,
+    PaintBrush,
     PencilSimple,
     Printer,
+    SignOut,
     Sparkle,
     Student,
+    User,
     UsersThree,
     X,
 } from '@phosphor-icons/react';
@@ -35,6 +38,7 @@ import { StatusBadge, type StatusTone } from '../../components/StatusBadge';
 import { getFeatureDataWithDemo, sendFeatureData } from '../api';
 import { useDemoRole } from '../../context/DemoRoleContext';
 import { showErrorAlert, showSuccessAlert } from '../../lib/feedback';
+import { useLogout } from '../../lib/useLogout';
 
 export function FacebookIcon({ className = 'size-4' }: { className?: string }) {
     return (
@@ -896,6 +900,7 @@ const demoLearningProfile: LearningProfile = {
 };
 
 export function MyLearningPage() {
+    const logout = useLogout();
     const [editingSocial, setEditingSocial] = useState(false);
     const profile = useQuery({ queryKey: ['my-learning'], queryFn: ({ signal }) => getFeatureDataWithDemo<LearningProfile>('/api/v1/my-learning', demoLearningProfile, signal) });
     if (profile.isPending) return <QuerySkeleton rows={6} />;
@@ -970,6 +975,34 @@ export function MyLearningPage() {
                         <p className="mt-4 text-lg font-bold text-slate-950">วันพบกลุ่ม</p>
                         <p className="mt-1 text-sm leading-6 text-slate-700">{data.nextMeeting}</p>
                         <Link to="/learning/calendar" className="mt-5 inline-flex whitespace-nowrap rounded-full bg-amber-800 px-5 py-2.5 text-sm font-bold text-white hover:bg-amber-900 active:scale-[0.98]">ดูปฏิทิน</Link>
+                    </Panel>
+
+                    <Panel title="บัญชีผู้ใช้งาน" description="จัดการโปรไฟล์และความปลอดภัยของบัญชี">
+                        <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+                            <div>
+                                <p className="text-sm font-black text-slate-900">{data.name}</p>
+                                <p className="text-xs text-slate-500">รหัสนักศึกษา: {data.code}</p>
+                            </div>
+                            <button
+                                type="button"
+                                disabled={logout.isPending}
+                                onClick={() => logout.mutate()}
+                                className="inline-flex items-center justify-center gap-1.5 rounded-xl border border-rose-200 bg-rose-50 px-3.5 py-2 text-xs font-bold text-rose-700 hover:bg-rose-100 disabled:opacity-60 active:scale-[0.98]"
+                            >
+                                <SignOut size={16} />
+                                <span>{logout.isPending ? 'กำลังออกจากระบบ...' : 'ออกจากระบบ'}</span>
+                            </button>
+                        </div>
+                        <div className="mt-3 flex flex-wrap gap-2 border-t border-slate-100 pt-3">
+                            <Link to="/settings/profile" className="inline-flex items-center gap-1.5 rounded-xl border border-slate-200 bg-white px-3 py-1.5 text-xs font-bold text-slate-700 hover:bg-slate-50 active:scale-[0.98]">
+                                <User size={15} />
+                                <span>แก้ไขโปรไฟล์</span>
+                            </Link>
+                            <Link to="/settings/appearance" className="inline-flex items-center gap-1.5 rounded-xl border border-slate-200 bg-white px-3 py-1.5 text-xs font-bold text-slate-700 hover:bg-slate-50 active:scale-[0.98]">
+                                <PaintBrush size={15} />
+                                <span>รูปแบบการแสดงผล</span>
+                            </Link>
+                        </div>
                     </Panel>
                 </div>
             </div>
