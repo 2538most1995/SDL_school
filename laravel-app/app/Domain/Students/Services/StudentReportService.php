@@ -611,21 +611,26 @@ final readonly class StudentReportService
         $terms = $this->academicTerms($gradesByStudent);
         $selectedTerm = $this->selectedAcademicTerm($filters, $terms);
         $term = $selectedTerm ?? '';
+        $subjectFilter = trim((string) ($filters['subject'] ?? ''));
 
         foreach ($students as $student) {
             $registered = 0;
             $gradeTwoOrAbove = 0;
             $attended = 0;
             $absent = 0;
+            $subjectGrade = null;
 
             foreach ($this->studentGrades($gradesByStudent, $student) as $grade) {
                 if (($term !== '' && $grade->term !== $term)
-                    || (isset($filters['subject']) && $filters['subject'] !== '' && $grade->subjectCode !== $filters['subject'])
+                    || ($subjectFilter !== '' && $grade->subjectCode !== $subjectFilter)
                     || ($kind === 'grade-threshold' && ! $this->matchesSubjectType($grade, $filters))) {
                     continue;
                 }
 
                 $registered++;
+                if ($subjectFilter !== '') {
+                    $subjectGrade = $grade->grade;
+                }
                 if (($grade->numericGrade() ?? -1) >= 2.0) {
                     $gradeTwoOrAbove++;
                 }
@@ -656,7 +661,7 @@ final readonly class StudentReportService
             if ($gradeTwoOrAbove === $registered) {
                 $studentsGradeTwoAll++;
             }
-            $items[] = [
+            $item = [
                 'student' => [
                     'code' => $student->code,
                     'full_name' => $student->fullName(),
@@ -670,6 +675,13 @@ final readonly class StudentReportService
                 'absent_subjects' => $absent,
                 'success_rate' => round(($successful / $registered) * 100, 1),
             ];
+            if ($kind === 'grade-threshold' && $subjectFilter !== '') {
+                $item['grade'] = $subjectGrade;
+                $item['meets_grade_threshold'] = $subjectGrade !== null
+                    && is_numeric($subjectGrade)
+                    && (float) $subjectGrade >= 2.0;
+            }
+            $items[] = $item;
         }
 
         usort($items, static fn (array $left, array $right): int => strnatcasecmp(

@@ -40,6 +40,8 @@ type ReportRow = {
     successfulCount?: number;
     successRate?: number;
     absentCount?: number;
+    grade?: string | null;
+    meetsGradeThreshold?: boolean;
     subjectType?: 'compulsory' | 'elective';
 };
 
@@ -182,6 +184,7 @@ function normalizeReportPayload(kind: ReportKind, payload: unknown, fallback: Re
             const studentGroup = student.group && typeof student.group === 'object' ? student.group as Record<string, unknown> : {};
             const registered = Number(item.registered_subjects ?? 0);
             const successful = Number(kind === 'exam-attendance' ? item.attended_subjects : kind === 'grade-threshold' ? item.grade_two_or_above : registered);
+            const grade = item.grade === null || item.grade === undefined ? null : String(item.grade);
             return {
                 id: String(student.code ?? index),
                 primary: String(student.full_name ?? 'ไม่พบชื่อนักศึกษา'),
@@ -194,6 +197,10 @@ function normalizeReportPayload(kind: ReportKind, payload: unknown, fallback: Re
                 successfulCount: successful,
                 successRate: Number(item.success_rate ?? 0),
                 absentCount: Number(item.absent_subjects ?? 0),
+                grade,
+                meetsGradeThreshold: typeof item.meets_grade_threshold === 'boolean'
+                    ? item.meets_grade_threshold
+                    : grade !== null && !Number.isNaN(Number(grade)) && Number(grade) >= 2,
             };
         }
         const subject = item.subject && typeof item.subject === 'object' ? item.subject as Record<string, unknown> : {};
@@ -441,7 +448,25 @@ function AcademicSubjectStudentsDialog({ kind, subject, term, level, group, endp
     const columns = useMemo<ColumnDef<ReportRow>[]>(() => [
         { accessorKey: 'primary', header: 'นักศึกษา', size: 255, meta: { compactSize: 138 }, cell: ({ row }) => <div><p className="font-bold text-slate-950">{row.original.primary}</p><p className="mt-0.5 font-mono text-xs text-slate-500">{row.original.secondary}</p></div> },
         { accessorKey: 'group', header: 'ระดับ / กลุ่มเรียน', size: 235, meta: { compactSize: 122 } },
-        { accessorKey: 'metric', header: kind === 'registered-subjects' ? 'การลงทะเบียน' : kind === 'grade-threshold' ? 'ผลตามเกณฑ์' : 'การเข้าสอบ', size: 170, meta: { compactSize: 88, compactTextAlign: 'center' } },
+        ...(kind === 'grade-threshold' ? [
+            {
+                accessorKey: 'grade', header: 'เกรด', size: 95, meta: { compactSize: 58, compactTextAlign: 'center' },
+                cell: ({ getValue }: { getValue: () => unknown }) => {
+                    const grade = getValue();
+                    return <span className="font-bold tabular-nums text-slate-950">{grade === null || grade === undefined ? 'รอผล' : String(grade)}</span>;
+                },
+            } as ColumnDef<ReportRow>,
+            {
+                id: 'grade_result', header: 'ผลตามเกณฑ์', size: 170, meta: { compactSize: 96, compactTextAlign: 'center' },
+                cell: ({ row }: { row: { original: ReportRow } }) => (
+                    <StatusBadge tone={row.original.meetsGradeThreshold ? 'success' : row.original.grade === null ? 'neutral' : 'warning'}>
+                        {row.original.meetsGradeThreshold ? 'เกรด 2 ขึ้นไป' : row.original.grade === null ? 'รอผล' : 'ต่ำกว่าเกณฑ์'}
+                    </StatusBadge>
+                ),
+            } as ColumnDef<ReportRow>,
+        ] : [{
+            accessorKey: 'metric', header: kind === 'registered-subjects' ? 'การลงทะเบียน' : 'การเข้าสอบ', size: 170, meta: { compactSize: 88, compactTextAlign: 'center' },
+        } as ColumnDef<ReportRow>]),
     ], [kind]);
 
     useEffect(() => {

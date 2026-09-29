@@ -327,13 +327,29 @@ final class StudentApiTest extends TestCase
 
         $subjectReport = $this->getJson('/api/v1/reports/students/grades-above-two?term=2/2568&view=subject&level=3&search='.urlencode('วิทยาศาสตร์'))
             ->assertOk()
-            ->assertJsonCount(1, 'data.items');
+            ->assertJsonCount(1, 'data.items')
+            ->assertJsonPath('data.items.0.registered_students', 3)
+            ->assertJsonPath('data.items.0.grade_two_or_above', 3);
         $subjectCode = (string) $subjectReport->json('data.items.0.subject.code');
 
-        $this->getJson('/api/v1/reports/students/grades-above-two?term=2/2568&view=student&level=3&subject='.urlencode($subjectCode))
+        $subjectStudents = $this->getJson('/api/v1/reports/students/grades-above-two?term=2/2568&view=student&level=3&subject='.urlencode($subjectCode))
             ->assertOk()
             ->assertJsonPath('data.items.0.registered_subjects', 1)
-            ->assertJsonStructure(['data' => ['items' => [['student' => ['code', 'full_name', 'level', 'group']]]]]);
+            ->assertJsonStructure(['data' => ['items' => [[
+                'student' => ['code', 'full_name', 'level', 'group'],
+                'grade',
+                'meets_grade_threshold',
+            ]]]]);
+        $subjectStudentItems = collect($subjectStudents->json('data.items'));
+        $this->assertCount((int) $subjectReport->json('data.items.0.registered_students'), $subjectStudentItems);
+        $this->assertTrue($subjectStudentItems->every(
+            static fn (array $item): bool => ($item['meets_grade_threshold'] ?? false)
+                === ($item['grade'] !== null && is_numeric($item['grade']) && (float) $item['grade'] >= 2.0),
+        ));
+        $this->assertSame(
+            (int) $subjectReport->json('data.items.0.grade_two_or_above'),
+            $subjectStudentItems->where('meets_grade_threshold', true)->count(),
+        );
 
         $this->getJson('/api/v1/reports/students/exam-attendance?term=2/2568&view=student')
             ->assertOk()

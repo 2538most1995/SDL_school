@@ -308,10 +308,13 @@ final class LegacyStudentReportServiceTest extends TestCase
             'term' => '2/2568',
             'view' => 'student',
             'subject_type' => 'elective',
+            'subject' => 'ทช11001',
         ]);
         $this->assertSame(1, $electiveGradeReport['summary']['registered_records']);
         $this->assertSame(1, $electiveGradeReport['summary']['successful_records']);
         $this->assertSame(1, $electiveGradeReport['items'][0]['registered_subjects']);
+        $this->assertSame('3', $electiveGradeReport['items'][0]['grade']);
+        $this->assertTrue($electiveGradeReport['items'][0]['meets_grade_threshold']);
 
         $attendanceReport = $service->examAttendance($teacher, 1, [
             'term' => '2/2568',

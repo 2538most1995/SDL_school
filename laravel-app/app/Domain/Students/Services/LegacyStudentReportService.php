@@ -1132,7 +1132,13 @@ final readonly class LegacyStudentReportService
         }
 
         if (($filters['view'] ?? 'subject') === 'student') {
-            return $this->historicalAcademicStudents($registrations, $terms, $selectedTerm, $kind);
+            return $this->historicalAcademicStudents(
+                $registrations,
+                $terms,
+                $selectedTerm,
+                $kind,
+                $kind === 'grade-threshold' && trim((string) ($filters['subject'] ?? '')) !== '',
+            );
         }
 
         $grouped = [];
@@ -1218,8 +1224,13 @@ final readonly class LegacyStudentReportService
      * @param  list<string>  $terms
      * @param  'grade-threshold'|'exam-attendance'  $kind
      */
-    private function historicalAcademicStudents(array $registrations, array $terms, string $selectedTerm, string $kind): array
-    {
+    private function historicalAcademicStudents(
+        array $registrations,
+        array $terms,
+        string $selectedTerm,
+        string $kind,
+        bool $includeSubjectGrade,
+    ): array {
         $students = [];
         foreach ($registrations as $registration) {
             $key = $registration['level'].'|'.$registration['student_code'];
@@ -1248,6 +1259,10 @@ final readonly class LegacyStudentReportService
                 $students[$key]['grade_two_or_above']++;
             }
             $students[$key][$registration['exam_attended'] ? 'attended_subjects' : 'absent_subjects']++;
+            if ($includeSubjectGrade) {
+                $students[$key]['grade'] = $registration['grade_value'] ?? null;
+                $students[$key]['meets_grade_threshold'] = $this->isGradeTwoOrAbove($registration);
+            }
         }
 
         $registeredTotal = 0;
