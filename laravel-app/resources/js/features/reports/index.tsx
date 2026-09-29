@@ -38,6 +38,7 @@ type ReportRow = {
     examStatus?: string;
     registeredCount?: number;
     successfulCount?: number;
+    successRate?: number;
     absentCount?: number;
     subjectType?: 'compulsory' | 'elective';
 };
@@ -147,9 +148,9 @@ const reportConfig: Record<ReportKind, {
         endpoint: '/api/v1/reports/students/grades-above-two',
         activeLabel: 'ผ่านเกณฑ์', activeDetail: 'ผลการเรียนเกรด 2 ขึ้นไป',
         demo: { total: 418, active: 356, groups: 12, rows: [
-            { id: '1', primary: 'ภาษาไทย', secondary: 'พท31001', group: 'มัธยมศึกษาตอนปลาย', metric: '34 จาก 38 คน (89.5%)' },
-            { id: '2', primary: 'วิทยาศาสตร์', secondary: 'พว31001', group: 'มัธยมศึกษาตอนปลาย', metric: '33 จาก 41 คน (80.5%)' },
-            { id: '3', primary: 'คณิตศาสตร์', secondary: 'พค21001', group: 'มัธยมศึกษาตอนต้น', metric: '27 จาก 35 คน (77.1%)' },
+            { id: '1', primary: 'ภาษาไทย', secondary: 'พท31001', group: 'มัธยมศึกษาตอนปลาย', metric: '34 จาก 38 คน (89.5%)', registeredCount: 38, successfulCount: 34, successRate: 89.5, subjectType: 'compulsory' },
+            { id: '2', primary: 'วิทยาศาสตร์', secondary: 'พว31001', group: 'มัธยมศึกษาตอนปลาย', metric: '33 จาก 41 คน (80.5%)', registeredCount: 41, successfulCount: 33, successRate: 80.5, subjectType: 'compulsory' },
+            { id: '3', primary: 'คณิตศาสตร์', secondary: 'พค21001', group: 'มัธยมศึกษาตอนต้น', metric: '27 จาก 35 คน (77.1%)', registeredCount: 35, successfulCount: 27, successRate: 77.1, subjectType: 'elective' },
         ] },
     },
     'exam-attendance': {
@@ -191,6 +192,7 @@ function normalizeReportPayload(kind: ReportKind, payload: unknown, fallback: Re
                     : `${successful.toLocaleString('th-TH')} จาก ${registered.toLocaleString('th-TH')} วิชา (${String(item.success_rate ?? 0)}%)`,
                 registeredCount: registered,
                 successfulCount: successful,
+                successRate: Number(item.success_rate ?? 0),
                 absentCount: Number(item.absent_subjects ?? 0),
             };
         }
@@ -207,6 +209,7 @@ function normalizeReportPayload(kind: ReportKind, payload: unknown, fallback: Re
             metric: `${successful.toLocaleString('th-TH')} จาก ${registered.toLocaleString('th-TH')} คน (${String(kind === 'exam-attendance' ? item.attendance_rate ?? 0 : item.success_rate ?? 0)}%)`,
             registeredCount: registered,
             successfulCount: successful,
+            successRate: Number(kind === 'exam-attendance' ? item.attendance_rate ?? 0 : item.success_rate ?? 0),
             absentCount: Number(item.absent_students ?? 0),
             subjectType,
         };
@@ -530,7 +533,22 @@ export function ReportPage({ kind }: { kind: ReportKind }) {
                 return <StatusBadge tone={isElective ? 'warning' : 'info'}>{isElective ? 'วิชาเลือก' : 'วิชาบังคับ'}</StatusBadge>;
             },
         } as ColumnDef<ReportRow>] : []),
-        { accessorKey: 'metric', header: isAcademicReport && viewMode === 'student' ? (kind === 'registered-subjects' ? 'วิชาลงทะเบียน' : config.metricLabel) : config.metricLabel, size: 170, meta: { compactSize: 84, compactTextAlign: 'center' } },
+        ...(kind === 'grade-threshold' && viewMode === 'subject' ? [
+            {
+                accessorKey: 'registeredCount', header: 'ลงทะเบียน (คน)', size: 145, meta: { compactSize: 76, compactTextAlign: 'center' },
+                cell: ({ getValue }: { getValue: () => unknown }) => <span className="font-bold tabular-nums text-slate-800">{Number(getValue() ?? 0).toLocaleString('th-TH')}</span>,
+            } as ColumnDef<ReportRow>,
+            {
+                accessorKey: 'successfulCount', header: 'เกรด 2 ขึ้นไป (คน)', size: 175, meta: { compactSize: 90, compactTextAlign: 'center' },
+                cell: ({ getValue }: { getValue: () => unknown }) => <span className="font-bold tabular-nums text-emerald-700">{Number(getValue() ?? 0).toLocaleString('th-TH')}</span>,
+            } as ColumnDef<ReportRow>,
+            {
+                accessorKey: 'successRate', header: 'ร้อยละ', size: 105, meta: { compactSize: 62, compactTextAlign: 'center' },
+                cell: ({ getValue }: { getValue: () => unknown }) => <span className="font-bold tabular-nums text-slate-800">{Number(getValue() ?? 0).toLocaleString('th-TH', { maximumFractionDigits: 1 })}%</span>,
+            } as ColumnDef<ReportRow>,
+        ] : [{
+            accessorKey: 'metric', header: isAcademicReport && viewMode === 'student' ? (kind === 'registered-subjects' ? 'วิชาลงทะเบียน' : config.metricLabel) : config.metricLabel, size: 170, meta: { compactSize: 84, compactTextAlign: 'center' },
+        } as ColumnDef<ReportRow>]),
         ...(kind === 'expected-graduates' ? [{
             id: 'exam_status',
             header: 'การสอบ N-Net / E-Exam',
