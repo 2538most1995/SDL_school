@@ -7,9 +7,10 @@ use App\Domain\Students\Models\Student;
 use App\Domain\Students\Repositories\StudentRepository;
 use App\Domain\Students\Support\AcademicTerm;
 use App\Domain\Students\Support\CurriculumCatalog;
-use App\Domain\Students\Support\StudentAccessScope;
+use App\Domain\Students\Support\RegistrationCreditPolicy;
 use App\Models\User;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Validation\ValidationException;
 
 final readonly class CourseRegistrationService
 {
@@ -24,7 +25,7 @@ final readonly class CourseRegistrationService
      * @param  array{term?: ?string, group?: ?string, level?: ?int, search?: ?string, page?: int, per_page?: int}  $filters
      * @return array<string, mixed>
      */
-    public function workspace(User $viewer, array $filters = []): array
+    public function workspace(User $viewer, int $districtId, array $filters = []): array
     {
         $allStudents = $this->directory->accessibleStudents($viewer);
         $groups = [];
@@ -45,7 +46,7 @@ final readonly class CourseRegistrationService
             }
         }
 
-        $termList = $this->resolveWorkspaceTerms($terms, $maxStudentTerm);
+        $termList = $this->resolveWorkspaceTerms($terms, $maxStudentTerm, $districtId);
         $nextRegisterableTerm = $termList[0] ?? AcademicTerm::nextTerm($maxStudentTerm ?? '1/2569');
         $selectedTerm = $filters['term'] ?? $nextRegisterableTerm;
 
@@ -70,10 +71,8 @@ final readonly class CourseRegistrationService
         }));
 
         $studentCodes = array_map(static fn (Student $s): string => $s->code, $filtered);
-        $districtId = $viewer->district_id;
-
         $registeredMap = [];
-        if ($studentCodes !== [] && $districtId !== null) {
+        if ($studentCodes !== []) {
             $regRows = DB::table('learning_course_registrations')
                 ->where('district_id', $districtId)
                 ->where('academic_term', $selectedTerm)
@@ -95,11 +94,14 @@ final readonly class CourseRegistrationService
                     'transferred_count' => $transferred,
                     'total_count' => $regCompulsory + $regElective,
                     'updated_at' => $row->updated_at,
+                    'compulsory_subjects' => $compulsory,
+                    'elective_subjects' => $elective,
                 ];
             }
         }
 
-        $items = array_map(static function (Student $student) use ($registeredMap): array {
+        $gradesByStudent = $filtered === [] ? [] : $this->repository->gradesForMany($filtered);
+        $items = array_map(function (Student $student) use ($registeredMap, $gradesByStudent): array {
             $reg = $registeredMap[$student->code] ?? [
                 'is_saved' => false,
                 'compulsory_count' => 0,
@@ -107,7 +109,21 @@ final readonly class CourseRegistrationService
                 'transferred_count' => 0,
                 'total_count' => 0,
                 'updated_at' => null,
+                'compulsory_subjects' => [],
+                'elective_subjects' => [],
             ];
+            $progress = $this->academicProgress(
+                $student,
+                $gradesByStudent[$this->studentKey($student)] ?? [],
+            );
+            $policy = $this->registrationPolicy(
+                $student,
+                $progress,
+                $reg['compulsory_subjects'],
+                $reg['elective_subjects'],
+            );
+            unset($reg['compulsory_subjects'], $reg['elective_subjects']);
+            $reg['credit_policy'] = $policy;
 
             return [
                 'code' => $student->code,
@@ -118,6 +134,7 @@ final readonly class CourseRegistrationService
                 'group_name' => $student->groupName,
                 'credits_earned' => $student->creditsEarned,
                 'credits_required' => $student->creditsRequired,
+                'is_potential_graduate' => $policy['is_potential_graduate'],
                 'registration' => $reg,
             ];
         }, $filtered);
@@ -168,7 +185,7 @@ final readonly class CourseRegistrationService
                 }
             }
         }
-        $availableTerms = $this->resolveWorkspaceTerms($studentTerms, $maxStudentTerm);
+        $availableTerms = $this->resolveWorkspaceTerms($studentTerms, $maxStudentTerm, $student->districtId);
         $nextRegisterableTerm = $availableTerms[0] ?? AcademicTerm::nextTerm($maxStudentTerm ?? '1/2569');
         $targetTerm = $term ? trim($term) : $nextRegisterableTerm;
         if (! in_array($targetTerm, $availableTerms, true)) {
@@ -490,6 +507,8 @@ final readonly class CourseRegistrationService
         $electiveEarned = $student->electiveCreditsEarned;
         $electiveRequired = $student->electiveCreditsRequired > 0 ? $student->electiveCreditsRequired : $reqs['elective'];
         $electiveRemaining = max(0.0, round($electiveRequired - $electiveEarned, 1));
+        $progress = $this->academicProgress($student, $allGrades);
+        $creditPolicy = $this->registrationPolicy($student, $progress, $compulsoryList, $electiveList);
 
         $addrParts = $this->parseAddress($student->currentAddress ?: $student->registeredAddress ?: '');
         [$termNo, $termYear] = $this->splitTerm($targetTerm);
@@ -505,6 +524,7 @@ final readonly class CourseRegistrationService
                 ->get()
                 ->first(static function (User $u) use ($student): bool {
                     $groups = (array) ($u->assigned_groups ?? []);
+
                     return in_array($student->groupCode, $groups, true);
                 });
             if ($t) {
@@ -619,6 +639,7 @@ final readonly class CourseRegistrationService
                     ];
                 }, $merged);
             })(),
+            'credit_policy' => $creditPolicy,
             'notes' => $notes,
             'is_saved' => $saved !== null,
         ];
@@ -635,8 +656,17 @@ final readonly class CourseRegistrationService
         $student = $this->directory->findAccessible($viewer, $studentCode);
         abort_if($student === null, 404, 'ไม่พบข้อมูลนักศึกษาหรือไม่มีสิทธิ์เข้าถึง');
 
-        $term = trim($data['academic_term']);
-        abort_if($term === '', 422, 'กรุณาระบุภาคเรียน');
+        $term = AcademicTerm::normalize((string) $data['academic_term']);
+        if ($term === null) {
+            throw ValidationException::withMessages([
+                'academic_term' => 'รูปแบบภาคเรียนไม่ถูกต้อง',
+            ]);
+        }
+
+        $allGrades = $this->repository->gradesFor($student);
+        $progress = $this->academicProgress($student, $allGrades);
+        $compulsoryCatalog = collect(CurriculumCatalog::compulsorySubjects($student->level))->keyBy('code');
+        $seenCodes = [];
 
         $compulsorySanitized = [];
         foreach ($data['compulsory_subjects'] ?? [] as $s) {
@@ -644,10 +674,22 @@ final readonly class CourseRegistrationService
             if ($code === '') {
                 continue;
             }
+            if (isset($seenCodes[$code])) {
+                throw ValidationException::withMessages([
+                    'compulsory_subjects' => "พบรหัสวิชาซ้ำ {$code}",
+                ]);
+            }
+            $seenCodes[$code] = true;
+            $catalogSubject = $compulsoryCatalog->get($code);
+            if ($catalogSubject === null) {
+                throw ValidationException::withMessages([
+                    'compulsory_subjects' => "รหัสวิชาบังคับ {$code} ไม่อยู่ในหลักสูตรระดับนี้",
+                ]);
+            }
             $compulsorySanitized[] = [
                 'code' => $code,
-                'name' => trim((string) ($s['name'] ?? '')),
-                'credits' => (float) ($s['credits'] ?? 0),
+                'name' => (string) $catalogSubject['name'],
+                'credits' => (float) $catalogSubject['credits'],
                 'registered' => ! empty($s['registered']),
                 'transferred' => ! empty($s['transferred']),
                 'remark' => trim((string) ($s['remark'] ?? '')),
@@ -661,6 +703,17 @@ final readonly class CourseRegistrationService
             if ($code === '' && $name === '') {
                 continue;
             }
+            if ($code === '') {
+                throw ValidationException::withMessages([
+                    'elective_subjects' => 'กรุณาระบุรหัสวิชาเลือกให้ครบถ้วน',
+                ]);
+            }
+            if (isset($seenCodes[$code])) {
+                throw ValidationException::withMessages([
+                    'elective_subjects' => "พบรหัสวิชาซ้ำ {$code}",
+                ]);
+            }
+            $seenCodes[$code] = true;
             $electiveSanitized[] = [
                 'code' => $code,
                 'name' => $name,
@@ -669,6 +722,21 @@ final readonly class CourseRegistrationService
                 'transferred' => ! empty($s['transferred']),
                 'remark' => trim((string) ($s['remark'] ?? '')),
             ];
+        }
+
+        $creditPolicy = $this->registrationPolicy(
+            $student,
+            $progress,
+            $compulsorySanitized,
+            $electiveSanitized,
+        );
+        if ($creditPolicy['exceeds_limit']) {
+            $kind = $creditPolicy['is_potential_graduate'] ? 'ภาคเรียนสุดท้าย' : 'ภาคเรียนปกติ';
+            throw ValidationException::withMessages([
+                'credits' => 'ลงทะเบียนรวม '.number_format($creditPolicy['total_selected'], 2)
+                    .' หน่วยกิต เกินเพดาน'.$kind.' '.$creditPolicy['applicable_limit']
+                    .' หน่วยกิต (เกิน '.number_format($creditPolicy['excess_credits'], 2).' หน่วยกิต)',
+            ]);
         }
 
         $studentInfo = isset($data['student_info']) && is_array($data['student_info'])
@@ -762,7 +830,7 @@ final readonly class CourseRegistrationService
      * @param  array<string, bool>  $existingTerms
      * @return list<string>
      */
-    private function resolveWorkspaceTerms(array $existingTerms, ?string $baseMaxTerm = null): array
+    private function resolveWorkspaceTerms(array $existingTerms, ?string $baseMaxTerm, int $districtId): array
     {
         $termsMap = $existingTerms;
 
@@ -786,6 +854,7 @@ final readonly class CourseRegistrationService
 
         // Also check any terms saved in learning_course_registrations
         $savedTerms = DB::table('learning_course_registrations')
+            ->where('district_id', $districtId)
             ->distinct()
             ->pluck('academic_term')
             ->filter()
@@ -802,5 +871,124 @@ final readonly class CourseRegistrationService
         usort($finalList, static fn (string $a, string $b): int => AcademicTerm::sortKey($b) <=> AcademicTerm::sortKey($a));
 
         return array_values($finalList);
+    }
+
+    /**
+     * @param  list<Grade>  $grades
+     * @return array{compulsory_earned: float, elective_earned: float, completed_codes: array<string, bool>}
+     */
+    private function academicProgress(Student $student, array $grades): array
+    {
+        $completed = [];
+        $compulsoryCodes = array_fill_keys(
+            array_column(CurriculumCatalog::compulsorySubjects($student->level), 'code'),
+            true,
+        );
+        foreach ($grades as $grade) {
+            if (! $grade->transferred && ! $grade->isPassed()) {
+                continue;
+            }
+
+            $code = trim($grade->subjectCode);
+            if ($code === '' || isset($completed[$code])) {
+                continue;
+            }
+
+            $completed[$code] = [
+                'type' => isset($compulsoryCodes[$code]) ? 'compulsory' : 'elective',
+                'credits' => max(0, $grade->credits),
+            ];
+        }
+
+        $compulsoryFromGrades = 0.0;
+        $electiveFromGrades = 0.0;
+        foreach ($completed as $subject) {
+            if ($subject['type'] === 'compulsory') {
+                $compulsoryFromGrades += $subject['credits'];
+            } else {
+                $electiveFromGrades += $subject['credits'];
+            }
+        }
+
+        return [
+            'compulsory_earned' => max($student->compulsoryCreditsEarned, $compulsoryFromGrades),
+            'elective_earned' => max($student->electiveCreditsEarned, $electiveFromGrades),
+            'completed_codes' => array_fill_keys(array_keys($completed), true),
+        ];
+    }
+
+    /**
+     * @param  array{compulsory_earned: float, elective_earned: float, completed_codes: array<string, bool>}  $progress
+     * @param  list<array<string, mixed>>  $compulsorySubjects
+     * @param  list<array<string, mixed>>  $electiveSubjects
+     * @return array<string, float|bool>
+     */
+    private function registrationPolicy(
+        Student $student,
+        array $progress,
+        array $compulsorySubjects,
+        array $electiveSubjects,
+    ): array {
+        $selected = static function (array $subjects, array $completedCodes): float {
+            $credits = 0.0;
+            $seen = [];
+            foreach ($subjects as $subject) {
+                $code = trim((string) ($subject['code'] ?? ''));
+                if ($code === '' || isset($seen[$code]) || isset($completedCodes[$code])) {
+                    continue;
+                }
+                $seen[$code] = true;
+                if (! empty($subject['registered']) || ! empty($subject['transferred'])) {
+                    $credits += max(0, (float) ($subject['credits'] ?? 0));
+                }
+            }
+
+            return round($credits, 2);
+        };
+        $termLoad = static function (array $subjects): float {
+            $credits = 0.0;
+            $seen = [];
+            foreach ($subjects as $subject) {
+                $code = trim((string) ($subject['code'] ?? ''));
+                if ($code === '' || isset($seen[$code]) || empty($subject['registered']) || ! empty($subject['transferred'])) {
+                    continue;
+                }
+                $seen[$code] = true;
+                $credits += max(0, (float) ($subject['credits'] ?? 0));
+            }
+
+            return round($credits, 2);
+        };
+
+        $requirements = CurriculumCatalog::creditRequirements($student->level);
+        $policy = RegistrationCreditPolicy::evaluate(
+            $student->level,
+            (float) $progress['compulsory_earned'],
+            (float) $progress['elective_earned'],
+            $selected($compulsorySubjects, $progress['completed_codes']),
+            $selected($electiveSubjects, $progress['completed_codes']),
+            $student->compulsoryCreditsRequired > 0 ? $student->compulsoryCreditsRequired : $requirements['compulsory'],
+            $student->electiveCreditsRequired > 0 ? $student->electiveCreditsRequired : $requirements['elective'],
+        );
+
+        $policy['compulsory_selected'] = $termLoad($compulsorySubjects);
+        $policy['elective_selected'] = $termLoad($electiveSubjects);
+        $policy['total_selected'] = round($policy['compulsory_selected'] + $policy['elective_selected'], 2);
+        $policy['is_potential_graduate'] = $student->status === 'studying'
+            && $policy['projected_compulsory'] >= $policy['compulsory_required']
+            && $policy['projected_elective'] >= $policy['elective_required'];
+        $policy['is_active_student'] = $student->status === 'studying';
+        $policy['applicable_limit'] = $policy['is_potential_graduate']
+            ? $policy['final_term_limit']
+            : $policy['regular_limit'];
+        $policy['excess_credits'] = round(max(0, $policy['total_selected'] - $policy['applicable_limit']), 2);
+        $policy['exceeds_limit'] = $policy['excess_credits'] > 0;
+
+        return $policy;
+    }
+
+    private function studentKey(Student $student): string
+    {
+        return "{$student->districtId}|{$student->level}|{$student->code}";
     }
 }

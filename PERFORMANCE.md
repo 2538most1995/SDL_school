@@ -86,10 +86,11 @@
 3. คะแนนใช้ index ตาม course scope (`district_id`, `academic_term`, `subject_code`, `education_level`) และ unique key ราย scorebook/component/student; การแยกคะแนนเก็บกับปลายภาคอ่าน component ของสมุดคะแนนเป็นชุดเดิม และ roster โหลดจากชุด import ล่าสุดแบบ join เดียว ไม่เพิ่ม query รายคน
 4. ต้นแบบโครงสร้างคะแนนอ่านด้วย `district_id` index และจำกัดสูงสุด 200 รายการต่อ request; การกรองต้นแบบทุกรายวิชา/เฉพาะบางวิชาทำใน memory จาก JSON ขนาดเล็กเพื่อให้ทำงานเหมือนกันทั้ง MySQL และ SQLite โดยไม่เกิด query รายต้นแบบ คำสั่งใช้กับทุกรายวิชาอ่าน roster ที่ถูก scope ครั้งเดียว แล้วตรวจ/สร้างสมุดคะแนนต่อ subject; ปริมาณวิชาจริงบน production และเวลารวมยัง `Not verified`
 5. `exam_rooms`: migration ล่าสุดมี (`district_id`, `term`, `subject_code`) แล้ว; ตรวจว่า wildcard-term query ใช้ prefix นี้ได้ตามข้อมูลจริง
-6. import batch/history joins: ตรวจ FK/index ของ `import_history_id`, (`district_id`, `batch_key`) และ ordering latest batch
-7. `announcements`: migration มี (`district_id`, `is_active`, `updated_at`) เพื่ออ่านประกาศที่เปิดล่าสุดโดยไม่สแกนข้ามอำเภอ และหน้า admin จำกัดผลลัพธ์ล่าสุดไว้ 100 รายการ; live cardinality และ MySQL plan ยัง `Not verified`
-8. `statistics_report_preferences`: unique (`user_id`, `district_id`, `report_key`) รองรับการโหลด/บันทึกรูปแบบรายงานหนึ่งแถวต่อ scope โดยตรง; live MySQL plan ยัง `Not verified`
-9. `public_relations_posts`: composite index (`district_id`, `is_published`, `published_at`) รองรับการอ่านข่าวที่เผยแพร่ล่าสุดของนักศึกษา หน้า admin จำกัด 100 รายการและหน้า student จำกัด 50 รายการ; รูปตอบด้วย private cache 1 ชั่วโมง แต่ live cardinality, response time และ MySQL plan ยัง `Not verified`
+6. `learning_course_registrations`: unique (`district_id`, `academic_term`, `student_code`) รองรับการอ่านรายการรายภาคเรียน; workspace โหลดผลการเรียนของนักศึกษาที่ผ่านตัวกรองด้วย `gradesForMany()` หนึ่งชุดแทน query รายคน และค้นหา term ที่เคยบันทึกภายใน district เดียวกันเพื่อไม่สแกนข้ามอำเภอ; live MySQL plan ยัง `Not verified`
+7. import batch/history joins: ตรวจ FK/index ของ `import_history_id`, (`district_id`, `batch_key`) และ ordering latest batch
+8. `announcements`: migration มี (`district_id`, `is_active`, `updated_at`) เพื่ออ่านประกาศที่เปิดล่าสุดโดยไม่สแกนข้ามอำเภอ และหน้า admin จำกัดผลลัพธ์ล่าสุดไว้ 100 รายการ; live cardinality และ MySQL plan ยัง `Not verified`
+9. `statistics_report_preferences`: unique (`user_id`, `district_id`, `report_key`) รองรับการโหลด/บันทึกรูปแบบรายงานหนึ่งแถวต่อ scope โดยตรง; live MySQL plan ยัง `Not verified`
+10. `public_relations_posts`: composite index (`district_id`, `is_published`, `published_at`) รองรับการอ่านข่าวที่เผยแพร่ล่าสุดของนักศึกษา หน้า admin จำกัด 100 รายการและหน้า student จำกัด 50 รายการ; รูปตอบด้วย private cache 1 ชั่วโมง แต่ live cardinality, response time และ MySQL plan ยัง `Not verified`
 
 ผลของ index ต่อ INSERT/UPDATE/DELETE และ execution plan จริง: `Not verified`.
 

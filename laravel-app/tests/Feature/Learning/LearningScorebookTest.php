@@ -86,6 +86,17 @@ final class LearningScorebookTest extends TestCase
             ->assertJsonPath('data.students.0.note', 'ตั้งใจเรียน')
             ->assertJsonPath('data.scorebook.can_edit', true);
 
+        Sanctum::actingAs(User::factory()->create([
+            'role' => 'admin',
+            'district_id' => $this->district->id,
+        ]));
+        $this->getJson("/api/v1/learning/scores/workspace?term=2/2568&subject_code={$subject}&level=3&group=SENA-M3-A&scorebook_id={$scorebookId}")
+            ->assertOk()
+            ->assertJsonPath('data.students.0.coursework_score', 60)
+            ->assertJsonPath('data.students.0.final_exam_score', 25)
+            ->assertJsonPath('data.students.0.total', 85)
+            ->assertJsonPath('data.scorebook.can_edit', true);
+
         $this->assertDatabaseHas('audit_logs', [
             'district_id' => $this->district->id,
             'event' => 'learning.scorebook.entries_saved',

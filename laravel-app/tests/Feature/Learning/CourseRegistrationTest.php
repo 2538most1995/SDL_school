@@ -2,6 +2,11 @@
 
 namespace Tests\Feature\Learning;
 
+use App\Domain\Students\Models\Grade;
+use App\Domain\Students\Models\Student;
+use App\Domain\Students\Repositories\DemoStudentRepository;
+use App\Domain\Students\Repositories\StudentRepository;
+use App\Domain\Students\Support\CurriculumCatalog;
 use App\Models\District;
 use App\Models\User;
 use Illuminate\Foundation\Testing\RefreshDatabase;
@@ -18,6 +23,7 @@ final class CourseRegistrationTest extends TestCase
     protected function setUp(): void
     {
         parent::setUp();
+        config()->set('system_data.write_enabled', true);
         $this->district = District::create(['name' => 'อำเภอเสนา', 'code' => 'sena', 'is_active' => true]);
     }
 
@@ -108,6 +114,127 @@ final class CourseRegistrationTest extends TestCase
             'academic_term' => '1/2569',
             'notes' => 'ลงทะเบียนครบตามแผนการเรียน',
         ]);
+        $this->assertDatabaseHas('audit_logs', [
+            'district_id' => $this->district->id,
+            'user_id' => $teacher->id,
+            'event' => 'learning.course_registration.saved',
+        ]);
+    }
+
+    public function test_registration_rejects_credits_above_the_regular_term_limit(): void
+    {
+        Sanctum::actingAs($this->viewer('admin'));
+
+        $response = $this->postJson('/api/v1/learning/registration/student/6650100001', [
+            'academic_term' => '1/2569',
+            'compulsory_subjects' => [
+                ['code' => 'ทร11001', 'name' => 'แก้ชื่อจาก client', 'credits' => 1, 'registered' => true, 'transferred' => false],
+                ['code' => 'พท11001', 'name' => 'ภาษาไทย', 'credits' => 3, 'registered' => true, 'transferred' => false],
+                ['code' => 'พต11001', 'name' => 'ภาษาอังกฤษพื้นฐาน', 'credits' => 3, 'registered' => true, 'transferred' => false],
+                ['code' => 'พค11001', 'name' => 'คณิตศาสตร์', 'credits' => 3, 'registered' => true, 'transferred' => false],
+            ],
+            'elective_subjects' => [
+                ['code' => 'พว12010', 'name' => 'การใช้พลังงานไฟฟ้าในชีวิตประจำวัน 1', 'credits' => 2, 'registered' => true, 'transferred' => false],
+            ],
+        ]);
+
+        $response->assertUnprocessable()->assertJsonValidationErrors('credits');
+        $this->assertDatabaseMissing('learning_course_registrations', [
+            'district_id' => $this->district->id,
+            'student_code' => '6650100001',
+            'academic_term' => '1/2569',
+        ]);
+    }
+
+    public function test_registration_normalizes_term_and_rejects_duplicate_subject_codes(): void
+    {
+        Sanctum::actingAs($this->viewer('admin'));
+
+        $this->postJson('/api/v1/learning/registration/student/6650100001', [
+            'academic_term' => '2569/1',
+            'compulsory_subjects' => [
+                ['code' => 'พท11001', 'credits' => 3, 'registered' => true, 'transferred' => false],
+            ],
+            'elective_subjects' => [],
+        ])->assertOk();
+
+        $this->assertDatabaseHas('learning_course_registrations', [
+            'district_id' => $this->district->id,
+            'student_code' => '6650100001',
+            'academic_term' => '1/2569',
+        ]);
+
+        $this->postJson('/api/v1/learning/registration/student/6650100001', [
+            'academic_term' => '1/2569',
+            'compulsory_subjects' => [
+                ['code' => 'พท11001', 'credits' => 3, 'registered' => true, 'transferred' => false],
+            ],
+            'elective_subjects' => [
+                ['code' => 'พท11001', 'credits' => 1, 'registered' => true, 'transferred' => false],
+            ],
+        ])->assertUnprocessable()->assertJsonValidationErrors('elective_subjects');
+    }
+
+    public function test_registration_write_respects_system_write_flag(): void
+    {
+        config()->set('system_data.write_enabled', false);
+        Sanctum::actingAs($this->viewer('admin'));
+
+        $this->postJson('/api/v1/learning/registration/student/6650100001', [
+            'academic_term' => '1/2569',
+            'compulsory_subjects' => [],
+            'elective_subjects' => [],
+        ])->assertServiceUnavailable();
+    }
+
+    public function test_workspace_marks_students_who_can_complete_both_credit_groups(): void
+    {
+        $admin = $this->viewer('admin');
+        Sanctum::actingAs($admin);
+
+        $compulsory = array_map(
+            static fn (array $subject): array => [
+                ...$subject,
+                'registered' => true,
+                'transferred' => false,
+                'remark' => '',
+            ],
+            CurriculumCatalog::compulsorySubjects(1),
+        );
+        $elective = array_map(
+            static fn (int $index): array => [
+                'code' => "เลือก{$index}",
+                'name' => "วิชาเลือก {$index}",
+                'credits' => 2,
+                'registered' => true,
+                'transferred' => false,
+                'remark' => '',
+            ],
+            range(1, 6),
+        );
+
+        DB::table('learning_course_registrations')->insert([
+            'district_id' => $this->district->id,
+            'academic_term' => '1/2569',
+            'student_code' => '6650100001',
+            'education_level' => 1,
+            'group_code' => 'SENA-P1-A',
+            'student_info' => null,
+            'compulsory_subjects' => json_encode($compulsory, JSON_UNESCAPED_UNICODE),
+            'elective_subjects' => json_encode($elective, JSON_UNESCAPED_UNICODE),
+            'notes' => null,
+            'registered_by' => $admin->id,
+            'created_at' => now(),
+            'updated_at' => now(),
+        ]);
+
+        $this->getJson('/api/v1/learning/registration/workspace?term=1/2569&search=6650100001')
+            ->assertOk()
+            ->assertJsonCount(1, 'data.items')
+            ->assertJsonPath('data.items.0.code', '6650100001')
+            ->assertJsonPath('data.items.0.is_potential_graduate', true)
+            ->assertJsonPath('data.items.0.registration.credit_policy.applicable_limit', 17)
+            ->assertJsonPath('data.items.0.registration.credit_policy.exceeds_limit', true);
     }
 
     public function test_teacher_cannot_save_registration_for_student_outside_assigned_group(): void
@@ -176,9 +303,9 @@ final class CourseRegistrationTest extends TestCase
 
     public function test_group_subdistrict_resolution_and_export_document(): void
     {
-        $this->assertSame('เจ้าเสด็จ', \App\Domain\Students\Support\CurriculumCatalog::resolveGroupSubdistrict('กลุ่ม ศกร.ระดับตำบลเจ้าเสด็จ'));
-        $this->assertSame('เสนา', \App\Domain\Students\Support\CurriculumCatalog::resolveGroupSubdistrict('ศกร.ระดับตำบลเสนา'));
-        $this->assertSame('บ้านแพน', \App\Domain\Students\Support\CurriculumCatalog::resolveGroupSubdistrict('กศน.ตำบลบ้านแพน'));
+        $this->assertSame('เจ้าเสด็จ', CurriculumCatalog::resolveGroupSubdistrict('กลุ่ม ศกร.ระดับตำบลเจ้าเสด็จ'));
+        $this->assertSame('เสนา', CurriculumCatalog::resolveGroupSubdistrict('ศกร.ระดับตำบลเสนา'));
+        $this->assertSame('บ้านแพน', CurriculumCatalog::resolveGroupSubdistrict('กศน.ตำบลบ้านแพน'));
 
         $teacher = $this->viewer('teacher', ['SENA-P1-A']);
         $teacher->name = 'คุณครู ทดสอบ';
@@ -328,16 +455,25 @@ final class CourseRegistrationTest extends TestCase
         Sanctum::actingAs($admin);
 
         // Bind custom repository providing a grade 'ข' (absent) for ทร11001
-        $demoRepo = $this->app->make(\App\Domain\Students\Repositories\DemoStudentRepository::class);
-        $customRepo = new class($demoRepo) implements \App\Domain\Students\Repositories\StudentRepository {
-            public function __construct(private readonly \App\Domain\Students\Repositories\DemoStudentRepository $inner) {}
-            public function students(?array $districtIds = null): array { return $this->inner->students($districtIds); }
-            public function find(string $code, ?int $districtId = null, ?int $level = null): ?\App\Domain\Students\Models\Student {
+        $demoRepo = $this->app->make(DemoStudentRepository::class);
+        $customRepo = new class($demoRepo) implements StudentRepository
+        {
+            public function __construct(private readonly DemoStudentRepository $inner) {}
+
+            public function students(?array $districtIds = null): array
+            {
+                return $this->inner->students($districtIds);
+            }
+
+            public function find(string $code, ?int $districtId = null, ?int $level = null): ?Student
+            {
                 return $this->inner->find($code, $districtId, $level);
             }
-            public function gradesFor(\App\Domain\Students\Models\Student $student): array {
+
+            public function gradesFor(Student $student): array
+            {
                 $grades = $this->inner->gradesFor($student);
-                $grades[] = new \App\Domain\Students\Models\Grade(
+                $grades[] = new Grade(
                     studentCode: $student->code,
                     subjectCode: 'ทร11001',
                     subjectName: 'ทักษะการเรียนรู้',
@@ -348,15 +484,32 @@ final class CourseRegistrationTest extends TestCase
                     transferred: false,
                     examAttended: false,
                 );
+
                 return $grades;
             }
-            public function gradesForMany(array $students): array { return $this->inner->gradesForMany($students); }
-            public function subjectsFor(\App\Domain\Students\Models\Student $student): array { return $this->inner->subjectsFor($student); }
-            public function kpchFor(\App\Domain\Students\Models\Student $student): array { return $this->inner->kpchFor($student); }
-            public function moralFor(\App\Domain\Students\Models\Student $student): array { return $this->inner->moralFor($student); }
+
+            public function gradesForMany(array $students): array
+            {
+                return $this->inner->gradesForMany($students);
+            }
+
+            public function subjectsFor(Student $student): array
+            {
+                return $this->inner->subjectsFor($student);
+            }
+
+            public function kpchFor(Student $student): array
+            {
+                return $this->inner->kpchFor($student);
+            }
+
+            public function moralFor(Student $student): array
+            {
+                return $this->inner->moralFor($student);
+            }
         };
 
-        $this->app->instance(\App\Domain\Students\Repositories\StudentRepository::class, $customRepo);
+        $this->app->instance(StudentRepository::class, $customRepo);
 
         $res = $this->getJson('/api/v1/learning/registration/student/6650100001');
         $res->assertOk();

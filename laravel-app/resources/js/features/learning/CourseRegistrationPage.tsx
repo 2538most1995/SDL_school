@@ -30,6 +30,7 @@ import { StatTile } from '../../components/StatTile';
 import { StatusBadge } from '../../components/StatusBadge';
 import { showErrorAlert, showSuccessAlert } from '../../lib/feedback';
 import { getFeatureDataWithDemo, sendFeatureData } from '../api';
+import { evaluateLiveRegistrationPolicy, type RegistrationCreditPolicy } from './registrationCreditPolicy';
 
 export interface CourseStatus {
     status: 'passed' | 'transferred' | 'pending_grade' | 'failed' | 'absent_exam' | 'not_taken';
@@ -53,6 +54,7 @@ type WorkspaceItem = {
     group_name: string;
     credits_earned: number;
     credits_required: number;
+    is_potential_graduate: boolean;
     registration: {
         is_saved: boolean;
         compulsory_count: number;
@@ -60,6 +62,7 @@ type WorkspaceItem = {
         transferred_count: number;
         total_count: number;
         updated_at: string | null;
+        credit_policy: RegistrationCreditPolicy;
     };
 };
 
@@ -148,6 +151,7 @@ type StudentRegistrationData = {
     compulsory_subjects: SubjectRow[];
     elective_subjects: SubjectRow[];
     common_electives: CommonElective[];
+    credit_policy: RegistrationCreditPolicy;
     notes: string;
     is_saved: boolean;
 };
@@ -312,19 +316,32 @@ export function CourseRegistrationPage() {
 
     // Calculate term totals
     const termCompulsoryCredits = useMemo(
-        () => compulsoryRows.filter((r) => r.registered).reduce((acc, cur) => acc + (cur.credits || 0), 0),
+        () => compulsoryRows
+            .filter((row) => row.registered && !row.transferred)
+            .reduce((total, row) => total + (row.credits || 0), 0),
         [compulsoryRows],
     );
     const termElectiveCredits = useMemo(
-        () => electiveRows.filter((r) => r.registered).reduce((acc, cur) => acc + (cur.credits || 0), 0),
+        () => electiveRows
+            .filter((row) => row.registered && !row.transferred)
+            .reduce((total, row) => total + (row.credits || 0), 0),
         [electiveRows],
     );
     const termTotalCredits = termCompulsoryCredits + termElectiveCredits;
+    const liveCreditPolicy = useMemo(
+        () => studentDetail?.credit_policy
+            ? evaluateLiveRegistrationPolicy(studentDetail.credit_policy, compulsoryRows, electiveRows)
+            : null,
+        [compulsoryRows, electiveRows, studentDetail?.credit_policy],
+    );
 
     // Save mutation
     const saveMutation = useMutation({
         mutationFn: async () => {
             if (!selectedStudentCode || !studentDetail) return;
+            if (liveCreditPolicy?.exceeds_limit) {
+                throw new Error(`ลงทะเบียนเกินเพดาน ${liveCreditPolicy.applicable_limit} หน่วยกิต`);
+            }
             const payload = {
                 academic_term: studentDetail.academic_term,
                 student_info: studentInfo,
@@ -413,6 +430,12 @@ export function CourseRegistrationPage() {
                         className="text-left font-bold text-brand-700 hover:underline"
                     >
                         {row.original.name}
+                        {row.original.is_potential_graduate && (
+                            <>
+                                <span aria-hidden="true" className="ml-1 text-amber-700">*</span>
+                                <span className="sr-only"> นักศึกษาที่มีโอกาสจบ</span>
+                            </>
+                        )}
                     </button>
                 ),
             },
@@ -587,6 +610,10 @@ export function CourseRegistrationPage() {
 
                     {/* Filter Bar */}
                     <Panel title="รายชื่อนักศึกษาสำหรับการลงทะเบียน">
+                        <p className="mb-4 text-xs font-medium text-slate-600">
+                            <span aria-hidden="true" className="font-black text-amber-700">*</span>{' '}
+                            นักศึกษาที่มีโอกาสจบ เมื่อหน่วยกิตวิชาบังคับและวิชาเลือกครบตามเกณฑ์หลังผ่านรายวิชาที่ลงทะเบียน
+                        </p>
                         <div className="mb-4 grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
                             <div>
                                 <label className="block text-xs font-bold text-slate-700 mb-1">ภาคเรียน</label>
@@ -718,7 +745,7 @@ export function CourseRegistrationPage() {
                                 appearance="primary"
                                 icon={<FloppyDisk size={18} />}
                                 onClick={() => saveMutation.mutate()}
-                                disabled={saveMutation.isPending}
+                                disabled={saveMutation.isPending || liveCreditPolicy?.exceeds_limit === true}
                             >
                                 {saveMutation.isPending ? 'กำลังบันทึก...' : 'บันทึกการลงทะเบียน'}
                             </Button>
@@ -738,10 +765,19 @@ export function CourseRegistrationPage() {
                                         <div className="flex items-center gap-2">
                                             <h2 className="text-xl font-black text-slate-900">
                                                 {studentInfo?.name || studentDetail.student.name}
+                                                {liveCreditPolicy?.is_potential_graduate && (
+                                                    <>
+                                                        <span aria-hidden="true" className="ml-1 text-amber-700">*</span>
+                                                        <span className="sr-only"> นักศึกษาที่มีโอกาสจบ</span>
+                                                    </>
+                                                )}
                                             </h2>
                                             <StatusBadge tone="info">
                                                 {studentDetail.student.level_label}
                                             </StatusBadge>
+                                            {liveCreditPolicy?.is_potential_graduate && (
+                                                <StatusBadge tone="warning">มีโอกาสจบ</StatusBadge>
+                                            )}
                                         </div>
                                         <p className="mt-1 font-mono text-sm text-slate-500">
                                             รหัสนักศึกษา: {studentInfo?.code || studentDetail.student.code} | เลขบัตร ปชช: {studentInfo?.citizen_id || studentDetail.student.citizen_id}
@@ -1073,10 +1109,11 @@ export function CourseRegistrationPage() {
                                     <div className="rounded-xl bg-emerald-50 p-2.5">
                                         <div className="text-[11px] font-bold text-emerald-700">เลือกลงเทอมนี้</div>
                                         <div className="mt-0.5 text-lg font-black text-emerald-950">
-                                            {termTotalCredits} นก.
+                                            {termTotalCredits} / {liveCreditPolicy?.applicable_limit ?? '-'} นก.
                                         </div>
                                         <div className="text-[10px] text-emerald-600">
-                                            (บังคับ {termCompulsoryCredits} + เลือก {termElectiveCredits})
+                                            {liveCreditPolicy?.is_potential_graduate ? 'เพดานภาคเรียนสุดท้าย' : 'เพดานภาคเรียนปกติ'}
+                                            {' '}· บังคับ {termCompulsoryCredits} + เลือก {termElectiveCredits}
                                         </div>
                                     </div>
                                     <div className="rounded-xl bg-amber-50 p-2.5">
@@ -1093,6 +1130,20 @@ export function CourseRegistrationPage() {
                                     </div>
                                 </div>
                             </div>
+
+                            {liveCreditPolicy?.exceeds_limit && (
+                                <div role="alert" className="flex items-start gap-3 rounded-2xl border border-rose-300 bg-rose-50 p-4 text-rose-950 shadow-sm">
+                                    <WarningCircle size={22} weight="fill" className="mt-0.5 shrink-0 text-rose-700" />
+                                    <div>
+                                        <p className="font-black">ลงทะเบียนเกินเพดานหน่วยกิต</p>
+                                        <p className="mt-1 text-sm font-medium">
+                                            ลงทะเบียน {liveCreditPolicy.total_selected} หน่วยกิต เกินเพดาน
+                                            {liveCreditPolicy.is_potential_graduate ? 'ภาคเรียนสุดท้าย' : 'ภาคเรียนปกติ'}{' '}
+                                            {liveCreditPolicy.applicable_limit} หน่วยกิต จำนวน {liveCreditPolicy.excess_credits} หน่วยกิต
+                                        </p>
+                                    </div>
+                                </div>
+                            )}
 
                             {/* Status Badges Legend */}
                             <div className="flex flex-wrap items-center gap-2 rounded-2xl bg-white border border-slate-200/80 p-3 shadow-2xs text-xs">
@@ -1185,6 +1236,7 @@ export function CourseRegistrationPage() {
                                                         <input
                                                             type="checkbox"
                                                             checked={row.registered}
+                                                            aria-label={`ลงทะเบียนวิชา ${row.name}`}
                                                             onChange={(e) => {
                                                                 const updated = [...compulsoryRows];
                                                                 updated[idx].registered = e.target.checked;
@@ -1199,6 +1251,7 @@ export function CourseRegistrationPage() {
                                                         <input
                                                             type="checkbox"
                                                             checked={row.transferred}
+                                                            aria-label={`เทียบโอนวิชา ${row.name}`}
                                                             onChange={(e) => {
                                                                 const updated = [...compulsoryRows];
                                                                 updated[idx].transferred = e.target.checked;
@@ -1438,6 +1491,7 @@ export function CourseRegistrationPage() {
                                                             <input
                                                                 type="checkbox"
                                                                 checked={row.registered}
+                                                                aria-label={`ลงทะเบียนวิชา ${row.name}`}
                                                                 onChange={(e) => {
                                                                     const updated = [...electiveRows];
                                                                     updated[idx].registered = e.target.checked;
@@ -1452,6 +1506,7 @@ export function CourseRegistrationPage() {
                                                             <input
                                                                 type="checkbox"
                                                                 checked={row.transferred}
+                                                                aria-label={`เทียบโอนวิชา ${row.name}`}
                                                                 onChange={(e) => {
                                                                     const updated = [...electiveRows];
                                                                     updated[idx].transferred = e.target.checked;
@@ -1537,7 +1592,7 @@ export function CourseRegistrationPage() {
                                         appearance="primary"
                                         icon={<FloppyDisk size={18} />}
                                         onClick={() => saveMutation.mutate()}
-                                        disabled={saveMutation.isPending}
+                                        disabled={saveMutation.isPending || liveCreditPolicy?.exceeds_limit === true}
                                     >
                                         {saveMutation.isPending ? 'กำลังบันทึก...' : 'บันทึกการลงทะเบียน'}
                                     </Button>
