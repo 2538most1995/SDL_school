@@ -134,6 +134,7 @@ final readonly class CourseRegistrationService
                 'group_name' => $student->groupName,
                 'credits_earned' => $student->creditsEarned,
                 'credits_required' => $student->creditsRequired,
+                'is_credit_complete' => $policy['is_credit_complete'],
                 'is_potential_graduate' => $policy['is_potential_graduate'],
                 'registration' => $reg,
             ];
@@ -731,7 +732,7 @@ final readonly class CourseRegistrationService
             $electiveSanitized,
         );
         if ($creditPolicy['exceeds_limit']) {
-            $kind = $creditPolicy['is_potential_graduate'] ? 'ภาคเรียนสุดท้าย' : 'ภาคเรียนปกติ';
+            $kind = $creditPolicy['uses_final_term_limit'] ? 'ภาคเรียนสุดท้าย' : 'ภาคเรียนปกติ';
             throw ValidationException::withMessages([
                 'credits' => 'ลงทะเบียนรวม '.number_format($creditPolicy['total_selected'], 2)
                     .' หน่วยกิต เกินเพดาน'.$kind.' '.$creditPolicy['applicable_limit']
@@ -974,11 +975,16 @@ final readonly class CourseRegistrationService
         $policy['compulsory_selected'] = $termLoad($compulsorySubjects);
         $policy['elective_selected'] = $termLoad($electiveSubjects);
         $policy['total_selected'] = round($policy['compulsory_selected'] + $policy['elective_selected'], 2);
+        $policy['is_credit_complete'] = $student->status === 'studying'
+            && $policy['compulsory_earned'] >= $policy['compulsory_required']
+            && $policy['elective_earned'] >= $policy['elective_required'];
         $policy['is_potential_graduate'] = $student->status === 'studying'
+            && ! $policy['is_credit_complete']
             && $policy['projected_compulsory'] >= $policy['compulsory_required']
             && $policy['projected_elective'] >= $policy['elective_required'];
         $policy['is_active_student'] = $student->status === 'studying';
-        $policy['applicable_limit'] = $policy['is_potential_graduate']
+        $policy['uses_final_term_limit'] = $policy['is_credit_complete'] || $policy['is_potential_graduate'];
+        $policy['applicable_limit'] = $policy['uses_final_term_limit']
             ? $policy['final_term_limit']
             : $policy['regular_limit'];
         $policy['excess_credits'] = round(max(0, $policy['total_selected'] - $policy['applicable_limit']), 2);

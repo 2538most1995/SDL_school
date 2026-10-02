@@ -4,6 +4,8 @@ export type ImportedScoreFilters = {
     group: string;
     subjectCode: string;
     search: string;
+    page?: number;
+    perPage?: number;
 };
 
 export const IMPORTED_ASSESSMENT_COUNT = 9;
@@ -27,6 +29,8 @@ export function buildImportedScoresPath(filters: ImportedScoreFilters): string {
     if (filters.group) query.set('group', filters.group);
     if (filters.subjectCode) query.set('subject_code', filters.subjectCode);
     if (filters.search.trim()) query.set('search', filters.search.trim());
+    if ((filters.page ?? 1) > 1) query.set('page', String(filters.page));
+    if (filters.perPage) query.set('per_page', String(filters.perPage));
 
     return `/api/v1/learning/scores/imported${query.size ? `?${query.toString()}` : ''}`;
 }
@@ -46,4 +50,3 @@ export function normalizeAssessmentScores(scores?: Array<number | null>): Array<
         return typeof value === 'number' && Number.isFinite(value) ? value : null;
     });
 }
-

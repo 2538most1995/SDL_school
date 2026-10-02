@@ -28,7 +28,9 @@ final class RegistrationCreditPolicy
      *     projected_elective: float,
      *     compulsory_required: float,
      *     elective_required: float,
+     *     is_credit_complete: bool,
      *     is_potential_graduate: bool,
+     *     uses_final_term_limit: bool,
      *     regular_limit: float,
      *     final_term_limit: float,
      *     applicable_limit: float,
@@ -57,9 +59,13 @@ final class RegistrationCreditPolicy
         $projectedCompulsory = self::credits($compulsoryEarned + $compulsorySelected);
         $projectedElective = self::credits($electiveEarned + $electiveSelected);
         $totalSelected = self::credits($compulsorySelected + $electiveSelected);
-        $isPotentialGraduate = $projectedCompulsory >= $compulsoryRequired
+        $isCreditComplete = $compulsoryEarned >= $compulsoryRequired
+            && $electiveEarned >= $electiveRequired;
+        $isPotentialGraduate = ! $isCreditComplete
+            && $projectedCompulsory >= $compulsoryRequired
             && $projectedElective >= $electiveRequired;
-        $applicableLimit = $isPotentialGraduate ? $limits['final'] : $limits['regular'];
+        $usesFinalTermLimit = $isCreditComplete || $isPotentialGraduate;
+        $applicableLimit = $usesFinalTermLimit ? $limits['final'] : $limits['regular'];
         $excessCredits = self::credits(max(0, $totalSelected - $applicableLimit));
 
         return [
@@ -72,7 +78,9 @@ final class RegistrationCreditPolicy
             'projected_elective' => $projectedElective,
             'compulsory_required' => self::credits($compulsoryRequired),
             'elective_required' => self::credits($electiveRequired),
+            'is_credit_complete' => $isCreditComplete,
             'is_potential_graduate' => $isPotentialGraduate,
+            'uses_final_term_limit' => $usesFinalTermLimit,
             'regular_limit' => $limits['regular'],
             'final_term_limit' => $limits['final'],
             'applicable_limit' => $applicableLimit,

@@ -39,6 +39,7 @@ import { getFeatureDataWithDemo, sendFeatureData } from '../api';
 import { useDemoRole } from '../../context/DemoRoleContext';
 import { showErrorAlert, showSuccessAlert } from '../../lib/feedback';
 import { useLogout } from '../../lib/useLogout';
+import { summarizeGradeRows, summarizeGradesByTerm } from './gradeSummary';
 
 export function FacebookIcon({ className = 'size-4' }: { className?: string }) {
     return (
@@ -656,6 +657,14 @@ type StaffGradeSummary = {
     graded_credits: number;
     registered_subjects: number;
     passed_subjects: number;
+    term_summaries: Array<{
+        term: string;
+        gpa: number | null;
+        earned_credits: number;
+        graded_credits: number;
+        registered_subjects: number;
+        passed_subjects: number;
+    }>;
 };
 
 export function StudentDetailPage() {
@@ -817,27 +826,9 @@ function StudentGradesPage() {
     const rows = grades.data?.data ?? [];
     const terms = useMemo(() => Array.from(new Set(rows.map((row) => row.term).filter(Boolean))).sort(sortAcademicTermsDescending), [rows]);
     const filteredRows = useMemo(() => term ? rows.filter((row) => row.term === term) : rows, [rows, term]);
-    const summary = useMemo(() => {
-        let points = 0;
-        let credits = 0;
-        let earned = 0;
-        let compulsory = 0;
-        let elective = 0;
-        let passed = 0;
-        rows.forEach((row) => {
-            const grade = Number(row.grade);
-            if (Number.isFinite(grade) && grade >= 1) {
-                points += grade * row.credits;
-                credits += row.credits;
-                earned += row.credits;
-                if (row.type === 'compulsory') compulsory += row.credits;
-                if (row.type === 'elective') elective += row.credits;
-                passed += 1;
-            }
-        });
-
-        return { gpax: credits > 0 ? (Math.floor((points / credits) * 100) / 100).toFixed(2) : '-', earned, compulsory, elective, passed };
-    }, [rows]);
+    const cumulativeSummary = useMemo(() => summarizeGradeRows(rows), [rows]);
+    const selectedSummary = useMemo(() => summarizeGradeRows(filteredRows), [filteredRows]);
+    const termSummaries = useMemo(() => summarizeGradesByTerm(rows).sort((left, right) => sortAcademicTermsDescending(left.term, right.term)), [rows]);
     const columns = useMemo<ColumnDef<GradeRow>[]>(() => [
         { accessorKey: 'code', header: 'รหัสวิชา', size: 100, meta: { compactSize: 72 } },
         { accessorKey: 'subject', header: 'รายวิชา', size: 280, meta: { compactSize: 168 }, cell: ({ getValue }) => <span className="font-bold text-slate-950">{getValue<string>()}</span> },
@@ -851,12 +842,21 @@ function StudentGradesPage() {
         <div>
             <PageHeader title="ผลการเรียนของฉัน" description="ดูเกรด หน่วยกิต และความก้าวหน้ารายภาคเรียนได้ในหน้าจอเดียว" icon={ChartLineUp} category="ความก้าวหน้าการเรียน" />
             <div className="mb-5 grid gap-3 sm:grid-cols-2 xl:grid-cols-5">
-                <StatTile label="GPAX" value={summary.gpax} detail="คำนวณจากผลการเรียนจริง" icon={ChartLineUp} />
-                <StatTile label="หน่วยกิตสะสม" value={summary.earned} detail="รายวิชาที่ผ่านแล้ว" icon={BookOpenText} tone="sky" />
-                <StatTile label="หน่วยกิตวิชาบังคับ" value={summary.compulsory} detail="วิชาบังคับที่ผ่านแล้ว" icon={BookOpenText} tone="amber" />
-                <StatTile label="หน่วยกิตวิชาเลือก" value={summary.elective} detail="วิชาเลือกที่ผ่านแล้ว" icon={Sparkle} tone="rose" />
-                <StatTile label="รายวิชาที่ผ่าน" value={summary.passed} detail={`จากทั้งหมด ${rows.length} รายการ`} icon={CheckCircle} tone="amber" />
+                <StatTile label={term ? `GPA ${term}` : 'GPAX'} value={selectedSummary.gpa === null ? '-' : selectedSummary.gpa.toFixed(2)} detail={term ? 'เกรดเฉลี่ยของภาคเรียนที่เลือก' : 'เกรดเฉลี่ยสะสมทุกภาคเรียน'} icon={ChartLineUp} />
+                <StatTile label={term ? 'หน่วยกิตที่ผ่านในเทอม' : 'หน่วยกิตสะสม'} value={selectedSummary.earned} detail="รายวิชาที่ผ่านแล้ว" icon={BookOpenText} tone="sky" />
+                <StatTile label="หน่วยกิตวิชาบังคับ" value={selectedSummary.compulsory} detail={term ? `ภาคเรียน ${term}` : 'วิชาบังคับที่ผ่านแล้ว'} icon={BookOpenText} tone="amber" />
+                <StatTile label="หน่วยกิตวิชาเลือก" value={selectedSummary.elective} detail={term ? `ภาคเรียน ${term}` : 'วิชาเลือกที่ผ่านแล้ว'} icon={Sparkle} tone="rose" />
+                <StatTile label="รายวิชาที่ผ่าน" value={selectedSummary.passed} detail={`จาก ${selectedSummary.total} รายการ${term ? ` ใน ${term}` : ''}`} icon={CheckCircle} tone="amber" />
             </div>
+            {termSummaries.length > 0 && <Panel className="mb-5" title="GPA รายภาคเรียน" description={`GPAX สะสมทุกภาคเรียน ${cumulativeSummary.gpa === null ? '-' : cumulativeSummary.gpa.toFixed(2)}`}>
+                <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
+                    {termSummaries.map((item) => <button key={item.term} type="button" onClick={() => setTerm(item.term)} className={`rounded-2xl border p-4 text-left transition hover:-translate-y-0.5 hover:shadow-md ${term === item.term ? 'border-brand-400 bg-brand-50 ring-2 ring-brand-100' : 'border-slate-200 bg-white'}`}>
+                        <p className="text-xs font-bold text-slate-500">ภาคเรียน {item.term}</p>
+                        <p className="mt-1 text-2xl font-black tabular-nums text-brand-900">GPA {item.gpa === null ? '-' : item.gpa.toFixed(2)}</p>
+                        <p className="mt-2 text-xs text-slate-600">ผ่าน {item.passed}/{item.total} วิชา · {item.earned} หน่วยกิต</p>
+                    </button>)}
+                </div>
+            </Panel>}
             <Panel title="ผลการเรียนรายวิชา" action={(
                 <label className="flex items-center gap-2 text-sm font-bold text-slate-700">
                     <span>ภาคเรียน</span>
@@ -871,7 +871,7 @@ function StudentGradesPage() {
                 {grades.data && <DataTable data={filteredRows} columns={columns} responsiveMode="compact-table" emptyTitle="ไม่พบข้อมูลผลการเรียน" emptyDescription="ยังไม่มีข้อมูลเกรดในภาคเรียนที่เลือก" />}
             </Panel>
             {selectedGrade && <DetailDialog title={selectedGrade.subject} description="รายละเอียดผลการเรียนรายวิชา" onClose={() => setSelectedGrade(null)} items={[
-                { label: 'รหัสวิชา', value: selectedGrade.code }, { label: 'ภาคเรียน', value: selectedGrade.term }, { label: 'หน่วยกิต', value: selectedGrade.credits }, { label: 'ผลการเรียน', value: selectedGrade.grade || '-' }, { label: 'เกรดเฉลี่ยสะสม (GPAX)', value: summary.gpax }, { label: 'สรุปรายวิชา', value: `ผ่าน ${summary.passed} จาก ${rows.length} วิชา` },
+                { label: 'รหัสวิชา', value: selectedGrade.code }, { label: 'ภาคเรียน', value: selectedGrade.term }, { label: 'หน่วยกิต', value: selectedGrade.credits }, { label: 'ผลการเรียน', value: selectedGrade.grade || '-' }, { label: `GPA ภาคเรียน ${selectedGrade.term}`, value: termSummaries.find((item) => item.term === selectedGrade.term)?.gpa?.toFixed(2) ?? '-' }, { label: 'เกรดเฉลี่ยสะสม (GPAX)', value: cumulativeSummary.gpa?.toFixed(2) ?? '-' },
             ]} />}
         </div>
     );
@@ -1112,9 +1112,10 @@ type StaffMetricStudent = {
 };
 
 function StaffAcademicDetailDialog({ kind, student, onClose }: { kind: MetricKind; student: StaffMetricStudent; onClose: () => void }) {
+    const [gradeTerm, setGradeTerm] = useState('');
     const grades = useQuery({
         queryKey: ['staff-student-grades', student.code],
-        queryFn: ({ signal }) => getFeatureDataWithDemo<{ items: StaffGradeDetailRow[]; summary: StaffGradeSummary }>(`/api/v1/students/${encodeURIComponent(student.code)}/grades`, { items: [], summary: { gpax: null, earned_credits: 0, compulsory_credits: 0, elective_credits: 0, graded_credits: 0, registered_subjects: 0, passed_subjects: 0 } }, signal),
+        queryFn: ({ signal }) => getFeatureDataWithDemo<{ items: StaffGradeDetailRow[]; summary: StaffGradeSummary }>(`/api/v1/students/${encodeURIComponent(student.code)}/grades`, { items: [], summary: { gpax: null, earned_credits: 0, compulsory_credits: 0, elective_credits: 0, graded_credits: 0, registered_subjects: 0, passed_subjects: 0, term_summaries: [] } }, signal),
         enabled: kind === 'grades',
     });
     const kpch = useQuery({
@@ -1136,6 +1137,8 @@ function StaffAcademicDetailDialog({ kind, student, onClose }: { kind: MetricKin
         result: item.score === null ? 'ไม่มีผลประเมิน' : item.score >= 90 ? 'ดีมาก' : item.score >= 70 ? 'ดี' : item.score >= 50 ? 'พอใช้' : 'ปรับปรุง',
         assessmentResult: assessment.summary.result,
     })))), [moral.data]);
+    const gradeRows = grades.data?.data.items ?? [];
+    const filteredGradeRows = useMemo(() => gradeTerm === '' ? gradeRows : gradeRows.filter((row) => row.term === gradeTerm), [gradeRows, gradeTerm]);
     const subjectColumns = useMemo<ColumnDef<StaffGradeDetailRow>[]>(() => [
         { id: 'code', accessorFn: (row) => row.subject.code, header: 'รหัสวิชา', size: 100, meta: { compactSize: 72 } },
         { id: 'name', accessorFn: (row) => row.subject.name, header: 'รายวิชา', size: 280, meta: { compactSize: 150 }, cell: ({ getValue }) => <span className="font-bold text-slate-950">{getValue<string>()}</span> },
@@ -1190,7 +1193,16 @@ function StaffAcademicDetailDialog({ kind, student, onClose }: { kind: MetricKin
                         <div className="rounded-xl bg-rose-50 px-3 py-2.5"><p className="text-[10px] font-bold text-rose-700">หน่วยกิตวิชาเลือก</p><p className="mt-0.5 text-xl font-black tabular-nums text-rose-950">{grades.data.data.summary.elective_credits}</p></div>
                         <div className="rounded-xl bg-slate-100 px-3 py-2.5"><p className="text-[10px] font-bold text-slate-600">หน่วยกิตคำนวณ GPAX</p><p className="mt-0.5 text-xl font-black tabular-nums text-slate-950">{grades.data.data.summary.graded_credits}</p></div>
                     </div>
-                    <DataTable data={grades.data.data.items} columns={subjectColumns} minWidth="wide" responsiveMode="compact-table" emptyTitle="ไม่พบผลการเรียน" emptyDescription="ยังไม่มีข้อมูลรายวิชาจากระบบต้นทาง" />
+                    {grades.data.data.summary.term_summaries.length > 0 && <div className="mb-4 rounded-2xl border border-slate-200 bg-slate-50 p-4">
+                        <div className="mb-3 flex flex-wrap items-center justify-between gap-3">
+                            <div><p className="font-black text-slate-950">GPA รายภาคเรียน</p><p className="text-xs text-slate-500">เลือกภาคเรียนเพื่อกรองรายวิชาในตาราง</p></div>
+                            <label className="flex items-center gap-2 text-sm font-bold text-slate-700"><span>ภาคเรียน</span><select value={gradeTerm} onChange={(event) => setGradeTerm(event.target.value)} className="h-10 rounded-xl border border-slate-300 bg-white px-3 text-sm"><option value="">ทุกภาคเรียน</option>{grades.data.data.summary.term_summaries.map((item) => <option key={item.term} value={item.term}>{item.term}</option>)}</select></label>
+                        </div>
+                        <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-4">
+                            {grades.data.data.summary.term_summaries.map((item) => <button key={item.term} type="button" onClick={() => setGradeTerm(item.term)} className={`rounded-xl border px-3 py-3 text-left transition ${gradeTerm === item.term ? 'border-brand-400 bg-brand-50 ring-2 ring-brand-100' : 'border-slate-200 bg-white hover:border-brand-300'}`}><p className="text-xs font-bold text-slate-500">{item.term}</p><p className="mt-0.5 text-xl font-black tabular-nums text-brand-900">GPA {item.gpa === null ? '-' : Number(item.gpa).toFixed(2)}</p><p className="mt-1 text-[11px] text-slate-500">ผ่าน {item.passed_subjects}/{item.registered_subjects} วิชา · {item.earned_credits} หน่วยกิต</p></button>)}
+                        </div>
+                    </div>}
+                    <DataTable data={filteredGradeRows} columns={subjectColumns} minWidth="wide" responsiveMode="compact-table" emptyTitle="ไม่พบผลการเรียน" emptyDescription={gradeTerm ? `ไม่พบผลการเรียนภาคเรียน ${gradeTerm}` : 'ยังไม่มีข้อมูลรายวิชาจากระบบต้นทาง'} />
                 </>}
                 {kind === 'kpch' && kpch.data && <DataTable data={kpch.data.data.items} columns={kpchColumns} minWidth="wide" responsiveMode="compact-table" emptyTitle="ไม่พบกิจกรรม กพช." emptyDescription="ยังไม่มีข้อมูลกิจกรรมจากระบบต้นทาง" />}
                 {kind === 'moral' && moral.data && <DataTable data={moralRows} columns={moralColumns} minWidth="wide" responsiveMode="compact-table" emptyTitle="ไม่พบผลประเมินคุณธรรม" emptyDescription="ยังไม่มีผลประเมินจากระบบต้นทาง" />}

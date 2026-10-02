@@ -206,10 +206,20 @@ final class StudentApiTest extends TestCase
                 'graded_credits',
                 'registered_subjects',
                 'passed_subjects',
+                'term_summaries',
             ]]])
             ->assertJsonPath('data.summary.compulsory_credits', 7)
             ->assertJsonPath('data.summary.elective_credits', 0)
+            ->assertJsonCount(1, 'data.summary.term_summaries')
+            ->assertJsonPath('data.summary.term_summaries.0.term', '1/2568')
+            ->assertJsonPath('data.summary.term_summaries.0.gpa', 2.86)
             ->assertJsonPath('meta.term', '1/2568');
+
+        $this->getJson('/api/v1/students/6650100001/grades')
+            ->assertOk()
+            ->assertJsonCount(2, 'data.summary.term_summaries')
+            ->assertJsonPath('data.summary.term_summaries.0.term', '2/2568')
+            ->assertJsonPath('data.summary.term_summaries.1.term', '1/2568');
 
         $this->getJson('/api/v1/students/6650100001/kpch')
             ->assertOk()

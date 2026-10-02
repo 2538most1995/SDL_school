@@ -27,6 +27,7 @@ final class RegistrationCreditPolicyTest extends TestCase
 
         $normal = RegistrationCreditPolicy::evaluate($level, 0, 0, $regular, 0);
         $this->assertFalse($normal['is_potential_graduate']);
+        $this->assertFalse($normal['is_credit_complete']);
         $this->assertSame($regular, $normal['applicable_limit']);
         $this->assertFalse($normal['exceeds_limit']);
 
@@ -38,6 +39,7 @@ final class RegistrationCreditPolicyTest extends TestCase
             $final - 1,
         );
         $this->assertTrue($finalTerm['is_potential_graduate']);
+        $this->assertFalse($finalTerm['is_credit_complete']);
         $this->assertSame($final, $finalTerm['applicable_limit']);
         $this->assertFalse($finalTerm['exceeds_limit']);
 
@@ -65,5 +67,21 @@ final class RegistrationCreditPolicyTest extends TestCase
         $this->assertFalse($policy['is_potential_graduate']);
         $this->assertSame(14.0, $policy['applicable_limit']);
         $this->assertTrue($policy['exceeds_limit']);
+    }
+
+    public function test_earned_compulsory_and_elective_credits_are_complete_not_potential(): void
+    {
+        $policy = RegistrationCreditPolicy::evaluate(
+            level: 1,
+            compulsoryEarned: 36,
+            electiveEarned: 12,
+            compulsorySelected: 0,
+            electiveSelected: 0,
+        );
+
+        $this->assertTrue($policy['is_credit_complete']);
+        $this->assertFalse($policy['is_potential_graduate']);
+        $this->assertTrue($policy['uses_final_term_limit']);
+        $this->assertSame(17.0, $policy['applicable_limit']);
     }
 }

@@ -32,42 +32,82 @@ final readonly class StudentAcademicService
             static fn (Grade $grade): bool => $term === null || $grade->term === $term,
         ));
         usort($items, static fn (Grade $a, Grade $b): int => [$b->term, $a->subjectCode] <=> [$a->term, $b->subjectCode]);
+        $summary = $this->summarizeGrades($items);
+        $gradesByTerm = [];
+        foreach ($items as $grade) {
+            $gradesByTerm[$grade->term][] = $grade;
+        }
+        $termSummaries = [];
+        foreach ($gradesByTerm as $academicTerm => $termGrades) {
+            $termSummary = $this->summarizeGrades($termGrades);
+            $termSummaries[] = [
+                'term' => $academicTerm,
+                'gpa' => $termSummary['gpax'],
+                'earned_credits' => $termSummary['earned_credits'],
+                'graded_credits' => $termSummary['graded_credits'],
+                'registered_subjects' => $termSummary['registered_subjects'],
+                'passed_subjects' => $termSummary['passed_subjects'],
+            ];
+        }
+        usort($termSummaries, static function (array $left, array $right): int {
+            $leftTerm = AcademicTerm::normalize((string) $left['term']);
+            $rightTerm = AcademicTerm::normalize((string) $right['term']);
+
+            return $leftTerm !== null && $rightTerm !== null
+                ? AcademicTerm::compare($rightTerm, $leftTerm)
+                : strcmp((string) $right['term'], (string) $left['term']);
+        });
+        $summary['term_summaries'] = $termSummaries;
+
+        return [
+            'student' => $student,
+            'items' => $items,
+            'summary' => $summary,
+        ];
+    }
+
+    /**
+     * @param  list<Grade>  $items
+     * @return array{gpax: ?float, earned_credits: float, compulsory_credits: float, elective_credits: float, graded_credits: float, registered_subjects: int, passed_subjects: int}
+     */
+    private function summarizeGrades(array $items): array
+    {
         $weightedPoints = 0.0;
         $gradedCredits = 0.0;
         $earnedCredits = 0.0;
         $compulsoryCredits = 0.0;
         $electiveCredits = 0.0;
+        $passedSubjects = 0;
 
         foreach ($items as $grade) {
             $numeric = $grade->numericGrade();
-            // Preserve the legacy GPAX rule: failed numeric grades (< 1) do not
-            // contribute either points or denominator credits.
+            // Preserve the established legacy GPA rule: failed numeric grades
+            // do not contribute points or denominator credits.
             if ($numeric !== null && $numeric >= 1.0) {
                 $weightedPoints += $numeric * $grade->credits;
                 $gradedCredits += $grade->credits;
             }
-            if ($grade->isPassed()) {
-                $earnedCredits += $grade->credits;
-                if ($grade->subjectType === 'compulsory') {
-                    $compulsoryCredits += $grade->credits;
-                } elseif ($grade->subjectType === 'elective') {
-                    $electiveCredits += $grade->credits;
-                }
+            if (! $grade->isPassed()) {
+                continue;
+            }
+
+            $passedSubjects++;
+            $earnedCredits += $grade->credits;
+            if ($grade->subjectType === 'compulsory') {
+                $compulsoryCredits += $grade->credits;
+            } elseif ($grade->subjectType === 'elective') {
+                $electiveCredits += $grade->credits;
             }
         }
 
         return [
-            'student' => $student,
-            'items' => $items,
-            'summary' => [
-                'gpax' => $gradedCredits > 0 ? round($weightedPoints / $gradedCredits, 2) : null,
-                'earned_credits' => $earnedCredits,
-                'compulsory_credits' => $compulsoryCredits,
-                'elective_credits' => $electiveCredits,
-                'graded_credits' => $gradedCredits,
-                'registered_subjects' => count($items),
-                'passed_subjects' => count(array_filter($items, static fn (Grade $grade): bool => $grade->isPassed())),
-            ],
+            'gpax' => $gradedCredits > 0 ? round($weightedPoints / $gradedCredits, 2) : null,
+            'earned_credits' => round($earnedCredits, 2),
+            'compulsory_credits' => round($compulsoryCredits, 2),
+            'elective_credits' => round($electiveCredits, 2),
+            'graded_credits' => round($gradedCredits, 2),
+            'registered_subjects' => count($items),
+            'passed_subjects' => $passedSubjects,
         ];
     }
 

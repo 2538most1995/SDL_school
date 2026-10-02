@@ -12,7 +12,9 @@ const basePolicy = {
     projected_elective: 11,
     compulsory_required: 36,
     elective_required: 12,
+    is_credit_complete: false,
     is_potential_graduate: false,
+    uses_final_term_limit: false,
     is_active_student: true,
     regular_limit: 14,
     final_term_limit: 17,
@@ -29,6 +31,7 @@ test('a student meeting both credit groups receives the final-term limit', () =>
     ]);
 
     assert.equal(policy.is_potential_graduate, true);
+    assert.equal(policy.is_credit_complete, false);
     assert.equal(policy.applicable_limit, 17);
     assert.equal(policy.total_selected, 17);
     assert.equal(policy.exceeds_limit, false);
@@ -70,4 +73,17 @@ test('transferred subjects help the graduation projection but not term load', ()
     assert.equal(policy.is_potential_graduate, true);
     assert.equal(policy.total_selected, 0);
     assert.equal(policy.exceeds_limit, false);
+});
+
+test('completed earned credits use the double-star state instead of potential graduate', () => {
+    const policy = evaluateLiveRegistrationPolicy({
+        ...basePolicy,
+        compulsory_earned: 36,
+        elective_earned: 12,
+    }, [], []);
+
+    assert.equal(policy.is_credit_complete, true);
+    assert.equal(policy.is_potential_graduate, false);
+    assert.equal(policy.uses_final_term_limit, true);
+    assert.equal(policy.applicable_limit, 17);
 });

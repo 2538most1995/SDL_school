@@ -232,6 +232,7 @@ final class CourseRegistrationTest extends TestCase
             ->assertOk()
             ->assertJsonCount(1, 'data.items')
             ->assertJsonPath('data.items.0.code', '6650100001')
+            ->assertJsonPath('data.items.0.is_credit_complete', false)
             ->assertJsonPath('data.items.0.is_potential_graduate', true)
             ->assertJsonPath('data.items.0.registration.credit_policy.applicable_limit', 17)
             ->assertJsonPath('data.items.0.registration.credit_policy.exceeds_limit', true);

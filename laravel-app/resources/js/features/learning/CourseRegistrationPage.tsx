@@ -54,6 +54,7 @@ type WorkspaceItem = {
     group_name: string;
     credits_earned: number;
     credits_required: number;
+    is_credit_complete: boolean;
     is_potential_graduate: boolean;
     registration: {
         is_saved: boolean;
@@ -430,12 +431,17 @@ export function CourseRegistrationPage() {
                         className="text-left font-bold text-brand-700 hover:underline"
                     >
                         {row.original.name}
-                        {row.original.is_potential_graduate && (
+                        {row.original.is_credit_complete ? (
+                            <>
+                                <span aria-hidden="true" className="ml-1 text-emerald-700">**</span>
+                                <span className="sr-only"> หน่วยกิตวิชาบังคับและวิชาเลือกครบแล้ว</span>
+                            </>
+                        ) : row.original.is_potential_graduate ? (
                             <>
                                 <span aria-hidden="true" className="ml-1 text-amber-700">*</span>
                                 <span className="sr-only"> นักศึกษาที่มีโอกาสจบ</span>
                             </>
-                        )}
+                        ) : null}
                     </button>
                 ),
             },
@@ -611,8 +617,10 @@ export function CourseRegistrationPage() {
                     {/* Filter Bar */}
                     <Panel title="รายชื่อนักศึกษาสำหรับการลงทะเบียน">
                         <p className="mb-4 text-xs font-medium text-slate-600">
+                            <span aria-hidden="true" className="font-black text-emerald-700">**</span>{' '}
+                            หน่วยกิตวิชาบังคับและวิชาเลือกครบแล้ว ·{' '}
                             <span aria-hidden="true" className="font-black text-amber-700">*</span>{' '}
-                            นักศึกษาที่มีโอกาสจบ เมื่อหน่วยกิตวิชาบังคับและวิชาเลือกครบตามเกณฑ์หลังผ่านรายวิชาที่ลงทะเบียน
+                            มีโอกาสจบเมื่อผ่านรายวิชาที่ลงทะเบียนตามเกณฑ์
                         </p>
                         <div className="mb-4 grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
                             <div>
@@ -765,17 +773,25 @@ export function CourseRegistrationPage() {
                                         <div className="flex items-center gap-2">
                                             <h2 className="text-xl font-black text-slate-900">
                                                 {studentInfo?.name || studentDetail.student.name}
-                                                {liveCreditPolicy?.is_potential_graduate && (
+                                                {liveCreditPolicy?.is_credit_complete ? (
+                                                    <>
+                                                        <span aria-hidden="true" className="ml-1 text-emerald-700">**</span>
+                                                        <span className="sr-only"> หน่วยกิตวิชาบังคับและวิชาเลือกครบแล้ว</span>
+                                                    </>
+                                                ) : liveCreditPolicy?.is_potential_graduate ? (
                                                     <>
                                                         <span aria-hidden="true" className="ml-1 text-amber-700">*</span>
                                                         <span className="sr-only"> นักศึกษาที่มีโอกาสจบ</span>
                                                     </>
-                                                )}
+                                                ) : null}
                                             </h2>
                                             <StatusBadge tone="info">
                                                 {studentDetail.student.level_label}
                                             </StatusBadge>
-                                            {liveCreditPolicy?.is_potential_graduate && (
+                                            {liveCreditPolicy?.is_credit_complete && (
+                                                <StatusBadge tone="success">หน่วยกิตครบแล้ว</StatusBadge>
+                                            )}
+                                            {!liveCreditPolicy?.is_credit_complete && liveCreditPolicy?.is_potential_graduate && (
                                                 <StatusBadge tone="warning">มีโอกาสจบ</StatusBadge>
                                             )}
                                         </div>
@@ -1112,7 +1128,7 @@ export function CourseRegistrationPage() {
                                             {termTotalCredits} / {liveCreditPolicy?.applicable_limit ?? '-'} นก.
                                         </div>
                                         <div className="text-[10px] text-emerald-600">
-                                            {liveCreditPolicy?.is_potential_graduate ? 'เพดานภาคเรียนสุดท้าย' : 'เพดานภาคเรียนปกติ'}
+                                            {liveCreditPolicy?.uses_final_term_limit ? 'เพดานภาคเรียนสุดท้าย' : 'เพดานภาคเรียนปกติ'}
                                             {' '}· บังคับ {termCompulsoryCredits} + เลือก {termElectiveCredits}
                                         </div>
                                     </div>
@@ -1138,7 +1154,7 @@ export function CourseRegistrationPage() {
                                         <p className="font-black">ลงทะเบียนเกินเพดานหน่วยกิต</p>
                                         <p className="mt-1 text-sm font-medium">
                                             ลงทะเบียน {liveCreditPolicy.total_selected} หน่วยกิต เกินเพดาน
-                                            {liveCreditPolicy.is_potential_graduate ? 'ภาคเรียนสุดท้าย' : 'ภาคเรียนปกติ'}{' '}
+                                            {liveCreditPolicy.uses_final_term_limit ? 'ภาคเรียนสุดท้าย' : 'ภาคเรียนปกติ'}{' '}
                                             {liveCreditPolicy.applicable_limit} หน่วยกิต จำนวน {liveCreditPolicy.excess_credits} หน่วยกิต
                                         </p>
                                     </div>
@@ -1147,6 +1163,14 @@ export function CourseRegistrationPage() {
 
                             {/* Status Badges Legend */}
                             <div className="flex flex-wrap items-center gap-2 rounded-2xl bg-white border border-slate-200/80 p-3 shadow-2xs text-xs">
+                                <span className="font-bold text-slate-700 text-xs mr-1">สัญลักษณ์หลังชื่อ:</span>
+                                <span className="inline-flex items-center gap-1.5 rounded-md border border-emerald-200 bg-emerald-50 px-2 py-0.5 text-[11px] font-bold text-emerald-800">
+                                    ** หน่วยกิตบังคับและเลือกครบแล้ว
+                                </span>
+                                <span className="inline-flex items-center gap-1.5 rounded-md border border-amber-300 bg-amber-50 px-2 py-0.5 text-[11px] font-bold text-amber-800">
+                                    * มีโอกาสจบเมื่อผ่านวิชาที่ลงทะเบียน
+                                </span>
+                                <span className="basis-full" />
                                 <span className="font-bold text-slate-700 text-xs mr-1">สัญลักษณ์สถานะรายวิชา:</span>
                                 <span className="inline-flex items-center gap-1.5 rounded-md border border-emerald-200 bg-emerald-50 px-2 py-0.5 text-[11px] font-bold text-emerald-800">
                                     <span className="size-1.5 rounded-full bg-emerald-500" /> มีเกรดแล้ว

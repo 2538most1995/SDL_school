@@ -8,7 +8,9 @@ export type RegistrationCreditPolicy = {
     projected_elective: number;
     compulsory_required: number;
     elective_required: number;
+    is_credit_complete: boolean;
     is_potential_graduate: boolean;
+    uses_final_term_limit: boolean;
     is_active_student: boolean;
     regular_limit: number;
     final_term_limit: number;
@@ -62,10 +64,15 @@ export function evaluateLiveRegistrationPolicy(
     const totalSelected = Math.round((compulsorySelected + electiveSelected) * 100) / 100;
     const projectedCompulsory = Math.round((policy.compulsory_earned + projectedAddition(compulsorySubjects)) * 100) / 100;
     const projectedElective = Math.round((policy.elective_earned + projectedAddition(electiveSubjects)) * 100) / 100;
+    const isCreditComplete = policy.is_active_student
+        && policy.compulsory_earned >= policy.compulsory_required
+        && policy.elective_earned >= policy.elective_required;
     const isPotentialGraduate = policy.is_active_student
+        && !isCreditComplete
         && projectedCompulsory >= policy.compulsory_required
         && projectedElective >= policy.elective_required;
-    const applicableLimit = isPotentialGraduate ? policy.final_term_limit : policy.regular_limit;
+    const usesFinalTermLimit = isCreditComplete || isPotentialGraduate;
+    const applicableLimit = usesFinalTermLimit ? policy.final_term_limit : policy.regular_limit;
     const excessCredits = Math.round(Math.max(0, totalSelected - applicableLimit) * 100) / 100;
 
     return {
@@ -75,7 +82,9 @@ export function evaluateLiveRegistrationPolicy(
         total_selected: totalSelected,
         projected_compulsory: projectedCompulsory,
         projected_elective: projectedElective,
+        is_credit_complete: isCreditComplete,
         is_potential_graduate: isPotentialGraduate,
+        uses_final_term_limit: usesFinalTermLimit,
         applicable_limit: applicableLimit,
         exceeds_limit: excessCredits > 0,
         excess_credits: excessCredits,

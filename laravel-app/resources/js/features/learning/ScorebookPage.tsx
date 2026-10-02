@@ -16,6 +16,7 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useDeferredValue, useEffect, useMemo, useRef, useState, type KeyboardEvent as ReactKeyboardEvent, type ReactNode } from 'react';
 import { Button, Field, Input, Select } from '../../components/MaterialUI';
 import { PageHeader } from '../../components/PageHeader';
+import { Pagination } from '../../components/Pagination';
 import { Panel } from '../../components/Panel';
 import { QueryError, QuerySkeleton } from '../../components/QueryState';
 import { useDemoRole } from '../../context/DemoRoleContext';
@@ -185,6 +186,7 @@ type ImportedScorePayload = {
     subjects: ImportedScoreOption[];
     score_labels: string[];
     rows: ImportedScoreRow[];
+    pagination: { current_page: number; per_page: number; total: number; last_page: number };
 };
 
 const emptyImportedScores: ImportedScorePayload = {
@@ -195,6 +197,7 @@ const emptyImportedScores: ImportedScorePayload = {
     subjects: [],
     score_labels: [],
     rows: [],
+    pagination: { current_page: 1, per_page: 100, total: 0, last_page: 1 },
 };
 
 function scoreOption(option: ImportedScoreOption, fallbackLabel?: string): { value: string; label: string } {
@@ -220,11 +223,13 @@ function ImportedScoresPage({ sourceNavigation }: { sourceNavigation: ReactNode 
     const [group, setGroup] = useState('');
     const [subjectCode, setSubjectCode] = useState('');
     const [search, setSearch] = useState('');
+    const [page, setPage] = useState(1);
+    const [perPage, setPerPage] = useState(100);
     const [showScoreLegend, setShowScoreLegend] = useState(false);
     const deferredSearch = useDeferredValue(search);
     const importedScores = useQuery({
-        queryKey: ['learning', 'scores', 'imported', term, level, group, subjectCode, deferredSearch],
-        queryFn: ({ signal }) => getFeatureDataWithDemo<ImportedScorePayload>(buildImportedScoresPath({ term, level, group, subjectCode, search: deferredSearch }), emptyImportedScores, signal),
+        queryKey: ['learning', 'scores', 'imported', term, level, group, subjectCode, deferredSearch, page, perPage],
+        queryFn: ({ signal }) => getFeatureDataWithDemo<ImportedScorePayload>(buildImportedScoresPath({ term, level, group, subjectCode, search: deferredSearch, page, perPage }), emptyImportedScores, signal),
         refetchOnWindowFocus: false,
     });
     const data = importedScores.data?.data;
@@ -281,15 +286,15 @@ function ImportedScoresPage({ sourceNavigation }: { sourceNavigation: ReactNode 
 
         <Panel title="ตัวกรองคะแนนนำเข้า" description="จำกัดผลลัพธ์ตามภาคเรียน ระดับ กลุ่มเรียน รายวิชา หรือค้นหาชื่อและรหัสนักศึกษา">
             <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-5">
-                <Field label="ค้นหา"><Input value={search} onChange={(_, input) => setSearch(input.value)} contentBefore={<MagnifyingGlass size={18} aria-hidden="true" />} placeholder="ชื่อหรือรหัสนักศึกษา" size="large" /></Field>
-                <Field label="ภาคเรียน"><Select value={term} onChange={(_, option) => { setTerm(option.value); setGroup(''); setSubjectCode(''); }} size="large"><option value="all">ทุกภาคเรียน</option>{(data?.terms ?? []).map((item) => <option key={item} value={item}>{item}</option>)}</Select></Field>
-                <Field label="ระดับการศึกษา"><Select value={level} onChange={(_, option) => { setLevel(option.value); setGroup(''); setSubjectCode(''); }} size="large"><option value="">ทุกระดับ</option>{levelOptions.map((option) => <option key={option.value} value={option.value}>{option.label}</option>)}</Select></Field>
-                <Field label="กลุ่มเรียน"><Select value={group} onChange={(_, option) => setGroup(option.value)} size="large"><option value="">ทุกกลุ่มเรียน</option>{groupOptions.map((option) => <option key={option.value} value={option.value}>{option.label}</option>)}</Select></Field>
-                <Field label="รายวิชา"><Select value={subjectCode} onChange={(_, option) => setSubjectCode(option.value)} size="large"><option value="">ทุกรายวิชา</option>{subjectOptions.map((option) => <option key={option.value} value={option.value}>{option.label}</option>)}</Select></Field>
+                <Field label="ค้นหา"><Input value={search} onChange={(_, input) => { setSearch(input.value); setPage(1); }} contentBefore={<MagnifyingGlass size={18} aria-hidden="true" />} placeholder="ชื่อหรือรหัสนักศึกษา" size="large" /></Field>
+                <Field label="ภาคเรียน"><Select value={term} onChange={(_, option) => { setTerm(option.value); setGroup(''); setSubjectCode(''); setPage(1); }} size="large"><option value="all">ทุกภาคเรียน</option>{(data?.terms ?? []).map((item) => <option key={item} value={item}>{item}</option>)}</Select></Field>
+                <Field label="ระดับการศึกษา"><Select value={level} onChange={(_, option) => { setLevel(option.value); setGroup(''); setSubjectCode(''); setPage(1); }} size="large"><option value="">ทุกระดับ</option>{levelOptions.map((option) => <option key={option.value} value={option.value}>{option.label}</option>)}</Select></Field>
+                <Field label="กลุ่มเรียน"><Select value={group} onChange={(_, option) => { setGroup(option.value); setPage(1); }} size="large"><option value="">ทุกกลุ่มเรียน</option>{groupOptions.map((option) => <option key={option.value} value={option.value}>{option.label}</option>)}</Select></Field>
+                <Field label="รายวิชา"><Select value={subjectCode} onChange={(_, option) => { setSubjectCode(option.value); setPage(1); }} size="large"><option value="">ทุกรายวิชา</option>{subjectOptions.map((option) => <option key={option.value} value={option.value}>{option.label}</option>)}</Select></Field>
             </div>
         </Panel>
 
-        <Panel className="mt-5" title="ตารางคะแนนจากไฟล์นำเข้า" description={importedScores.isPending ? 'กำลังโหลดข้อมูล' : `พบ ${rows.length} รายการ จาก ${studentCount} คน และ ${subjectCount} วิชา`} action={
+        <Panel className="mt-5" title="ตารางคะแนนจากไฟล์นำเข้า" description={importedScores.isPending ? 'กำลังโหลดข้อมูล' : `พบทั้งหมด ${(data?.pagination.total ?? rows.length).toLocaleString('th-TH')} รายการ · หน้านี้ ${studentCount} คน และ ${subjectCount} วิชา`} action={
             <div className="flex items-center gap-2">
                 <Button type="button" appearance="outline" icon={<ListChecks size={18} weight="bold" />} onClick={() => setShowScoreLegend((prev) => !prev)}>
                     {showScoreLegend ? 'ซ่อนคำอธิบาย 1-9' : 'คำอธิบายคะแนน 1-9'}
@@ -348,7 +353,7 @@ function ImportedScoresPage({ sourceNavigation }: { sourceNavigation: ReactNode 
                     </thead>
                     <tbody>
                         {rows.map((row, rowIndex) => <tr key={`${row.level}|${row.student_code}|${row.subject_code}|${rowIndex}`} className="bg-white hover:bg-slate-50/70">
-                            <td className="sticky left-0 z-10 border-b border-r border-slate-200 bg-inherit px-2 py-3 text-center font-mono text-xs text-slate-500">{rowIndex + 1}</td>
+                            <td className="sticky left-0 z-10 border-b border-r border-slate-200 bg-inherit px-2 py-3 text-center font-mono text-xs text-slate-500">{(((data?.pagination.current_page ?? page) - 1) * (data?.pagination.per_page ?? perPage)) + rowIndex + 1}</td>
                             <td className="sticky left-14 z-10 border-b border-r border-slate-200 bg-inherit px-3 py-3 font-mono font-bold text-slate-700">{row.student_code}</td>
                             <td className="sticky left-[200px] z-10 border-b border-r border-slate-200 bg-inherit px-4 py-3"><p className="font-black text-slate-950">{row.full_name}</p><p className="mt-1 text-xs text-slate-500">{levelLabel(row.level)}</p></td>
                             <td className="border-b border-r border-slate-200 px-3 py-3"><p className="font-bold text-slate-800">{row.group_name || row.group_code || '-'}</p>{row.group_name && row.group_code && <p className="mt-1 font-mono text-xs text-slate-500">{row.group_code}</p>}</td>
@@ -363,6 +368,7 @@ function ImportedScoresPage({ sourceNavigation }: { sourceNavigation: ReactNode 
                     </tbody>
                 </table>
             </div>}
+            {importedScores.data && <Pagination currentPage={data?.pagination.current_page ?? page} totalPages={data?.pagination.last_page ?? 1} totalItems={data?.pagination.total ?? rows.length} pageSize={data?.pagination.per_page ?? perPage} itemLabel="รายการคะแนน" disabled={importedScores.isFetching} onPageChange={setPage} onPageSizeChange={(nextPageSize) => { setPerPage(nextPageSize); setPage(1); }} />}
         </Panel>
     </div>;
 }

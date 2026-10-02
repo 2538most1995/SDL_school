@@ -101,6 +101,7 @@ final class CourseRegistrationController extends Controller
                 'compulsory_subject_count' => count($validated['compulsory_subjects']),
                 'elective_subject_count' => count($validated['elective_subjects']),
                 'total_selected_credits' => $saved['credit_policy']['total_selected'] ?? null,
+                'is_credit_complete' => $saved['credit_policy']['is_credit_complete'] ?? false,
                 'is_potential_graduate' => $saved['credit_policy']['is_potential_graduate'] ?? false,
             ],
         );
