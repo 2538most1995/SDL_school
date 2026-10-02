@@ -114,6 +114,58 @@ final class AcademicTerm
         return self::nextTerms($baseTerm, 1)[0];
     }
 
+    /**
+     * Compute previous academic terms going backward from a given term.
+     * E.g. previousTerms('1/2569', 2) => ['2/2568', '1/2568']
+     *
+     * @return list<string>
+     */
+    public static function previousTerms(?string $baseTerm, int $count = 1): array
+    {
+        $normalized = self::normalize($baseTerm);
+        if ($normalized === null) {
+            $currentYear = (int) date('Y') + 543;
+            $normalized = "1/{$currentYear}";
+        }
+
+        [$semester, $year] = array_map('intval', explode('/', $normalized));
+        $terms = [];
+
+        for ($i = 0; $i < $count; $i++) {
+            if ($semester === 2) {
+                $semester = 1;
+            } else {
+                $semester = 2;
+                $year--;
+            }
+            $terms[] = "{$semester}/{$year}";
+        }
+
+        return $terms;
+    }
+
+    /**
+     * Return a list of terms spanning from $count semesters before $baseTerm
+     * up to and including $baseTerm itself.
+     *
+     * E.g. termsInRange('2/2569', 4) => ['2/2567', '1/2568', '2/2568', '1/2569', '2/2569']
+     *
+     * @return list<string>
+     */
+    public static function termsInRange(?string $baseTerm, int $count): array
+    {
+        $normalized = self::normalize($baseTerm);
+        if ($normalized === null) {
+            return [];
+        }
+
+        $previous = self::previousTerms($baseTerm, $count);
+        $all = array_reverse($previous);
+        $all[] = $normalized;
+
+        return $all;
+    }
+
     public static function sortKey(string $term): int
     {
         $normalized = self::normalize($term);

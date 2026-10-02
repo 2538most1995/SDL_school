@@ -668,13 +668,24 @@ final class LegacyStudentRepository implements StudentRepository
         $grade = $this->identifier($set->grade);
         $citizenIdColumn = $this->firstExistingColumn($set->student, ['_perf_cardid', 'cardid']);
         $citizenId = $citizenIdColumn === null ? 'NULL' : 's.'.$this->identifier($citizenIdColumn);
-        $variants = AcademicTerm::variants($latestTerm);
-        if ($variants === []) {
+
+        // Expand the window to include students whose grades fall within the
+        // last 10 semesters (5 years) so that graduated students remain
+        // visible for historical grade review.
+        $historyTerms = AcademicTerm::termsInRange($latestTerm, 9);
+        $allVariants = [];
+        foreach ($historyTerms as $historyTerm) {
+            foreach (AcademicTerm::variants($historyTerm) as $variant) {
+                $allVariants[$variant] = true;
+            }
+        }
+        $allVariants = array_keys($allVariants);
+        if ($allVariants === []) {
             return [];
         }
 
-        $bindings = $variants;
-        $placeholders = implode(',', array_fill(0, count($variants), '?'));
+        $bindings = $allVariants;
+        $placeholders = implode(',', array_fill(0, count($allVariants), '?'));
         $groupJoin = '';
         $groupName = 's.grp_code';
         if ($set->group !== null) {
