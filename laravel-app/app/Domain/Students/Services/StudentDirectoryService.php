@@ -100,6 +100,11 @@ final readonly class StudentDirectoryService
                     return $student;
                 }
             }
+        } elseif ($viewer->role === 'super_admin') {
+            $student = $this->repository->find($code);
+            if ($student !== null) {
+                return $student;
+            }
         }
 
         return null;

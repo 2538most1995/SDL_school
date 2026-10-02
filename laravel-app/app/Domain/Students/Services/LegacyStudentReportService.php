@@ -27,7 +27,10 @@ final readonly class LegacyStudentReportService
     {
         $sets = $this->sets($districtId);
         $terms = $this->newStudentTerms($sets);
-        $selectedTerm = $this->selectedTerm($filters, $terms);
+        $latestTerm = AcademicTerm::latest($terms) ?? '1/'.((int) date('Y') + 543);
+        $historyTerms = AcademicTerm::termsInRange($latestTerm, 9);
+        $allTerms = $this->sortTerms(array_unique([...$terms, ...$historyTerms]));
+        $selectedTerm = $this->selectedTerm($filters, $allTerms);
         $rows = [];
 
         foreach ($this->filteredSets($sets, $filters) as $set) {
@@ -80,25 +83,37 @@ final readonly class LegacyStudentReportService
             }
         }
 
-        return $this->payload($rows, $terms, $selectedTerm, static fn (array $row): bool => (bool) ($row['_active'] ?? false));
+        return $this->payload($rows, $allTerms, $selectedTerm, static fn (array $row): bool => (bool) ($row['_active'] ?? false));
     }
 
     /** @param array<string, mixed> $filters */
     public function graduates(User $viewer, int $districtId, array $filters): array
     {
         $sets = $this->sets($districtId);
-        $terms = $this->distinctTerms($sets, 'student', 'fin_sem', "TRIM(COALESCE(fin_cause, '')) = '1'");
-        $selectedTerm = $this->selectedTerm($filters, $terms);
+        $terms = $this->distinctTerms($sets, 'student', ['fin_sem', 'fin_sem2', 'finsem'], "TRIM(COALESCE(fin_cause, '')) = '1'");
+        $latestTerm = AcademicTerm::latest($terms) ?? '1/'.((int) date('Y') + 543);
+        $historyTerms = AcademicTerm::termsInRange($latestTerm, 9);
+        $allTerms = $this->sortTerms(array_unique([...$terms, ...$historyTerms]));
+        $selectedTerm = $this->selectedTerm($filters, $allTerms);
         $rows = [];
 
         foreach ($this->filteredSets($sets, $filters) as $set) {
+            $finSemCol = $this->firstExistingColumn($set->student, ['fin_sem', 'fin_sem2', 'finsem']);
+            if ($finSemCol === null) {
+                continue;
+            }
+            $finCauseCol = $this->firstExistingColumn($set->student, ['fin_cause', 'fincause']);
+            $finDateCol = $this->firstExistingColumn($set->student, ['fin_date', 'fin_date2', 'findate']);
+            $finDateSql = $finDateCol !== null ? ", s.{$this->identifier($finDateCol)} AS graduation_date" : ", '' AS graduation_date";
+
             [$join, $groupName] = $this->groupJoin($set, 's');
             [$scopeSql, $scopeBindings] = $this->scope($viewer, $set, 's', $join !== '');
-            $conditions = [$scopeSql, "TRIM(COALESCE(s.fin_cause, '')) = '1'"];
+            $causeCondition = $finCauseCol !== null ? "TRIM(COALESCE(s.{$this->identifier($finCauseCol)}, '')) = '1'" : '1=1';
+            $conditions = [$scopeSql, $causeCondition];
             $bindings = $scopeBindings;
             if ($selectedTerm !== null) {
                 $variants = AcademicTerm::variants($selectedTerm);
-                $conditions[] = 'TRIM(s.fin_sem) IN ('.implode(',', array_fill(0, count($variants), '?')).')';
+                $conditions[] = "TRIM(s.{$this->identifier($finSemCol)}) IN (".implode(',', array_fill(0, count($variants), '?')).')';
                 array_push($bindings, ...$variants);
             }
             $this->appendGroupAndSearchFilters($conditions, $bindings, $filters, $join !== '', 's', $groupName);
@@ -109,7 +124,7 @@ final readonly class LegacyStudentReportService
             foreach ($this->rows(
                 "SELECT s._perf_id10 AS student_code, s.prename, s.name AS first_name,
                         s.surname AS last_name, s.grp_code AS group_code, {$groupName} AS group_name,
-                        s.fin_sem AS raw_term, s.fin_date AS graduation_date {$genderSql}
+                        s.{$this->identifier($finSemCol)} AS raw_term {$finDateSql} {$genderSql}
                  FROM {$student} s {$join}
                  WHERE ".implode(' AND ', array_filter($conditions)).'
                  ORDER BY s.name ASC, s.surname ASC, s._perf_id10 ASC',
@@ -138,7 +153,7 @@ final readonly class LegacyStudentReportService
             }
         }
 
-        return $this->payload($rows, $terms, $selectedTerm, static fn (): bool => true);
+        return $this->payload($rows, $allTerms, $selectedTerm, static fn (): bool => true);
     }
 
     /** @param array<string, mixed> $filters */
@@ -146,10 +161,13 @@ final readonly class LegacyStudentReportService
     {
         $sets = $this->sets($districtId);
         $terms = $this->registeredSubjectTerms($viewer, $sets, $filters);
-        $selectedTerm = $this->selectedTerm($filters, $terms);
-        $rows = $this->expectedGraduateRows($viewer, $sets, $filters, $selectedTerm, $terms);
+        $latestTerm = AcademicTerm::latest($terms) ?? '1/'.((int) date('Y') + 543);
+        $historyTerms = AcademicTerm::termsInRange($latestTerm, 9);
+        $allTerms = $this->sortTerms(array_unique([...$terms, ...$historyTerms]));
+        $selectedTerm = $this->selectedTerm($filters, $allTerms);
+        $rows = $this->expectedGraduateRows($viewer, $sets, $filters, $selectedTerm, $allTerms);
 
-        return $this->payload($rows, $terms, $selectedTerm, static fn (): bool => true);
+        return $this->payload($rows, $allTerms, $selectedTerm, static fn (): bool => true);
     }
 
     /**
@@ -411,7 +429,10 @@ final readonly class LegacyStudentReportService
     {
         $sets = $this->sets($districtId);
         $terms = $this->distinctTerms($sets, 'grade', '_perf_semestry', "TRIM(COALESCE(typ_code, '')) = '1'");
-        $selectedTerm = $this->selectedTerm($filters, $terms);
+        $latestTerm = AcademicTerm::latest($terms) ?? '1/'.((int) date('Y') + 543);
+        $historyTerms = AcademicTerm::termsInRange($latestTerm, 9);
+        $allTerms = $this->sortTerms(array_unique([...$terms, ...$historyTerms]));
+        $selectedTerm = $this->selectedTerm($filters, $allTerms);
         $rows = [];
         $seen = [];
 
@@ -477,7 +498,7 @@ final readonly class LegacyStudentReportService
             }
         }
 
-        return $this->payload($rows, $terms, $selectedTerm, static fn (): bool => true);
+        return $this->payload($rows, $allTerms, $selectedTerm, static fn (): bool => true);
     }
 
     /**
@@ -494,13 +515,16 @@ final readonly class LegacyStudentReportService
     {
         $sets = $this->filteredSets($this->sets($districtId), $filters);
         $terms = $this->registeredSubjectTerms($viewer, $sets, $filters);
-        $selectedTerm = $this->selectedTerm($filters, $terms);
+        $latestTerm = AcademicTerm::latest($terms) ?? '1/'.((int) date('Y') + 543);
+        $historyTerms = AcademicTerm::termsInRange($latestTerm, 9);
+        $allTerms = $this->sortTerms(array_unique([...$terms, ...$historyTerms]));
+        $selectedTerm = $this->selectedTerm($filters, $allTerms);
         $registrations = $selectedTerm === null
             ? []
             : $this->registeredSubjectRows($viewer, $sets, $filters, $selectedTerm);
 
         if (($filters['view'] ?? 'subject') === 'student') {
-            return $this->registeredSubjectStudents($registrations, $terms, $selectedTerm);
+            return $this->registeredSubjectStudents($registrations, $allTerms, $selectedTerm);
         }
 
         $grouped = [];
@@ -540,7 +564,7 @@ final readonly class LegacyStudentReportService
                 'unique_students' => count($studentCodes),
                 'registered_records' => count($registrations),
             ],
-            'terms' => $terms,
+            'terms' => $allTerms,
             'selected_term' => $selectedTerm,
             'rows' => $rows,
         ];
@@ -585,7 +609,10 @@ final readonly class LegacyStudentReportService
             $queryFilters['group'] = $filters['group_name'];
         }
         $terms = $this->registeredSubjectTerms($viewer, $sets, $queryFilters);
-        $selectedTerm = $this->selectedTerm($filters, $terms);
+        $latestTerm = AcademicTerm::latest($terms) ?? '1/'.((int) date('Y') + 543);
+        $historyTerms = AcademicTerm::termsInRange($latestTerm, 9);
+        $allTerms = $this->sortTerms(array_unique([...$terms, ...$historyTerms]));
+        $selectedTerm = $this->selectedTerm($filters, $allTerms);
         $records = [];
 
         if ($selectedTerm === null) {
@@ -594,13 +621,13 @@ final readonly class LegacyStudentReportService
                     $filters['row_categories'],
                     $filters['column_categories'],
                     $records,
-                    $terms,
+                    $allTerms,
                     null,
                     $filters,
                 );
             }
 
-            return RegistrationStatistics::fromRecords($category, $records, $terms, null, $filters);
+            return RegistrationStatistics::fromRecords($category, $records, $allTerms, null, $filters);
         }
 
         foreach ($sets as $set) {
@@ -672,13 +699,13 @@ final readonly class LegacyStudentReportService
                 $filters['row_categories'],
                 $filters['column_categories'],
                 array_values($records),
-                $terms,
+                $allTerms,
                 $selectedTerm,
                 $filters,
             );
         }
 
-        return RegistrationStatistics::fromRecords($category, array_values($records), $terms, $selectedTerm, $filters);
+        return RegistrationStatistics::fromRecords($category, array_values($records), $allTerms, $selectedTerm, $filters);
     }
 
     /** @param array<string, mixed> $filters */
@@ -704,7 +731,10 @@ final readonly class LegacyStudentReportService
     {
         $sets = $this->sets($districtId);
         $terms = $this->registeredSubjectTerms($viewer, $sets, $filters);
-        $selectedTerm = $this->selectedTerm($filters, $terms);
+        $latestTerm = AcademicTerm::latest($terms) ?? '1/'.((int) date('Y') + 543);
+        $historyTerms = AcademicTerm::termsInRange($latestTerm, 9);
+        $allTerms = $this->sortTerms(array_unique([...$terms, ...$historyTerms]));
+        $selectedTerm = $this->selectedTerm($filters, $allTerms);
         $students = [];
 
         if ($selectedTerm !== null) {
@@ -761,7 +791,7 @@ final readonly class LegacyStudentReportService
                 'disqualified_students' => $totalStudents - count($eligible),
                 'group_count' => count($groupStatistics),
             ],
-            'terms' => $terms,
+            'terms' => $allTerms,
             'selected_term' => $selectedTerm,
         ];
     }
@@ -912,14 +942,19 @@ final readonly class LegacyStudentReportService
         return $this->sortTerms($terms);
     }
 
-    /** @param list<LegacyTableSet> $sets @return list<string> */
-    private function distinctTerms(array $sets, string $tableProperty, string $column, string $where): array
+    /** @param list<LegacyTableSet> $sets @param list<string>|string $column @return list<string> */
+    private function distinctTerms(array $sets, string $tableProperty, array|string $column, string $where): array
     {
         $terms = [];
+        $candidates = (array) $column;
         foreach ($sets as $set) {
             $tableName = $set->{$tableProperty};
+            $col = $this->firstExistingColumn($tableName, $candidates);
+            if ($col === null) {
+                continue;
+            }
             $table = $this->identifier($tableName);
-            $quotedColumn = $this->identifier($column);
+            $quotedColumn = $this->identifier($col);
             foreach ($this->rows("SELECT DISTINCT {$quotedColumn} AS raw_term FROM {$table} WHERE {$where}") as $row) {
                 $normalized = AcademicTerm::normalize((string) ($row['raw_term'] ?? ''));
                 if ($normalized !== null) {
@@ -1119,7 +1154,10 @@ final readonly class LegacyStudentReportService
     {
         $sets = $this->filteredSets($this->sets($districtId), $filters);
         $terms = $this->registeredSubjectTerms($viewer, $sets, $filters);
-        $selectedTerm = $this->selectedTerm($filters, $terms);
+        $latestTerm = AcademicTerm::latest($terms) ?? '1/'.((int) date('Y') + 543);
+        $historyTerms = AcademicTerm::termsInRange($latestTerm, 9);
+        $allTerms = $this->sortTerms(array_unique([...$terms, ...$historyTerms]));
+        $selectedTerm = $this->selectedTerm($filters, $allTerms);
         $registrations = $selectedTerm === null
             ? []
             : $this->registeredSubjectRows($viewer, $sets, $filters, $selectedTerm);
@@ -1134,7 +1172,7 @@ final readonly class LegacyStudentReportService
         if (($filters['view'] ?? 'subject') === 'student') {
             return $this->historicalAcademicStudents(
                 $registrations,
-                $terms,
+                $allTerms,
                 $selectedTerm,
                 $kind,
                 $kind === 'grade-threshold' && trim((string) ($filters['subject'] ?? '')) !== '',
@@ -1214,7 +1252,7 @@ final readonly class LegacyStudentReportService
         return [
             'items' => $items,
             'summary' => $summary,
-            'terms' => $terms,
+            'terms' => $allTerms,
             'selected_term' => $selectedTerm,
         ];
     }

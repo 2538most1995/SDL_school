@@ -91,15 +91,13 @@ export function StudentSubjectsDialog({
         };
     }, [isOpen, onClose]);
 
-    const queryKey = ['student-subjects', studentCode, selectedTerm];
+    const queryKey = ['student-subjects', studentCode];
 
     const { data, isPending, isError, refetch } = useQuery({
         queryKey,
         enabled: isOpen && Boolean(studentCode),
         queryFn: ({ signal }) => {
-            const url = selectedTerm
-                ? `/api/v1/students/${encodeURIComponent(studentCode)}/subjects?term=${encodeURIComponent(selectedTerm)}`
-                : `/api/v1/students/${encodeURIComponent(studentCode)}/subjects`;
+            const url = `/api/v1/students/${encodeURIComponent(studentCode)}/subjects`;
             return getFeatureDataWithDemo<StudentSubjectsResponse>(
                 url,
                 {
@@ -120,11 +118,19 @@ export function StudentSubjectsDialog({
         rawItems.forEach((item) => {
             if (item.term) set.add(item.term);
         });
-        return Array.from(set);
+        return Array.from(set).sort((a, b) => {
+            const [aSem, aYear] = a.split('/').map(Number);
+            const [bSem, bYear] = b.split('/').map(Number);
+            return (bYear || 0) - (aYear || 0) || (bSem || 0) - (aSem || 0);
+        });
     }, [rawItems]);
 
     const filteredItems = useMemo(() => {
         let items = rawItems;
+
+        if (selectedTerm) {
+            items = items.filter((item) => item.term === selectedTerm);
+        }
 
         if (filterType === 'transferred') {
             items = items.filter((item) => item.is_transferred || item.registration_status === 'transferred');
@@ -311,10 +317,11 @@ export function StudentSubjectsDialog({
                                     className="h-8 w-full rounded-lg border border-slate-300 bg-white px-2 text-xs font-bold text-slate-800"
                                     aria-label="เลือกภาคเรียนที่แสดง"
                                 >
-                                    <option value="">ทุกภาคเรียน</option>
-                                    {term && <option value={term}>ภาคเรียน {term} (ตามรายงาน)</option>}
-                                    {availableTerms.filter((t) => t !== term).map((t) => (
-                                        <option key={t} value={t}>ภาคเรียน {t}</option>
+                                    <option value="">ทุกภาคเรียน ({rawItems.length} รายวิชา)</option>
+                                    {availableTerms.map((t) => (
+                                        <option key={t} value={t}>
+                                            ภาคเรียน {t} {term === t ? '(ตามรายงาน)' : ''}
+                                        </option>
                                     ))}
                                 </select>
                             </div>

@@ -254,7 +254,8 @@ final class LegacyStudentRepository implements StudentRepository
 
             if ($rows !== []) {
                 $row = $rows[0];
-                $academic = $this->academicAggregates($set, null, [$code]);
+                $latestTerm = $this->latestTerm([$set]);
+                $academic = $this->academicAggregates($set, $latestTerm, [$code]);
                 $kpch = $this->kpchAggregates($set, [$code]);
                 $moral = $this->moralAggregates($set, [$code]);
                 $metrics = $academic[$code] ?? [];
@@ -668,24 +669,13 @@ final class LegacyStudentRepository implements StudentRepository
         $grade = $this->identifier($set->grade);
         $citizenIdColumn = $this->firstExistingColumn($set->student, ['_perf_cardid', 'cardid']);
         $citizenId = $citizenIdColumn === null ? 'NULL' : 's.'.$this->identifier($citizenIdColumn);
-
-        // Expand the window to include students whose grades fall within the
-        // last 10 semesters (5 years) so that graduated students remain
-        // visible for historical grade review.
-        $historyTerms = AcademicTerm::termsInRange($latestTerm, 9);
-        $allVariants = [];
-        foreach ($historyTerms as $historyTerm) {
-            foreach (AcademicTerm::variants($historyTerm) as $variant) {
-                $allVariants[$variant] = true;
-            }
-        }
-        $allVariants = array_keys($allVariants);
-        if ($allVariants === []) {
+        $variants = AcademicTerm::variants($latestTerm);
+        if ($variants === []) {
             return [];
         }
 
-        $bindings = $allVariants;
-        $placeholders = implode(',', array_fill(0, count($allVariants), '?'));
+        $bindings = $variants;
+        $placeholders = implode(',', array_fill(0, count($variants), '?'));
         $groupJoin = '';
         $groupName = 's.grp_code';
         if ($set->group !== null) {
@@ -803,7 +793,7 @@ final class LegacyStudentRepository implements StudentRepository
     }
 
     /** @return array<string, array{gpax: float, credits_earned: float, credits_current: float, compulsory_earned: float, elective_earned: float}> */
-    private function academicAggregates(LegacyTableSet $set, string $latestTerm, array $studentCodes): array
+    private function academicAggregates(LegacyTableSet $set, ?string $latestTerm, array $studentCodes): array
     {
         if ($studentCodes === []) {
             return [];
@@ -811,10 +801,10 @@ final class LegacyStudentRepository implements StudentRepository
 
         $grade = $this->identifier($set->grade);
         $subject = $this->identifier($set->subject);
-        $termVariants = AcademicTerm::variants($latestTerm);
-        $termPlaceholders = implode(',', array_fill(0, count($termVariants), '?'));
+        $termVariants = $latestTerm !== null ? AcademicTerm::variants($latestTerm) : [];
+        $termPlaceholders = $termVariants !== [] ? implode(',', array_fill(0, count($termVariants), '?')) : 'NULL';
         $studentPlaceholders = implode(',', array_fill(0, count($studentCodes), '?'));
-        $cacheKey = $this->aggregateCacheKey('academic', $set, $latestTerm, $studentCodes);
+        $cacheKey = $this->aggregateCacheKey('academic', $set, $latestTerm ?? 'all', $studentCodes);
 
         return $this->rememberAggregate($cacheKey, function () use ($grade, $subject, $termPlaceholders, $studentPlaceholders, $termVariants, $studentCodes): array {
             $rows = $this->rows(

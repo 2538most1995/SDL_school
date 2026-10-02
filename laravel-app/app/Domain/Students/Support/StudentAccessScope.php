@@ -35,7 +35,7 @@ final readonly class StudentAccessScope
     public function allows(Student $student): bool
     {
         if ($this->role === 'super_admin') {
-            return $this->districtId !== null && $student->districtId === $this->districtId;
+            return $this->districtId === null || $student->districtId === $this->districtId;
         }
 
         if ($this->districtId === null || $student->districtId !== $this->districtId) {

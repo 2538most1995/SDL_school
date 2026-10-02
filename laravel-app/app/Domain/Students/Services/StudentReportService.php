@@ -53,9 +53,20 @@ final readonly class StudentReportService
      */
     public function newStudents(User $viewer, array $filters = []): array
     {
+        $allStudents = $this->students($viewer, $filters);
+        $terms = array_values(array_unique(array_filter(array_map(
+            static fn (Student $student): ?string => AcademicTerm::normalize($student->enrollmentTerm),
+            $allStudents,
+        ))));
+        $latestTerm = AcademicTerm::latest($terms) ?? '1/'.((int) date('Y') + 543);
+        $historyTerms = AcademicTerm::termsInRange($latestTerm, 9);
+        $allTerms = array_values(array_unique([...$terms, ...$historyTerms]));
+        usort($allTerms, static fn (string $left, string $right): int => AcademicTerm::compare($right, $left));
+        $selectedTerm = $this->selectedAcademicTerm($filters, $allTerms);
+
         $term = (string) ($filters['term'] ?? '');
         $students = array_values(array_filter(
-            $this->students($viewer, $filters),
+            $allStudents,
             static fn (Student $student): bool => $term === '' || $student->enrollmentTerm === $term,
         ));
         $rows = array_map(static fn (Student $student): array => [
@@ -73,18 +84,40 @@ final readonly class StudentReportService
             'metric' => 'ภาคเรียน '.$student->enrollmentTerm,
         ], $students);
 
-        return ['total' => count($rows), 'active' => count(array_filter($students, static fn (Student $student): bool => $student->status === 'studying')), 'groups' => count(array_unique(array_column($rows, 'group'))), 'rows' => $rows];
+        return [
+            'total' => count($rows),
+            'active' => count(array_filter($students, static fn (Student $student): bool => $student->status === 'studying')),
+            'groups' => count(array_unique(array_column($rows, 'group'))),
+            'terms' => $allTerms,
+            'selected_term' => $selectedTerm,
+            'rows' => $rows,
+        ];
     }
 
     /** @param array<string, mixed> $filters
-     * @return array{total: int, active: int, groups: int, rows: list<array<string, string>>}
+     * @return array{total: int, active: int, groups: int, terms: list<string>, selected_term: ?string, rows: list<array<string, string>>}
      */
     public function graduates(User $viewer, array $filters = []): array
     {
+        $allStudents = $this->students($viewer, $filters);
+        $graduatedStudents = array_values(array_filter(
+            $allStudents,
+            static fn (Student $student): bool => $student->status === 'graduated',
+        ));
+        $terms = array_values(array_unique(array_filter(array_map(
+            static fn (Student $student): ?string => AcademicTerm::normalize($student->currentTerm),
+            $graduatedStudents,
+        ))));
+        $latestTerm = AcademicTerm::latest($terms) ?? '1/'.((int) date('Y') + 543);
+        $historyTerms = AcademicTerm::termsInRange($latestTerm, 9);
+        $allTerms = array_values(array_unique([...$terms, ...$historyTerms]));
+        usort($allTerms, static fn (string $left, string $right): int => AcademicTerm::compare($right, $left));
+        $selectedTerm = $this->selectedAcademicTerm($filters, $allTerms);
+
         $term = (string) ($filters['term'] ?? '');
         $students = array_values(array_filter(
-            $this->students($viewer, $filters),
-            static fn (Student $student): bool => $student->status === 'graduated' && ($term === '' || $student->currentTerm === $term),
+            $graduatedStudents,
+            static fn (Student $student): bool => $term === '' || $student->currentTerm === $term,
         ));
         $rows = array_map(static fn (Student $student): array => [
             'id' => "{$student->districtId}-{$student->level}-{$student->code}",
@@ -101,7 +134,14 @@ final readonly class StudentReportService
             'metric' => $student->currentTerm,
         ], $students);
 
-        return ['total' => count($rows), 'active' => count($rows), 'groups' => count(array_unique(array_column($rows, 'group'))), 'rows' => $rows];
+        return [
+            'total' => count($rows),
+            'active' => count($rows),
+            'groups' => count(array_unique(array_column($rows, 'group'))),
+            'terms' => $allTerms,
+            'selected_term' => $selectedTerm,
+            'rows' => $rows,
+        ];
     }
 
     /** @param array<string, mixed> $filters
@@ -205,15 +245,14 @@ final readonly class StudentReportService
         ];
     }
 
-    /** @param array<string, mixed> $filters
-     * @return array{total: int, active: int, groups: int, rows: list<array<string, string>>}
-     */
     public function transfers(User $viewer, array $filters = []): array
     {
-        $term = (string) ($filters['term'] ?? '');
-        $rows = [];
         $students = $this->students($viewer, $filters);
         $gradesByStudent = $this->repository->gradesForMany($students);
+        $terms = $this->academicTerms($gradesByStudent);
+        $selectedTerm = $this->selectedAcademicTerm($filters, $terms);
+        $term = (string) ($filters['term'] ?? '');
+        $rows = [];
         foreach ($students as $student) {
             foreach ($this->studentGrades($gradesByStudent, $student) as $grade) {
                 if (! $grade->transferred || ($term !== '' && $grade->term !== $term)) {
@@ -240,7 +279,14 @@ final readonly class StudentReportService
             }
         }
 
-        return ['total' => count($rows), 'active' => count($rows), 'groups' => count(array_unique(array_column($rows, 'group'))), 'rows' => $rows];
+        return [
+            'total' => count($rows),
+            'active' => count($rows),
+            'groups' => count(array_unique(array_column($rows, 'group'))),
+            'terms' => $terms,
+            'selected_term' => $selectedTerm,
+            'rows' => $rows,
+        ];
     }
 
     /** @param array<string, mixed> $filters
@@ -723,10 +769,13 @@ final readonly class StudentReportService
             }
         }
 
-        $terms = array_keys($terms);
-        usort($terms, static fn (string $left, string $right): int => AcademicTerm::compare($right, $left));
+        $termList = array_keys($terms);
+        $latestTerm = AcademicTerm::latest($termList) ?? '1/'.((int) date('Y') + 543);
+        $historyTerms = AcademicTerm::termsInRange($latestTerm, 9);
+        $allTerms = array_values(array_unique([...$termList, ...$historyTerms]));
+        usort($allTerms, static fn (string $left, string $right): int => AcademicTerm::compare($right, $left));
 
-        return $terms;
+        return $allTerms;
     }
 
     /** @param array<string, mixed> $filters @param list<string> $terms */

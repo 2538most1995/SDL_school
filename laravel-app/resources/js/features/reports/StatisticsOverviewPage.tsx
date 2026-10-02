@@ -600,6 +600,25 @@ async function loadWorkspace(request: WorkspaceRequest, signal?: AbortSignal): P
     return { crossTab, selectedTerm: response.data.selected_term ?? request.term };
 }
 
+function getHistoricalTerms(latestTerm?: string | null, count: number = 10): string[] {
+    const base = latestTerm && /^([12])\/25\d{2}$/.test(latestTerm)
+        ? latestTerm
+        : `1/${new Date().getFullYear() + 543}`;
+    const [startSem, startYear] = base.split('/').map(Number);
+    const terms: string[] = [];
+    let curSem = startSem;
+    let curYear = startYear;
+    for (let i = 0; i < count; i++) {
+        terms.push(`${curSem}/${curYear}`);
+        curSem--;
+        if (curSem < 1) {
+            curSem = 2;
+            curYear--;
+        }
+    }
+    return terms;
+}
+
 export function StatisticsOverviewPage() {
     const navigate = useNavigate();
     const queryClient = useQueryClient();
@@ -638,6 +657,11 @@ export function StatisticsOverviewPage() {
         mutationFn: (value: StatisticsPreference) => sendFeatureData<StatisticsPreference>('/api/v1/settings/statistics-report', 'PUT', value).then((response) => response.data),
     });
     const workspace = useQuery({ queryKey: ['statistics-workspace', request], queryFn: ({ signal }) => loadWorkspace(request!, signal), enabled: request !== null, placeholderData: keepPreviousData });
+
+    const historicalTerms = useMemo(() => {
+        const current = portal.data?.analytics.current_term;
+        return getHistoricalTerms(current, 10);
+    }, [portal.data?.analytics.current_term]);
 
     useEffect(() => { const currentTerm = portal.data?.analytics.current_term; if (!currentTerm || termStart !== '') return; setTermStart(currentTerm); }, [portal.data?.analytics.current_term, termStart]);
     useEffect(() => {
@@ -703,7 +727,7 @@ export function StatisticsOverviewPage() {
                 <div className="space-y-5 lg:border-r lg:border-slate-200 lg:pr-6">
                     <div><label htmlFor="statistics-report" className="mb-2 flex items-center gap-2 text-sm font-black text-slate-800"><FileText size={19} className="text-emerald-600" weight="duotone" />รายงาน</label><select id="statistics-report" value={reportId} onChange={(event) => changeReport(Number(event.target.value) as StatisticReportId)} className={inputClassName()}>{statisticReports.map((report) => <option key={report.id} value={report.id}>{report.id}. {report.label}</option>)}</select><p className="mt-2 text-xs text-slate-500">แสดงเฉพาะรายงานที่มีแหล่งข้อมูลและวิธีนับที่ระบบรองรับแล้ว</p></div>
                     <div className="grid gap-3 sm:grid-cols-[190px_minmax(0,1fr)] sm:items-end"><label className="grid gap-2 text-sm font-black text-slate-800"><span className="flex items-center gap-2"><Buildings size={19} className="text-brand-700" weight="duotone" />รหัสพื้นที่/สถานศึกษา</span><div className="relative"><input readOnly value={districtCode} className={`${inputClassName(true)} pr-11`} /><MagnifyingGlass size={18} className="absolute right-3 top-1/2 -translate-y-1/2 text-brand-600" /></div></label><label className="grid gap-2 text-sm font-black text-slate-800">พื้นที่ข้อมูล<input readOnly value={districtName} className={inputClassName(true)} /></label></div>
-                    <fieldset><legend id="statistics-filter-title" className="mb-3 flex items-center gap-2 text-sm font-black text-slate-800"><CalendarBlank size={19} className="text-brand-700" weight="duotone" />ตัวกรองรายงาน</legend><div className="grid gap-3 sm:grid-cols-2"><label className="grid gap-2 text-sm font-black text-slate-800">ภาคเรียนที่ต้องการประมวลผล<input aria-label="ภาคเรียนที่ต้องการประมวลผล" value={termStart} onChange={(event) => { setTermStart(event.target.value); clearProcessedResult(); }} placeholder="1/2569" className={inputClassName()} /></label><label className="grid gap-2 text-sm font-black text-slate-800">กลุ่มเรียน<select aria-label="กรองตามกลุ่มเรียน" value={group} onChange={(event) => { setGroup(event.target.value); clearProcessedResult(); }} className={inputClassName()}><option value="">ทุกกลุ่มเรียน</option>{groupOptions.map((option) => <option key={String(option.value)} value={String(option.value)}>{option.label}</option>)}</select></label></div><p className="mt-2 text-xs text-slate-500">ระบบประมวลผลจากข้อมูลจริงครั้งละ 1 ภาคเรียน และเลือกกรองเฉพาะกลุ่มได้</p></fieldset>
+                    <fieldset><legend id="statistics-filter-title" className="mb-3 flex items-center gap-2 text-sm font-black text-slate-800"><CalendarBlank size={19} className="text-brand-700" weight="duotone" />ตัวกรองรายงาน</legend><div className="grid gap-3 sm:grid-cols-2"><label className="grid gap-2 text-sm font-black text-slate-800">ภาคเรียนที่ต้องการประมวลผล<select aria-label="ภาคเรียนที่ต้องการประมวลผล" value={termStart} onChange={(event) => { setTermStart(event.target.value); clearProcessedResult(); }} className={inputClassName()}>{historicalTerms.map((t) => <option key={t} value={t}>ภาคเรียน {t}{t === portal.data?.analytics.current_term ? ' (ภาคเรียนปัจจุบัน)' : ''}</option>)}{termStart && !historicalTerms.includes(termStart) && <option value={termStart}>ภาคเรียน {termStart} (กำหนดเอง)</option>}</select></label><label className="grid gap-2 text-sm font-black text-slate-800">กลุ่มเรียน<select aria-label="กรองตามกลุ่มเรียน" value={group} onChange={(event) => { setGroup(event.target.value); clearProcessedResult(); }} className={inputClassName()}><option value="">ทุกกลุ่มเรียน</option>{groupOptions.map((option) => <option key={String(option.value)} value={String(option.value)}>{option.label}</option>)}</select></label></div><p className="mt-2 text-xs text-slate-500">ระบบประมวลผลจากข้อมูลจริงครั้งละ 1 ภาคเรียน (สามารถเลือกย้อนหลังได้ 5 ปี / 10 เทอม) และเลือกกรองเฉพาะกลุ่มได้</p></fieldset>
                 </div>
                 <div className="flex flex-col justify-between gap-6">
                     <div><h2 className="flex items-center gap-2 text-sm font-black text-slate-800"><ChartBar size={19} className="text-brand-700" weight="duotone" />ระดับการแสดงผล</h2><div className="mt-3 inline-flex items-center gap-2 rounded-full bg-emerald-50 px-3 py-1.5 text-sm font-black text-emerald-800"><span className="size-2 rounded-full bg-emerald-500" />ระดับสถานศึกษา/อำเภอ</div><p className="mt-2 text-xs text-slate-500">ใช้ข้อมูลของอำเภอที่เลือกและขอบเขตกลุ่มของผู้ใช้งาน</p><div className="mt-4 grid gap-2 rounded-xl border border-brand-100 bg-brand-50/70 px-4 py-3 text-sm text-brand-950"><p><strong className="font-black text-indigo-800">แกนตั้ง:</strong> {verticalSummary || 'ยังไม่ได้เลือก'}</p><p><strong className="font-black text-sky-800">แกนนอน:</strong> {horizontalSummary || 'ยังไม่ได้เลือก'}</p></div></div>
