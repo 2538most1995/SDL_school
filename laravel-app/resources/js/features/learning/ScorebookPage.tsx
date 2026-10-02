@@ -2,15 +2,18 @@ import {
     ArrowsClockwise,
     BookOpenText,
     ChartBar,
+    Database,
     FileXls,
     FloppyDisk,
+    ListChecks,
+    MagnifyingGlass,
     NotePencil,
     Plus,
     Trash,
     Users,
 } from '@phosphor-icons/react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { useEffect, useMemo, useRef, useState, type KeyboardEvent as ReactKeyboardEvent } from 'react';
+import { useDeferredValue, useEffect, useMemo, useRef, useState, type KeyboardEvent as ReactKeyboardEvent, type ReactNode } from 'react';
 import { Button, Field, Input, Select } from '../../components/MaterialUI';
 import { PageHeader } from '../../components/PageHeader';
 import { Panel } from '../../components/Panel';
@@ -19,6 +22,7 @@ import { useDemoRole } from '../../context/DemoRoleContext';
 import { showSuccessAlert } from '../../lib/feedback';
 import { downloadExcel } from '../../lib/excel';
 import { getFeatureDataWithDemo, sendFeatureData } from '../api';
+import { buildImportedScoresPath, importedAssessmentLabels, normalizeAssessmentScores } from './importedScores';
 import { isScoreGridNavigationKey, nextScoreGridPosition, scoreGridCellKey } from './scoreGridNavigation';
 
 type ScoreComponent = {
@@ -129,10 +133,241 @@ function formatScore(value: number): string {
 export function ScorebookPage() {
     const { role } = useDemoRole();
 
-    return role === 'student' ? <StudentScoreSummary /> : <TeacherScorebook />;
+    return role === 'student' ? <StudentScoreSummary /> : <StaffScoresPage />;
 }
 
-function TeacherScorebook() {
+type StaffScoreView = 'imported' | 'scorebook';
+
+function StaffScoresPage() {
+    const [view, setView] = useState<StaffScoreView>('imported');
+    const navigation = <ScoreSourceTabs value={view} onChange={setView} />;
+
+    return view === 'imported'
+        ? <ImportedScoresPage sourceNavigation={navigation} />
+        : <TeacherScorebook sourceNavigation={navigation} />;
+}
+
+function ScoreSourceTabs({ value, onChange }: { value: StaffScoreView; onChange: (view: StaffScoreView) => void }) {
+    return <nav className="mb-5 flex gap-1 overflow-x-auto border-b border-slate-200" aria-label="แหล่งข้อมูลคะแนน">
+        <button type="button" onClick={() => onChange('imported')} aria-current={value === 'imported' ? 'page' : undefined} className={`inline-flex min-h-12 shrink-0 items-center gap-2 border-b-2 px-4 py-3 text-sm font-bold ${value === 'imported' ? 'border-brand-700 text-brand-800' : 'border-transparent text-slate-500 hover:text-slate-900'}`}><Database size={18} aria-hidden="true" /> คะแนนจากข้อมูลนำเข้า</button>
+        <button type="button" onClick={() => onChange('scorebook')} aria-current={value === 'scorebook' ? 'page' : undefined} className={`inline-flex min-h-12 shrink-0 items-center gap-2 border-b-2 px-4 py-3 text-sm font-bold ${value === 'scorebook' ? 'border-brand-700 text-brand-800' : 'border-transparent text-slate-500 hover:text-slate-900'}`}><NotePencil size={18} aria-hidden="true" /> สมุดคะแนนในระบบ</button>
+    </nav>;
+}
+
+type ImportedScoreOption = string | number | {
+    value?: string | number;
+    code?: string | number;
+    label?: string;
+    name?: string;
+};
+
+type ImportedScoreRow = {
+    student_code: string;
+    full_name: string;
+    group_code: string;
+    group_name: string;
+    level: number;
+    subject_code: string;
+    subject_name: string;
+    learning_method: string | null;
+    assessment_scores: Array<number | null>;
+    midterm_score: number | null;
+    final_exam_score: number | null;
+    total_score: number | null;
+    grade: string | null;
+};
+
+type ImportedScorePayload = {
+    terms: string[];
+    selected_term: string | null;
+    levels: ImportedScoreOption[];
+    groups: ImportedScoreOption[];
+    subjects: ImportedScoreOption[];
+    score_labels: string[];
+    rows: ImportedScoreRow[];
+};
+
+const emptyImportedScores: ImportedScorePayload = {
+    terms: [],
+    selected_term: null,
+    levels: [],
+    groups: [],
+    subjects: [],
+    score_labels: [],
+    rows: [],
+};
+
+function scoreOption(option: ImportedScoreOption, fallbackLabel?: string): { value: string; label: string } {
+    if (typeof option === 'string' || typeof option === 'number') {
+        return { value: String(option), label: fallbackLabel ?? String(option) };
+    }
+
+    const value = String(option.value ?? option.code ?? '');
+    return { value, label: option.label ?? option.name ?? fallbackLabel ?? value };
+}
+
+function levelLabel(level: string | number): string {
+    return { '1': 'ประถมศึกษา', '2': 'มัธยมศึกษาตอนต้น', '3': 'มัธยมศึกษาตอนปลาย' }[String(level)] ?? String(level);
+}
+
+function nullableScore(value: number | null): string {
+    return value === null ? '-' : formatScore(value);
+}
+
+function ImportedScoresPage({ sourceNavigation }: { sourceNavigation: ReactNode }) {
+    const [term, setTerm] = useState('');
+    const [level, setLevel] = useState('');
+    const [group, setGroup] = useState('');
+    const [subjectCode, setSubjectCode] = useState('');
+    const [search, setSearch] = useState('');
+    const [showScoreLegend, setShowScoreLegend] = useState(false);
+    const deferredSearch = useDeferredValue(search);
+    const importedScores = useQuery({
+        queryKey: ['learning', 'scores', 'imported', term, level, group, subjectCode, deferredSearch],
+        queryFn: ({ signal }) => getFeatureDataWithDemo<ImportedScorePayload>(buildImportedScoresPath({ term, level, group, subjectCode, search: deferredSearch }), emptyImportedScores, signal),
+        refetchOnWindowFocus: false,
+    });
+    const data = importedScores.data?.data;
+    const rows = data?.rows ?? [];
+    const scoreLabels = useMemo(() => importedAssessmentLabels(data?.score_labels), [data?.score_labels]);
+
+    useEffect(() => {
+        if (!term && data?.selected_term) setTerm(data.selected_term);
+    }, [data?.selected_term, term]);
+
+    const levelOptions = useMemo(() => {
+        if ((data?.levels.length ?? 0) > 0) return data!.levels.map((option) => {
+            const parsed = scoreOption(option);
+            return { ...parsed, label: parsed.label === parsed.value ? levelLabel(parsed.value) : parsed.label };
+        });
+        return Array.from(new Set(rows.map((row) => row.level))).sort().map((value) => ({ value: String(value), label: levelLabel(value) }));
+    }, [data?.levels, rows]);
+    const groupOptions = useMemo(() => {
+        if ((data?.groups.length ?? 0) > 0) return data!.groups.map((option) => scoreOption(option));
+        return Array.from(new Map(rows.filter((row) => row.group_code || row.group_name).map((row) => [row.group_code || row.group_name, row.group_name || row.group_code])).entries()).map(([value, label]) => ({ value, label }));
+    }, [data?.groups, rows]);
+    const subjectOptions = useMemo(() => {
+        if ((data?.subjects.length ?? 0) > 0) return data!.subjects.map((option) => scoreOption(option));
+        return Array.from(new Map(rows.filter((row) => row.subject_code).map((row) => [row.subject_code, `${row.subject_code} ${row.subject_name}`.trim()])).entries()).map(([value, label]) => ({ value, label }));
+    }, [data?.subjects, rows]);
+    const studentCount = useMemo(() => new Set(rows.map((row) => `${row.level}|${row.student_code}`)).size, [rows]);
+    const subjectCount = useMemo(() => new Set(rows.map((row) => `${row.level}|${row.subject_code}`)).size, [rows]);
+
+    const exportImportedScores = () => downloadExcel(`คะแนนนำเข้า-${data?.selected_term ?? (term || 'ทั้งหมด')}`, [{
+        name: 'คะแนนนำเข้า',
+        columns: ['ลำดับ', 'รหัสนักศึกษา', 'ชื่อ-นามสกุล', 'กลุ่ม', 'ระดับ', 'รหัสวิชา', 'รายวิชา', 'วิธีเรียน', ...scoreLabels, 'กลางภาค', 'ปลายภาค', 'รวม', 'เกรด'],
+        rows: rows.map((row, index) => [
+            index + 1,
+            row.student_code,
+            row.full_name,
+            row.group_name || row.group_code,
+            levelLabel(row.level),
+            row.subject_code,
+            row.subject_name,
+            row.learning_method ?? '',
+            ...normalizeAssessmentScores(row.assessment_scores),
+            row.midterm_score,
+            row.final_exam_score,
+            row.total_score,
+            row.grade,
+        ]),
+    }]);
+
+    return <div>
+        <PageHeader category="learning" title="คะแนนจากข้อมูลนำเข้า" description="ดูคะแนนย่อย คะแนนเก็บ คะแนนสอบปลายภาค และเกรดจากไฟล์ผลการเรียนที่นำเข้า (GRADE.DBF)" icon={Database} actions={rows.length > 0 ? <Button type="button" appearance="outline" icon={<FileXls size={18} weight="bold" />} onClick={exportImportedScores}>ส่งออก Excel</Button> : undefined} />
+        {sourceNavigation}
+
+        <p role="status" className="mb-5 rounded-xl border border-sky-200 bg-sky-50 p-4 text-sm leading-6 text-sky-950"><strong>ข้อมูลอ่านอย่างเดียว:</strong> คะแนนในตารางนี้มาจากไฟล์ผลการเรียน ITW51 ที่นำเข้า (GRADE.DBF) แสดงผลคะแนนย่อย 1-9, กลางภาค (คะแนนเก็บ), ปลายภาค และเกรดจริง</p>
+
+        <Panel title="ตัวกรองคะแนนนำเข้า" description="จำกัดผลลัพธ์ตามภาคเรียน ระดับ กลุ่มเรียน รายวิชา หรือค้นหาชื่อและรหัสนักศึกษา">
+            <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-5">
+                <Field label="ค้นหา"><Input value={search} onChange={(_, input) => setSearch(input.value)} contentBefore={<MagnifyingGlass size={18} aria-hidden="true" />} placeholder="ชื่อหรือรหัสนักศึกษา" size="large" /></Field>
+                <Field label="ภาคเรียน"><Select value={term} onChange={(_, option) => { setTerm(option.value); setGroup(''); setSubjectCode(''); }} size="large"><option value="all">ทุกภาคเรียน</option>{(data?.terms ?? []).map((item) => <option key={item} value={item}>{item}</option>)}</Select></Field>
+                <Field label="ระดับการศึกษา"><Select value={level} onChange={(_, option) => { setLevel(option.value); setGroup(''); setSubjectCode(''); }} size="large"><option value="">ทุกระดับ</option>{levelOptions.map((option) => <option key={option.value} value={option.value}>{option.label}</option>)}</Select></Field>
+                <Field label="กลุ่มเรียน"><Select value={group} onChange={(_, option) => setGroup(option.value)} size="large"><option value="">ทุกกลุ่มเรียน</option>{groupOptions.map((option) => <option key={option.value} value={option.value}>{option.label}</option>)}</Select></Field>
+                <Field label="รายวิชา"><Select value={subjectCode} onChange={(_, option) => setSubjectCode(option.value)} size="large"><option value="">ทุกรายวิชา</option>{subjectOptions.map((option) => <option key={option.value} value={option.value}>{option.label}</option>)}</Select></Field>
+            </div>
+        </Panel>
+
+        <Panel className="mt-5" title="ตารางคะแนนจากไฟล์นำเข้า" description={importedScores.isPending ? 'กำลังโหลดข้อมูล' : `พบ ${rows.length} รายการ จาก ${studentCount} คน และ ${subjectCount} วิชา`} action={
+            <div className="flex items-center gap-2">
+                <Button type="button" appearance="outline" icon={<ListChecks size={18} weight="bold" />} onClick={() => setShowScoreLegend((prev) => !prev)}>
+                    {showScoreLegend ? 'ซ่อนคำอธิบาย 1-9' : 'คำอธิบายคะแนน 1-9'}
+                </Button>
+                <Button type="button" appearance="outline" icon={<ArrowsClockwise size={18} weight="bold" />} onClick={() => importedScores.refetch()} disabled={importedScores.isFetching}>
+                    โหลดข้อมูลใหม่
+                </Button>
+            </div>
+        }>
+            {showScoreLegend && (
+                <div className="mb-4 rounded-2xl border border-brand-200 bg-brand-50/70 p-4 text-sm text-slate-800 shadow-xs">
+                    <div className="flex items-center justify-between pb-2 mb-3 border-b border-brand-200/60">
+                        <p className="font-black text-brand-950 flex items-center gap-2">
+                            <ListChecks size={20} className="text-brand-700" />
+                            ความหมายคะแนนย่อยช่อง 1 - 9 (ตาราง GRADE.DBF ตามระบบ ITW51)
+                        </p>
+                        <span className="rounded-full bg-brand-200/70 px-2.5 py-0.5 text-xs text-brand-900 font-bold">โครงสร้างไฟล์จริง ITW51</span>
+                    </div>
+                    <div className="grid gap-2 sm:grid-cols-2 md:grid-cols-3">
+                        {scoreLabels.map((label, index) => (
+                            <div key={index} className="flex items-center gap-2.5 rounded-xl bg-white/90 px-3 py-2 border border-brand-100 shadow-xs">
+                                <span className="grid size-6 shrink-0 place-items-center rounded-lg bg-brand-700 font-mono text-xs font-black text-white">{index + 1}</span>
+                                <span className="truncate font-bold text-slate-800 text-xs" title={label}>{label}</span>
+                            </div>
+                        ))}
+                    </div>
+                    <div className="mt-3 flex flex-wrap gap-4 text-xs font-semibold text-slate-600 border-t border-brand-200/50 pt-2.5">
+                        <span><strong className="text-slate-800">วิธีเรียน:</strong> พบกลุ่ม (1), ทางไกล (2), ทางไกลพิเศษ (3)</span>
+                        <span><strong className="text-sky-800">กลางภาค:</strong> คะแนนเก็บรวม (MIDTERM)</span>
+                        <span><strong className="text-amber-800">ปลายภาค:</strong> คะแนนสอบปลายภาค (FINAL)</span>
+                        <span><strong className="text-brand-900">รวม:</strong> คะแนนรวมทั้งสิ้น (TOTAL)</span>
+                        <span><strong className="text-slate-900">เกรด:</strong> ผลการเรียน (GRADE)</span>
+                    </div>
+                </div>
+            )}
+
+            {importedScores.isPending && <QuerySkeleton rows={7} />}
+            {importedScores.isError && <QueryError onRetry={() => importedScores.refetch()} />}
+            {importedScores.data && rows.length === 0 && <div className="grid min-h-48 place-items-center rounded-xl border border-dashed border-slate-300 bg-slate-50 p-6 text-center text-sm leading-6 text-slate-600">ไม่พบคะแนนจากข้อมูลนำเข้าตามตัวกรองที่เลือก</div>}
+            {importedScores.data && rows.length > 0 && <div role="region" aria-label="ตารางคะแนนจากข้อมูลนำเข้า เลื่อนแนวนอนเพื่อดูคะแนนทุกช่อง" tabIndex={0} className="overflow-x-auto rounded-xl border border-slate-200 outline-none focus:ring-2 focus:ring-brand-200">
+                <table className="w-full min-w-[1940px] border-collapse text-sm">
+                    <thead className="bg-slate-50 text-slate-700">
+                        <tr>
+                            <th className="sticky left-0 z-20 w-14 border-b border-r border-slate-200 bg-slate-50 px-2 py-3 text-center">ลำดับ</th>
+                            <th className="sticky left-14 z-20 min-w-36 border-b border-r border-slate-200 bg-slate-50 px-3 py-3 text-left">รหัสนักศึกษา</th>
+                            <th className="sticky left-[200px] z-20 min-w-60 border-b border-r border-slate-200 bg-slate-50 px-4 py-3 text-left">ชื่อ-นามสกุล</th>
+                            <th className="min-w-36 border-b border-r border-slate-200 px-3 py-3 text-left">กลุ่ม</th>
+                            <th className="min-w-64 border-b border-r border-slate-200 px-4 py-3 text-left">วิชา</th>
+                            <th className="min-w-28 border-b border-r border-slate-200 px-3 py-3 text-center">วิธีเรียน</th>
+                            {scoreLabels.map((label, index) => <th key={`${label}-${index}`} className="w-16 border-b border-r border-slate-200 px-2 py-3 text-center" title={label}><span className="block truncate">{index + 1}</span><span className="sr-only">{label}</span></th>)}
+                            <th className="w-24 border-b border-r border-slate-200 bg-sky-50 px-3 py-3 text-center">กลางภาค</th>
+                            <th className="w-24 border-b border-r border-slate-200 bg-amber-50 px-3 py-3 text-center">ปลายภาค</th>
+                            <th className="w-20 border-b border-r border-slate-200 bg-brand-50 px-3 py-3 text-center">รวม</th>
+                            <th className="w-20 border-b border-slate-200 px-3 py-3 text-center">เกรด</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {rows.map((row, rowIndex) => <tr key={`${row.level}|${row.student_code}|${row.subject_code}|${rowIndex}`} className="bg-white hover:bg-slate-50/70">
+                            <td className="sticky left-0 z-10 border-b border-r border-slate-200 bg-inherit px-2 py-3 text-center font-mono text-xs text-slate-500">{rowIndex + 1}</td>
+                            <td className="sticky left-14 z-10 border-b border-r border-slate-200 bg-inherit px-3 py-3 font-mono font-bold text-slate-700">{row.student_code}</td>
+                            <td className="sticky left-[200px] z-10 border-b border-r border-slate-200 bg-inherit px-4 py-3"><p className="font-black text-slate-950">{row.full_name}</p><p className="mt-1 text-xs text-slate-500">{levelLabel(row.level)}</p></td>
+                            <td className="border-b border-r border-slate-200 px-3 py-3"><p className="font-bold text-slate-800">{row.group_name || row.group_code || '-'}</p>{row.group_name && row.group_code && <p className="mt-1 font-mono text-xs text-slate-500">{row.group_code}</p>}</td>
+                            <td className="border-b border-r border-slate-200 px-4 py-3"><p className="font-black text-slate-950">{row.subject_name || '-'}</p><p className="mt-1 font-mono text-xs text-slate-500">{row.subject_code}</p></td>
+                            <td className="border-b border-r border-slate-200 px-3 py-3 text-center text-slate-700">{row.learning_method || '-'}</td>
+                            {normalizeAssessmentScores(row.assessment_scores).map((score, scoreIndex) => <td key={scoreIndex} className="border-b border-r border-slate-200 px-2 py-3 text-center font-mono tabular-nums text-slate-700">{nullableScore(score)}</td>)}
+                            <td className="border-b border-r border-slate-200 bg-sky-50/60 px-3 py-3 text-center font-mono font-black tabular-nums text-sky-900">{nullableScore(row.midterm_score)}</td>
+                            <td className="border-b border-r border-slate-200 bg-amber-50/60 px-3 py-3 text-center font-mono font-black tabular-nums text-amber-900">{nullableScore(row.final_exam_score)}</td>
+                            <td className="border-b border-r border-slate-200 bg-brand-50/60 px-3 py-3 text-center font-mono font-black tabular-nums text-brand-900">{nullableScore(row.total_score)}</td>
+                            <td className="border-b border-slate-200 px-3 py-3 text-center"><span className="inline-flex min-w-10 justify-center rounded-lg bg-slate-100 px-2 py-1 font-mono font-black text-slate-900">{row.grade || '-'}</span></td>
+                        </tr>)}
+                    </tbody>
+                </table>
+            </div>}
+        </Panel>
+    </div>;
+}
+
+function TeacherScorebook({ sourceNavigation }: { sourceNavigation: ReactNode }) {
     const queryClient = useQueryClient();
     const scoreInputRefs = useRef(new Map<string, HTMLInputElement>());
     const [term, setTerm] = useState('');
@@ -460,7 +695,8 @@ function TeacherScorebook() {
     }).map((component) => `${student.full_name}: ${component.title}`));
 
     return <div>
-        <PageHeader category="learning" title="คะแนน" description="กำหนดสัดส่วนคะแนนเก็บและคะแนนสอบปลายภาค แล้วบันทึกคะแนนนักศึกษา" icon={NotePencil} actions={scorebook ? <Button type="button" appearance="outline" icon={<FileXls size={18} weight="bold" />} onClick={exportScores}>ส่งออก Excel</Button> : undefined} />
+        <PageHeader category="learning" title="สมุดคะแนนในระบบ" description="กำหนดโครงสร้างและบันทึกคะแนนระหว่างเรียนที่จัดเก็บในระบบ" icon={NotePencil} actions={scorebook ? <Button type="button" appearance="outline" icon={<FileXls size={18} weight="bold" />} onClick={exportScores}>ส่งออก Excel</Button> : undefined} />
+        {sourceNavigation}
 
         <section className="mb-5 overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm shadow-slate-200/60">
             <div className="grid gap-5 p-5 lg:grid-cols-[minmax(0,1.35fr)_repeat(3,minmax(140px,0.55fr))] lg:items-end">

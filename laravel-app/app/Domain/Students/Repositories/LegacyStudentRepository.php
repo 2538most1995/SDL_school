@@ -369,6 +369,7 @@ final class LegacyStudentRepository implements StudentRepository
 
             $gradeTable = $this->identifier($set->grade);
             $subjectTable = $this->identifier($set->subject);
+            $scoreProjection = $this->gradeScoreProjection($set->grade, 'g');
             $placeholders = implode(',', array_fill(0, count($codes), '?'));
             $rows = $this->rows(
                 "SELECT g._perf_std10 AS student_code,
@@ -379,7 +380,8 @@ final class LegacyStudentRepository implements StudentRepository
                         g.typ_code AS typ_code,
                         s.sub_name AS subject_name,
                         s.sub_credit AS subject_credit,
-                        s.sub_type AS subject_type
+                        s.sub_type AS subject_type,
+                        {$scoreProjection}
                  FROM {$gradeTable} g
                  LEFT JOIN {$subjectTable} s ON s._perf_sub = g._perf_sub
                  WHERE g._perf_std10 IN ({$placeholders})
@@ -739,23 +741,50 @@ final class LegacyStudentRepository implements StudentRepository
     {
         if (! array_key_exists($table, $this->columnsByTable)) {
             $columns = [];
-            foreach ($this->rows(
-                'SELECT COLUMN_NAME AS column_name
-                 FROM INFORMATION_SCHEMA.COLUMNS
-                 WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = ?',
-                [$table],
-            ) as $row) {
-                $column = strtolower(trim((string) ($row['column_name'] ?? '')));
-                if ($column !== '') {
-                    $columns[$column] = true;
+            try {
+                $isSqlite = method_exists($this->connection, 'getDriverName')
+                    && $this->connection->getDriverName() === 'sqlite';
+                if ($isSqlite && method_exists($this->connection, 'getSchemaBuilder')) {
+                    /** @var \Illuminate\Database\Connection $conn */
+                    $conn = $this->connection;
+                    foreach ($conn->getSchemaBuilder()->getColumnListing($table) as $col) {
+                        $colStr = trim((string) $col);
+                        if ($colStr !== '') {
+                            $columns[strtolower($colStr)] = $colStr;
+                        }
+                    }
+                } else {
+                    foreach ($this->rows(
+                        'SELECT COLUMN_NAME AS column_name
+                         FROM INFORMATION_SCHEMA.COLUMNS
+                         WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = ?',
+                        [$table],
+                    ) as $row) {
+                        $column = trim((string) ($row['column_name'] ?? ''));
+                        if ($column !== '') {
+                            $columns[strtolower($column)] = $column;
+                        }
+                    }
+                }
+            } catch (\Throwable) {
+                if (method_exists($this->connection, 'getSchemaBuilder')) {
+                    /** @var \Illuminate\Database\Connection $conn */
+                    $conn = $this->connection;
+                    foreach ($conn->getSchemaBuilder()->getColumnListing($table) as $col) {
+                        $colStr = trim((string) $col);
+                        if ($colStr !== '') {
+                            $columns[strtolower($colStr)] = $colStr;
+                        }
+                    }
                 }
             }
             $this->columnsByTable[$table] = $columns;
         }
 
         foreach ($candidates as $candidate) {
-            if (isset($this->columnsByTable[$table][strtolower($candidate)])) {
-                return $candidate;
+            $lower = strtolower($candidate);
+            if (isset($this->columnsByTable[$table][$lower])) {
+                return $this->columnsByTable[$table][$lower];
             }
         }
 
@@ -989,6 +1018,14 @@ final class LegacyStudentRepository implements StudentRepository
                 // Legacy has no attendance field. Preserve the established
                 // report convention while keeping the limitation explicit.
                 examAttended: ! in_array($gradeValue, ['', '-', 'ข', 'ม'], true),
+                assessmentScores: array_map(
+                    fn (int $position): ?float => $this->nullableDecimal($chosen["assessment_score_{$position}"] ?? null),
+                    range(1, 9),
+                ),
+                courseworkScore: $this->nullableDecimal($chosen['coursework_score'] ?? null),
+                finalExamScore: $this->nullableDecimal($chosen['final_exam_score'] ?? null),
+                totalScore: $this->nullableDecimal($chosen['total_score'] ?? null),
+                learningMethod: $this->learningMethodLabel($chosen['learning_method_value'] ?? null),
             );
         }
 
@@ -1003,6 +1040,68 @@ final class LegacyStudentRepository implements StudentRepository
         });
 
         return $grades;
+    }
+
+    private function gradeScoreProjection(string $table, string $alias): string
+    {
+        $columns = [];
+        for ($position = 1; $position <= 9; $position++) {
+            $columns["assessment_score_{$position}"] = ["midterm{$position}", "score{$position}", "score_{$position}"];
+        }
+        $columns['coursework_score'] = ['midterm', 'mid_score', 'coursework_score'];
+        $columns['final_exam_score'] = ['final', 'final_score', 'final2', 'final_exam_score'];
+        $columns['total_score'] = ['total', 'total_score'];
+
+        $selects = [];
+        foreach ($columns as $output => $candidates) {
+            $column = $this->firstExistingColumn($table, $candidates);
+            $selects[] = $column === null
+                ? "NULL AS {$output}"
+                : $alias.'.'.$this->identifier($column)." AS {$output}";
+        }
+
+        // Learning method: ITW51 stores learning method in METHOD and/or LEARNING column
+        // e.g. 1 = พบกลุ่ม, 2 = ทางไกล, 3 = ทางไกลพิเศษ
+        $methodCol = $this->firstExistingColumn($table, ['method', 'learning_method', 'learn_method']);
+        $learningCol = $this->firstExistingColumn($table, ['learning']);
+
+        if ($methodCol !== null && $learningCol !== null) {
+            $mIdent = $alias.'.'.$this->identifier($methodCol);
+            $lIdent = $alias.'.'.$this->identifier($learningCol);
+            $selects[] = "COALESCE(NULLIF(TRIM({$mIdent}), ''), NULLIF(TRIM({$lIdent}), '')) AS learning_method_value";
+        } elseif ($methodCol !== null) {
+            $mIdent = $alias.'.'.$this->identifier($methodCol);
+            $selects[] = "NULLIF(TRIM({$mIdent}), '') AS learning_method_value";
+        } elseif ($learningCol !== null) {
+            $lIdent = $alias.'.'.$this->identifier($learningCol);
+            $selects[] = "NULLIF(TRIM({$lIdent}), '') AS learning_method_value";
+        } else {
+            $selects[] = "NULL AS learning_method_value";
+        }
+
+        return implode(",\n                        ", $selects);
+    }
+
+    private function nullableDecimal(mixed $value): ?float
+    {
+        $raw = trim((string) ($value ?? ''));
+
+        return $raw === '' || ! is_numeric($raw) ? null : (float) $raw;
+    }
+
+    private function learningMethodLabel(mixed $value): ?string
+    {
+        $raw = trim((string) ($value ?? ''));
+        if ($raw === '') {
+            return null;
+        }
+
+        return match ($raw) {
+            '1' => 'พบกลุ่ม',
+            '2' => 'ทางไกล',
+            '3' => 'ทางไกลพิเศษ',
+            default => $raw,
+        };
     }
 
     private function studentKey(Student $student): string

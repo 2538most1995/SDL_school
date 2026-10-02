@@ -512,6 +512,76 @@ final class LearningScorebookTest extends TestCase
         $this->assertTrue(Schema::hasIndex('learning_score_entries', 'learning_score_entries_unique'));
     }
 
+    public function test_admin_and_teacher_can_view_imported_scores(): void
+    {
+        $admin = User::factory()->create([
+            'role' => 'admin',
+            'district_id' => $this->district->id,
+        ]);
+        Sanctum::actingAs($admin);
+
+        $response = $this->getJson('/api/v1/learning/scores/imported')
+            ->assertOk()
+            ->assertJsonStructure([
+                'data' => [
+                    'terms',
+                    'selected_term',
+                    'levels',
+                    'groups',
+                    'subjects',
+                    'score_labels',
+                    'rows',
+                ],
+            ]);
+
+        $this->assertSame([
+            'คะแนนบันทึกการเรียนรู้',
+            'คะแนนบันทึกการฝึกทักษะ',
+            'คะแนนรายงาน/รายงานเชิงปฏิบัติการ',
+            'คะแนนแบบฝึกหัด',
+            'คะแนนแต้มสะสมงาน',
+            'คะแนนผลงาน/ชิ้นงาน',
+            'คะแนนโครงงาน',
+            'คะแนนทดสอบย่อย',
+            'คะแนนอื่นๆ',
+        ], $response->json('data.score_labels'));
+
+        $this->assertNotEmpty($response->json('data.rows'));
+        $firstRow = $response->json('data.rows.0');
+        $this->assertArrayHasKey('student_code', $firstRow);
+        $this->assertArrayHasKey('full_name', $firstRow);
+        $this->assertArrayHasKey('group_code', $firstRow);
+        $this->assertArrayHasKey('subject_code', $firstRow);
+        $this->assertArrayHasKey('learning_method', $firstRow);
+        $this->assertArrayHasKey('assessment_scores', $firstRow);
+        $this->assertCount(9, $firstRow['assessment_scores']);
+        $this->assertArrayHasKey('midterm_score', $firstRow);
+        $this->assertArrayHasKey('coursework_score', $firstRow);
+        $this->assertArrayHasKey('final_exam_score', $firstRow);
+        $this->assertArrayHasKey('total_score', $firstRow);
+        $this->assertArrayHasKey('grade', $firstRow);
+
+        // Teacher access
+        $teacher = $this->teacher(['SENA-M3-A']);
+        Sanctum::actingAs($teacher);
+        $this->getJson('/api/v1/learning/scores/imported?term=all')
+            ->assertOk()
+            ->assertJsonPath('data.selected_term', null);
+    }
+
+    public function test_student_cannot_access_imported_scores(): void
+    {
+        $student = User::factory()->create([
+            'role' => 'student',
+            'district_id' => $this->district->id,
+            'student_code' => '6650300005',
+        ]);
+        Sanctum::actingAs($student);
+
+        $this->getJson('/api/v1/learning/scores/imported')
+            ->assertForbidden();
+    }
+
     /** @param list<string> $groups */
     private function teacher(array $groups): User
     {

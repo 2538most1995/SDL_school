@@ -641,6 +641,11 @@ type StaffGradeDetailRow = {
     is_passed: boolean;
     is_transferred: boolean;
     exam_attended: boolean;
+    assessment_scores?: Array<number | null>;
+    coursework_score?: number | null;
+    final_exam_score?: number | null;
+    total_score?: number | null;
+    learning_method?: string | null;
 };
 
 type StaffGradeSummary = {
@@ -1133,10 +1138,14 @@ function StaffAcademicDetailDialog({ kind, student, onClose }: { kind: MetricKin
     })))), [moral.data]);
     const subjectColumns = useMemo<ColumnDef<StaffGradeDetailRow>[]>(() => [
         { id: 'code', accessorFn: (row) => row.subject.code, header: 'รหัสวิชา', size: 100, meta: { compactSize: 72 } },
-        { id: 'name', accessorFn: (row) => row.subject.name, header: 'รายวิชา', size: 320, meta: { compactSize: 174 }, cell: ({ getValue }) => <span className="font-bold text-slate-950">{getValue<string>()}</span> },
+        { id: 'name', accessorFn: (row) => row.subject.name, header: 'รายวิชา', size: 280, meta: { compactSize: 150 }, cell: ({ getValue }) => <span className="font-bold text-slate-950">{getValue<string>()}</span> },
         { accessorKey: 'term', header: 'ภาคเรียน', size: 104, meta: { compactSize: 68, compactTextAlign: 'center' } },
-        { id: 'credits', accessorFn: (row) => row.subject.credits, header: 'หน่วยกิต', size: 92, meta: { compactSize: 58, compactTextAlign: 'center' } },
-        { accessorKey: 'grade', header: 'ผลการเรียน', size: 124, meta: { compactSize: 70, compactHeader: 'เกรด', compactTextAlign: 'center' }, cell: ({ getValue }) => getValue<string | null>() ?? 'รอผล' },
+        { id: 'credits', accessorFn: (row) => row.subject.credits, header: 'หน่วยกิต', size: 84, meta: { compactSize: 52, compactTextAlign: 'center' } },
+        { id: 'method', accessorFn: (row) => row.learning_method, header: 'วิธีเรียน', size: 96, meta: { compactSize: 64, compactTextAlign: 'center' }, cell: ({ getValue }) => getValue<string | null>() || '-' },
+        { id: 'coursework', accessorFn: (row) => row.coursework_score, header: 'คะแนนเก็บ', size: 100, meta: { compactSize: 60, compactHeader: 'เก็บ', compactTextAlign: 'center' }, cell: ({ getValue }) => { const val = getValue<number | null | undefined>(); return val !== null && val !== undefined ? <span className="font-mono font-bold text-sky-900">{val}</span> : '-'; } },
+        { id: 'final', accessorFn: (row) => row.final_exam_score, header: 'ปลายภาค', size: 100, meta: { compactSize: 60, compactHeader: 'ปลาย', compactTextAlign: 'center' }, cell: ({ getValue }) => { const val = getValue<number | null | undefined>(); return val !== null && val !== undefined ? <span className="font-mono font-bold text-amber-900">{val}</span> : '-'; } },
+        { id: 'total', accessorFn: (row) => row.total_score, header: 'รวม', size: 88, meta: { compactSize: 52, compactTextAlign: 'center' }, cell: ({ getValue }) => { const val = getValue<number | null | undefined>(); return val !== null && val !== undefined ? <span className="font-mono font-black text-brand-900">{val}</span> : '-'; } },
+        { accessorKey: 'grade', header: 'ผลการเรียน', size: 110, meta: { compactSize: 64, compactHeader: 'เกรด', compactTextAlign: 'center' }, cell: ({ getValue }) => { const val = getValue<string | null>(); return <span className="font-mono font-black text-slate-900">{val ?? 'รอผล'}</span>; } },
     ], []);
     const kpchColumns = useMemo<ColumnDef<KpchDetailRow>[]>(() => [
         { accessorKey: 'term', header: 'ภาคเรียน', size: 104, meta: { compactSize: 64, compactTextAlign: 'center' } },

@@ -14,6 +14,12 @@ final readonly class Grade
         public ?string $grade,
         public bool $transferred = false,
         public bool $examAttended = true,
+        /** @var list<float|null> */
+        public array $assessmentScores = [],
+        public ?float $courseworkScore = null,
+        public ?float $finalExamScore = null,
+        public ?float $totalScore = null,
+        public ?string $learningMethod = null,
     ) {}
 
     public function numericGrade(): ?float
@@ -49,6 +55,11 @@ final readonly class Grade
             'is_passed' => $this->isPassed(),
             'is_transferred' => $this->transferred,
             'exam_attended' => $this->examAttended,
+            'assessment_scores' => $this->assessmentScores,
+            'coursework_score' => $this->courseworkScore,
+            'final_exam_score' => $this->finalExamScore,
+            'total_score' => $this->totalScore,
+            'learning_method' => $this->learningMethod,
         ];
     }
 }

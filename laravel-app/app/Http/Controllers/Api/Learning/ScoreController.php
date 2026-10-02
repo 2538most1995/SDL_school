@@ -4,6 +4,7 @@ namespace App\Http\Controllers\Api\Learning;
 
 use App\Domain\Learning\DemoLearningPortal;
 use App\Domain\Learning\DemoResponseMeta;
+use App\Domain\Students\Services\StudentAcademicService;
 use App\Http\Controllers\Controller;
 use App\Services\Learning\LearningScorebookService;
 use App\Services\Legacy\LegacyPortalReadService;
@@ -49,6 +50,23 @@ final class ScoreController extends Controller
         return response()->json([
             'data' => $scorebooks->workspace($request->user(), $this->districtId($request), $filters),
             'meta' => ['mode' => 'production', 'source' => 'system_database', 'read_only' => ! (bool) config('system_data.write_enabled')],
+        ]);
+    }
+
+    public function imported(Request $request, StudentAcademicService $academics): JsonResponse
+    {
+        $filters = $request->validate([
+            'term' => ['nullable', 'string', 'max:20'],
+            'level' => ['nullable', 'integer', Rule::in([1, 2, 3])],
+            'group' => ['nullable', 'string', 'max:120'],
+            'subject_code' => ['nullable', 'string', 'max:32'],
+            'search' => ['nullable', 'string', 'max:120'],
+            'page' => ['nullable', 'integer', 'min:1'],
+            'per_page' => ['nullable', 'integer', 'min:1', 'max:1000'],
+        ]);
+
+        return response()->json([
+            'data' => $academics->importedScores($request->user(), $filters),
         ]);
     }
 

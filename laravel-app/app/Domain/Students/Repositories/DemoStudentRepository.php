@@ -61,6 +61,11 @@ final class DemoStudentRepository implements StudentRepository
                 grade: $row['grade'],
                 transferred: $row['transferred'],
                 examAttended: $row['examAttended'],
+                assessmentScores: $row['assessmentScores'] ?? [],
+                courseworkScore: $row['courseworkScore'] ?? null,
+                finalExamScore: $row['finalExamScore'] ?? null,
+                totalScore: $row['totalScore'] ?? null,
+                learningMethod: $row['learningMethod'] ?? null,
             ),
             $this->academicRows($student),
         );
@@ -247,17 +252,47 @@ final class DemoStudentRepository implements StudentRepository
         $index = max(0, ((int) substr($student->code, -2)) - 1) % count($gradeSets);
         $grades = $gradeSets[$index];
 
+        $assessmentTemplates = [
+            [13, null, null, 13, null, null, 8, 7, 8],
+            [13, null, null, 14, null, null, 7, 8, null],
+            [14, null, null, 13, null, null, 9, 7, 8],
+            [14, null, null, 14, null, null, 9, 8, 8],
+            [14, null, null, 13, null, null, 9, 8, 7],
+            [13, null, null, 12, null, null, 9, 8, 7],
+        ];
+
         return array_map(
-            static fn (array $subject, int $subjectIndex): array => [
-                'subjectCode' => $subject[0],
-                'subjectName' => $subject[1],
-                'credits' => $subject[2],
-                'subjectType' => $subject[3],
-                'term' => $subjectIndex < 3 ? '1/2568' : '2/2568',
-                'grade' => $grades[$subjectIndex],
-                'transferred' => $subjectIndex === 0 && ((int) substr($student->code, -1)) % 3 === 0,
-                'examAttended' => ! ($grades[$subjectIndex] === 'มส'),
-            ],
+            static function (array $subject, int $subjectIndex) use ($grades, $student, $assessmentTemplates): array {
+                $rawGrade = $grades[$subjectIndex];
+                $isAbsent = $rawGrade === 'มส';
+                $assessments = $assessmentTemplates[$subjectIndex % count($assessmentTemplates)];
+                $coursework = array_sum(array_filter($assessments, static fn ($v): bool => $v !== null));
+                $final = $isAbsent ? null : match ($rawGrade) {
+                    '4', '3.5' => 20.0 + ($subjectIndex * 2),
+                    '3', '2.5' => 15.0 + $subjectIndex,
+                    '2', '1.5' => 10.0 + $subjectIndex,
+                    '1' => 8.0,
+                    '0' => 3.0,
+                    default => 12.0,
+                };
+                $total = $final !== null ? ($coursework + $final) : null;
+
+                return [
+                    'subjectCode' => $subject[0],
+                    'subjectName' => $subject[1],
+                    'credits' => $subject[2],
+                    'subjectType' => $subject[3],
+                    'term' => $subjectIndex < 3 ? '1/2568' : '2/2568',
+                    'grade' => $rawGrade,
+                    'transferred' => $subjectIndex === 0 && ((int) substr($student->code, -1)) % 3 === 0,
+                    'examAttended' => ! $isAbsent,
+                    'assessmentScores' => $assessments,
+                    'courseworkScore' => (float) $coursework,
+                    'finalExamScore' => $final !== null ? (float) $final : null,
+                    'totalScore' => $total !== null ? (float) $total : null,
+                    'learningMethod' => 'พบกลุ่ม',
+                ];
+            },
             $catalog,
             array_keys($catalog),
         );

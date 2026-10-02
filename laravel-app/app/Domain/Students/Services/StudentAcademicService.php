@@ -8,6 +8,7 @@ use App\Domain\Students\Models\MoralAssessment;
 use App\Domain\Students\Models\RegisteredSubject;
 use App\Domain\Students\Models\Student;
 use App\Domain\Students\Repositories\StudentRepository;
+use App\Domain\Students\Support\AcademicTerm;
 use App\Models\User;
 
 final readonly class StudentAcademicService
@@ -66,6 +67,153 @@ final readonly class StudentAcademicService
                 'graded_credits' => $gradedCredits,
                 'registered_subjects' => count($items),
                 'passed_subjects' => count(array_filter($items, static fn (Grade $grade): bool => $grade->isPassed())),
+            ],
+        ];
+    }
+
+    /**
+     * Return imported ITW51 score details for the staff score grid. Student and
+     * grade reads retain the repository's latest-batch rule and directory scope.
+     *
+     * @param  array<string, mixed>  $filters
+     * @return array<string, mixed>
+     */
+    public function importedScores(User $viewer, array $filters = []): array
+    {
+        abort_unless(in_array($viewer->role, ['teacher', 'admin', 'super_admin'], true), 403);
+
+        $accessible = $this->directory->accessibleStudents($viewer);
+        $levels = [];
+        $groups = [];
+        foreach ($accessible as $student) {
+            $levels[$student->level] = $student->levelLabel;
+            $groupCode = trim($student->groupCode);
+            if ($groupCode !== '') {
+                $groups[$groupCode] = trim($student->groupName) ?: $groupCode;
+            }
+        }
+
+        $students = array_values(array_filter($accessible, static function (Student $student) use ($filters): bool {
+            if (isset($filters['level']) && (int) $filters['level'] !== $student->level) {
+                return false;
+            }
+            $group = trim((string) ($filters['group'] ?? ''));
+            if ($group !== '' && ! in_array($group, [$student->groupCode, $student->groupName], true)) {
+                return false;
+            }
+            $search = mb_strtolower(trim((string) ($filters['search'] ?? '')));
+
+            return $search === '' || str_contains(mb_strtolower($student->code.' '.$student->fullName()), $search);
+        }));
+
+        $gradesByStudent = $this->repository->gradesForMany($students);
+        $terms = [];
+        foreach ($gradesByStudent as $grades) {
+            foreach ($grades as $grade) {
+                $normalized = AcademicTerm::normalize($grade->term);
+                if ($normalized !== null) {
+                    $terms[$normalized] = true;
+                }
+            }
+        }
+        $termOptions = array_keys($terms);
+        usort($termOptions, static fn (string $left, string $right): int => AcademicTerm::compare($right, $left));
+        $requestedTerm = trim((string) ($filters['term'] ?? ''));
+        $selectedTerm = match (true) {
+            $requestedTerm === 'all' => null,
+            $requestedTerm !== '' => AcademicTerm::normalize($requestedTerm),
+            default => $termOptions[0] ?? null,
+        };
+        $subjectCode = trim((string) ($filters['subject_code'] ?? ''));
+        $subjects = [];
+        $rows = [];
+
+        foreach ($students as $student) {
+            $studentKey = "{$student->districtId}|{$student->level}|{$student->code}";
+            foreach ($gradesByStudent[$studentKey] ?? [] as $grade) {
+                if ($selectedTerm !== null && AcademicTerm::normalize($grade->term) !== $selectedTerm) {
+                    continue;
+                }
+
+                $subjects[$student->level.'|'.$grade->subjectCode] = [
+                    'code' => $grade->subjectCode,
+                    'name' => $grade->subjectName,
+                    'level' => $student->level,
+                ];
+                if ($subjectCode !== '' && $grade->subjectCode !== $subjectCode) {
+                    continue;
+                }
+
+                $assessmentScores = array_slice(array_pad($grade->assessmentScores, 9, null), 0, 9);
+                $rows[] = [
+                    'student_code' => $student->code,
+                    'full_name' => $student->fullName(),
+                    'group_code' => $student->groupCode,
+                    'group_name' => $student->groupName,
+                    'level' => $student->level,
+                    'subject_code' => $grade->subjectCode,
+                    'subject_name' => $grade->subjectName,
+                    'learning_method' => $grade->learningMethod ?? '-',
+                    'assessment_scores' => $assessmentScores,
+                    'midterm_score' => $grade->courseworkScore,
+                    'coursework_score' => $grade->courseworkScore,
+                    'final_exam_score' => $grade->finalExamScore,
+                    'total_score' => $grade->totalScore,
+                    'grade' => $grade->grade,
+                ];
+            }
+        }
+
+        usort($rows, static fn (array $left, array $right): int => [
+            $left['student_code'], $left['subject_code'],
+        ] <=> [
+            $right['student_code'], $right['subject_code'],
+        ]);
+        $subjectOptions = array_values($subjects);
+        usort($subjectOptions, static fn (array $left, array $right): int => [
+            $left['level'], $left['code'],
+        ] <=> [
+            $right['level'], $right['code'],
+        ]);
+        ksort($levels);
+        ksort($groups, SORT_NATURAL);
+
+        $page = max(1, (int) ($filters['page'] ?? 1));
+        $perPage = min(1000, max(1, (int) ($filters['per_page'] ?? 250)));
+        $total = count($rows);
+        $pagedRows = array_values(array_slice($rows, ($page - 1) * $perPage, $perPage));
+
+        return [
+            'terms' => $termOptions,
+            'selected_term' => $selectedTerm,
+            'levels' => array_map(
+                static fn (int $value, string $label): array => ['value' => $value, 'label' => $label],
+                array_keys($levels),
+                array_values($levels),
+            ),
+            'groups' => array_map(
+                static fn (string $value, string $label): array => ['value' => $value, 'label' => $label],
+                array_keys($groups),
+                array_values($groups),
+            ),
+            'subjects' => $subjectOptions,
+            'score_labels' => [
+                'คะแนนบันทึกการเรียนรู้',
+                'คะแนนบันทึกการฝึกทักษะ',
+                'คะแนนรายงาน/รายงานเชิงปฏิบัติการ',
+                'คะแนนแบบฝึกหัด',
+                'คะแนนแต้มสะสมงาน',
+                'คะแนนผลงาน/ชิ้นงาน',
+                'คะแนนโครงงาน',
+                'คะแนนทดสอบย่อย',
+                'คะแนนอื่นๆ',
+            ],
+            'rows' => $pagedRows,
+            'pagination' => [
+                'current_page' => $page,
+                'per_page' => $perPage,
+                'total' => $total,
+                'last_page' => max(1, (int) ceil($total / $perPage)),
             ],
         ];
     }
