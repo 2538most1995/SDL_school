@@ -95,6 +95,15 @@ type CommonElective = {
     course_status?: CourseStatus;
 };
 
+type CompletedElective = {
+    code: string;
+    name: string;
+    credits: number;
+    term: string;
+    grade: string | null;
+    transferred: boolean;
+};
+
 type StudentInfoForm = {
     name: string;
     phone: string;
@@ -146,9 +155,12 @@ type StudentRegistrationData = {
         elective_required: number;
         elective_earned: number;
         elective_remaining: number;
+        source_compulsory_earned: number;
+        source_elective_earned: number;
         total_required: number;
         total_earned: number;
     };
+    completed_electives: CompletedElective[];
     compulsory_subjects: SubjectRow[];
     elective_subjects: SubjectRow[];
     common_electives: CommonElective[];
@@ -209,6 +221,7 @@ export function CourseRegistrationPage() {
     const [group, setGroup] = useState('');
     const [level, setLevel] = useState('');
     const [search, setSearch] = useState('');
+    const [graduationStatus, setGraduationStatus] = useState('');
     const [blankLevel, setBlankLevel] = useState('3');
     const [showBlankModal, setShowBlankModal] = useState(false);
 
@@ -237,8 +250,9 @@ export function CourseRegistrationPage() {
         if (group) query.set('group', group);
         if (level) query.set('level', level);
         if (search) query.set('search', search);
+        if (graduationStatus) query.set('graduation_status', graduationStatus);
         return query.toString();
-    }, [group, level, search, term]);
+    }, [graduationStatus, group, level, search, term]);
 
     const workspaceQuery = useQuery({
         queryKey: ['course-registration-workspace', workspaceParams],
@@ -620,9 +634,9 @@ export function CourseRegistrationPage() {
                             <span aria-hidden="true" className="font-black text-emerald-700">**</span>{' '}
                             หน่วยกิตวิชาบังคับและวิชาเลือกครบแล้ว ·{' '}
                             <span aria-hidden="true" className="font-black text-amber-700">*</span>{' '}
-                            มีโอกาสจบเมื่อผ่านรายวิชาที่ลงทะเบียนตามเกณฑ์
+                            มีโอกาสจบหากลงทะเบียนวิชาใหม่และผ่านจนหน่วยกิตครบในภาคเรียนสุดท้าย
                         </p>
-                        <div className="mb-4 grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+                        <div className="mb-4 grid gap-3 sm:grid-cols-2 lg:grid-cols-5">
                             <div>
                                 <label className="block text-xs font-bold text-slate-700 mb-1">ภาคเรียน</label>
                                 <select
@@ -683,6 +697,14 @@ export function CourseRegistrationPage() {
                                         className="absolute left-3 top-3 text-slate-400"
                                     />
                                 </div>
+                            </div>
+                            <div>
+                                <label className="block text-xs font-bold text-slate-700 mb-1">โอกาสจบ</label>
+                                <select value={graduationStatus} onChange={(event) => setGraduationStatus(event.target.value)} className="w-full rounded-xl border border-slate-300 bg-white p-2.5 text-sm">
+                                    <option value="">ทุกสถานะ</option>
+                                    <option value="complete">** หน่วยกิตครบแล้ว</option>
+                                    <option value="potential">* มีโอกาสจบภาคเรียนหน้า</option>
+                                </select>
                             </div>
                         </div>
 
@@ -1147,6 +1169,34 @@ export function CourseRegistrationPage() {
                                 </div>
                             </div>
 
+                            <details open className="rounded-2xl border border-purple-200 bg-white p-4 shadow-2xs">
+                                <summary className="cursor-pointer font-black text-purple-950">
+                                    วิชาเลือกที่ผ่านแล้วและเทียบโอน ({studentDetail.completed_electives?.length ?? 0} วิชา · {studentDetail.requirements.elective_earned} หน่วยกิต)
+                                </summary>
+                                {(studentDetail.completed_electives?.length ?? 0) === 0 ? (
+                                    <p className="mt-3 text-sm text-slate-600">ยังไม่พบผลการเรียนวิชาเลือกที่ผ่านในข้อมูลนำเข้า</p>
+                                ) : (
+                                    <div className="mt-3 overflow-x-auto">
+                                        <table className="w-full min-w-[620px] text-sm">
+                                            <thead><tr className="border-b bg-purple-50 text-left text-purple-950"><th className="p-2">รหัสวิชา</th><th className="p-2">รายวิชา</th><th className="p-2">ภาคเรียน</th><th className="p-2 text-center">หน่วยกิต</th><th className="p-2">ผลการเรียน</th></tr></thead>
+                                            <tbody>{studentDetail.completed_electives.map((subject) => <tr key={subject.code} className="border-b border-slate-100"><td className="p-2 font-mono">{subject.code}</td><td className="p-2 font-semibold">{subject.name}</td><td className="p-2">{subject.term || '-'}</td><td className="p-2 text-center">{subject.credits}</td><td className="p-2">{subject.transferred ? 'เทียบโอน' : `เกรด ${subject.grade ?? '-'}`}</td></tr>)}</tbody>
+                                        </table>
+                                    </div>
+                                )}
+                                {studentDetail.requirements.source_elective_earned !== studentDetail.requirements.elective_earned && (
+                                    <p className="mt-3 text-xs text-amber-800">ยอดรวมจากระเบียน ITW คือ {studentDetail.requirements.source_elective_earned} หน่วยกิต; ยอดที่ใช้ตรวจจบคือ {studentDetail.requirements.elective_earned} หน่วยกิตจากรหัสวิชาที่ผ่านจริงแบบไม่ซ้ำ</p>
+                                )}
+                            </details>
+
+                            {liveCreditPolicy?.can_complete_with_new_registration && liveCreditPolicy.new_registration_plan && (
+                                <div className="rounded-2xl border border-amber-200 bg-amber-50 p-4 text-sm text-amber-950">
+                                    <p className="font-black">มีโอกาสจบหากลงทะเบียนใหม่และผ่านตามเกณฑ์</p>
+                                    <p className="mt-1">ต้องลงทะเบียนเพิ่มอย่างน้อย {liveCreditPolicy.new_registration_plan.total_credits_needed} หน่วยกิต ภายในเพดาน {liveCreditPolicy.final_term_limit} หน่วยกิต: วิชาบังคับ {liveCreditPolicy.new_registration_plan.compulsory_credits} และวิชาเลือก {liveCreditPolicy.new_registration_plan.elective_credits_needed} หน่วยกิต</p>
+                                    {liveCreditPolicy.new_registration_plan.compulsory_subjects.length > 0 && <p className="mt-1 text-xs">วิชาบังคับที่สามารถเลือก: {liveCreditPolicy.new_registration_plan.compulsory_subjects.map((subject) => `${subject.code} ${subject.name}`).join(', ')}</p>}
+                                    <p className="mt-1 text-xs">เครื่องหมาย * เป็นการประเมินหน่วยกิตที่ยังขาด ต้องตรวจรายวิชาที่เปิดสอนและผ่านผลการเรียนจริงก่อนจบ</p>
+                                </div>
+                            )}
+
                             {liveCreditPolicy?.exceeds_limit && (
                                 <div role="alert" className="flex items-start gap-3 rounded-2xl border border-rose-300 bg-rose-50 p-4 text-rose-950 shadow-sm">
                                     <WarningCircle size={22} weight="fill" className="mt-0.5 shrink-0 text-rose-700" />
@@ -1168,7 +1218,7 @@ export function CourseRegistrationPage() {
                                     ** หน่วยกิตบังคับและเลือกครบแล้ว
                                 </span>
                                 <span className="inline-flex items-center gap-1.5 rounded-md border border-amber-300 bg-amber-50 px-2 py-0.5 text-[11px] font-bold text-amber-800">
-                                    * มีโอกาสจบเมื่อผ่านวิชาที่ลงทะเบียน
+                                    * มีโอกาสจบเมื่อผ่านวิชาที่ลงทะเบียนเพิ่มตามเกณฑ์
                                 </span>
                                 <span className="basis-full" />
                                 <span className="font-bold text-slate-700 text-xs mr-1">สัญลักษณ์สถานะรายวิชา:</span>

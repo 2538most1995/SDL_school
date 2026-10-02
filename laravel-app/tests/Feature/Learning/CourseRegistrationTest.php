@@ -238,6 +238,93 @@ final class CourseRegistrationTest extends TestCase
             ->assertJsonPath('data.items.0.registration.credit_policy.exceeds_limit', true);
     }
 
+    public function test_registration_shows_all_distinct_passed_electives_and_flags_new_term_opportunity(): void
+    {
+        Sanctum::actingAs($this->viewer('admin'));
+        $demoRepo = $this->app->make(DemoStudentRepository::class);
+        $grades = [];
+        foreach (CurriculumCatalog::compulsorySubjects(1) as $subject) {
+            if ($subject['code'] === 'พท11001') {
+                continue;
+            }
+            $grades[] = new Grade('6650100001', $subject['code'], $subject['name'], $subject['credits'], 'compulsory', '1/2568', '2');
+        }
+        foreach (CurriculumCatalog::commonElectiveSubjects(1) as $index => $subject) {
+            $grades[] = new Grade('6650100001', $subject['code'], $subject['name'], $subject['credits'], 'elective', '2/2568', '2', transferred: $index === 0);
+        }
+        $first = CurriculumCatalog::commonElectiveSubjects(1)[0];
+        $grades[] = new Grade('6650100001', $first['code'], $first['name'], $first['credits'], 'elective', '1/2568', '2');
+
+        $this->app->instance(StudentRepository::class, new class($demoRepo, $grades) implements StudentRepository
+        {
+            public function __construct(private DemoStudentRepository $inner, private array $grades) {}
+
+            public function students(?array $districtIds = null): array
+            {
+                return $this->inner->students($districtIds);
+            }
+
+            public function find(string $code, ?int $districtId = null, ?int $level = null): ?Student
+            {
+                return $this->inner->find($code, $districtId, $level);
+            }
+
+            public function gradesFor(Student $student): array
+            {
+                return $student->code === '6650100001' ? $this->grades : $this->inner->gradesFor($student);
+            }
+
+            public function gradesForMany(array $students): array
+            {
+                $result = $this->inner->gradesForMany($students);
+                foreach ($students as $student) {
+                    if ($student->code === '6650100001') {
+                        $result["{$student->districtId}|{$student->level}|{$student->code}"] = $this->grades;
+                    }
+                }
+
+                return $result;
+            }
+
+            public function subjectsFor(Student $student): array
+            {
+                return $this->inner->subjectsFor($student);
+            }
+
+            public function kpchFor(Student $student): array
+            {
+                return $this->inner->kpchFor($student);
+            }
+
+            public function moralFor(Student $student): array
+            {
+                return $this->inner->moralFor($student);
+            }
+        });
+
+        $detail = $this->getJson('/api/v1/learning/registration/student/6650100001?term=2/2569');
+        $detail->assertOk()
+            ->assertJsonPath('data.requirements.compulsory_earned', 33)
+            ->assertJsonPath('data.requirements.elective_earned', 10)
+            ->assertJsonCount(5, 'data.completed_electives')
+            ->assertJsonPath('data.credit_policy.is_potential_graduate', true)
+            ->assertJsonPath('data.credit_policy.can_complete_with_new_registration', true)
+            ->assertJsonPath('data.credit_policy.new_registration_plan.total_credits_needed', 5);
+        $this->assertCount(0, $detail->json('data.elective_subjects'));
+
+        $this->getJson('/api/v1/learning/registration/workspace?term=2/2569&search=6650100001')
+            ->assertOk()
+            ->assertJsonPath('data.items.0.is_credit_complete', false)
+            ->assertJsonPath('data.items.0.is_potential_graduate', true);
+
+        $this->getJson('/api/v1/learning/registration/workspace?term=2/2569&search=6650100001&graduation_status=potential')
+            ->assertOk()
+            ->assertJsonCount(1, 'data.items');
+        $this->getJson('/api/v1/learning/registration/workspace?term=2/2569&search=6650100001&graduation_status=complete')
+            ->assertOk()
+            ->assertJsonCount(0, 'data.items');
+    }
+
     public function test_teacher_cannot_save_registration_for_student_outside_assigned_group(): void
     {
         // Teacher assigned only to SENA-P1-B, but 6650100001 is in SENA-P1-A

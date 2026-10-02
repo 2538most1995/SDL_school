@@ -7,6 +7,7 @@ use App\Domain\Students\Models\Student;
 use App\Domain\Students\Repositories\StudentRepository;
 use App\Domain\Students\Support\AcademicTerm;
 use App\Domain\Students\Support\CurriculumCatalog;
+use App\Domain\Students\Support\GraduationOpportunity;
 use App\Domain\Students\Support\RegistrationCreditPolicy;
 use App\Models\User;
 use Illuminate\Support\Facades\DB;
@@ -22,7 +23,7 @@ final readonly class CourseRegistrationService
     /**
      * Return students list with registration status for the registration workspace.
      *
-     * @param  array{term?: ?string, group?: ?string, level?: ?int, search?: ?string, page?: int, per_page?: int}  $filters
+     * @param  array{term?: ?string, group?: ?string, level?: ?int, search?: ?string, graduation_status?: ?string, page?: int, per_page?: int}  $filters
      * @return array<string, mixed>
      */
     public function workspace(User $viewer, int $districtId, array $filters = []): array
@@ -139,6 +140,10 @@ final readonly class CourseRegistrationService
                 'registration' => $reg,
             ];
         }, $filtered);
+        if (! empty($filters['graduation_status'])) {
+            $field = $filters['graduation_status'] === 'complete' ? 'is_credit_complete' : 'is_potential_graduate';
+            $items = array_values(array_filter($items, static fn (array $item): bool => $item[$field]));
+        }
 
         ksort($groups, SORT_NATURAL);
         $groupOptions = [];
@@ -150,7 +155,7 @@ final readonly class CourseRegistrationService
             'term' => $selectedTerm,
             'terms' => $termList,
             'groups' => $groupOptions,
-            'total_students' => count($filtered),
+            'total_students' => count($items),
             'items' => $items,
         ];
     }
@@ -501,14 +506,14 @@ final readonly class CourseRegistrationService
             }
         }
 
-        $compulsoryEarned = $student->compulsoryCreditsEarned;
+        $progress = $this->academicProgress($student, $allGrades);
+        $compulsoryEarned = $progress['compulsory_earned'];
         $compulsoryRequired = $student->compulsoryCreditsRequired > 0 ? $student->compulsoryCreditsRequired : $reqs['compulsory'];
         $compulsoryRemaining = max(0.0, round($compulsoryRequired - $compulsoryEarned, 1));
 
-        $electiveEarned = $student->electiveCreditsEarned;
+        $electiveEarned = $progress['elective_earned'];
         $electiveRequired = $student->electiveCreditsRequired > 0 ? $student->electiveCreditsRequired : $reqs['elective'];
         $electiveRemaining = max(0.0, round($electiveRequired - $electiveEarned, 1));
-        $progress = $this->academicProgress($student, $allGrades);
         $creditPolicy = $this->registrationPolicy($student, $progress, $compulsoryList, $electiveList);
 
         $addrParts = $this->parseAddress($student->currentAddress ?: $student->registeredAddress ?: '');
@@ -607,9 +612,15 @@ final readonly class CourseRegistrationService
                 'elective_required' => $electiveRequired,
                 'elective_earned' => $electiveEarned,
                 'elective_remaining' => $electiveRemaining,
+                'source_compulsory_earned' => $student->compulsoryCreditsEarned,
+                'source_elective_earned' => $student->electiveCreditsEarned,
                 'total_required' => $reqs['total'],
-                'total_earned' => $student->creditsEarned,
+                'total_earned' => round($compulsoryEarned + $electiveEarned, 2),
             ],
+            'completed_electives' => array_values(array_filter(
+                $progress['completed_subjects'],
+                static fn (array $subject): bool => $subject['type'] === 'elective',
+            )),
             'compulsory_subjects' => $compulsoryList,
             'elective_subjects' => $electiveList,
             'common_electives' => (function () use ($student, $catalogCompulsory, $historyUnpassed, $resolveStatus): array {
@@ -876,7 +887,7 @@ final readonly class CourseRegistrationService
 
     /**
      * @param  list<Grade>  $grades
-     * @return array{compulsory_earned: float, elective_earned: float, completed_codes: array<string, bool>}
+     * @return array{compulsory_earned: float, elective_earned: float, completed_codes: array<string, bool>, completed_subjects: list<array<string, mixed>>}
      */
     private function academicProgress(Student $student, array $grades): array
     {
@@ -896,8 +907,13 @@ final readonly class CourseRegistrationService
             }
 
             $completed[$code] = [
+                'code' => $code,
+                'name' => $grade->subjectName ?: $code,
                 'type' => isset($compulsoryCodes[$code]) ? 'compulsory' : 'elective',
                 'credits' => max(0, $grade->credits),
+                'term' => $grade->term,
+                'grade' => $grade->grade,
+                'transferred' => $grade->transferred,
             ];
         }
 
@@ -912,14 +928,15 @@ final readonly class CourseRegistrationService
         }
 
         return [
-            'compulsory_earned' => max($student->compulsoryCreditsEarned, $compulsoryFromGrades),
-            'elective_earned' => max($student->electiveCreditsEarned, $electiveFromGrades),
+            'compulsory_earned' => round($compulsoryFromGrades, 2),
+            'elective_earned' => round($electiveFromGrades, 2),
             'completed_codes' => array_fill_keys(array_keys($completed), true),
+            'completed_subjects' => array_values($completed),
         ];
     }
 
     /**
-     * @param  array{compulsory_earned: float, elective_earned: float, completed_codes: array<string, bool>}  $progress
+     * @param  array{compulsory_earned: float, elective_earned: float, completed_codes: array<string, bool>, completed_subjects: list<array<string, mixed>>}  $progress
      * @param  list<array<string, mixed>>  $compulsorySubjects
      * @param  list<array<string, mixed>>  $electiveSubjects
      * @return array<string, float|bool>
@@ -978,10 +995,27 @@ final readonly class CourseRegistrationService
         $policy['is_credit_complete'] = $student->status === 'studying'
             && $policy['compulsory_earned'] >= $policy['compulsory_required']
             && $policy['elective_earned'] >= $policy['elective_required'];
+        $remainingCompulsory = array_values(array_filter(
+            CurriculumCatalog::compulsorySubjects($student->level),
+            static fn (array $subject): bool => ! isset($progress['completed_codes'][$subject['code']]),
+        ));
+        $newRegistrationPlan = GraduationOpportunity::plan(
+            $policy['compulsory_earned'],
+            $policy['compulsory_required'],
+            $policy['elective_earned'],
+            $policy['elective_required'],
+            $policy['final_term_limit'],
+            $remainingCompulsory,
+        );
+        $policy['new_registration_plan'] = $newRegistrationPlan;
+        $policy['can_complete_with_new_registration'] = $student->status === 'studying'
+            && ! $policy['is_credit_complete']
+            && $newRegistrationPlan !== null;
         $policy['is_potential_graduate'] = $student->status === 'studying'
             && ! $policy['is_credit_complete']
-            && $policy['projected_compulsory'] >= $policy['compulsory_required']
-            && $policy['projected_elective'] >= $policy['elective_required'];
+            && ($policy['can_complete_with_new_registration']
+                || ($policy['projected_compulsory'] >= $policy['compulsory_required']
+                    && $policy['projected_elective'] >= $policy['elective_required']));
         $policy['is_active_student'] = $student->status === 'studying';
         $policy['uses_final_term_limit'] = $policy['is_credit_complete'] || $policy['is_potential_graduate'];
         $policy['applicable_limit'] = $policy['uses_final_term_limit']

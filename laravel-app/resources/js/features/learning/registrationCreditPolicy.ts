@@ -10,6 +10,13 @@ export type RegistrationCreditPolicy = {
     elective_required: number;
     is_credit_complete: boolean;
     is_potential_graduate: boolean;
+    can_complete_with_new_registration?: boolean;
+    new_registration_plan?: {
+        compulsory_subjects: Array<{ code: string; name: string; credits: number }>;
+        compulsory_credits: number;
+        elective_credits_needed: number;
+        total_credits_needed: number;
+    } | null;
     uses_final_term_limit: boolean;
     is_active_student: boolean;
     regular_limit: number;
@@ -69,8 +76,9 @@ export function evaluateLiveRegistrationPolicy(
         && policy.elective_earned >= policy.elective_required;
     const isPotentialGraduate = policy.is_active_student
         && !isCreditComplete
-        && projectedCompulsory >= policy.compulsory_required
-        && projectedElective >= policy.elective_required;
+        && (policy.can_complete_with_new_registration === true
+            || (projectedCompulsory >= policy.compulsory_required
+                && projectedElective >= policy.elective_required));
     const usesFinalTermLimit = isCreditComplete || isPotentialGraduate;
     const applicableLimit = usesFinalTermLimit ? policy.final_term_limit : policy.regular_limit;
     const excessCredits = Math.round(Math.max(0, totalSelected - applicableLimit) * 100) / 100;

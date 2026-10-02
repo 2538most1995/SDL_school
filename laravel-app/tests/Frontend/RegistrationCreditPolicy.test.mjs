@@ -87,3 +87,14 @@ test('completed earned credits use the double-star state instead of potential gr
     assert.equal(policy.uses_final_term_limit, true);
     assert.equal(policy.applicable_limit, 17);
 });
+
+test('new registration opportunity remains visible before subjects are selected', () => {
+    const policy = evaluateLiveRegistrationPolicy({
+        ...basePolicy,
+        can_complete_with_new_registration: true,
+    }, [], []);
+
+    assert.equal(policy.is_potential_graduate, true);
+    assert.equal(policy.is_credit_complete, false);
+    assert.equal(policy.applicable_limit, 17);
+});

@@ -21,6 +21,7 @@ final class CourseRegistrationController extends Controller
             'group' => ['nullable', 'string', 'max:64'],
             'level' => ['nullable', 'integer', 'in:1,2,3'],
             'search' => ['nullable', 'string', 'max:120'],
+            'graduation_status' => ['nullable', 'string', 'in:complete,potential'],
         ]);
 
         $data = $this->service->workspace(
