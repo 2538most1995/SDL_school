@@ -7,6 +7,7 @@ use App\Http\Resources\Students\RegisteredSubjectResource;
 use App\Http\Resources\Students\StudentSummaryResource;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
+use Illuminate\Validation\Rule;
 
 final class StudentSubjectsController extends StudentsApiController
 {
@@ -14,8 +15,20 @@ final class StudentSubjectsController extends StudentsApiController
 
     public function __invoke(Request $request, string $student): JsonResponse
     {
-        $filters = $request->validate(['term' => ['nullable', 'regex:/^[12]\/25\d{2}$/']]);
-        $result = $this->academics->subjects($request->user(), $student, $filters['term'] ?? null);
+        $filters = $request->validate([
+            'term' => ['nullable', 'regex:/^[12]\/25\d{2}$/'],
+            'level' => ['nullable', 'string', 'max:40', Rule::in([
+                '1', '2', '3',
+                'ประถมศึกษา', 'มัธยมศึกษาตอนต้น', 'มัธยมศึกษาตอนปลาย',
+                'ม.ต้น', 'ม.ปลาย',
+            ])],
+        ]);
+        $result = $this->academics->subjects(
+            $request->user(),
+            $student,
+            $filters['term'] ?? null,
+            $filters['level'] ?? null,
+        );
         abort_if($result === null, 404, 'ไม่พบข้อมูลนักศึกษา');
 
         return response()->json([

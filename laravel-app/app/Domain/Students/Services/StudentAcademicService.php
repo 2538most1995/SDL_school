@@ -9,6 +9,7 @@ use App\Domain\Students\Models\RegisteredSubject;
 use App\Domain\Students\Models\Student;
 use App\Domain\Students\Repositories\StudentRepository;
 use App\Domain\Students\Support\AcademicTerm;
+use App\Domain\Students\Support\ImportedScoreCalculationAudit;
 use App\Models\User;
 
 final readonly class StudentAcademicService
@@ -19,9 +20,9 @@ final readonly class StudentAcademicService
     ) {}
 
     /** @return array{student: Student, items: list<Grade>, summary: array<string, mixed>}|null */
-    public function grades(User $viewer, string $code, ?string $term = null): ?array
+    public function grades(User $viewer, string $code, ?string $term = null, mixed $level = null): ?array
     {
-        $student = $this->directory->findAccessible($viewer, $code);
+        $student = $this->directory->findAccessible($viewer, $code, $level);
 
         if ($student === null) {
             return null;
@@ -165,8 +166,15 @@ final readonly class StudentAcademicService
             default => $termOptions[0] ?? null,
         };
         $subjectCode = trim((string) ($filters['subject_code'] ?? ''));
+        $calculationStatus = trim((string) ($filters['calculation_status'] ?? ''));
         $subjects = [];
         $rows = [];
+        $calculationAudit = [
+            'total_rows' => 0,
+            'checked_rows' => 0,
+            'incorrect_rows' => 0,
+            'not_checkable_rows' => 0,
+        ];
 
         foreach ($students as $student) {
             $studentKey = "{$student->districtId}|{$student->level}|{$student->code}";
@@ -185,6 +193,20 @@ final readonly class StudentAcademicService
                 }
 
                 $assessmentScores = array_slice(array_pad($grade->assessmentScores, 9, null), 0, 9);
+                $audit = ImportedScoreCalculationAudit::inspect($grade);
+                $calculationAudit['total_rows']++;
+                if ($audit['status'] === 'not_checkable') {
+                    $calculationAudit['not_checkable_rows']++;
+                } else {
+                    $calculationAudit['checked_rows']++;
+                }
+                if ($audit['status'] === 'incorrect') {
+                    $calculationAudit['incorrect_rows']++;
+                }
+                if ($calculationStatus === 'incorrect' && $audit['status'] !== 'incorrect') {
+                    continue;
+                }
+
                 $rows[] = [
                     'student_code' => $student->code,
                     'full_name' => $student->fullName(),
@@ -200,6 +222,7 @@ final readonly class StudentAcademicService
                     'final_exam_score' => $grade->finalExamScore,
                     'total_score' => $grade->totalScore,
                     'grade' => $grade->grade,
+                    'calculation_audit' => $audit,
                 ];
             }
         }
@@ -248,6 +271,7 @@ final readonly class StudentAcademicService
                 'คะแนนทดสอบย่อย',
                 'คะแนนอื่นๆ',
             ],
+            'calculation_audit' => $calculationAudit,
             'rows' => $pagedRows,
             'pagination' => [
                 'current_page' => $page,
@@ -259,9 +283,9 @@ final readonly class StudentAcademicService
     }
 
     /** @return array{student: Student, items: list<KpchActivity>, summary: array<string, mixed>}|null */
-    public function kpch(User $viewer, string $code, ?string $term = null): ?array
+    public function kpch(User $viewer, string $code, ?string $term = null, mixed $level = null): ?array
     {
-        $student = $this->directory->findAccessible($viewer, $code);
+        $student = $this->directory->findAccessible($viewer, $code, $level);
 
         if ($student === null) {
             return null;
@@ -287,9 +311,9 @@ final readonly class StudentAcademicService
     }
 
     /** @return array{student: Student, items: list<MoralAssessment>, summary: array<string, mixed>}|null */
-    public function moral(User $viewer, string $code, ?string $term = null): ?array
+    public function moral(User $viewer, string $code, ?string $term = null, mixed $level = null): ?array
     {
-        $student = $this->directory->findAccessible($viewer, $code);
+        $student = $this->directory->findAccessible($viewer, $code, $level);
 
         if ($student === null) {
             return null;
@@ -316,9 +340,9 @@ final readonly class StudentAcademicService
     }
 
     /** @return array{student: Student, items: list<RegisteredSubject>, summary: array<string, mixed>}|null */
-    public function subjects(User $viewer, string $code, ?string $term = null): ?array
+    public function subjects(User $viewer, string $code, ?string $term = null, mixed $level = null): ?array
     {
-        $student = $this->directory->findAccessible($viewer, $code);
+        $student = $this->directory->findAccessible($viewer, $code, $level);
 
         if ($student === null) {
             return null;

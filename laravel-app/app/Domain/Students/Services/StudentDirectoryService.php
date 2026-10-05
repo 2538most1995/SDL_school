@@ -6,6 +6,8 @@ use App\Domain\Students\Models\Student;
 use App\Domain\Students\Repositories\StudentRepository;
 use App\Domain\Students\Support\StudentAccessScope;
 use App\Models\User;
+use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Schema;
 
 final readonly class StudentDirectoryService
 {
@@ -20,8 +22,7 @@ final readonly class StudentDirectoryService
         array $filters,
         bool $includeCitizenIdInSearch = true,
         bool $clampPage = true,
-    ): array
-    {
+    ): array {
         $allAccessible = $this->accessibleStudents($viewer);
         $filtered = $this->applyFilters($allAccessible, $filters, $includeCitizenIdInSearch);
         $sort = (string) ($filters['sort'] ?? 'code');
@@ -76,12 +77,39 @@ final readonly class StudentDirectoryService
         ];
     }
 
-    public function findAccessible(User $viewer, string $code): ?Student
+    public static function normalizeLevel(mixed $level): ?int
+    {
+        if ($level === null || $level === '') {
+            return null;
+        }
+        if (is_numeric($level)) {
+            $val = (int) $level;
+
+            return in_array($val, [1, 2, 3], true) ? $val : null;
+        }
+        $text = (string) $level;
+        if (str_contains($text, 'ประถม')) {
+            return 1;
+        }
+        if (str_contains($text, 'มัธยมศึกษาตอนต้น') || str_contains($text, 'ม.ต้น')) {
+            return 2;
+        }
+        if (str_contains($text, 'มัธยมศึกษาตอนปลาย') || str_contains($text, 'ม.ปลาย')) {
+            return 3;
+        }
+
+        return null;
+    }
+
+    public function findAccessible(User $viewer, string $code, mixed $level = null): ?Student
     {
         $code = trim($code);
+        $levelInt = self::normalizeLevel($level);
+
         $matches = array_values(array_filter(
             $this->accessibleStudents($viewer),
-            static fn (Student $student): bool => hash_equals($student->code, $code),
+            static fn (Student $student): bool => hash_equals($student->code, $code)
+                && ($levelInt === null || $student->level === $levelInt),
         ));
 
         if (count($matches) === 1) {
@@ -93,15 +121,17 @@ final readonly class StudentDirectoryService
             : ($viewer->district_id !== null ? (int) $viewer->district_id : null);
 
         if ($districtId !== null && $districtId > 0) {
-            $student = $this->repository->find($code, $districtId);
+            $student = $this->repository->find($code, $districtId, $levelInt);
             if ($student !== null) {
                 $scope = StudentAccessScope::forUser($viewer);
                 if ($scope->allows($student)) {
                     return $student;
                 }
             }
-        } elseif ($viewer->role === 'super_admin') {
-            $student = $this->repository->find($code);
+        }
+
+        if ($viewer->role === 'super_admin') {
+            $student = $this->repository->find($code, null, $levelInt);
             if ($student !== null) {
                 return $student;
             }
@@ -141,12 +171,12 @@ final readonly class StudentDirectoryService
         }
 
         try {
-            if (! \Illuminate\Support\Facades\Schema::hasTable('student_social_profiles')) {
+            if (! Schema::hasTable('student_social_profiles')) {
                 return $students;
             }
 
             $codes = array_values(array_unique(array_map(static fn (Student $s): string => $s->code, $students)));
-            $socialRows = \Illuminate\Support\Facades\DB::table('student_social_profiles')
+            $socialRows = DB::table('student_social_profiles')
                 ->where('district_id', $districtId)
                 ->whereIn('student_code', $codes)
                 ->get(['student_code', 'facebook_url', 'line_id']);

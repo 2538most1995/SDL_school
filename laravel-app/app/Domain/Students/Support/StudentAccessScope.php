@@ -42,10 +42,14 @@ final readonly class StudentAccessScope
             return false;
         }
 
+        $unpad = static fn (string $val): string => ltrim($val, '0') === '' ? '0' : ltrim($val, '0');
+        $unpaddedGroups = array_map($unpad, $this->groupCodes);
+
         return match ($this->role) {
             'admin' => true,
             'teacher' => in_array($student->groupCode, $this->groupCodes, true)
-                || in_array($student->groupName, $this->groupCodes, true),
+                || in_array($student->groupName, $this->groupCodes, true)
+                || in_array($unpad($student->groupCode), $unpaddedGroups, true),
             'student' => $this->studentCode !== '' && hash_equals($student->code, $this->studentCode),
             default => false,
         };

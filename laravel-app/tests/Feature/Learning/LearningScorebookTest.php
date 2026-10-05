@@ -530,6 +530,7 @@ final class LearningScorebookTest extends TestCase
                     'groups',
                     'subjects',
                     'score_labels',
+                    'calculation_audit',
                     'rows',
                 ],
             ]);
@@ -560,6 +561,15 @@ final class LearningScorebookTest extends TestCase
         $this->assertArrayHasKey('final_exam_score', $firstRow);
         $this->assertArrayHasKey('total_score', $firstRow);
         $this->assertArrayHasKey('grade', $firstRow);
+        $this->assertArrayHasKey('calculation_audit', $firstRow);
+        $this->assertContains($firstRow['calculation_audit']['status'], ['correct', 'incorrect', 'not_checkable']);
+
+        $this->getJson('/api/v1/learning/scores/imported?calculation_status=incorrect')
+            ->assertOk()
+            ->assertJsonStructure(['data' => ['calculation_audit' => ['total_rows', 'checked_rows', 'incorrect_rows', 'not_checkable_rows']]]);
+
+        $this->getJson('/api/v1/learning/scores/imported?calculation_status=correct')
+            ->assertUnprocessable();
 
         // Teacher access
         $teacher = $this->teacher(['SENA-M3-A']);

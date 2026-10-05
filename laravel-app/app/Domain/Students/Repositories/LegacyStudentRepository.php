@@ -12,6 +12,7 @@ use App\Domain\Students\Support\LegacyStudentStatus;
 use App\Domain\Students\Support\LegacyTableSet;
 use App\Support\LegacyFptMemoReader;
 use App\Support\ThaiAdministrativeAreaLookup;
+use Illuminate\Database\Connection;
 use Illuminate\Database\ConnectionInterface;
 use Illuminate\Support\Facades\Cache;
 use InvalidArgumentException;
@@ -214,50 +215,35 @@ final class LegacyStudentRepository implements StudentRepository
                 $groupJoin = " LEFT JOIN {$group} grp ON grp._perf_grp = s._perf_grp ";
                 $groupName = "COALESCE(NULLIF(TRIM(grp.grp_name), ''), s.grp_code)";
             }
+            $selectFields = $this->studentSelectFields($set, $groupName, $citizenId);
+            [$whereSql, $bindings] = $this->studentCodeWhereClause($set, $code);
             $rows = $this->rows(
-                "SELECT s._perf_id10 AS code,
-                        s.prename AS prename,
-                        s.name AS first_name,
-                        s.surname AS last_name,
-                        s.grp_code AS group_code,
-                        {$groupName} AS group_name,
-                        s.dep_sem AS enrollment_term,
-                        s.fin_cause AS fin_cause,
-                        s.trn_date2 AS transfer_date,
-                        s.gpasem AS gpasem,
-                        CASE
-                            WHEN CHAR_LENGTH(TRIM(COALESCE({$citizenId}, ''))) = 13
-                            THEN CONCAT(LEFT(TRIM({$citizenId}), 1), '-xxxx-xxxxx-xx-', RIGHT(TRIM({$citizenId}), 1))
-                            ELSE NULL
-                        END AS citizen_id_masked,
-                        {$citizenId} AS citizen_id,
-                        s.gender AS gender,
-                        s.birday AS birth_date,
-                        s.age AS age,
-                        s.app_date AS application_date,
-                        s.lastupdate AS last_updated,
-                        s.phone AS phone,
-                        s.curphone AS curphone,
-                        s.email AS email,
-                        s.addr AS registered_address,
-                        s.tambonid AS registered_area_code,
-                        s.zipcode AS registered_postcode,
-                        s.curaddr AS current_address,
-                        s.ctambonid AS current_area_code,
-                        s.czipcode AS current_postcode
+                "SELECT {$selectFields}
                  FROM {$student} s
                  {$groupJoin}
-                 WHERE s._perf_id10 = ?
+                 WHERE {$whereSql}
                  LIMIT 1",
-                [$code],
+                $bindings,
             );
 
             if ($rows !== []) {
                 $row = $rows[0];
                 $latestTerm = $this->latestTerm([$set]);
-                $academic = $this->academicAggregates($set, $latestTerm, [$code]);
-                $kpch = $this->kpchAggregates($set, [$code]);
-                $moral = $this->moralAggregates($set, [$code]);
+                try {
+                    $academic = $this->academicAggregates($set, $latestTerm, [$code]);
+                } catch (\Throwable) {
+                    $academic = [];
+                }
+                try {
+                    $kpch = $this->kpchAggregates($set, [$code]);
+                } catch (\Throwable) {
+                    $kpch = [];
+                }
+                try {
+                    $moral = $this->moralAggregates($set, [$code]);
+                } catch (\Throwable) {
+                    $moral = [];
+                }
                 $metrics = $academic[$code] ?? [];
                 [$creditsRequired, $compulsoryRequired, $electiveRequired] = $this->creditRequirements($set->level);
                 $contactPhone = $this->phoneMemoValue($set, $code, 'curphone', (string) ($row['curphone'] ?? ''))
@@ -282,7 +268,7 @@ final class LegacyStudentRepository implements StudentRepository
                     groupName: trim((string) (($row['group_name'] ?? '') ?: ($row['group_code'] ?? ''))),
                     enrollmentTerm: AcademicTerm::normalize((string) ($row['enrollment_term'] ?? ''))
                         ?? trim((string) ($row['enrollment_term'] ?? '')),
-                    currentTerm: null,
+                    currentTerm: $latestTerm,
                     status: $status,
                     statusLabel: $statusLabel,
                     gpax: round((float) ($metrics['gpax'] ?? $row['gpasem'] ?? 0), 2),
@@ -372,6 +358,12 @@ final class LegacyStudentRepository implements StudentRepository
             $subjectTable = $this->identifier($set->subject);
             $scoreProjection = $this->gradeScoreProjection($set->grade, 'g');
             $placeholders = implode(',', array_fill(0, count($codes), '?'));
+            $subTypeCol = $this->firstExistingColumn($set->subject, ['sub_type', 'subtype']);
+            $subTypeSql = $subTypeCol !== null ? "s.{$this->identifier($subTypeCol)} AS subject_type" : "'' AS subject_type";
+            $subCreditCol = $this->firstExistingColumn($set->subject, ['sub_credit', 'subcredit', 'credit']);
+            $subCreditSql = $subCreditCol !== null ? "s.{$this->identifier($subCreditCol)} AS subject_credit" : '0 AS subject_credit';
+            $subNameCol = $this->firstExistingColumn($set->subject, ['sub_name', 'subname', 'name']);
+            $subNameSql = $subNameCol !== null ? "s.{$this->identifier($subNameCol)} AS subject_name" : "'' AS subject_name";
             $rows = $this->rows(
                 "SELECT g._perf_std10 AS student_code,
                         g._id AS row_id,
@@ -379,15 +371,15 @@ final class LegacyStudentRepository implements StudentRepository
                         g.grade AS grade_value,
                         g._perf_semestry AS raw_term,
                         g.typ_code AS typ_code,
-                        s.sub_name AS subject_name,
-                        s.sub_credit AS subject_credit,
-                        s.sub_type AS subject_type,
+                        {$subNameSql},
+                        {$subCreditSql},
+                        {$subTypeSql},
                         {$scoreProjection}
                  FROM {$gradeTable} g
                  LEFT JOIN {$subjectTable} s ON s._perf_sub = g._perf_sub
-                 WHERE g._perf_std10 IN ({$placeholders})
+                 WHERE (g._perf_std10 IN ({$placeholders}) OR TRIM(g._perf_std10) IN ({$placeholders}))
                  ORDER BY g._perf_std10 ASC, g._perf_semestry DESC, g._perf_sub ASC, g._id ASC",
-                $codes,
+                [...$codes, ...$codes],
             );
             $rowsByCode = [];
             foreach ($rows as $row) {
@@ -398,7 +390,11 @@ final class LegacyStudentRepository implements StudentRepository
             }
 
             foreach ($studentsByKey as $studentKey => $student) {
-                $results[$studentKey] = $this->hydrateGrades($student, $rowsByCode[$student->code] ?? []);
+                $stdCode = trim($student->code);
+                $results[$studentKey] = $this->hydrateGrades(
+                    $student,
+                    $rowsByCode[$stdCode] ?? $rowsByCode[$student->code] ?? [],
+                );
             }
         }
 
@@ -667,8 +663,7 @@ final class LegacyStudentRepository implements StudentRepository
     {
         $student = $this->identifier($set->student);
         $grade = $this->identifier($set->grade);
-        $citizenIdColumn = $this->firstExistingColumn($set->student, ['_perf_cardid', 'cardid']);
-        $citizenId = $citizenIdColumn === null ? 'NULL' : 's.'.$this->identifier($citizenIdColumn);
+        $citizenId = $this->citizenIdSql($set);
         $variants = AcademicTerm::variants($latestTerm);
         if ($variants === []) {
             return [];
@@ -683,38 +678,10 @@ final class LegacyStudentRepository implements StudentRepository
             $groupJoin = " LEFT JOIN {$group} grp ON grp._perf_grp = s._perf_grp ";
             $groupName = "COALESCE(NULLIF(TRIM(grp.grp_name), ''), s.grp_code)";
         }
+        $selectFields = $this->studentSelectFields($set, $groupName, $citizenId);
 
         return $this->rows(
-            "SELECT s._perf_id10 AS code,
-                    s.prename AS prename,
-                    s.name AS first_name,
-                    s.surname AS last_name,
-                    s.grp_code AS group_code,
-                    {$groupName} AS group_name,
-                    s.dep_sem AS enrollment_term,
-                    s.fin_cause AS fin_cause,
-                    s.trn_date2 AS transfer_date,
-                    s.gpasem AS gpasem,
-                    CASE
-                        WHEN CHAR_LENGTH(TRIM(COALESCE({$citizenId}, ''))) = 13
-                        THEN CONCAT(LEFT(TRIM({$citizenId}), 1), '-xxxx-xxxxx-xx-', RIGHT(TRIM({$citizenId}), 1))
-                        ELSE NULL
-                    END AS citizen_id_masked,
-                    {$citizenId} AS citizen_id,
-                    s.gender AS gender,
-                    s.birday AS birth_date,
-                    s.age AS age,
-                    s.app_date AS application_date,
-                    s.lastupdate AS last_updated,
-                    s.phone AS phone,
-                    s.curphone AS curphone,
-                    s.email AS email,
-                    s.addr AS registered_address,
-                    s.tambonid AS registered_area_code,
-                    s.zipcode AS registered_postcode,
-                    s.curaddr AS current_address,
-                    s.ctambonid AS current_area_code,
-                    s.czipcode AS current_postcode
+            "SELECT {$selectFields}
              FROM {$student} s
              {$groupJoin}
              WHERE s._perf_id10 IS NOT NULL
@@ -737,6 +704,110 @@ final class LegacyStudentRepository implements StudentRepository
         );
     }
 
+    private function citizenIdSql(LegacyTableSet $set): string
+    {
+        $citizenIdColumn = $this->firstExistingColumn($set->student, ['_perf_cardid', 'cardid']);
+
+        return $citizenIdColumn === null ? 'NULL' : 's.'.$this->identifier($citizenIdColumn);
+    }
+
+    private function studentCodeWhereClause(LegacyTableSet $set, string $code): array
+    {
+        $clauses = ['s._perf_id10 = ?', 'TRIM(s._perf_id10) = ?'];
+        $bindings = [$code, $code];
+        if ($this->firstExistingColumn($set->student, ['_perf_std10']) !== null) {
+            $clauses[] = 's._perf_std10 = ?';
+            $clauses[] = 'TRIM(s._perf_std10) = ?';
+            $bindings[] = $code;
+            $bindings[] = $code;
+        }
+        if ($this->firstExistingColumn($set->student, ['id']) !== null) {
+            $clauses[] = 's.id = ?';
+            $clauses[] = 'TRIM(s.id) = ?';
+            $bindings[] = $code;
+            $bindings[] = $code;
+        }
+        if ($this->firstExistingColumn($set->student, ['std_code']) !== null) {
+            $clauses[] = 's.std_code = ?';
+            $clauses[] = 'TRIM(s.std_code) = ?';
+            $bindings[] = $code;
+            $bindings[] = $code;
+        }
+
+        return ['('.implode(' OR ', $clauses).')', $bindings];
+    }
+
+    private function studentSelectFields(LegacyTableSet $set, string $groupName, string $citizenId): string
+    {
+        $finCauseCol = $this->firstExistingColumn($set->student, ['fin_cause', 'fincause']);
+        $finCauseSql = $finCauseCol !== null ? "s.{$this->identifier($finCauseCol)} AS fin_cause" : "'' AS fin_cause";
+        $trnDateCol = $this->firstExistingColumn($set->student, ['trn_date2', 'trndate2', 'trn_date']);
+        $trnDateSql = $trnDateCol !== null ? "s.{$this->identifier($trnDateCol)} AS transfer_date" : "'' AS transfer_date";
+        $gpasemCol = $this->firstExistingColumn($set->student, ['gpasem']);
+        $gpasemSql = $gpasemCol !== null ? "s.{$this->identifier($gpasemCol)} AS gpasem" : 'NULL AS gpasem';
+        $genderCol = $this->firstExistingColumn($set->student, ['gender', 'sex']);
+        $genderSql = $genderCol !== null ? "s.{$this->identifier($genderCol)} AS gender" : "'' AS gender";
+        $birdayCol = $this->firstExistingColumn($set->student, ['birday', 'birthday', 'birth_date']);
+        $birdaySql = $birdayCol !== null ? "s.{$this->identifier($birdayCol)} AS birth_date" : "'' AS birth_date";
+        $ageCol = $this->firstExistingColumn($set->student, ['age']);
+        $ageSql = $ageCol !== null ? "s.{$this->identifier($ageCol)} AS age" : 'NULL AS age';
+        $appDateCol = $this->firstExistingColumn($set->student, ['app_date', 'appdate']);
+        $appDateSql = $appDateCol !== null ? "s.{$this->identifier($appDateCol)} AS application_date" : "'' AS application_date";
+        $lastupdateCol = $this->firstExistingColumn($set->student, ['lastupdate', 'last_updated']);
+        $lastupdateSql = $lastupdateCol !== null ? "s.{$this->identifier($lastupdateCol)} AS last_updated" : "'' AS last_updated";
+        $phoneCol = $this->firstExistingColumn($set->student, ['phone']);
+        $phoneSql = $phoneCol !== null ? "s.{$this->identifier($phoneCol)} AS phone" : "'' AS phone";
+        $curphoneCol = $this->firstExistingColumn($set->student, ['curphone']);
+        $curphoneSql = $curphoneCol !== null ? "s.{$this->identifier($curphoneCol)} AS curphone" : "'' AS curphone";
+        $emailCol = $this->firstExistingColumn($set->student, ['email']);
+        $emailSql = $emailCol !== null ? "s.{$this->identifier($emailCol)} AS email" : "'' AS email";
+        $addrCol = $this->firstExistingColumn($set->student, ['addr', 'address']);
+        $addrSql = $addrCol !== null ? "s.{$this->identifier($addrCol)} AS registered_address" : "'' AS registered_address";
+        $tambonidCol = $this->firstExistingColumn($set->student, ['tambonid']);
+        $tambonidSql = $tambonidCol !== null ? "s.{$this->identifier($tambonidCol)} AS registered_area_code" : "'' AS registered_area_code";
+        $zipcodeCol = $this->firstExistingColumn($set->student, ['zipcode']);
+        $zipcodeSql = $zipcodeCol !== null ? "s.{$this->identifier($zipcodeCol)} AS registered_postcode" : "'' AS registered_postcode";
+        $curaddrCol = $this->firstExistingColumn($set->student, ['curaddr']);
+        $curaddrSql = $curaddrCol !== null ? "s.{$this->identifier($curaddrCol)} AS current_address" : "'' AS current_address";
+        $ctambonidCol = $this->firstExistingColumn($set->student, ['ctambonid']);
+        $ctambonidSql = $ctambonidCol !== null ? "s.{$this->identifier($ctambonidCol)} AS current_area_code" : "'' AS current_area_code";
+        $czipcodeCol = $this->firstExistingColumn($set->student, ['czipcode']);
+        $czipcodeSql = $czipcodeCol !== null ? "s.{$this->identifier($czipcodeCol)} AS current_postcode" : "'' AS current_postcode";
+        $depSemCol = $this->firstExistingColumn($set->student, ['dep_sem', 'depsem']);
+        $depSemSql = $depSemCol !== null ? "s.{$this->identifier($depSemCol)} AS enrollment_term" : "'' AS enrollment_term";
+
+        return "s._perf_id10 AS code,
+                s.prename AS prename,
+                s.name AS first_name,
+                s.surname AS last_name,
+                s.grp_code AS group_code,
+                {$groupName} AS group_name,
+                {$depSemSql},
+                {$finCauseSql},
+                {$trnDateSql},
+                {$gpasemSql},
+                CASE
+                    WHEN CHAR_LENGTH(TRIM(COALESCE({$citizenId}, ''))) = 13
+                    THEN CONCAT(LEFT(TRIM({$citizenId}), 1), '-xxxx-xxxxx-xx-', RIGHT(TRIM({$citizenId}), 1))
+                    ELSE NULL
+                END AS citizen_id_masked,
+                {$citizenId} AS citizen_id,
+                {$genderSql},
+                {$birdaySql},
+                {$ageSql},
+                {$appDateSql},
+                {$lastupdateSql},
+                {$phoneSql},
+                {$curphoneSql},
+                {$emailSql},
+                {$addrSql},
+                {$tambonidSql},
+                {$zipcodeSql},
+                {$curaddrSql},
+                {$ctambonidSql},
+                {$czipcodeSql}";
+    }
+
     /** @param list<string> $candidates */
     private function firstExistingColumn(string $table, array $candidates): ?string
     {
@@ -746,7 +817,7 @@ final class LegacyStudentRepository implements StudentRepository
                 $isSqlite = method_exists($this->connection, 'getDriverName')
                     && $this->connection->getDriverName() === 'sqlite';
                 if ($isSqlite && method_exists($this->connection, 'getSchemaBuilder')) {
-                    /** @var \Illuminate\Database\Connection $conn */
+                    /** @var Connection $conn */
                     $conn = $this->connection;
                     foreach ($conn->getSchemaBuilder()->getColumnListing($table) as $col) {
                         $colStr = trim((string) $col);
@@ -769,7 +840,7 @@ final class LegacyStudentRepository implements StudentRepository
                 }
             } catch (\Throwable) {
                 if (method_exists($this->connection, 'getSchemaBuilder')) {
-                    /** @var \Illuminate\Database\Connection $conn */
+                    /** @var Connection $conn */
                     $conn = $this->connection;
                     foreach ($conn->getSchemaBuilder()->getColumnListing($table) as $col) {
                         $colStr = trim((string) $col);
@@ -1077,7 +1148,7 @@ final class LegacyStudentRepository implements StudentRepository
             $lIdent = $alias.'.'.$this->identifier($learningCol);
             $selects[] = "NULLIF(TRIM({$lIdent}), '') AS learning_method_value";
         } else {
-            $selects[] = "NULL AS learning_method_value";
+            $selects[] = 'NULL AS learning_method_value';
         }
 
         return implode(",\n                        ", $selects);

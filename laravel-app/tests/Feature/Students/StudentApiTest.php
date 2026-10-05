@@ -234,6 +234,13 @@ final class StudentApiTest extends TestCase
         $this->getJson('/api/v1/students/6650100001/subjects?term=2/2568')
             ->assertOk()
             ->assertJsonCount(3, 'data.items');
+
+        $this->getJson('/api/v1/students/6650100001/subjects?level=1')
+            ->assertOk()
+            ->assertJsonPath('data.student.level.id', 1);
+
+        $this->getJson('/api/v1/students/6650100001/subjects?level=4')
+            ->assertUnprocessable();
     }
 
     public function test_reports_are_computed_from_the_same_accessible_dataset(): void

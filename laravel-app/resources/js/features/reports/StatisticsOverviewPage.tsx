@@ -498,10 +498,10 @@ function OverviewStudentListDialog({
                                                         group: student.group_name || student.group_label || student.group || student.group_id || '',
                                                     })}
                                                     className="inline-flex items-center gap-1.5 rounded-xl border border-brand-200 bg-brand-50 px-2.5 py-1 text-xs font-bold text-brand-800 transition hover:border-brand-400 hover:bg-brand-100 active:scale-95"
-                                                    title={report?.source === 'transfers' ? 'ดูรายวิชาที่เทียบโอน' : 'ดูรายวิชาที่ลงทะเบียน'}
+                                                    title={report?.source === 'transfers' ? 'ดูรายวิชาที่เทียบโอน' : report?.source === 'graduates' ? 'ดูรายวิชาและผลการเรียน' : 'ดูรายวิชาที่ลงทะเบียน'}
                                                 >
                                                     <Books size={14} weight="bold" />
-                                                    {report?.source === 'transfers' ? 'วิชาเทียบโอน' : 'ดูรายวิชา'}
+                                                    {report?.source === 'transfers' ? 'วิชาเทียบโอน' : report?.source === 'graduates' ? 'ผลการเรียน' : 'ดูรายวิชา'}
                                                 </button>
                                             </td>
                                         </tr>
@@ -519,7 +519,7 @@ function OverviewStudentListDialog({
                     studentName={subjectStudent?.name ?? ''}
                     level={subjectStudent?.level ?? ''}
                     group={subjectStudent?.group ?? ''}
-                    term={term}
+                    term={report?.source === 'graduates' ? '' : term}
                     initialFilter={report?.source === 'transfers' ? 'transferred' : 'all'}
                 />
             </section>

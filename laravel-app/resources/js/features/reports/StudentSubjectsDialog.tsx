@@ -15,6 +15,7 @@ import { StatusBadge } from '../../components/StatusBadge';
 import { QueryError, QuerySkeleton } from '../../components/QueryState';
 import { getFeatureDataWithDemo } from '../api';
 import { showErrorAlert } from '../../lib/feedback';
+import { buildStudentSubjectsPath } from './studentSubjects';
 
 export type SubjectItem = {
     student_code?: string;
@@ -91,13 +92,13 @@ export function StudentSubjectsDialog({
         };
     }, [isOpen, onClose]);
 
-    const queryKey = ['student-subjects', studentCode];
+    const queryKey = ['student-subjects', studentCode, level];
 
     const { data, isPending, isError, refetch } = useQuery({
         queryKey,
         enabled: isOpen && Boolean(studentCode),
         queryFn: ({ signal }) => {
-            const url = `/api/v1/students/${encodeURIComponent(studentCode)}/subjects`;
+            const url = buildStudentSubjectsPath(studentCode, level);
             return getFeatureDataWithDemo<StudentSubjectsResponse>(
                 url,
                 {
@@ -151,7 +152,7 @@ export function StudentSubjectsDialog({
         }
 
         return items;
-    }, [rawItems, filterType, searchTerm]);
+    }, [rawItems, filterType, searchTerm, selectedTerm]);
 
     const summary = useMemo(() => {
         const totalCredits = rawItems.reduce((sum, item) => sum + (Number(item.credits) || 0), 0);
@@ -233,7 +234,7 @@ export function StudentSubjectsDialog({
                         <div className="flex flex-wrap items-center gap-2">
                             <span className="inline-flex items-center gap-1 rounded-lg bg-brand-50 px-2.5 py-1 text-xs font-bold text-brand-700">
                                 <GraduationCap size={15} weight="bold" />
-                                ข้อมูลรายวิชา
+                                รายวิชาและผลการเรียน
                             </span>
                             {selectedTerm && (
                                 <span className="text-xs font-semibold text-slate-500">

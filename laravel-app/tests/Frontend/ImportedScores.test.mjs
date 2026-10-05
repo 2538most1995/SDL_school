@@ -18,6 +18,13 @@ test('imported score path sends only active filters with the backend field names
     );
 });
 
+test('imported score path can request only rows with inconsistent ITW calculations', () => {
+    assert.equal(
+        buildImportedScoresPath({ term: '2/2568', level: '', group: '', subjectCode: '', search: '', calculationStatus: 'incorrect', page: 2, perPage: 100 }),
+        '/api/v1/learning/scores/imported?term=2%2F2568&calculation_status=incorrect&page=2&per_page=100',
+    );
+});
+
 test('imported score columns default to confirmed ITW51 assessment labels', () => {
     assert.deepEqual(importedAssessmentLabels(), [
         'คะแนนบันทึกการเรียนรู้',

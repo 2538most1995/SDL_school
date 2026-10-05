@@ -2,6 +2,7 @@ import {
     ArrowsClockwise,
     BookOpenText,
     ChartBar,
+    Calculator,
     Database,
     FileXls,
     FloppyDisk,
@@ -176,6 +177,11 @@ type ImportedScoreRow = {
     final_exam_score: number | null;
     total_score: number | null;
     grade: string | null;
+    calculation_audit: {
+        status: 'correct' | 'incorrect' | 'not_checkable';
+        check_count: number;
+        issues: Array<{ code: string; label: string; expected: number; actual: number }>;
+    };
 };
 
 type ImportedScorePayload = {
@@ -185,6 +191,7 @@ type ImportedScorePayload = {
     groups: ImportedScoreOption[];
     subjects: ImportedScoreOption[];
     score_labels: string[];
+    calculation_audit: { total_rows: number; checked_rows: number; incorrect_rows: number; not_checkable_rows: number };
     rows: ImportedScoreRow[];
     pagination: { current_page: number; per_page: number; total: number; last_page: number };
 };
@@ -196,6 +203,7 @@ const emptyImportedScores: ImportedScorePayload = {
     groups: [],
     subjects: [],
     score_labels: [],
+    calculation_audit: { total_rows: 0, checked_rows: 0, incorrect_rows: 0, not_checkable_rows: 0 },
     rows: [],
     pagination: { current_page: 1, per_page: 100, total: 0, last_page: 1 },
 };
@@ -217,6 +225,10 @@ function nullableScore(value: number | null): string {
     return value === null ? '-' : formatScore(value);
 }
 
+function auditIssueText(issue: ImportedScoreRow['calculation_audit']['issues'][number]): string {
+    return `${issue.label}: ควรเป็น ${formatScore(issue.expected)} แต่ ITW เป็น ${formatScore(issue.actual)}`;
+}
+
 function ImportedScoresPage({ sourceNavigation }: { sourceNavigation: ReactNode }) {
     const [term, setTerm] = useState('');
     const [level, setLevel] = useState('');
@@ -226,10 +238,11 @@ function ImportedScoresPage({ sourceNavigation }: { sourceNavigation: ReactNode 
     const [page, setPage] = useState(1);
     const [perPage, setPerPage] = useState(100);
     const [showScoreLegend, setShowScoreLegend] = useState(false);
+    const [showIncorrectOnly, setShowIncorrectOnly] = useState(false);
     const deferredSearch = useDeferredValue(search);
     const importedScores = useQuery({
-        queryKey: ['learning', 'scores', 'imported', term, level, group, subjectCode, deferredSearch, page, perPage],
-        queryFn: ({ signal }) => getFeatureDataWithDemo<ImportedScorePayload>(buildImportedScoresPath({ term, level, group, subjectCode, search: deferredSearch, page, perPage }), emptyImportedScores, signal),
+        queryKey: ['learning', 'scores', 'imported', term, level, group, subjectCode, deferredSearch, showIncorrectOnly, page, perPage],
+        queryFn: ({ signal }) => getFeatureDataWithDemo<ImportedScorePayload>(buildImportedScoresPath({ term, level, group, subjectCode, search: deferredSearch, calculationStatus: showIncorrectOnly ? 'incorrect' : '', page, perPage }), emptyImportedScores, signal),
         refetchOnWindowFocus: false,
     });
     const data = importedScores.data?.data;
@@ -260,7 +273,7 @@ function ImportedScoresPage({ sourceNavigation }: { sourceNavigation: ReactNode 
 
     const exportImportedScores = () => downloadExcel(`คะแนนนำเข้า-${data?.selected_term ?? (term || 'ทั้งหมด')}`, [{
         name: 'คะแนนนำเข้า',
-        columns: ['ลำดับ', 'รหัสนักศึกษา', 'ชื่อ-นามสกุล', 'กลุ่ม', 'ระดับ', 'รหัสวิชา', 'รายวิชา', 'วิธีเรียน', ...scoreLabels, 'กลางภาค', 'ปลายภาค', 'รวม', 'เกรด'],
+        columns: ['ลำดับ', 'รหัสนักศึกษา', 'ชื่อ-นามสกุล', 'กลุ่ม', 'ระดับ', 'รหัสวิชา', 'รายวิชา', 'วิธีเรียน', ...scoreLabels, 'กลางภาค', 'ปลายภาค', 'รวม', 'เกรด', 'ผลตรวจการคำนวณ'],
         rows: rows.map((row, index) => [
             index + 1,
             row.student_code,
@@ -275,6 +288,7 @@ function ImportedScoresPage({ sourceNavigation }: { sourceNavigation: ReactNode 
             row.final_exam_score,
             row.total_score,
             row.grade,
+            row.calculation_audit.issues.map(auditIssueText).join(' | ') || (row.calculation_audit.status === 'correct' ? 'คำนวณตรงกัน' : 'ข้อมูลไม่ครบสำหรับตรวจ'),
         ]),
     }]);
 
@@ -295,7 +309,10 @@ function ImportedScoresPage({ sourceNavigation }: { sourceNavigation: ReactNode 
         </Panel>
 
         <Panel className="mt-5" title="ตารางคะแนนจากไฟล์นำเข้า" description={importedScores.isPending ? 'กำลังโหลดข้อมูล' : `พบทั้งหมด ${(data?.pagination.total ?? rows.length).toLocaleString('th-TH')} รายการ · หน้านี้ ${studentCount} คน และ ${subjectCount} วิชา`} action={
-            <div className="flex items-center gap-2">
+            <div className="flex flex-wrap items-center gap-2">
+                <Button type="button" appearance={showIncorrectOnly ? 'primary' : 'outline'} icon={<Calculator size={18} weight="bold" />} onClick={() => { setShowIncorrectOnly((current) => !current); setPage(1); }} disabled={importedScores.isFetching}>
+                    {showIncorrectOnly ? 'แสดงคะแนนทั้งหมด' : 'เช็คการคำนวณจาก ITW'}
+                </Button>
                 <Button type="button" appearance="outline" icon={<ListChecks size={18} weight="bold" />} onClick={() => setShowScoreLegend((prev) => !prev)}>
                     {showScoreLegend ? 'ซ่อนคำอธิบาย 1-9' : 'คำอธิบายคะแนน 1-9'}
                 </Button>
@@ -304,6 +321,12 @@ function ImportedScoresPage({ sourceNavigation }: { sourceNavigation: ReactNode 
                 </Button>
             </div>
         }>
+            {showIncorrectOnly && importedScores.data && (
+                <div className={`mb-4 rounded-xl border p-4 text-sm leading-6 ${data?.calculation_audit.incorrect_rows ? 'border-amber-300 bg-amber-50 text-amber-950' : 'border-emerald-300 bg-emerald-50 text-emerald-950'}`} role="status">
+                    <p className="font-black">{data?.calculation_audit.incorrect_rows ? `พบ ${data.calculation_audit.incorrect_rows.toLocaleString('th-TH')} รายการที่ควรตรวจใน ITW` : 'ไม่พบการคำนวณที่ไม่ตรงกัน'}</p>
+                    <p className="mt-1">ตรวจจากผลรวมคะแนนช่อง 1-9, คะแนนกลางภาค + ปลายภาค และเกรดตัวเลขตามคะแนนรวม เฉพาะรายการที่มีข้อมูลครบ ระบบนี้อ่านอย่างเดียวและไม่ได้แก้ข้อมูลต้นทาง</p>
+                </div>
+            )}
             {showScoreLegend && (
                 <div className="mb-4 rounded-2xl border border-brand-200 bg-brand-50/70 p-4 text-sm text-slate-800 shadow-xs">
                     <div className="flex items-center justify-between pb-2 mb-3 border-b border-brand-200/60">
@@ -333,9 +356,9 @@ function ImportedScoresPage({ sourceNavigation }: { sourceNavigation: ReactNode 
 
             {importedScores.isPending && <QuerySkeleton rows={7} />}
             {importedScores.isError && <QueryError onRetry={() => importedScores.refetch()} />}
-            {importedScores.data && rows.length === 0 && <div className="grid min-h-48 place-items-center rounded-xl border border-dashed border-slate-300 bg-slate-50 p-6 text-center text-sm leading-6 text-slate-600">ไม่พบคะแนนจากข้อมูลนำเข้าตามตัวกรองที่เลือก</div>}
+            {importedScores.data && rows.length === 0 && <div className="grid min-h-48 place-items-center rounded-xl border border-dashed border-slate-300 bg-slate-50 p-6 text-center text-sm leading-6 text-slate-600">{showIncorrectOnly ? 'ไม่พบรายการที่คำนวณไม่ตรงกันตามตัวกรองที่เลือก' : 'ไม่พบคะแนนจากข้อมูลนำเข้าตามตัวกรองที่เลือก'}</div>}
             {importedScores.data && rows.length > 0 && <div role="region" aria-label="ตารางคะแนนจากข้อมูลนำเข้า เลื่อนแนวนอนเพื่อดูคะแนนทุกช่อง" tabIndex={0} className="overflow-x-auto rounded-xl border border-slate-200 outline-none focus:ring-2 focus:ring-brand-200">
-                <table className="w-full min-w-[1940px] border-collapse text-sm">
+                <table className="w-full min-w-[2240px] border-collapse text-sm">
                     <thead className="bg-slate-50 text-slate-700">
                         <tr>
                             <th className="sticky left-0 z-20 w-14 border-b border-r border-slate-200 bg-slate-50 px-2 py-3 text-center">ลำดับ</th>
@@ -349,6 +372,7 @@ function ImportedScoresPage({ sourceNavigation }: { sourceNavigation: ReactNode 
                             <th className="w-24 border-b border-r border-slate-200 bg-amber-50 px-3 py-3 text-center">ปลายภาค</th>
                             <th className="w-20 border-b border-r border-slate-200 bg-brand-50 px-3 py-3 text-center">รวม</th>
                             <th className="w-20 border-b border-slate-200 px-3 py-3 text-center">เกรด</th>
+                            <th className="min-w-72 border-b border-slate-200 px-4 py-3 text-left">ผลตรวจการคำนวณ</th>
                         </tr>
                     </thead>
                     <tbody>
@@ -364,6 +388,9 @@ function ImportedScoresPage({ sourceNavigation }: { sourceNavigation: ReactNode 
                             <td className="border-b border-r border-slate-200 bg-amber-50/60 px-3 py-3 text-center font-mono font-black tabular-nums text-amber-900">{nullableScore(row.final_exam_score)}</td>
                             <td className="border-b border-r border-slate-200 bg-brand-50/60 px-3 py-3 text-center font-mono font-black tabular-nums text-brand-900">{nullableScore(row.total_score)}</td>
                             <td className="border-b border-slate-200 px-3 py-3 text-center"><span className="inline-flex min-w-10 justify-center rounded-lg bg-slate-100 px-2 py-1 font-mono font-black text-slate-900">{row.grade || '-'}</span></td>
+                            <td className="border-b border-slate-200 px-4 py-3">
+                                {row.calculation_audit.status === 'incorrect' ? <ul className="space-y-1 text-xs font-semibold leading-5 text-rose-800">{row.calculation_audit.issues.map((issue) => <li key={issue.code}>{auditIssueText(issue)}</li>)}</ul> : row.calculation_audit.status === 'correct' ? <span className="text-xs font-bold text-emerald-700">คำนวณตรงกัน</span> : <span className="text-xs text-slate-500">ข้อมูลไม่ครบสำหรับตรวจ</span>}
+                            </td>
                         </tr>)}
                     </tbody>
                 </table>
