@@ -9,6 +9,7 @@ use App\Domain\Students\Support\AcademicTerm;
 use App\Domain\Students\Support\CurriculumCatalog;
 use App\Domain\Students\Support\GraduationOpportunity;
 use App\Domain\Students\Support\RegistrationCreditPolicy;
+use App\Domain\Students\Support\StudentGroupOptions;
 use App\Models\User;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Validation\ValidationException;
@@ -29,15 +30,10 @@ final readonly class CourseRegistrationService
     public function workspace(User $viewer, int $districtId, array $filters = []): array
     {
         $allStudents = $this->directory->accessibleStudents($viewer);
-        $groups = [];
         $terms = [];
         $maxStudentTerm = null;
 
         foreach ($allStudents as $student) {
-            $grp = trim($student->groupCode);
-            if ($grp !== '') {
-                $groups[$grp] = trim($student->groupName) ?: $grp;
-            }
             if ($student->currentTerm !== '') {
                 $norm = AcademicTerm::normalize($student->currentTerm) ?? $student->currentTerm;
                 $terms[$norm] = true;
@@ -50,9 +46,11 @@ final readonly class CourseRegistrationService
         $termList = $this->resolveWorkspaceTerms($terms, $maxStudentTerm, $districtId);
         $nextRegisterableTerm = $termList[0] ?? AcademicTerm::nextTerm($maxStudentTerm ?? '1/2569');
         $selectedTerm = $filters['term'] ?? $nextRegisterableTerm;
+        $selectedLevel = ! empty($filters['level']) ? (int) $filters['level'] : null;
+        $groupOptions = StudentGroupOptions::fromStudents($allStudents, $selectedLevel);
 
         $filtered = array_values(array_filter($allStudents, function (Student $student) use ($filters): bool {
-            if (! empty($filters['group']) && $student->groupCode !== $filters['group']) {
+            if (! empty($filters['group']) && ! StudentGroupOptions::matches($student, (string) $filters['group'])) {
                 return false;
             }
             if (! empty($filters['level']) && (int) $student->level !== (int) $filters['level']) {
@@ -143,12 +141,6 @@ final readonly class CourseRegistrationService
         if (! empty($filters['graduation_status'])) {
             $field = $filters['graduation_status'] === 'complete' ? 'is_credit_complete' : 'is_potential_graduate';
             $items = array_values(array_filter($items, static fn (array $item): bool => $item[$field]));
-        }
-
-        ksort($groups, SORT_NATURAL);
-        $groupOptions = [];
-        foreach ($groups as $code => $label) {
-            $groupOptions[] = ['value' => $code, 'label' => "{$label} ({$code})"];
         }
 
         return [

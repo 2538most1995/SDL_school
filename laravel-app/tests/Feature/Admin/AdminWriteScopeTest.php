@@ -126,6 +126,69 @@ final class AdminWriteScopeTest extends TestCase
         Http::assertNothingSent();
     }
 
+    public function test_district_admin_can_delete_only_teacher_accounts_in_own_district(): void
+    {
+        $teacher = User::factory()->create([
+            'name' => 'ครู สำหรับลบ',
+            'first_name' => 'ครู',
+            'last_name' => 'สำหรับลบ',
+            'username' => 'teacher.delete',
+            'role' => 'teacher',
+            'district_id' => $this->sena->id,
+            'assigned_groups' => ['220001'],
+        ]);
+        $otherTeacher = User::factory()->create([
+            'role' => 'teacher',
+            'district_id' => $this->other->id,
+        ]);
+        DB::table('sessions')->insert([
+            'id' => 'teacher-delete-session',
+            'user_id' => $teacher->id,
+            'ip_address' => '127.0.0.1',
+            'user_agent' => 'test',
+            'payload' => 'test',
+            'last_activity' => now()->timestamp,
+        ]);
+
+        Sanctum::actingAs($this->senaAdmin);
+
+        $this->getJson('/api/v1/admin/users')
+            ->assertOk()
+            ->assertJsonFragment([
+                'id' => $teacher->id,
+                'role' => 'teacher',
+                'can_delete' => true,
+            ])
+            ->assertJsonFragment([
+                'id' => $this->senaAdmin->id,
+                'role' => 'admin',
+                'can_delete' => false,
+            ]);
+
+        $this->deleteJson("/api/v1/admin/users/{$this->senaAdmin->id}")
+            ->assertUnprocessable()
+            ->assertJsonValidationErrors('user');
+        $this->assertDatabaseHas('users', ['id' => $this->senaAdmin->id]);
+
+        $this->deleteJson("/api/v1/admin/users/{$otherTeacher->id}")->assertNotFound();
+        $this->assertDatabaseHas('users', ['id' => $otherTeacher->id]);
+
+        $this->deleteJson("/api/v1/admin/users/{$teacher->id}")
+            ->assertOk()
+            ->assertJsonPath('data.deleted', true)
+            ->assertJsonPath('data.id', $teacher->id);
+
+        $this->assertDatabaseMissing('users', ['id' => $teacher->id]);
+        $this->assertDatabaseMissing('sessions', ['user_id' => $teacher->id]);
+        $this->assertDatabaseHas('audit_logs', [
+            'user_id' => $this->senaAdmin->id,
+            'district_id' => $this->sena->id,
+            'event' => 'admin.user.deleted',
+            'auditable_type' => 'system_user',
+            'auditable_id' => $teacher->id,
+        ]);
+    }
+
     public function test_exam_room_writes_are_scoped_and_audited_in_system_database(): void
     {
         $this->bindStudents([

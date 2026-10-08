@@ -7,6 +7,7 @@ use App\Domain\Students\Repositories\StudentRepository;
 use App\Models\District;
 use App\Models\NnetResult;
 use App\Models\User;
+use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Pagination\LengthAwarePaginator;
 use Illuminate\Support\Collection;
 use Illuminate\Validation\ValidationException;
@@ -349,8 +350,8 @@ final class NnetService
         $bestAvg = -1.0;
 
         for ($idx = 0; $idx < 5; $idx++) {
-            $name = self::DEFAULT_SUBJECT_NAMES[$idx] ?? "สาระที่ " . ($idx + 1);
-            $codeStr = "สาระที่ " . ($idx + 1);
+            $name = self::DEFAULT_SUBJECT_NAMES[$idx] ?? 'สาระที่ '.($idx + 1);
+            $codeStr = 'สาระที่ '.($idx + 1);
 
             // เอาคะแนนเฉลี่ยของ ประถม ม.ต้น ม.ปลาย บวกกันแล้วหารจำนวนระดับชั้น (เช่น หาร 3)
             $sumAcrossLevels = 0.0;
@@ -759,46 +760,6 @@ final class NnetService
         return $record;
     }
 
-    /**
-     * Delete single record (CRUD D).
-     */
-    public function deleteRecord(int $id, User $user): bool
-    {
-        $record = NnetResult::findOrFail($id);
-        $this->ensureCanAccessRecord($record, $user);
-
-        return (bool) $record->delete();
-    }
-
-    /**
-     * Bulk clear records matching filters.
-     *
-     * @param  array<string, mixed>  $filters
-     */
-    public function clearRecords(array $filters, User $user): int
-    {
-        $districtId = $this->resolveDistrictId($filters['district_id'] ?? null, $user);
-        if ($districtId === null) {
-            throw ValidationException::withMessages(['district_id' => 'ไม่พบข้อมูลอำเภอสำหรับการล้างข้อมูล']);
-        }
-
-        $query = NnetResult::query()->where('district_id', $districtId);
-
-        if (! empty($filters['education_level'])) {
-            $query->where('education_level', (int) $filters['education_level']);
-        }
-
-        if (! empty($filters['academic_year'])) {
-            $query->where('academic_year', trim((string) $filters['academic_year']));
-        }
-
-        if (! empty($filters['round'])) {
-            $query->where('round', (int) $filters['round']);
-        }
-
-        return $query->delete();
-    }
-
     private function resolveDistrictId(mixed $requestedDistrictId, User $user): ?int
     {
         if ($user->role === 'super_admin') {
@@ -879,7 +840,7 @@ final class NnetService
         return $identifiers['citizen_ids'][0] ?? null;
     }
 
-    private function applyStudentScope(\Illuminate\Database\Eloquent\Builder $query, User $user): bool
+    private function applyStudentScope(Builder $query, User $user): bool
     {
         if ($user->role !== 'student') {
             return true;

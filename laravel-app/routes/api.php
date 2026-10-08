@@ -152,8 +152,6 @@ Route::prefix('v1')->group(function (): void {
             Route::post('/nnet/import', [NnetController::class, 'import']);
             Route::post('/nnet/records', [NnetController::class, 'store']);
             Route::put('/nnet/records/{id}', [NnetController::class, 'update'])->whereNumber('id');
-            Route::delete('/nnet/records/{id}', [NnetController::class, 'destroy'])->whereNumber('id');
-            Route::post('/nnet/clear', [NnetController::class, 'clear']);
         });
 
         Route::get('/my-learning', [CurrentStudentController::class, 'profile']);
@@ -222,6 +220,7 @@ Route::prefix('v1')->group(function (): void {
             Route::get('/admin/users', [UserController::class, 'index']);
             Route::post('/admin/users', [UserController::class, 'store']);
             Route::patch('/admin/users/{user}', [UserController::class, 'update'])->whereNumber('user');
+            Route::delete('/admin/users/{user}', [UserController::class, 'destroy'])->whereNumber('user');
             Route::get('/admin/imports', [ImportController::class, 'index']);
             Route::get('/admin/imports/jobs/{job}', [ImportController::class, 'status'])->whereUuid('job');
             Route::post('/admin/imports', [ImportController::class, 'store']);

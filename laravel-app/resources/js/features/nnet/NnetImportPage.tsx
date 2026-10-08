@@ -487,7 +487,7 @@ export function NnetImportPage() {
                         onClick={handleClear}
                         disabled={parsedRows.length === 0 || isImporting}
                     >
-                        ล้างข้อมูล
+                        นำไฟล์ออกก่อนบันทึก
                     </Button>
                     <Button
                         appearance="primary"

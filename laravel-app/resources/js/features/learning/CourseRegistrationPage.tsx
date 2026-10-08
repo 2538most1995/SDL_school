@@ -656,7 +656,10 @@ export function CourseRegistrationPage() {
                                 <label className="block text-xs font-bold text-slate-700 mb-1">ระดับการศึกษา</label>
                                 <select
                                     value={level}
-                                    onChange={(e) => setLevel(e.target.value)}
+                                    onChange={(e) => {
+                                        setLevel(e.target.value);
+                                        setGroup('');
+                                    }}
                                     className="w-full rounded-xl border border-slate-300 bg-white p-2.5 text-sm"
                                 >
                                     <option value="">ทุกระดับชั้น</option>

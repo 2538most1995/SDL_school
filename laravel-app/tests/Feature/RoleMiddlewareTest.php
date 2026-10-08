@@ -49,7 +49,7 @@ class RoleMiddlewareTest extends TestCase
     {
         Sanctum::actingAs(User::factory()->create(['role' => 'student']));
 
-        $this->postJson('/api/v1/nnet/clear', [])->assertForbidden();
+        $this->postJson('/api/v1/nnet/clear', [])->assertNotFound();
         $this->postJson('/api/v1/nnet/records', [])->assertForbidden();
         $this->postJson('/api/v1/nnet/import', [])->assertForbidden();
     }

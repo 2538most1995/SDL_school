@@ -547,6 +547,13 @@ final class LearningScorebookTest extends TestCase
             'คะแนนอื่นๆ',
         ], $response->json('data.score_labels'));
 
+        $groups = $response->json('data.groups');
+        $groupLabels = array_column($groups, 'label');
+        $this->assertSame($groupLabels, array_values(array_unique($groupLabels)));
+        foreach ($groups as $group) {
+            $this->assertSame($group['label'], $group['value']);
+        }
+
         $this->assertNotEmpty($response->json('data.rows'));
         $firstRow = $response->json('data.rows.0');
         $this->assertArrayHasKey('student_code', $firstRow);
@@ -570,6 +577,20 @@ final class LearningScorebookTest extends TestCase
 
         $this->getJson('/api/v1/learning/scores/imported?calculation_status=correct')
             ->assertUnprocessable();
+
+        $levelGroups = $this->getJson('/api/v1/learning/scores/imported?level=3')
+            ->assertOk()
+            ->json('data.groups');
+        $this->assertNotEmpty($levelGroups);
+        $selectedGroup = $levelGroups[0]['value'];
+        $filteredRows = $this->getJson('/api/v1/learning/scores/imported?level=3&group='.urlencode($selectedGroup))
+            ->assertOk()
+            ->json('data.rows');
+        $this->assertNotEmpty($filteredRows);
+        foreach ($filteredRows as $row) {
+            $this->assertSame(3, $row['level']);
+            $this->assertSame($selectedGroup, $row['group_name']);
+        }
 
         // Teacher access
         $teacher = $this->teacher(['SENA-M3-A']);

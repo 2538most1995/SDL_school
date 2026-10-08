@@ -5,6 +5,7 @@ namespace App\Http\Controllers\Api\Admin;
 use App\Domain\Learning\DemoLearningPortal;
 use App\Domain\Learning\DemoResponseMeta;
 use App\Http\Controllers\Controller;
+use App\Models\User;
 use Illuminate\Database\DatabaseManager;
 use Illuminate\Database\Query\Builder;
 use Illuminate\Http\JsonResponse;
@@ -35,7 +36,7 @@ final class UserController extends Controller
             $items = array_map(static function (array $item): array {
                 [$firstName, $lastName] = array_pad(explode(' ', (string) $item['display_name'], 2), 2, '');
 
-                return [...$item, 'first_name' => $firstName, 'last_name' => $lastName, 'assigned_groups' => $item['group'] ? [$item['group']] : [], 'can_edit' => false];
+                return [...$item, 'first_name' => $firstName, 'last_name' => $lastName, 'assigned_groups' => $item['group'] ? [$item['group']] : [], 'can_edit' => false, 'can_delete' => false];
             }, $demo->users($filters['role'] ?? null, $filters['search'] ?? null));
 
             return response()->json(['data' => $items, 'meta' => [
@@ -158,6 +159,51 @@ final class UserController extends Controller
         return response()->json(['data' => $this->payload($after, true, $this->groupNames($this->districtId($request)))]);
     }
 
+    public function destroy(Request $request, int $user): JsonResponse
+    {
+        $this->assertWriteEnabled();
+        $before = $this->userRow($request, $user, true);
+
+        if ($before->role !== 'teacher') {
+            throw ValidationException::withMessages([
+                'user' => ['อนุญาตให้ลบได้เฉพาะบัญชีครูเท่านั้น'],
+            ]);
+        }
+
+        $connection = $this->write();
+        $connection->transaction(function () use ($connection, $before, $user): void {
+            $schema = $connection->getSchemaBuilder();
+            foreach (['sessions', 'student_api_clients', 'statistics_report_preferences'] as $table) {
+                if ($schema->hasTable($table) && $schema->hasColumn($table, 'user_id')) {
+                    $connection->table($table)->where('user_id', $user)->delete();
+                }
+            }
+
+            if ($schema->hasTable('personal_access_tokens')
+                && $schema->hasColumn('personal_access_tokens', 'tokenable_type')
+                && $schema->hasColumn('personal_access_tokens', 'tokenable_id')) {
+                $connection->table('personal_access_tokens')
+                    ->where('tokenable_type', User::class)
+                    ->where('tokenable_id', $user)
+                    ->delete();
+            }
+
+            if ($schema->hasTable('password_reset_tokens')
+                && $schema->hasColumn('password_reset_tokens', 'email')) {
+                $connection->table('password_reset_tokens')->where('email', $before->email)->delete();
+            }
+
+            abort_unless(
+                $connection->table('users')->where('id', $user)->where('role', 'teacher')->delete() === 1,
+                404,
+            );
+        });
+
+        $this->audit($request, 'admin.user.deleted', $user, $this->auditPayload($before), null);
+
+        return response()->json(['data' => ['deleted' => true, 'id' => $user]]);
+    }
+
     /** @return array<string, mixed> */
     private function validated(Request $request, bool $creating): array
     {
@@ -248,6 +294,7 @@ final class UserController extends Controller
             'group' => implode(', ', array_map(static fn (string $code): string => (string) ($groupNames[$code] ?? $code), $groups)) ?: null,
             'status' => 'active',
             'can_edit' => $canEdit,
+            'can_delete' => $canEdit && $this->writeEnabled() && $row->role === 'teacher',
         ];
     }
 
@@ -337,7 +384,7 @@ final class UserController extends Controller
         ]));
     }
 
-    private function audit(Request $request, string $event, int $id, ?array $before, array $after): void
+    private function audit(Request $request, string $event, int $id, ?array $before, ?array $after): void
     {
         $entry = [
             'user_id' => $request->user()->id,
@@ -347,7 +394,7 @@ final class UserController extends Controller
             'auditable_id' => $id,
             'ip_address' => $request->ip(),
             'before' => $before === null ? null : json_encode($before, JSON_UNESCAPED_UNICODE | JSON_THROW_ON_ERROR),
-            'after' => json_encode($after, JSON_UNESCAPED_UNICODE | JSON_THROW_ON_ERROR),
+            'after' => $after === null ? null : json_encode($after, JSON_UNESCAPED_UNICODE | JSON_THROW_ON_ERROR),
             'created_at' => now(),
         ];
 

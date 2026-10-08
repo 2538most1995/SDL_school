@@ -40,7 +40,7 @@ class AuditLogTest extends TestCase
         ]);
     }
 
-    public function test_nnet_clear_records_audit_log(): void
+    public function test_nnet_destructive_routes_are_not_available(): void
     {
         $district = District::create(['name' => 'อำเภอทดสอบ', 'code' => 'test-nnet', 'is_active' => true]);
         $admin = User::factory()->create([
@@ -50,20 +50,15 @@ class AuditLogTest extends TestCase
 
         Sanctum::actingAs($admin);
 
-        $response = $this->withServerVariables(['REMOTE_ADDR' => '10.0.0.42'])
+        $this->withServerVariables(['REMOTE_ADDR' => '10.0.0.42'])
             ->postJson('/api/v1/nnet/clear', [
                 'academic_year' => '2567',
                 'round' => '1',
-            ]);
+            ])
+            ->assertNotFound();
 
-        $response->assertOk();
-
-        $this->assertDatabaseHas('audit_logs', [
-            'user_id' => $admin->id,
-            'district_id' => $district->id,
+        $this->assertDatabaseMissing('audit_logs', [
             'event' => 'nnet.records_cleared',
-            'auditable_type' => 'nnet_result',
-            'ip_address' => '10.0.0.42',
         ]);
     }
 }

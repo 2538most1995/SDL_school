@@ -16,8 +16,11 @@ class NnetTest extends TestCase
     use RefreshDatabase;
 
     private District $district;
+
     private User $teacher;
+
     private User $admin;
+
     private User $studentUser;
 
     protected function setUp(): void
@@ -79,6 +82,7 @@ class NnetTest extends TestCase
         $this->app->bind(StudentRepository::class, function () use ($mockStudent) {
             $repo = $this->createMock(StudentRepository::class);
             $repo->method('students')->willReturn([$mockStudent]);
+
             return $repo;
         });
 
@@ -174,7 +178,7 @@ class NnetTest extends TestCase
             ->assertJsonPath('data.items.0.student_name', 'นางสาวสมศรี เรียนดี');
 
         // Search by keyword
-        $this->getJson('/api/v1/nnet/records?search=' . urlencode('สมศักดิ์'))
+        $this->getJson('/api/v1/nnet/records?search='.urlencode('สมศักดิ์'))
             ->assertOk()
             ->assertJsonPath('data.total', 1)
             ->assertJsonPath('data.items.0.student_name', 'นายสมศักดิ์ เรียนต่อ');
@@ -238,7 +242,7 @@ class NnetTest extends TestCase
         $this->assertEquals(60.00, $subjects[0]['average']);
     }
 
-    public function test_crud_endpoints_store_show_update_destroy(): void
+    public function test_create_read_and_update_endpoints_keep_records_non_deletable(): void
     {
         Sanctum::actingAs($this->admin);
 
@@ -276,15 +280,14 @@ class NnetTest extends TestCase
 
         $this->assertEquals(65.00, $updateRes->json('data.total_score'));
 
-        // DELETE
+        // DELETE is intentionally unavailable so imported N-NET history cannot be removed.
         $this->deleteJson("/api/v1/nnet/records/{$recordId}")
-            ->assertOk()
-            ->assertJsonPath('message', 'ลบข้อมูลผลสอบเรียบร้อยแล้ว');
+            ->assertMethodNotAllowed();
 
-        $this->assertDatabaseMissing('nnet_results', ['id' => $recordId]);
+        $this->assertDatabaseHas('nnet_results', ['id' => $recordId]);
     }
 
-    public function test_clear_records_removes_matching_data(): void
+    public function test_clear_records_endpoint_is_unavailable_and_preserves_data(): void
     {
         Sanctum::actingAs($this->admin);
 
@@ -311,10 +314,9 @@ class NnetTest extends TestCase
             'academic_year' => '2569',
             'round' => 1,
         ])
-            ->assertOk()
-            ->assertJsonPath('deleted_count', 1);
+            ->assertNotFound();
 
-        $this->assertDatabaseMissing('nnet_results', ['citizen_id' => '1100400111111']);
+        $this->assertDatabaseHas('nnet_results', ['citizen_id' => '1100400111111']);
         $this->assertDatabaseHas('nnet_results', ['citizen_id' => '1100400222222']);
     }
 
@@ -349,6 +351,7 @@ class NnetTest extends TestCase
         $this->app->bind(StudentRepository::class, function () use ($mockStudent) {
             $repo = $this->createMock(StudentRepository::class);
             $repo->method('students')->willReturn([$mockStudent]);
+
             return $repo;
         });
 
@@ -416,13 +419,13 @@ class NnetTest extends TestCase
         ]);
 
         // Filter records by group
-        $this->getJson('/api/v1/nnet/records?group=' . urlencode('กลุ่ม ก'))
+        $this->getJson('/api/v1/nnet/records?group='.urlencode('กลุ่ม ก'))
             ->assertOk()
             ->assertJsonPath('data.total', 1)
             ->assertJsonPath('data.items.0.student_name', 'นายกนก กลุ่ม ก');
 
         // Filter summary by group
-        $sumRes = $this->getJson('/api/v1/nnet/summary?education_level=2&academic_year=2569&round=1&group=' . urlencode('กลุ่ม ก'))
+        $sumRes = $this->getJson('/api/v1/nnet/summary?education_level=2&academic_year=2569&round=1&group='.urlencode('กลุ่ม ก'))
             ->assertOk()
             ->assertJsonPath('data.total_students', 1);
         $this->assertEquals(60.0, $sumRes->json('data.average_total_score'));
@@ -659,5 +662,3 @@ class NnetTest extends TestCase
         $this->assertEmpty($response->json('data.items'));
     }
 }
-
-

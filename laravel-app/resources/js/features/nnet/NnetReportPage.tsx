@@ -10,7 +10,6 @@ import {
     PencilSimple,
     Plus,
     Prohibit,
-    Trash,
     Trophy,
     UploadSimple,
     Users,
@@ -187,77 +186,6 @@ export function NnetReportPage() {
 
     const items = recordsQuery.data?.items ?? [];
     const summary = summaryQuery.data;
-
-    // Delete Mutation
-    const deleteMutation = useMutation({
-        mutationFn: (id: number) => sendFeatureData(`/api/v1/nnet/records/${id}`, 'DELETE'),
-        onSuccess: () => {
-            queryClient.invalidateQueries({ queryKey: ['nnet'] });
-            Swal.fire({
-                title: 'ลบข้อมูลสำเร็จ',
-                icon: 'success',
-                timer: 1500,
-                showConfirmButton: false,
-            });
-        },
-        onError: (err: any) => {
-            Swal.fire('เกิดข้อผิดพลาด', err.message || 'ไม่สามารถลบข้อมูลได้', 'error');
-        },
-    });
-
-    // Clear Mutation
-    const clearMutation = useMutation({
-        mutationFn: () => {
-            const payload: Record<string, any> = {};
-            if (level > 0) payload.education_level = level;
-            if (year) payload.academic_year = year;
-            if (round > 0) payload.round = round;
-            return sendFeatureData('/api/v1/nnet/clear', 'POST', payload);
-        },
-        onSuccess: () => {
-            queryClient.invalidateQueries({ queryKey: ['nnet'] });
-            Swal.fire('สำเร็จ', 'ล้างข้อมูลชุดนี้เรียบร้อยแล้ว', 'success');
-        },
-        onError: (err: any) => {
-            Swal.fire('เกิดข้อผิดพลาด', err.message || 'ไม่สามารถล้างข้อมูลได้', 'error');
-        },
-    });
-
-    const handleDeleteRecord = async (record: NnetRecord) => {
-        const result = await Swal.fire({
-            title: 'ยืนยันการลบ?',
-            html: `ต้องการลบผลคะแนนของ <b>${record.student_name}</b> (เลขที่นั่งสอบ: ${record.seat_no || '-'}) หรือไม่?`,
-            icon: 'warning',
-            showCancelButton: true,
-            confirmButtonText: 'ลบข้อมูล',
-            cancelButtonText: 'ยกเลิก',
-            confirmButtonColor: '#dc2626',
-        });
-
-        if (result.isConfirmed) {
-            deleteMutation.mutate(record.id);
-        }
-    };
-
-    const handleClearSet = async () => {
-        const levelText = LEVEL_OPTIONS.find((l) => l.value === level)?.label ?? 'ทั้งหมด';
-        const result = await Swal.fire({
-            title: 'ยืนยันการล้างข้อมูลชุดนี้?',
-            html: `คุณกำลังจะลบข้อมูล N-NET ทั้งหมดของ:<br/>
-                ระดับชั้น: <b>${levelText}</b><br/>
-                ปีการศึกษา: <b>${year || 'ทุกปี'}</b> ครั้งที่: <b>${round || 'ทุกครั้ง'}</b><br/>
-                <span class="text-red-600 font-bold">การกระทำนี้ไม่สามารถย้อนกลับได้!</span>`,
-            icon: 'warning',
-            showCancelButton: true,
-            confirmButtonText: 'ยืนยันล้างข้อมูล',
-            cancelButtonText: 'ยกเลิก',
-            confirmButtonColor: '#dc2626',
-        });
-
-        if (result.isConfirmed) {
-            clearMutation.mutate();
-        }
-    };
 
     const handleOpenAddModal = () => {
         setFormDraft({
@@ -681,18 +609,9 @@ export function NnetReportPage() {
             {/* Individual Results Table Panel */}
             <Panel
                 title={`ผลรายบุคคล (${items.length.toLocaleString('th-TH')} รายการ)`}
+                description="ข้อมูล N-NET สามารถเพิ่มและแก้ไขได้ แต่ระบบไม่อนุญาตให้ลบข้อมูลรายบุคคลหรือล้างข้อมูลทั้งชุด"
                 action={(
                     <div className="flex items-center gap-2">
-                        {items.length > 0 && (
-                            <Button
-                                appearance="subtle"
-                                icon={<Trash size={16} />}
-                                onClick={handleClearSet}
-                                className="text-red-600 hover:text-red-700 hover:bg-red-50"
-                            >
-                                ล้างข้อมูลชุดนี้
-                            </Button>
-                        )}
                         <Button
                             appearance="subtle"
                             icon={<ArrowsClockwise size={16} />}
@@ -836,14 +755,6 @@ export function NnetReportPage() {
                                                         title="แก้ไขคะแนน"
                                                     >
                                                         <PencilSimple size={17} />
-                                                    </button>
-                                                    <button
-                                                        type="button"
-                                                        onClick={() => handleDeleteRecord(r)}
-                                                        className="p-1.5 rounded-lg text-slate-500 hover:text-red-600 hover:bg-red-50"
-                                                        title="ลบ"
-                                                    >
-                                                        <Trash size={17} />
                                                     </button>
                                                 </div>
                                             </td>

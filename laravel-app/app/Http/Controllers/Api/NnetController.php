@@ -171,46 +171,4 @@ final class NnetController extends Controller
             'data' => $record,
         ]);
     }
-
-    public function destroy(Request $request, int $id): JsonResponse
-    {
-        abort_unless(in_array($request->user()->role, ['teacher', 'admin', 'super_admin'], true), 403, 'ไม่มีสิทธิ์ลบข้อมูล N-NET');
-
-        $record = $this->service->getRecord($id, $request->user());
-        $this->service->deleteRecord($id, $request->user());
-
-        AuditService::logFromRequest($request, 'nnet.record_deleted', 'nnet_result', $id, [
-            'student_name' => $record->student_name,
-            'academic_year' => $record->academic_year,
-            'round' => $record->round,
-        ]);
-
-        return response()->json([
-            'message' => 'ลบข้อมูลผลสอบเรียบร้อยแล้ว',
-        ]);
-    }
-
-    public function clear(Request $request): JsonResponse
-    {
-        abort_unless(in_array($request->user()->role, ['admin', 'super_admin'], true), 403, 'เฉพาะผู้ดูแลระบบเท่านั้นที่สามารถล้างข้อมูลทั้งชุดได้');
-
-        $filters = $request->validate([
-            'district_id' => ['nullable', 'integer'],
-            'education_level' => ['nullable', 'integer', 'in:1,2,3'],
-            'academic_year' => ['nullable', 'string', 'max:8'],
-            'round' => ['nullable', 'integer', 'in:1,2'],
-        ]);
-
-        $count = $this->service->clearRecords($filters, $request->user());
-
-        AuditService::logFromRequest($request, 'nnet.records_cleared', 'nnet_result', null, [
-            'filters' => array_filter($filters),
-            'deleted_count' => $count,
-        ]);
-
-        return response()->json([
-            'message' => "ล้างข้อมูลเรียบร้อยแล้วทั้งหมด {$count} รายการ",
-            'deleted_count' => $count,
-        ]);
-    }
 }

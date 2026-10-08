@@ -10,6 +10,7 @@ use App\Domain\Students\Models\Student;
 use App\Domain\Students\Repositories\StudentRepository;
 use App\Domain\Students\Support\AcademicTerm;
 use App\Domain\Students\Support\ImportedScoreCalculationAudit;
+use App\Domain\Students\Support\StudentGroupOptions;
 use App\Models\User;
 
 final readonly class StudentAcademicService
@@ -125,21 +126,18 @@ final readonly class StudentAcademicService
 
         $accessible = $this->directory->accessibleStudents($viewer);
         $levels = [];
-        $groups = [];
         foreach ($accessible as $student) {
             $levels[$student->level] = $student->levelLabel;
-            $groupCode = trim($student->groupCode);
-            if ($groupCode !== '') {
-                $groups[$groupCode] = trim($student->groupName) ?: $groupCode;
-            }
         }
+        $selectedLevel = ! empty($filters['level']) ? (int) $filters['level'] : null;
+        $groups = StudentGroupOptions::fromStudents($accessible, $selectedLevel);
 
         $students = array_values(array_filter($accessible, static function (Student $student) use ($filters): bool {
-            if (isset($filters['level']) && (int) $filters['level'] !== $student->level) {
+            if (! empty($filters['level']) && (int) $filters['level'] !== $student->level) {
                 return false;
             }
             $group = trim((string) ($filters['group'] ?? ''));
-            if ($group !== '' && ! in_array($group, [$student->groupCode, $student->groupName], true)) {
+            if ($group !== '' && ! StudentGroupOptions::matches($student, $group)) {
                 return false;
             }
             $search = mb_strtolower(trim((string) ($filters['search'] ?? '')));
@@ -239,8 +237,6 @@ final readonly class StudentAcademicService
             $right['level'], $right['code'],
         ]);
         ksort($levels);
-        ksort($groups, SORT_NATURAL);
-
         $page = max(1, (int) ($filters['page'] ?? 1));
         $perPage = min(1000, max(1, (int) ($filters['per_page'] ?? 250)));
         $total = count($rows);
@@ -254,11 +250,7 @@ final readonly class StudentAcademicService
                 array_keys($levels),
                 array_values($levels),
             ),
-            'groups' => array_map(
-                static fn (string $value, string $label): array => ['value' => $value, 'label' => $label],
-                array_keys($groups),
-                array_values($groups),
-            ),
+            'groups' => $groups,
             'subjects' => $subjectOptions,
             'score_labels' => [
                 'คะแนนบันทึกการเรียนรู้',

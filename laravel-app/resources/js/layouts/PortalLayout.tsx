@@ -236,7 +236,8 @@ export function PortalLayout() {
     const changeDistrict = (districtId: string) => {
         window.localStorage.setItem('sena-district-id', districtId);
         setSelectedDistrictId(districtId);
-        queryClient.removeQueries({ predicate: (query) => !['auth', 'system'].includes(String(query.queryKey[0])) });
+        const isDistrictScoped = (query: { queryKey: readonly unknown[] }) => !['auth', 'system'].includes(String(query.queryKey[0]));
+        void queryClient.invalidateQueries({ predicate: isDistrictScoped });
     };
 
     if (me.isPending) {

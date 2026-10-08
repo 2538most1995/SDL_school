@@ -45,6 +45,31 @@ final class CourseRegistrationTest extends TestCase
             ]);
     }
 
+    public function test_registration_group_options_are_unique_names_scoped_by_level_and_still_filter_rows(): void
+    {
+        Sanctum::actingAs($this->viewer('admin'));
+
+        $response = $this->getJson('/api/v1/learning/registration/workspace?level=2')
+            ->assertOk();
+
+        $groups = $response->json('data.groups');
+        $labels = array_column($groups, 'label');
+        $this->assertSame($labels, array_values(array_unique($labels)));
+        $this->assertNotEmpty($groups);
+        foreach ($response->json('data.items') as $item) {
+            $this->assertSame(2, $item['level']);
+        }
+
+        $selectedGroup = $groups[0]['value'];
+        $filtered = $this->getJson('/api/v1/learning/registration/workspace?level=2&group='.urlencode($selectedGroup))
+            ->assertOk()
+            ->json('data.items');
+        $this->assertNotEmpty($filtered);
+        foreach ($filtered as $item) {
+            $this->assertSame($selectedGroup, $item['group_name']);
+        }
+    }
+
     public function test_teacher_workspace_is_scoped_to_assigned_groups(): void
     {
         // 6650100001 is in group SENA-P1-A

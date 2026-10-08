@@ -76,6 +76,7 @@ type AdminUser = {
     group: string | null;
     status: string;
     can_edit: boolean;
+    can_delete: boolean;
 };
 type AvailableGroup = { code: string; name: string; label: string; level: string | null; advisor: string | null; meeting_place: string | null };
 type UserDraft = { username: string; password: string; first_name: string; last_name: string; role: AdminRole; assigned_groups: string[] };
@@ -182,6 +183,13 @@ export function AdminUsersPage() {
             void queryClient.invalidateQueries({ queryKey: ['admin', 'users'] });
         },
     });
+    const remove = useMutation({
+        meta: { notification: { success: 'ลบบัญชีครูเรียบร้อยแล้ว' } },
+        mutationFn: (user: AdminUser) => sendFeatureData<{ deleted: boolean; id: number }>(`/api/v1/admin/users/${user.id}`, 'DELETE'),
+        onSuccess: () => {
+            void queryClient.invalidateQueries({ queryKey: ['admin', 'users'] });
+        },
+    });
     const allowedRoles = (users.data?.meta.allowed_roles as AdminRole[] | undefined) ?? ['teacher', 'admin'];
     const availableGroups = (users.data?.meta.available_groups as AvailableGroup[] | undefined) ?? [];
     const groupOptions = [
@@ -207,6 +215,11 @@ export function AdminUsersPage() {
         save.reset();
         setEditing(user);
     }
+    function confirmDelete(user: AdminUser) {
+        if (window.confirm(`ยืนยันลบบัญชีครู “${user.display_name}” (${user.username})?\n\nบัญชีนี้จะเข้าสู่ระบบไม่ได้อีก แต่ข้อมูลการเรียนที่เคยสร้างไว้จะยังคงอยู่`)) {
+            remove.mutate(user);
+        }
+    }
     function toggleGroup(code: string) {
         setDraft({ ...draft, assigned_groups: draft.assigned_groups.includes(code) ? draft.assigned_groups.filter((item) => item !== code) : [...draft.assigned_groups, code] });
     }
@@ -217,8 +230,8 @@ export function AdminUsersPage() {
         { accessorKey: 'district_name', header: 'พื้นที่', size: 160, meta: { compactSize: 90 } },
         { accessorKey: 'group', header: 'กลุ่มที่รับผิดชอบ', size: 220, meta: { compactSize: 112 }, cell: ({ getValue }) => <span className="text-xs">{getValue<string | null>() || 'ทุกกลุ่ม'}</span> },
         { accessorKey: 'status', header: 'สถานะ', size: 115, meta: { compactSize: 70, compactTextAlign: 'center' }, cell: () => <StatusBadge tone="success">ใช้งาน</StatusBadge> },
-        { id: 'actions', header: 'จัดการ', size: 120, meta: { compactSize: 46, compactTextAlign: 'center' }, enableSorting: false, cell: ({ row }) => row.original.can_edit ? <button type="button" onClick={() => openEdit(row.original)} className={`${secondaryButton} responsive-table-action`} aria-label={`แก้ไข ${row.original.display_name}`}><PencilSimple size={15} weight="bold" /> <span>แก้ไข</span></button> : <span className="text-xs text-slate-400">สงวนสิทธิ์</span> },
-    ], []);
+        { id: 'actions', header: 'จัดการ', size: 220, meta: { compactSize: 126, compactTextAlign: 'center' }, enableSorting: false, cell: ({ row }) => row.original.can_edit ? <div className="flex justify-center gap-1.5"><button type="button" onClick={() => openEdit(row.original)} className={`${secondaryButton} responsive-table-action`} aria-label={`แก้ไข ${row.original.display_name}`}><PencilSimple size={15} weight="bold" /> <span>แก้ไข</span></button>{row.original.can_delete && <button type="button" onClick={() => confirmDelete(row.original)} disabled={remove.isPending} className="responsive-table-action inline-flex items-center justify-center gap-1.5 rounded-full border border-rose-200 bg-white px-4 py-2.5 text-sm font-bold text-rose-700 transition hover:bg-rose-50 disabled:cursor-not-allowed disabled:opacity-50" aria-label={`ลบบัญชีครู ${row.original.display_name}`}>{remove.isPending ? <CircleNotch size={15} className="animate-spin" /> : <Trash size={15} weight="bold" />} <span>ลบครู</span></button>}</div> : <span className="text-xs text-slate-400">สงวนสิทธิ์</span> },
+    ], [remove.isPending]);
 
     return (
         <div>
@@ -228,7 +241,7 @@ export function AdminUsersPage() {
                 <StatTile label="ครู" value={(users.data?.data ?? []).filter((item) => item.role === 'teacher').length} detail="บัญชีผู้สอน" icon={UserCircleGear} />
                 <StatTile label="ผู้ดูแล" value={(users.data?.data ?? []).filter((item) => item.role.includes('admin')).length} detail="บัญชีสิทธิ์สูง" icon={ShieldCheck} tone="amber" />
             </div>
-            <Panel title="บัญชีผู้ใช้งาน" description="ทุกการเพิ่มและแก้ไขจะบันทึกประวัติ พร้อมบังคับขอบเขตอำเภอจากบัญชีที่เข้าสู่ระบบ" action={<div className="flex flex-wrap gap-2"><label className="relative"><MagnifyingGlass size={16} className="absolute left-3 top-3 text-slate-400" /><input value={search} onChange={(event) => setSearch(event.target.value)} placeholder="ค้นหาชื่อหรือบัญชี" className={`${inputClass} w-52 pl-9`} /></label><select value={role} onChange={(event) => setRole(event.target.value)} className={`${inputClass} w-auto`}><option value="all">ทุกบทบาท</option>{allowedRoles.map((item) => <option key={item} value={item}>{roleLabels[item]}</option>)}</select></div>}>
+            <Panel title="บัญชีผู้ใช้งาน" description="ทุกการเพิ่ม แก้ไข และลบบัญชีครูจะบันทึกประวัติ พร้อมบังคับขอบเขตอำเภอจากบัญชีที่เข้าสู่ระบบ" action={<div className="flex flex-wrap gap-2"><label className="relative"><MagnifyingGlass size={16} className="absolute left-3 top-3 text-slate-400" /><input value={search} onChange={(event) => setSearch(event.target.value)} placeholder="ค้นหาชื่อหรือบัญชี" className={`${inputClass} w-52 pl-9`} /></label><select value={role} onChange={(event) => setRole(event.target.value)} className={`${inputClass} w-auto`}><option value="all">ทุกบทบาท</option>{allowedRoles.map((item) => <option key={item} value={item}>{roleLabels[item]}</option>)}</select></div>}>
                 {users.isPending && <QuerySkeleton />}
                 {users.isError && <QueryError onRetry={() => users.refetch()} />}
                 {users.data && <DataTable data={filtered} columns={columns} minWidth="wide" />}
