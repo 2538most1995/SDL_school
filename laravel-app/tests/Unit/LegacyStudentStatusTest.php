@@ -24,7 +24,8 @@ final class LegacyStudentStatusTest extends TestCase
         yield 'blank finish cause means studying' => ['', '', 'studying', 'กำลังศึกษา'];
         yield 'null finish cause means studying' => [null, null, 'studying', 'กำลังศึกษา'];
         yield 'finish cause one means graduated' => ['1', '', 'graduated', 'จบการศึกษา'];
-        yield 'finish cause zero is inactive' => ['0', '', 'inactive', 'พ้นสภาพ/รอตรวจสอบ'];
+        yield 'finish cause zero means studying' => ['0', '', 'studying', 'กำลังศึกษา'];
+        yield 'finish cause double zero means studying' => ['00', '', 'studying', 'กำลังศึกษา'];
         yield 'any other finish cause is inactive' => ['2', '', 'inactive', 'พ้นสภาพ/รอตรวจสอบ'];
     }
 }

@@ -984,8 +984,7 @@ final readonly class CourseRegistrationService
         $policy['compulsory_selected'] = $termLoad($compulsorySubjects);
         $policy['elective_selected'] = $termLoad($electiveSubjects);
         $policy['total_selected'] = round($policy['compulsory_selected'] + $policy['elective_selected'], 2);
-        $policy['is_credit_complete'] = $student->status === 'studying'
-            && $policy['compulsory_earned'] >= $policy['compulsory_required']
+        $policy['is_credit_complete'] = $policy['compulsory_earned'] >= $policy['compulsory_required']
             && $policy['elective_earned'] >= $policy['elective_required'];
         $remainingCompulsory = array_values(array_filter(
             CurriculumCatalog::compulsorySubjects($student->level),
@@ -1000,15 +999,13 @@ final readonly class CourseRegistrationService
             $remainingCompulsory,
         );
         $policy['new_registration_plan'] = $newRegistrationPlan;
-        $policy['can_complete_with_new_registration'] = $student->status === 'studying'
-            && ! $policy['is_credit_complete']
+        $policy['can_complete_with_new_registration'] = ! $policy['is_credit_complete']
             && $newRegistrationPlan !== null;
-        $policy['is_potential_graduate'] = $student->status === 'studying'
-            && ! $policy['is_credit_complete']
+        $policy['is_potential_graduate'] = ! $policy['is_credit_complete']
             && ($policy['can_complete_with_new_registration']
                 || ($policy['projected_compulsory'] >= $policy['compulsory_required']
                     && $policy['projected_elective'] >= $policy['elective_required']));
-        $policy['is_active_student'] = $student->status === 'studying';
+        $policy['is_active_student'] = true;
         $policy['uses_final_term_limit'] = $policy['is_credit_complete'] || $policy['is_potential_graduate'];
         $policy['applicable_limit'] = $policy['uses_final_term_limit']
             ? $policy['final_term_limit']

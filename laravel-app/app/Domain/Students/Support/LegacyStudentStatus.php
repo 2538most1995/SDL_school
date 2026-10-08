@@ -11,10 +11,14 @@ final class LegacyStudentStatus
             return ['transferred', 'ย้ายสถานศึกษา'];
         }
 
-        return match (trim((string) $finishCause)) {
-            '' => ['studying', 'กำลังศึกษา'],
-            '1' => ['graduated', 'จบการศึกษา'],
-            default => ['inactive', 'พ้นสภาพ/รอตรวจสอบ'],
-        };
+        $cause = trim((string) $finishCause);
+        if ($cause === '' || $cause === '0' || $cause === '00') {
+            return ['studying', 'กำลังศึกษา'];
+        }
+        if ($cause === '1') {
+            return ['graduated', 'จบการศึกษา'];
+        }
+
+        return ['inactive', 'พ้นสภาพ/รอตรวจสอบ'];
     }
 }

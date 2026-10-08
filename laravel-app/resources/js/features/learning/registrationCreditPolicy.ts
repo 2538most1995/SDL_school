@@ -71,14 +71,16 @@ export function evaluateLiveRegistrationPolicy(
     const totalSelected = Math.round((compulsorySelected + electiveSelected) * 100) / 100;
     const projectedCompulsory = Math.round((policy.compulsory_earned + projectedAddition(compulsorySubjects)) * 100) / 100;
     const projectedElective = Math.round((policy.elective_earned + projectedAddition(electiveSubjects)) * 100) / 100;
-    const isCreditComplete = policy.is_active_student
-        && policy.compulsory_earned >= policy.compulsory_required
-        && policy.elective_earned >= policy.elective_required;
-    const isPotentialGraduate = policy.is_active_student
-        && !isCreditComplete
+    const compEarned = Number(policy.compulsory_earned) || 0;
+    const compRequired = Number(policy.compulsory_required) || 0;
+    const elecEarned = Number(policy.elective_earned) || 0;
+    const elecRequired = Number(policy.elective_required) || 0;
+
+    const isCreditComplete = compEarned >= compRequired && elecEarned >= elecRequired;
+    const isPotentialGraduate = !isCreditComplete
         && (policy.can_complete_with_new_registration === true
-            || (projectedCompulsory >= policy.compulsory_required
-                && projectedElective >= policy.elective_required));
+            || (projectedCompulsory >= compRequired
+                && projectedElective >= elecRequired));
     const usesFinalTermLimit = isCreditComplete || isPotentialGraduate;
     const applicableLimit = usesFinalTermLimit ? policy.final_term_limit : policy.regular_limit;
     const excessCredits = Math.round(Math.max(0, totalSelected - applicableLimit) * 100) / 100;
