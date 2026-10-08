@@ -98,3 +98,42 @@ test('new registration opportunity remains visible before subjects are selected'
     assert.equal(policy.is_credit_complete, false);
     assert.equal(policy.applicable_limit, 17);
 });
+
+test('selected credit summary updates when registration checkboxes change', () => {
+    const compulsorySubjects = [
+        { code: 'บังคับ-1', credits: 3, registered: false, transferred: false },
+    ];
+    const electiveSubjects = [
+        { code: 'เลือก-1', credits: 2, registered: false, transferred: false },
+    ];
+
+    const beforeSelection = evaluateLiveRegistrationPolicy(basePolicy, compulsorySubjects, electiveSubjects);
+    const afterSelection = evaluateLiveRegistrationPolicy(
+        basePolicy,
+        compulsorySubjects.map((subject) => ({ ...subject, registered: true })),
+        electiveSubjects.map((subject) => ({ ...subject, registered: true })),
+    );
+
+    assert.deepEqual(
+        [beforeSelection.compulsory_selected, beforeSelection.elective_selected, beforeSelection.total_selected],
+        [0, 0, 0],
+    );
+    assert.deepEqual(
+        [afterSelection.compulsory_selected, afterSelection.elective_selected, afterSelection.total_selected],
+        [3, 2, 5],
+    );
+});
+
+test('selected credit summary ignores incomplete, duplicate and transferred rows', () => {
+    const policy = evaluateLiveRegistrationPolicy(basePolicy, [
+        { code: 'บังคับ-1', credits: 3, registered: true, transferred: false },
+        { code: 'บังคับ-1', credits: 3, registered: true, transferred: false },
+    ], [
+        { code: '', credits: 2, registered: true, transferred: false },
+        { code: 'เลือก-1', credits: 2, registered: false, transferred: true },
+    ]);
+
+    assert.equal(policy.compulsory_selected, 3);
+    assert.equal(policy.elective_selected, 0);
+    assert.equal(policy.total_selected, 3);
+});

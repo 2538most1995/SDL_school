@@ -329,26 +329,15 @@ export function CourseRegistrationPage() {
         setIsFormDirty(false);
     };
 
-    // Calculate term totals
-    const termCompulsoryCredits = useMemo(
-        () => compulsoryRows
-            .filter((row) => row.registered && !row.transferred)
-            .reduce((total, row) => total + (row.credits || 0), 0),
-        [compulsoryRows],
-    );
-    const termElectiveCredits = useMemo(
-        () => electiveRows
-            .filter((row) => row.registered && !row.transferred)
-            .reduce((total, row) => total + (row.credits || 0), 0),
-        [electiveRows],
-    );
-    const termTotalCredits = termCompulsoryCredits + termElectiveCredits;
     const liveCreditPolicy = useMemo(
         () => studentDetail?.credit_policy
             ? evaluateLiveRegistrationPolicy(studentDetail.credit_policy, compulsoryRows, electiveRows)
             : null,
         [compulsoryRows, electiveRows, studentDetail?.credit_policy],
     );
+    const termCompulsoryCredits = liveCreditPolicy?.compulsory_selected ?? 0;
+    const termElectiveCredits = liveCreditPolicy?.elective_selected ?? 0;
+    const termTotalCredits = liveCreditPolicy?.total_selected ?? 0;
 
     // Save mutation
     const saveMutation = useMutation({
@@ -1172,25 +1161,6 @@ export function CourseRegistrationPage() {
                                 </div>
                             </div>
 
-                            <details open className="rounded-2xl border border-purple-200 bg-white p-4 shadow-2xs">
-                                <summary className="cursor-pointer font-black text-purple-950">
-                                    วิชาเลือกที่ผ่านแล้วและเทียบโอน ({studentDetail.completed_electives?.length ?? 0} วิชา · {studentDetail.requirements.elective_earned} หน่วยกิต)
-                                </summary>
-                                {(studentDetail.completed_electives?.length ?? 0) === 0 ? (
-                                    <p className="mt-3 text-sm text-slate-600">ยังไม่พบผลการเรียนวิชาเลือกที่ผ่านในข้อมูลนำเข้า</p>
-                                ) : (
-                                    <div className="mt-3 overflow-x-auto">
-                                        <table className="w-full min-w-[620px] text-sm">
-                                            <thead><tr className="border-b bg-purple-50 text-left text-purple-950"><th className="p-2">รหัสวิชา</th><th className="p-2">รายวิชา</th><th className="p-2">ภาคเรียน</th><th className="p-2 text-center">หน่วยกิต</th><th className="p-2">ผลการเรียน</th></tr></thead>
-                                            <tbody>{studentDetail.completed_electives.map((subject) => <tr key={subject.code} className="border-b border-slate-100"><td className="p-2 font-mono">{subject.code}</td><td className="p-2 font-semibold">{subject.name}</td><td className="p-2">{subject.term || '-'}</td><td className="p-2 text-center">{subject.credits}</td><td className="p-2">{subject.transferred ? 'เทียบโอน' : `เกรด ${subject.grade ?? '-'}`}</td></tr>)}</tbody>
-                                        </table>
-                                    </div>
-                                )}
-                                {studentDetail.requirements.source_elective_earned !== studentDetail.requirements.elective_earned && (
-                                    <p className="mt-3 text-xs text-amber-800">ยอดรวมจากระเบียน ITW คือ {studentDetail.requirements.source_elective_earned} หน่วยกิต; ยอดที่ใช้ตรวจจบคือ {studentDetail.requirements.elective_earned} หน่วยกิตจากรหัสวิชาที่ผ่านจริงแบบไม่ซ้ำ</p>
-                                )}
-                            </details>
-
                             {liveCreditPolicy?.can_complete_with_new_registration && liveCreditPolicy.new_registration_plan && (
                                 <div className="rounded-2xl border border-amber-200 bg-amber-50 p-4 text-sm text-amber-950">
                                     <p className="font-black">มีโอกาสจบหากลงทะเบียนใหม่และผ่านตามเกณฑ์</p>
@@ -1315,10 +1285,16 @@ export function CourseRegistrationPage() {
                                                             checked={row.registered}
                                                             aria-label={`ลงทะเบียนวิชา ${row.name}`}
                                                             onChange={(e) => {
-                                                                const updated = [...compulsoryRows];
-                                                                updated[idx].registered = e.target.checked;
-                                                                if (e.target.checked) updated[idx].transferred = false;
-                                                                setCompulsoryRows(updated);
+                                                                const checked = e.target.checked;
+                                                                setCompulsoryRows((rows) => rows.map((subject, subjectIndex) => (
+                                                                    subjectIndex === idx
+                                                                        ? {
+                                                                            ...subject,
+                                                                            registered: checked,
+                                                                            transferred: checked ? false : subject.transferred,
+                                                                        }
+                                                                        : subject
+                                                                )));
                                                                 setIsFormDirty(true);
                                                             }}
                                                             className="size-4.5 rounded border-slate-300 text-brand-600 focus:ring-brand-500"
@@ -1330,10 +1306,16 @@ export function CourseRegistrationPage() {
                                                             checked={row.transferred}
                                                             aria-label={`เทียบโอนวิชา ${row.name}`}
                                                             onChange={(e) => {
-                                                                const updated = [...compulsoryRows];
-                                                                updated[idx].transferred = e.target.checked;
-                                                                if (e.target.checked) updated[idx].registered = false;
-                                                                setCompulsoryRows(updated);
+                                                                const checked = e.target.checked;
+                                                                setCompulsoryRows((rows) => rows.map((subject, subjectIndex) => (
+                                                                    subjectIndex === idx
+                                                                        ? {
+                                                                            ...subject,
+                                                                            transferred: checked,
+                                                                            registered: checked ? false : subject.registered,
+                                                                        }
+                                                                        : subject
+                                                                )));
                                                                 setIsFormDirty(true);
                                                             }}
                                                             className="size-4.5 rounded border-slate-300 text-brand-600 focus:ring-brand-500"
@@ -1570,10 +1552,16 @@ export function CourseRegistrationPage() {
                                                                 checked={row.registered}
                                                                 aria-label={`ลงทะเบียนวิชา ${row.name}`}
                                                                 onChange={(e) => {
-                                                                    const updated = [...electiveRows];
-                                                                    updated[idx].registered = e.target.checked;
-                                                                    if (e.target.checked) updated[idx].transferred = false;
-                                                                    setElectiveRows(updated);
+                                                                    const checked = e.target.checked;
+                                                                    setElectiveRows((rows) => rows.map((subject, subjectIndex) => (
+                                                                        subjectIndex === idx
+                                                                            ? {
+                                                                                ...subject,
+                                                                                registered: checked,
+                                                                                transferred: checked ? false : subject.transferred,
+                                                                            }
+                                                                            : subject
+                                                                    )));
                                                                     setIsFormDirty(true);
                                                                 }}
                                                                 className="size-4.5 rounded border-slate-300 text-brand-600 focus:ring-brand-500"
@@ -1585,10 +1573,16 @@ export function CourseRegistrationPage() {
                                                                 checked={row.transferred}
                                                                 aria-label={`เทียบโอนวิชา ${row.name}`}
                                                                 onChange={(e) => {
-                                                                    const updated = [...electiveRows];
-                                                                    updated[idx].transferred = e.target.checked;
-                                                                    if (e.target.checked) updated[idx].registered = false;
-                                                                    setElectiveRows(updated);
+                                                                    const checked = e.target.checked;
+                                                                    setElectiveRows((rows) => rows.map((subject, subjectIndex) => (
+                                                                        subjectIndex === idx
+                                                                            ? {
+                                                                                ...subject,
+                                                                                transferred: checked,
+                                                                                registered: checked ? false : subject.registered,
+                                                                            }
+                                                                            : subject
+                                                                    )));
                                                                     setIsFormDirty(true);
                                                                 }}
                                                                 className="size-4.5 rounded border-slate-300 text-brand-600 focus:ring-brand-500"
@@ -1629,6 +1623,25 @@ export function CourseRegistrationPage() {
                                 </div>
                             </div>
 
+                            <details open className="rounded-2xl border border-purple-200 bg-white p-4 shadow-2xs">
+                                <summary className="cursor-pointer font-black text-purple-950">
+                                    วิชาเลือกที่ผ่านแล้วและเทียบโอน ({studentDetail.completed_electives?.length ?? 0} วิชา · {studentDetail.requirements.elective_earned} หน่วยกิต)
+                                </summary>
+                                {(studentDetail.completed_electives?.length ?? 0) === 0 ? (
+                                    <p className="mt-3 text-sm text-slate-600">ยังไม่พบผลการเรียนวิชาเลือกที่ผ่านในข้อมูลนำเข้า</p>
+                                ) : (
+                                    <div className="mt-3 overflow-x-auto">
+                                        <table className="w-full min-w-[620px] text-sm">
+                                            <thead><tr className="border-b bg-purple-50 text-left text-purple-950"><th className="p-2">รหัสวิชา</th><th className="p-2">รายวิชา</th><th className="p-2">ภาคเรียน</th><th className="p-2 text-center">หน่วยกิต</th><th className="p-2">ผลการเรียน</th></tr></thead>
+                                            <tbody>{studentDetail.completed_electives.map((subject) => <tr key={subject.code} className="border-b border-slate-100"><td className="p-2 font-mono">{subject.code}</td><td className="p-2 font-semibold">{subject.name}</td><td className="p-2">{subject.term || '-'}</td><td className="p-2 text-center">{subject.credits}</td><td className="p-2">{subject.transferred ? 'เทียบโอน' : `เกรด ${subject.grade ?? '-'}`}</td></tr>)}</tbody>
+                                        </table>
+                                    </div>
+                                )}
+                                {studentDetail.requirements.source_elective_earned !== studentDetail.requirements.elective_earned && (
+                                    <p className="mt-3 text-xs text-amber-800">ยอดรวมจากระเบียน ITW คือ {studentDetail.requirements.source_elective_earned} หน่วยกิต; ยอดที่ใช้ตรวจจบคือ {studentDetail.requirements.elective_earned} หน่วยกิตจากรหัสวิชาที่ผ่านจริงแบบไม่ซ้ำ</p>
+                                )}
+                            </details>
+
                             {/* Additional Notes */}
                             <div className="rounded-2xl border border-slate-200 bg-white p-6 shadow-sm space-y-2">
                                 <label className="block text-sm font-bold text-slate-800">
@@ -1648,10 +1661,21 @@ export function CourseRegistrationPage() {
 
                             {/* Bottom Fixed Action Bar */}
                             <div className="flex flex-wrap items-center justify-between gap-4 rounded-2xl bg-slate-900 p-4 text-white shadow-xl">
-                                <div>
-                                    <div className="text-xs text-slate-400">สรุปการลงทะเบียนในเทอมนี้</div>
-                                    <div className="text-base font-black">
-                                        วิชาบังคับ {termCompulsoryCredits} นก. + วิชาเลือก {termElectiveCredits} นก. = รวม {termTotalCredits} หน่วยกิต
+                                <div className="min-w-0 flex-1" aria-live="polite" aria-atomic="true">
+                                    <div className="text-xs text-slate-400">สรุปหน่วยกิตที่เลือกลงทะเบียน (อัปเดตทันที)</div>
+                                    <div className="mt-2 grid max-w-xl grid-cols-3 gap-2 text-center">
+                                        <div className="rounded-xl bg-white/8 px-3 py-2">
+                                            <div className="text-[11px] text-slate-300">วิชาบังคับ</div>
+                                            <div className="text-lg font-black">{termCompulsoryCredits} นก.</div>
+                                        </div>
+                                        <div className="rounded-xl bg-white/8 px-3 py-2">
+                                            <div className="text-[11px] text-slate-300">วิชาเลือก</div>
+                                            <div className="text-lg font-black">{termElectiveCredits} นก.</div>
+                                        </div>
+                                        <div className="rounded-xl bg-brand-500 px-3 py-2">
+                                            <div className="text-[11px] text-white/80">รวมทั้งหมด</div>
+                                            <div className="text-lg font-black">{termTotalCredits} นก.</div>
+                                        </div>
                                     </div>
                                 </div>
                                 <div className="flex items-center gap-2">
