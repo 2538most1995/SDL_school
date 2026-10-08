@@ -1659,44 +1659,74 @@ export function CourseRegistrationPage() {
                                 />
                             </div>
 
-                            {/* Bottom Fixed Action Bar */}
-                            <div className="flex flex-wrap items-center justify-between gap-4 rounded-2xl bg-slate-900 p-4 text-white shadow-xl">
-                                <div className="min-w-0 flex-1" aria-live="polite" aria-atomic="true">
-                                    <div className="text-xs text-slate-400">สรุปหน่วยกิตที่เลือกลงทะเบียน (อัปเดตทันที)</div>
-                                    <div className="mt-2 grid max-w-xl grid-cols-3 gap-2 text-center">
-                                        <div className="rounded-xl bg-white/8 px-3 py-2">
-                                            <div className="text-[11px] text-slate-300">วิชาบังคับ</div>
-                                            <div className="text-lg font-black">{termCompulsoryCredits} นก.</div>
+                            <div aria-hidden="true" className="h-44 sm:h-36" />
+
+                            {/* Persistent Bottom Action Bar */}
+                            <div className="fixed inset-x-0 bottom-0 z-40 pointer-events-none pb-[calc(0.75rem+env(safe-area-inset-bottom))] lg:pl-[266px]">
+                                <div className="mx-auto max-w-[1500px] px-3 sm:px-6 lg:px-8 pointer-events-auto">
+                                    <div className="flex flex-col gap-3 rounded-2xl border border-white/10 bg-slate-900/95 p-3 text-white shadow-2xl ring-1 ring-slate-950/20 backdrop-blur-xl sm:p-4 xl:flex-row xl:items-center xl:justify-between xl:gap-4">
+                                        <div className="min-w-0 flex-1" aria-live="polite" aria-atomic="true">
+                                            <div className="flex flex-wrap items-center gap-2">
+                                                <span className="text-xs font-semibold text-slate-300">
+                                                    สรุปหน่วยกิตที่เลือกลงทะเบียน (อัปเดตทันที)
+                                                </span>
+                                                {isFormDirty ? (
+                                                    <span className="inline-flex items-center gap-1 rounded-md border border-amber-400/30 bg-amber-400/20 px-2 py-0.5 text-[10px] font-bold text-amber-300">
+                                                        <span className="size-1.5 rounded-full bg-amber-400 animate-pulse" />
+                                                        ยังไม่บันทึกการแก้ไข
+                                                    </span>
+                                                ) : studentDetail.is_saved ? (
+                                                    <span className="inline-flex items-center gap-1 rounded-md border border-emerald-400/30 bg-emerald-400/20 px-2 py-0.5 text-[10px] font-bold text-emerald-300">
+                                                        <span className="size-1.5 rounded-full bg-emerald-400" />
+                                                        บันทึกแล้ว
+                                                    </span>
+                                                ) : null}
+                                                {liveCreditPolicy?.exceeds_limit && (
+                                                    <span className="inline-flex items-center gap-1 rounded-md border border-rose-400/30 bg-rose-500/25 px-2 py-0.5 text-[10px] font-bold text-rose-300">
+                                                        เกินเพดาน {liveCreditPolicy.excess_credits} นก. (จำกัด {liveCreditPolicy.applicable_limit})
+                                                    </span>
+                                                )}
+                                            </div>
+                                            <div className="mt-2 grid max-w-xl grid-cols-3 gap-2 text-center">
+                                                <div className="rounded-xl bg-white/10 px-2 py-2 sm:px-3">
+                                                    <div className="text-[11px] text-slate-300">วิชาบังคับ</div>
+                                                    <div className="text-base sm:text-lg font-black">{termCompulsoryCredits} นก.</div>
+                                                </div>
+                                                <div className="rounded-xl bg-white/10 px-2 py-2 sm:px-3">
+                                                    <div className="text-[11px] text-slate-300">วิชาเลือก</div>
+                                                    <div className="text-base sm:text-lg font-black">{termElectiveCredits} นก.</div>
+                                                </div>
+                                                <div className={`rounded-xl px-2 py-2 sm:px-3 transition-colors ${
+                                                    liveCreditPolicy?.exceeds_limit ? 'bg-rose-600' : 'bg-brand-600'
+                                                }`}>
+                                                    <div className="text-[11px] text-white/80">รวมทั้งหมด</div>
+                                                    <div className="text-base sm:text-lg font-black">{termTotalCredits} นก.</div>
+                                                </div>
+                                            </div>
                                         </div>
-                                        <div className="rounded-xl bg-white/8 px-3 py-2">
-                                            <div className="text-[11px] text-slate-300">วิชาเลือก</div>
-                                            <div className="text-lg font-black">{termElectiveCredits} นก.</div>
-                                        </div>
-                                        <div className="rounded-xl bg-brand-500 px-3 py-2">
-                                            <div className="text-[11px] text-white/80">รวมทั้งหมด</div>
-                                            <div className="text-lg font-black">{termTotalCredits} นก.</div>
+                                        <div className="grid grid-cols-2 gap-2 sm:flex sm:items-center xl:gap-3">
+                                            <button
+                                                type="button"
+                                                onClick={() =>
+                                                    openPrintDocument({ scope: 'student', student: selectedStudentCode })
+                                                }
+                                                className="inline-flex min-h-11 items-center justify-center gap-2 rounded-xl border border-white/20 bg-white/10 px-4 py-2 text-xs sm:text-sm font-bold text-white shadow-sm transition hover:bg-white/20 active:scale-95 cursor-pointer whitespace-nowrap"
+                                                title="พิมพ์ใบลงทะเบียน (PDF)"
+                                            >
+                                                <Printer size={18} />
+                                                <span>พิมพ์ใบลงทะเบียน (PDF)</span>
+                                            </button>
+                                            <button
+                                                type="button"
+                                                onClick={() => saveMutation.mutate()}
+                                                disabled={saveMutation.isPending || liveCreditPolicy?.exceeds_limit === true}
+                                                className="inline-flex min-h-11 items-center justify-center gap-2 rounded-xl bg-brand-600 px-5 py-2 text-xs sm:text-sm font-bold text-white shadow-lg shadow-brand-600/30 transition hover:bg-brand-500 active:scale-95 disabled:opacity-50 disabled:cursor-not-allowed cursor-pointer whitespace-nowrap"
+                                            >
+                                                <FloppyDisk size={18} />
+                                                <span>{saveMutation.isPending ? 'กำลังบันทึก...' : 'บันทึกการลงทะเบียน'}</span>
+                                            </button>
                                         </div>
                                     </div>
-                                </div>
-                                <div className="flex items-center gap-2">
-                                    <Button
-                                        appearance="outline"
-                                        className="!text-white !border-white/30 hover:!bg-white/10"
-                                        icon={<Printer size={18} />}
-                                        onClick={() =>
-                                            openPrintDocument({ scope: 'student', student: selectedStudentCode })
-                                        }
-                                    >
-                                        พิมพ์ใบลงทะเบียน (PDF)
-                                    </Button>
-                                    <Button
-                                        appearance="primary"
-                                        icon={<FloppyDisk size={18} />}
-                                        onClick={() => saveMutation.mutate()}
-                                        disabled={saveMutation.isPending || liveCreditPolicy?.exceeds_limit === true}
-                                    >
-                                        {saveMutation.isPending ? 'กำลังบันทึก...' : 'บันทึกการลงทะเบียน'}
-                                    </Button>
                                 </div>
                             </div>
                         </>
