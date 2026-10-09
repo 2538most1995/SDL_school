@@ -28,7 +28,7 @@ import { showSuccessAlert } from '../../lib/feedback';
 import { downloadExcel } from '../../lib/excel';
 import { retainSelectedFilterOption } from '../../lib/filterOptions';
 import { getFeatureDataWithDemo, sendFeatureData } from '../api';
-import { buildImportedScoresPath, formatAuditIssueText, formatAuditStatusText, importedAssessmentLabels, isLowImportedMidtermScore, normalizeAssessmentScores } from './importedScores';
+import { auditIssueColorClass, buildImportedScoresPath, formatAuditIssueText, formatAuditStatusText, importedAssessmentLabels, isLowImportedMidtermScore, normalizeAssessmentScores } from './importedScores';
 import { isScoreGridNavigationKey, nextScoreGridPosition, scoreGridCellKey } from './scoreGridNavigation';
 
 type ScoreComponent = {
@@ -599,8 +599,8 @@ function ImportedScoresPage({ sourceNavigation }: { sourceNavigation: ReactNode 
                             <td className="border-b border-slate-200 px-3 py-3 text-center"><span className="inline-flex min-w-10 justify-center rounded-lg bg-slate-100 px-2 py-1 font-mono font-black text-slate-900">{row.grade || '-'}</span></td>
                             <td className="border-b border-slate-200 px-4 py-3">
                                 {row.calculation_audit.status === 'incorrect' ? (
-                                    <ul className="space-y-1 text-xs font-semibold leading-5 text-orange-700">
-                                        {row.calculation_audit.issues.map((issue) => <li key={issue.code}>{auditIssueText(issue)}</li>)}
+                                    <ul className="space-y-1 text-xs font-semibold leading-5">
+                                        {row.calculation_audit.issues.map((issue) => <li key={issue.code} className={auditIssueColorClass(issue.code)}>{auditIssueText(issue)}</li>)}
                                     </ul>
                                 ) : row.calculation_audit.status === 'correct' ? (
                                     <span className="text-xs font-bold text-emerald-700">คำนวณตรงกัน</span>

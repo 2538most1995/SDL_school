@@ -81,6 +81,10 @@ export function formatAuditIssueText(issue: { label: string; expected: number | 
     return `${issue.label}: ควรเป็น ${formatAuditScore(issue.expected)} แต่ ITW เป็น ${formatAuditScore(issue.actual)}`;
 }
 
+export function auditIssueColorClass(code: string): string {
+    return code === 'grade' ? 'text-orange-700' : 'text-rose-800';
+}
+
 export function formatAuditStatusText(row: {
     final_exam_score?: number | null;
     grade?: string | null;

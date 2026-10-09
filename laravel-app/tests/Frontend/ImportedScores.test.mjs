@@ -1,6 +1,7 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
 import {
+    auditIssueColorClass,
     buildImportedScoresPath,
     formatAuditIssueText,
     formatAuditScore,
@@ -11,6 +12,12 @@ import {
     normalizeAssessmentScores,
 } from '../../resources/js/features/learning/importedScores.ts';
 import { retainSelectedFilterOption } from '../../resources/js/lib/filterOptions.ts';
+
+test('grade mismatches are orange while arithmetic mismatches remain red, including mixed rows', () => {
+    assert.deepEqual(['assessment_total', 'total_score', 'grade'].map(auditIssueColorClass), [
+        'text-rose-800', 'text-rose-800', 'text-orange-700',
+    ]);
+});
 
 test('midterm warning highlights only finite scores strictly below 40, including a real zero', () => {
     for (const score of [0, 15, 39, 39.99]) {
