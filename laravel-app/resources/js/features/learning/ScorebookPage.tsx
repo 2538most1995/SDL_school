@@ -6,6 +6,7 @@ import {
     Database,
     FileXls,
     FloppyDisk,
+    FunnelSimpleX,
     ListChecks,
     MagnifyingGlass,
     NotePencil,
@@ -24,7 +25,7 @@ import { useDemoRole } from '../../context/DemoRoleContext';
 import { showSuccessAlert } from '../../lib/feedback';
 import { downloadExcel } from '../../lib/excel';
 import { getFeatureDataWithDemo, sendFeatureData } from '../api';
-import { buildImportedScoresPath, importedAssessmentLabels, normalizeAssessmentScores } from './importedScores';
+import { buildImportedScoresPath, importedAssessmentLabels, normalizeAssessmentScores, retainSelectedFilterOption } from './importedScores';
 import { isScoreGridNavigationKey, nextScoreGridPosition, scoreGridCellKey } from './scoreGridNavigation';
 
 type ScoreComponent = {
@@ -239,6 +240,9 @@ function ImportedScoresPage({ sourceNavigation }: { sourceNavigation: ReactNode 
     const [perPage, setPerPage] = useState(100);
     const [showScoreLegend, setShowScoreLegend] = useState(false);
     const [showIncorrectOnly, setShowIncorrectOnly] = useState(false);
+    const levelLabels = useRef(new Map<string, string>());
+    const groupLabels = useRef(new Map<string, string>());
+    const subjectLabels = useRef(new Map<string, string>());
     const deferredSearch = useDeferredValue(search);
     const importedScores = useQuery({
         queryKey: ['learning', 'scores', 'imported', term, level, group, subjectCode, deferredSearch, showIncorrectOnly, page, perPage],
@@ -268,8 +272,53 @@ function ImportedScoresPage({ sourceNavigation }: { sourceNavigation: ReactNode 
         if ((data?.subjects.length ?? 0) > 0) return data!.subjects.map((option) => scoreOption(option));
         return Array.from(new Map(rows.filter((row) => row.subject_code).map((row) => [row.subject_code, `${row.subject_code} ${row.subject_name}`.trim()])).entries()).map(([value, label]) => ({ value, label }));
     }, [data?.subjects, rows]);
+    useEffect(() => {
+        levelOptions.forEach((option) => levelLabels.current.set(option.value, option.label));
+    }, [levelOptions]);
+    useEffect(() => {
+        groupOptions.forEach((option) => groupLabels.current.set(option.value, option.label));
+    }, [groupOptions]);
+    useEffect(() => {
+        subjectOptions.forEach((option) => subjectLabels.current.set(option.value, option.label));
+    }, [subjectOptions]);
+    const retainedLevelOptions = useMemo(
+        () => retainSelectedFilterOption(levelOptions, level, levelLabels.current.get(level)),
+        [level, levelOptions],
+    );
+    const retainedGroupOptions = useMemo(
+        () => retainSelectedFilterOption(groupOptions, group, groupLabels.current.get(group)),
+        [group, groupOptions],
+    );
+    const retainedSubjectOptions = useMemo(
+        () => retainSelectedFilterOption(subjectOptions, subjectCode, subjectLabels.current.get(subjectCode)),
+        [subjectCode, subjectOptions],
+    );
+    const retainedTermOptions = useMemo(
+        () => retainSelectedFilterOption(
+            (data?.terms ?? []).map((value) => ({ value, label: value })),
+            term && term !== 'all' ? term : '',
+            term,
+        ),
+        [data?.terms, term],
+    );
     const studentCount = useMemo(() => new Set(rows.map((row) => `${row.level}|${row.student_code}`)).size, [rows]);
     const subjectCount = useMemo(() => new Set(rows.map((row) => `${row.level}|${row.subject_code}`)).size, [rows]);
+    const hasActiveFilters = search.trim() !== ''
+        || (term !== '' && term !== 'all')
+        || level !== ''
+        || group !== ''
+        || subjectCode !== ''
+        || showIncorrectOnly;
+
+    const clearFilters = () => {
+        setSearch('');
+        setTerm('all');
+        setLevel('');
+        setGroup('');
+        setSubjectCode('');
+        setShowIncorrectOnly(false);
+        setPage(1);
+    };
 
     const exportImportedScores = () => downloadExcel(`คะแนนนำเข้า-${data?.selected_term ?? (term || 'ทั้งหมด')}`, [{
         name: 'คะแนนนำเข้า',
@@ -298,13 +347,28 @@ function ImportedScoresPage({ sourceNavigation }: { sourceNavigation: ReactNode 
 
         <p role="status" className="mb-5 rounded-xl border border-sky-200 bg-sky-50 p-4 text-sm leading-6 text-sky-950"><strong>ข้อมูลอ่านอย่างเดียว:</strong> คะแนนในตารางนี้มาจากไฟล์ผลการเรียน ITW51 ที่นำเข้า (GRADE.DBF) แสดงผลคะแนนย่อย 1-9, กลางภาค (คะแนนเก็บ), ปลายภาค และเกรดจริง</p>
 
-        <Panel title="ตัวกรองคะแนนนำเข้า" description="จำกัดผลลัพธ์ตามภาคเรียน ระดับ กลุ่มเรียน รายวิชา หรือค้นหาชื่อและรหัสนักศึกษา">
+        <Panel
+            title="ตัวกรองคะแนนนำเข้า"
+            description="จำกัดผลลัพธ์ตามภาคเรียน ระดับ กลุ่มเรียน รายวิชา หรือค้นหาชื่อและรหัสนักศึกษา"
+            action={
+                <Button
+                    type="button"
+                    aria-label="ล้างตัวกรอง"
+                    appearance="outline"
+                    icon={<FunnelSimpleX size={18} weight="bold" />}
+                    onClick={clearFilters}
+                    disabled={!hasActiveFilters}
+                >
+                    ล้างตัวกรอง
+                </Button>
+            }
+        >
             <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-5">
                 <Field label="ค้นหา"><Input value={search} onChange={(_, input) => { setSearch(input.value); setPage(1); }} contentBefore={<MagnifyingGlass size={18} aria-hidden="true" />} placeholder="ชื่อหรือรหัสนักศึกษา" size="large" /></Field>
-                <Field label="ภาคเรียน"><Select value={term} onChange={(_, option) => { setTerm(option.value); setGroup(''); setSubjectCode(''); setPage(1); }} size="large"><option value="all">ทุกภาคเรียน</option>{(data?.terms ?? []).map((item) => <option key={item} value={item}>{item}</option>)}</Select></Field>
-                <Field label="ระดับการศึกษา"><Select value={level} onChange={(_, option) => { setLevel(option.value); setGroup(''); setSubjectCode(''); setPage(1); }} size="large"><option value="">ทุกระดับ</option>{levelOptions.map((option) => <option key={option.value} value={option.value}>{option.label}</option>)}</Select></Field>
-                <Field label="กลุ่มเรียน"><Select value={group} onChange={(_, option) => { setGroup(option.value); setPage(1); }} size="large"><option value="">ทุกกลุ่มเรียน</option>{groupOptions.map((option) => <option key={option.value} value={option.value}>{option.label}</option>)}</Select></Field>
-                <Field label="รายวิชา"><Select value={subjectCode} onChange={(_, option) => { setSubjectCode(option.value); setPage(1); }} size="large"><option value="">ทุกรายวิชา</option>{subjectOptions.map((option) => <option key={option.value} value={option.value}>{option.label}</option>)}</Select></Field>
+                <Field label="ภาคเรียน"><Select value={term} onChange={(_, option) => { setTerm(option.value); setPage(1); }} size="large"><option value="all">ทุกภาคเรียน</option>{retainedTermOptions.map((option) => <option key={option.value} value={option.value}>{option.label}</option>)}</Select></Field>
+                <Field label="ระดับการศึกษา"><Select value={level} onChange={(_, option) => { setLevel(option.value); setPage(1); }} size="large"><option value="">ทุกระดับ</option>{retainedLevelOptions.map((option) => <option key={option.value} value={option.value}>{option.label}</option>)}</Select></Field>
+                <Field label="กลุ่มเรียน"><Select value={group} onChange={(_, option) => { setGroup(option.value); setPage(1); }} size="large"><option value="">ทุกกลุ่มเรียน</option>{retainedGroupOptions.map((option) => <option key={option.value} value={option.value}>{option.label}</option>)}</Select></Field>
+                <Field label="รายวิชา"><Select value={subjectCode} onChange={(_, option) => { setSubjectCode(option.value); setPage(1); }} size="large"><option value="">ทุกรายวิชา</option>{retainedSubjectOptions.map((option) => <option key={option.value} value={option.value}>{option.label}</option>)}</Select></Field>
             </div>
         </Panel>
 

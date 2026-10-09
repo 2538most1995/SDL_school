@@ -5,6 +5,7 @@ import {
     importedAssessmentLabels,
     ITW51_ASSESSMENT_LABELS,
     normalizeAssessmentScores,
+    retainSelectedFilterOption,
 } from '../../resources/js/features/learning/importedScores.ts';
 
 test('imported score path sends only active filters with the backend field names', () => {
@@ -53,4 +54,18 @@ test('imported score columns always contain nine labelled assessments', () => {
 test('imported assessment values are normalized to nine safe numeric cells', () => {
     assert.deepEqual(normalizeAssessmentScores([12, null, Number.NaN, 7.5]).slice(0, 5), [12, null, null, 7.5, null]);
     assert.equal(normalizeAssessmentScores([1, 2]).length, 9);
+});
+
+test('selected filters remain visible when the refreshed option set no longer contains them', () => {
+    const options = retainSelectedFilterOption(
+        [{ value: 'สค32034', label: 'การเงินเพื่อชีวิต' }],
+        'พว31001',
+        'วิทยาศาสตร์',
+    );
+
+    assert.deepEqual(options, [
+        { value: 'พว31001', label: 'วิทยาศาสตร์' },
+        { value: 'สค32034', label: 'การเงินเพื่อชีวิต' },
+    ]);
+    assert.equal(retainSelectedFilterOption(options, 'พว31001'), options);
 });
