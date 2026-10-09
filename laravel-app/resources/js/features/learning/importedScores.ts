@@ -11,6 +11,10 @@ export type ImportedScoreFilters = {
 
 export const IMPORTED_ASSESSMENT_COUNT = 9;
 
+export function isLowImportedMidtermScore(value: number | null | undefined): boolean {
+    return typeof value === 'number' && Number.isFinite(value) && value < 40;
+}
+
 export const ITW51_ASSESSMENT_LABELS: readonly string[] = [
     'คะแนนบันทึกการเรียนรู้',
     'คะแนนบันทึกการฝึกทักษะ',

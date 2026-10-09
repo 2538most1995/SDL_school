@@ -3,10 +3,20 @@ import test from 'node:test';
 import {
     buildImportedScoresPath,
     importedAssessmentLabels,
+    isLowImportedMidtermScore,
     ITW51_ASSESSMENT_LABELS,
     normalizeAssessmentScores,
 } from '../../resources/js/features/learning/importedScores.ts';
 import { retainSelectedFilterOption } from '../../resources/js/lib/filterOptions.ts';
+
+test('midterm warning highlights only finite scores strictly below 40, including a real zero', () => {
+    for (const score of [0, 15, 39, 39.99]) {
+        assert.equal(isLowImportedMidtermScore(score), true, `score ${score} should be highlighted`);
+    }
+    for (const score of [40, 40.01, 50, 60, null, undefined, Number.NaN, Number.POSITIVE_INFINITY, Number.NEGATIVE_INFINITY, '39', '']) {
+        assert.equal(isLowImportedMidtermScore(score), false, `score ${score} should keep its normal colour`);
+    }
+});
 
 test('imported score path sends only active filters with the backend field names', () => {
     assert.equal(
@@ -67,5 +77,6 @@ test('selected filters remain visible when the refreshed option set no longer co
         { value: 'พว31001', label: 'วิทยาศาสตร์' },
         { value: 'สค32034', label: 'การเงินเพื่อชีวิต' },
     ]);
-    assert.equal(retainSelectedFilterOption(options, 'พว31001'), options);
+    // The helper returns a copy; verify that selecting it again preserves values.
+    assert.deepEqual(retainSelectedFilterOption(options, 'พว31001'), options);
 });

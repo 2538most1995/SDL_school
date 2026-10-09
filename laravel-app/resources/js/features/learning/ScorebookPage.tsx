@@ -26,7 +26,7 @@ import { showSuccessAlert } from '../../lib/feedback';
 import { downloadExcel } from '../../lib/excel';
 import { retainSelectedFilterOption } from '../../lib/filterOptions';
 import { getFeatureDataWithDemo, sendFeatureData } from '../api';
-import { buildImportedScoresPath, importedAssessmentLabels, normalizeAssessmentScores } from './importedScores';
+import { buildImportedScoresPath, importedAssessmentLabels, isLowImportedMidtermScore, normalizeAssessmentScores } from './importedScores';
 import { isScoreGridNavigationKey, nextScoreGridPosition, scoreGridCellKey } from './scoreGridNavigation';
 
 type ScoreComponent = {
@@ -346,7 +346,7 @@ function ImportedScoresPage({ sourceNavigation }: { sourceNavigation: ReactNode 
         <PageHeader category="learning" title="คะแนนจากข้อมูลนำเข้า" description="ดูคะแนนย่อย คะแนนเก็บ คะแนนสอบปลายภาค และเกรดจากไฟล์ผลการเรียนที่นำเข้า (GRADE.DBF)" icon={Database} actions={rows.length > 0 ? <Button type="button" appearance="outline" icon={<FileXls size={18} weight="bold" />} onClick={exportImportedScores}>ส่งออก Excel</Button> : undefined} />
         {sourceNavigation}
 
-        <p role="status" className="mb-5 rounded-xl border border-sky-200 bg-sky-50 p-4 text-sm leading-6 text-sky-950"><strong>ข้อมูลอ่านอย่างเดียว:</strong> คะแนนในตารางนี้มาจากไฟล์ผลการเรียน ITW51 ที่นำเข้า (GRADE.DBF) แสดงผลคะแนนย่อย 1-9, กลางภาค (คะแนนเก็บ), ปลายภาค และเกรดจริง</p>
+        <p role="status" className="mb-5 rounded-xl border border-sky-200 bg-sky-50 p-4 text-sm leading-6 text-sky-950"><strong>ข้อมูลอ่านอย่างเดียว:</strong> คะแนนในตารางนี้มาจากไฟล์ผลการเรียน ITW51 ที่นำเข้า (GRADE.DBF) แสดงผลคะแนนย่อย 1-9, กลางภาค (คะแนนเก็บ), ปลายภาค และเกรดจริง <span className="font-bold text-rose-700">คะแนนกลางภาคต่ำกว่า 40 แสดงเป็นสีแดง</span></p>
 
         <Panel
             title="ตัวกรองคะแนนนำเข้า"
@@ -449,7 +449,7 @@ function ImportedScoresPage({ sourceNavigation }: { sourceNavigation: ReactNode 
                             <td className="border-b border-r border-slate-200 px-4 py-3"><p className="font-black text-slate-950">{row.subject_name || '-'}</p><p className="mt-1 font-mono text-xs text-slate-500">{row.subject_code}</p></td>
                             <td className="border-b border-r border-slate-200 px-3 py-3 text-center text-slate-700">{row.learning_method || '-'}</td>
                             {normalizeAssessmentScores(row.assessment_scores).map((score, scoreIndex) => <td key={scoreIndex} className="border-b border-r border-slate-200 px-2 py-3 text-center font-mono tabular-nums text-slate-700">{nullableScore(score)}</td>)}
-                            <td className="border-b border-r border-slate-200 bg-sky-50/60 px-3 py-3 text-center font-mono font-black tabular-nums text-sky-900">{nullableScore(row.midterm_score)}</td>
+                            <td className={`border-b border-r border-slate-200 bg-sky-50/60 px-3 py-3 text-center font-mono font-black tabular-nums ${isLowImportedMidtermScore(row.midterm_score) ? 'text-rose-700' : 'text-sky-900'}`}>{nullableScore(row.midterm_score)}{isLowImportedMidtermScore(row.midterm_score) && <span className="sr-only"> คะแนนกลางภาคต่ำกว่า 40</span>}</td>
                             <td className="border-b border-r border-slate-200 bg-amber-50/60 px-3 py-3 text-center font-mono font-black tabular-nums text-amber-900">{nullableScore(row.final_exam_score)}</td>
                             <td className="border-b border-r border-slate-200 bg-brand-50/60 px-3 py-3 text-center font-mono font-black tabular-nums text-brand-900">{nullableScore(row.total_score)}</td>
                             <td className="border-b border-slate-200 px-3 py-3 text-center"><span className="inline-flex min-w-10 justify-center rounded-lg bg-slate-100 px-2 py-1 font-mono font-black text-slate-900">{row.grade || '-'}</span></td>
