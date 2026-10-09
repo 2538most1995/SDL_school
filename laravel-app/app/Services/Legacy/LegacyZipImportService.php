@@ -126,6 +126,7 @@ final class LegacyZipImportService
                 'batch_key' => $batchKey,
                 'academic_term' => $academicTerm,
                 'source_filename' => $archive->getClientOriginalName(),
+                'dbf_null_handling' => 'foxpro_bitmap_v1',
                 'table_count' => count($tableReport),
                 'row_count' => $rowCount,
                 'warning_count' => count($replacement['warnings']),
@@ -503,7 +504,7 @@ final class LegacyZipImportService
         // exactly while avoiding the off-page overhead incurred by making every
         // small code, date and grade a TEXT column.
         $length = max(1, min(16_000, (int) $field['length']));
-        if (in_array(strtoupper((string) $field['type']), ['I', 'T', 'B', 'G', 'P', 'Y'], true)) {
+        if (in_array(strtoupper((string) $field['type']), ['0', 'I', 'T', 'B', 'G', 'P', 'Y'], true)) {
             $length = min(16_000, $length * 2);
         }
 

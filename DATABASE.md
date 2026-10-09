@@ -77,6 +77,8 @@ Column names from older migration definitions (`academic_term`, `room_code`, `st
 
 Successful ZIP/DBF imports create physical names such as `db_import_{timestamp}_{hash}_{level}_{type}` inside the default database. Supported types are `student`, `grade`, `subject`, `activity`, `virtue`, `group`, and optional `schedule`/`field`. Identifiers must come from the validated batch registry and pass the repository identifier whitelist; values use bindings.
 
+Visual FoxPro nullable columns use descriptor flag `0x02` and a hidden `_NullFlags` bitmap. The reader imports a flagged field as SQL NULL even when stale numeric/text bytes remain in the DBF record. Null bits are allocated in descriptor order only to nullable fields, with a preceding length bit for Varchar/Varbinary; missing/undersized bitmaps are rejected. Type `0` system bitmap values are stored losslessly as hexadecimal in a VARCHAR of twice the source byte length. No migration changes existing imported tables: reimport the source ZIP to replace batches produced by the old reader. Import validation/audit summaries mark the fixed reader with `dbf_null_handling = foxpro_bitmap_v1`.
+
 ## Important relationships and query patterns
 
 - District scope is mandatory for admin/teacher reads and writes.

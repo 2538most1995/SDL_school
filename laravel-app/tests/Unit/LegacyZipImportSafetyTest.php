@@ -179,22 +179,145 @@ final class LegacyZipImportSafetyTest extends TestCase
         }
     }
 
+    public function test_import_preserves_foxpro_null_scores_even_when_old_numbers_remain_in_the_record(): void
+    {
+        $database = $this->workspace.'/nullable-import.sqlite';
+        touch($database);
+        config()->set('database.connections.nullable_import_test', [
+            'driver' => 'sqlite',
+            'database' => $database,
+            'prefix' => '',
+        ]);
+        config()->set('database.default', 'nullable_import_test');
+        DB::purge('nullable_import_test');
+
+        $path = $this->workspace.'/nullable-grade.dbf';
+        File::put($path, $this->dbf([
+            ['name' => 'std_code', 'type' => 'C', 'length' => 20],
+            ['name' => 'semestry', 'type' => 'C', 'length' => 4],
+            ['name' => 'sub_code', 'type' => 'C', 'length' => 8],
+            ['name' => 'midterm', 'type' => 'N', 'length' => 3, 'flags' => 2],
+            ['name' => 'final', 'type' => 'N', 'length' => 3, 'flags' => 2],
+            ['name' => 'total', 'type' => 'N', 'length' => 3],
+            ['name' => 'grade', 'type' => 'C', 'length' => 3],
+            ['name' => 'final1', 'type' => 'N', 'length' => 3, 'flags' => 2],
+            ['name' => 'final2', 'type' => 'N', 'length' => 3, 'flags' => 2],
+            ['name' => '_NullFlags', 'type' => '0', 'length' => 1, 'flags' => 5],
+        ], [
+            ['12141200006913000001', '69/1', 'TEST01', '50', '32', '50', 'X', '19', '32', "\x0e"],
+            ['12141200006913000002', '69/1', 'TEST01', '50', '32', '82', '4', '19', '32', "\x00"],
+            ['12141200006913000003', '69/1', 'TEST01', '0', '0', '0', '0', '0', '0', "\x00"],
+        ]));
+
+        try {
+            $report = (new \ReflectionMethod(LegacyZipImportService::class, 'importDbf'))->invoke(
+                app(LegacyZipImportService::class), 'import_1700000098_abcd', '3', 'grade', $path,
+            );
+            $rows = DB::connection('nullable_import_test')->table($report['physical_table'])->orderBy('_id')->get();
+            $this->assertSame(3, $report['row_count']);
+            $this->assertSame('6913000001', $rows[0]->_perf_std10);
+            $this->assertSame('50', $rows[0]->midterm);
+            $this->assertNull($rows[0]->final);
+            $this->assertNull($rows[0]->final1);
+            $this->assertNull($rows[0]->final2);
+            $this->assertSame('50', $rows[0]->total);
+            $this->assertSame('X', $rows[0]->grade);
+            $this->assertSame('0e', $rows[0]->_nullflags);
+            $this->assertSame('32', $rows[1]->final);
+            $this->assertSame('82', $rows[1]->total);
+            $this->assertSame('0', $rows[2]->midterm);
+            $this->assertSame('0', $rows[2]->final);
+        } finally {
+            DB::purge('nullable_import_test');
+        }
+    }
+
+    public function test_null_bitmap_uses_only_nullable_columns_and_can_span_multiple_bytes(): void
+    {
+        $fields = [['name' => 'label', 'type' => 'C', 'length' => 5]];
+        $values = ['fixed'];
+        for ($index = 0; $index < 10; $index++) {
+            $fields[] = ['name' => 'score'.$index, 'type' => 'N', 'length' => 3, 'flags' => 2];
+            $values[] = (string) $index;
+        }
+        $fields[] = ['name' => '_NullFlags', 'type' => '0', 'length' => 2, 'flags' => 5];
+        $values[] = "\x81\x02";
+        $path = $this->workspace.'/bitmap.dbf';
+        File::put($path, $this->dbf($fields, [$values]));
+        $reader = new VisualFoxProDbfReader($path);
+        $row = iterator_to_array($reader->records())[0];
+
+        $this->assertSame('fixed', $row['label']);
+        $this->assertNull($row['score0']);
+        $this->assertSame('1', $row['score1']);
+        $this->assertNull($row['score7']);
+        $this->assertSame('8', $row['score8']);
+        $this->assertNull($row['score9']);
+        $this->assertSame('8102', $row['_nullflags']);
+        $this->assertSame([$row], iterator_to_array($reader->records()), 'Repeated import passes must read the same values.');
+    }
+
+    public function test_varchar_length_bits_do_not_shift_nullable_score_bits(): void
+    {
+        $path = $this->workspace.'/varchar-bitmap.dbf';
+        File::put($path, $this->dbf([
+            ['name' => 'label', 'type' => 'V', 'length' => 4, 'flags' => 2],
+            ['name' => 'final', 'type' => 'N', 'length' => 3, 'flags' => 2],
+            ['name' => '_NullFlags', 'type' => '0', 'length' => 1, 'flags' => 5],
+        ], [
+            ['old', '32', "\x02"],
+            ['old', '32', "\x04"],
+        ]));
+        $rows = iterator_to_array((new VisualFoxProDbfReader($path))->records());
+
+        $this->assertNull($rows[0]['label']);
+        $this->assertSame('32', $rows[0]['final']);
+        $this->assertNull($rows[1]['final']);
+    }
+
+    public function test_nullable_dbf_without_a_null_bitmap_is_rejected_instead_of_importing_stale_values(): void
+    {
+        $path = $this->workspace.'/missing-bitmap.dbf';
+        File::put($path, $this->dbf([
+            ['name' => 'final', 'type' => 'N', 'length' => 3, 'flags' => 2],
+        ], [['32']]));
+
+        $this->expectException(RuntimeException::class);
+        $this->expectExceptionMessage('สถานะ NULL');
+        new VisualFoxProDbfReader($path);
+    }
+
+    public function test_dbf_with_an_undersized_null_bitmap_is_rejected(): void
+    {
+        $fields = [];
+        for ($index = 0; $index < 9; $index++) {
+            $fields[] = ['name' => 'score'.$index, 'type' => 'N', 'length' => 3, 'flags' => 2];
+        }
+        $fields[] = ['name' => '_NullFlags', 'type' => '0', 'length' => 1, 'flags' => 5];
+        $path = $this->workspace.'/short-bitmap.dbf';
+        File::put($path, $this->dbf($fields, []));
+
+        $this->expectException(RuntimeException::class);
+        $this->expectExceptionMessage('สถานะ NULL');
+        new VisualFoxProDbfReader($path);
+    }
+
     /**
-     * @param  list<array{name: string, type: string, length: int}>  $fields
+     * @param  list<array{name: string, type: string, length: int, flags?: int}>  $fields
      * @param  list<list<string>>  $records
      */
     private function dbf(array $fields, array $records): string
     {
         $headerLength = 32 + (count($fields) * 32) + 1;
         $recordLength = 1 + array_sum(array_column($fields, 'length'));
-        $binary = chr(0x03).str_repeat("\0", 3)
+        $binary = chr(0x30).str_repeat("\0", 3)
             .pack('Vvv', count($records), $headerLength, $recordLength)
             .str_repeat("\0", 20);
 
         foreach ($fields as $field) {
             $binary .= str_pad($field['name'], 11, "\0")
                 .$field['type'].str_repeat("\0", 4)
-                .chr($field['length']).chr(0).str_repeat("\0", 14);
+                .chr($field['length']).chr(0).chr($field['flags'] ?? 0).str_repeat("\0", 13);
         }
         $binary .= chr(0x0D);
         foreach ($records as $record) {

@@ -19,6 +19,12 @@ final class VisualFoxProDbfReader
 
     private int $recordLength;
 
+    /** @var array<string, int> Field name to bit position in the FoxPro null bitmap. */
+    private array $nullBits = [];
+
+    /** @var array{offset: int, length: int}|null */
+    private ?array $nullFlags = null;
+
     public function __construct(private readonly string $path)
     {
         $handle = @fopen($path, 'rb');
@@ -63,11 +69,16 @@ final class VisualFoxProDbfReader
                 continue;
             }
 
+            $nullBitmap = $this->nullFlags === null ? '' : substr($buffer, $this->nullFlags['offset'], $this->nullFlags['length']);
             $offset = 1;
             $record = [];
             foreach ($this->fields as $field) {
                 $raw = substr($buffer, $offset, $field['length']);
-                $record[$field['name']] = $this->decode($raw, $field['type']);
+                $nullBit = $this->nullBits[$field['name']] ?? null;
+                // VFP can retain old field bytes after setting a value to NULL.
+                // The bitmap, not those bytes, determines whether a value exists.
+                $isNull = $nullBit !== null && (ord($nullBitmap[intdiv($nullBit, 8)]) & (1 << ($nullBit % 8))) !== 0;
+                $record[$field['name']] = $isNull ? null : $this->decode($raw, $field['type']);
                 $offset += $field['length'];
             }
             yield $record;
@@ -98,6 +109,9 @@ final class VisualFoxProDbfReader
             throw new RuntimeException('ไม่สามารถอ่านโครงสร้างคอลัมน์ DBF ได้');
         }
 
+        $isVisualFoxPro = in_array(ord($header[0]), [0x30, 0x31, 0x32], true);
+        $fieldOffset = 1;
+        $bitmapBits = 0;
         while (ftell($this->handle) < $this->headerLength - 1) {
             $descriptor = fread($this->handle, 32);
             if ($descriptor === false || $descriptor === '') {
@@ -120,21 +134,44 @@ final class VisualFoxProDbfReader
                 throw new RuntimeException("พบชื่อคอลัมน์ซ้ำใน DBF: {$name}");
             }
 
+            $type = strtoupper($descriptor[11]);
+            if ($isVisualFoxPro) {
+                // Varchar/Varbinary reserve a length bit before their optional
+                // null bit; otherwise later nullable columns would shift.
+                if (in_array($type, ['V', 'Q'], true)) {
+                    $bitmapBits++;
+                }
+                if ((ord($descriptor[18]) & 0x02) !== 0) {
+                    $this->nullBits[$name] = $bitmapBits++;
+                }
+                if ($name === '_nullflags' && $type === '0') {
+                    $this->nullFlags = ['offset' => $fieldOffset, 'length' => $length];
+                }
+            }
             $this->fields[] = [
                 'name' => $name,
-                'type' => strtoupper($descriptor[11]),
+                'type' => $type,
                 'length' => $length,
                 'decimal' => ord($descriptor[17]),
             ];
+            $fieldOffset += $length;
         }
 
         if ($this->fields === [] || 1 + array_sum(array_column($this->fields, 'length')) > $this->recordLength) {
             throw new RuntimeException('จำนวนคอลัมน์และความยาวระเบียน DBF ไม่สัมพันธ์กัน');
         }
+        if ($bitmapBits > 0 && ($this->nullFlags === null || $bitmapBits > $this->nullFlags['length'] * 8)) {
+            throw new RuntimeException('สถานะ NULL ของไฟล์ DBF ไม่ครบหรือไม่สัมพันธ์กับคอลัมน์');
+        }
     }
 
     private function decode(string $raw, string $type): ?string
     {
+        if ($type === '0') {
+            // Keep system flags losslessly, including zero and high-bit bytes,
+            // without putting non-UTF-8 binary data into VARCHAR import columns.
+            return bin2hex($raw);
+        }
         if (in_array($type, ['I', 'T', 'B', 'G', 'P', 'Y'], true)) {
             return trim($raw, "\0 \t\r\n") === '' ? null : bin2hex($raw);
         }

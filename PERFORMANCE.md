@@ -104,6 +104,13 @@
 
 ## Benchmark
 
+### Visual FoxPro NULL import correction (2026-10-09)
+
+- The reader now resolves `_NullFlags` in each streamed record before decoding nullable columns. Field-to-bit positions and the bitmap offset are calculated once from the header; import still uses the existing batch INSERTs and indexes, without queries per record.
+- End-to-end import of the user-supplied ZIP into a separate temporary SQLite database succeeded: 20 tables, 204,323 imported rows, zero warnings, 4.161 seconds on the local machine. The source ZIP remained unchanged. This is a local verification measurement, not a production MySQL benchmark.
+- The investigated row retained coursework/total 50 and the source special grade, while FINAL/FINAL1/FINAL2 were SQL NULL despite stale numeric bytes in the source. The calculation audit no longer raised the spurious total-82 warning.
+- Existing batches require reimport from their original ZIP after deployment; no in-place real-data repair or schema migration was run. Live MySQL import time and memory remain `Not verified`.
+
 | Metric | Before | After | Evidence |
 | --- | --- | --- | --- |
 | User directory query count | `1 + N` | `1` | static review + `LegacyPortalReadPerformanceTest` (1 user) |
