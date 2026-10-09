@@ -21,6 +21,19 @@ final class ImportedScoreCalculationAudit
      */
     public static function inspect(Grade $grade): array
     {
+        // กรณีไม่มีคะแนนปลายภาคเรียน หรือขาดสอบ/ไม่ผ่าน/ไม่มีสิทธิ์สอบ หรือเทียบโอน ไม่ต้องแจ้งเตือนการคำนวณ
+        if (
+            $grade->transferred
+            || $grade->finalExamScore === null
+            || in_array(trim((string) $grade->grade), ['ข', 'ม', 'มส', 'ผ', 'มผ', 'ร'], true)
+        ) {
+            return [
+                'status' => 'not_checkable',
+                'check_count' => 0,
+                'issues' => [],
+            ];
+        }
+
         $issues = [];
         $checkCount = 0;
         $assessmentScores = array_values(array_filter(
@@ -39,7 +52,7 @@ final class ImportedScoreCalculationAudit
             );
         }
 
-        if ($grade->courseworkScore !== null && $grade->finalExamScore !== null && $grade->totalScore !== null) {
+        if ($grade->courseworkScore !== null && $grade->totalScore !== null) {
             $checkCount++;
             self::compare(
                 $issues,
@@ -50,27 +63,11 @@ final class ImportedScoreCalculationAudit
             );
         }
 
-        $totalForGrade = $grade->totalScore ?? ($grade->courseworkScore !== null && $grade->finalExamScore !== null ? $grade->courseworkScore + $grade->finalExamScore : null);
+        $totalForGrade = $grade->totalScore ?? ($grade->courseworkScore !== null ? $grade->courseworkScore + $grade->finalExamScore : null);
 
-        if (! $grade->transferred && $grade->grade !== null && trim($grade->grade) !== '') {
+        if ($grade->grade !== null && trim($grade->grade) !== '') {
             $gradeValue = trim($grade->grade);
-            $isAbsentOrIneligible = in_array($gradeValue, ['ข', 'ม', 'มส'], true);
-
-            if ($isAbsentOrIneligible) {
-                // ไม่มีคะแนนปลายภาคแล้วได้เกรด ข/ม/มส ถือว่าถูกต้องตามระเบียบ
-                // แต่ถ้ามีคะแนนปลายภาคแล้วยังได้เกรด ข/ม/มส จะตรวจเทียบกับคะแนนรวม
-                if ($grade->finalExamScore !== null) {
-                    $checkCount++;
-                    $expectedGrade = $totalForGrade !== null ? self::gradeForTotal($totalForGrade) : 0.0;
-                    self::compare(
-                        $issues,
-                        'grade',
-                        'เกรดไม่ตรงกับคะแนนรวม',
-                        $expectedGrade,
-                        $gradeValue,
-                    );
-                }
-            } elseif ($totalForGrade !== null) {
+            if ($totalForGrade !== null) {
                 $checkCount++;
                 self::compare(
                     $issues,

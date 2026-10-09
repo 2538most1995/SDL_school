@@ -80,3 +80,23 @@ export function formatAuditScore(value: number | string | null | undefined): str
 export function formatAuditIssueText(issue: { label: string; expected: number | string; actual: number | string }): string {
     return `${issue.label}: ควรเป็น ${formatAuditScore(issue.expected)} แต่ ITW เป็น ${formatAuditScore(issue.actual)}`;
 }
+
+export function formatAuditStatusText(row: {
+    final_exam_score?: number | null;
+    grade?: string | null;
+    calculation_audit: {
+        status: 'correct' | 'incorrect' | 'not_checkable';
+        issues: Array<{ label: string; expected: number | string; actual: number | string }>;
+    };
+}): string {
+    if (row.calculation_audit.status === 'incorrect') {
+        return row.calculation_audit.issues.map(formatAuditIssueText).join(' | ');
+    }
+    if (row.calculation_audit.status === 'correct') {
+        return 'คำนวณตรงกัน';
+    }
+    if (row.final_exam_score === null || row.final_exam_score === undefined || row.grade === 'ข' || row.grade === 'ม' || row.grade === 'มส') {
+        return 'ไม่มีคะแนนปลายภาค';
+    }
+    return 'ข้อมูลไม่ครบสำหรับตรวจ';
+}

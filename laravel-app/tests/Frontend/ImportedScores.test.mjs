@@ -4,6 +4,7 @@ import {
     buildImportedScoresPath,
     formatAuditIssueText,
     formatAuditScore,
+    formatAuditStatusText,
     importedAssessmentLabels,
     isLowImportedMidtermScore,
     ITW51_ASSESSMENT_LABELS,
@@ -112,5 +113,46 @@ test('calculation audit formats expected and actual score values including non-n
     assert.equal(
         formatAuditIssueText({ label: 'เกรดไม่ตรงกับคะแนนรวม', expected: 0, actual: 'ข' }),
         'เกรดไม่ตรงกับคะแนนรวม: ควรเป็น 0 แต่ ITW เป็น ข',
+    );
+});
+
+test('formatAuditStatusText displays ไม่มีคะแนนปลายภาค for missing final exam or absent grade', () => {
+    assert.equal(
+        formatAuditStatusText({
+            final_exam_score: null,
+            grade: 'ข',
+            calculation_audit: { status: 'not_checkable', issues: [] },
+        }),
+        'ไม่มีคะแนนปลายภาค',
+    );
+
+    assert.equal(
+        formatAuditStatusText({
+            final_exam_score: null,
+            grade: null,
+            calculation_audit: { status: 'not_checkable', issues: [] },
+        }),
+        'ไม่มีคะแนนปลายภาค',
+    );
+
+    assert.equal(
+        formatAuditStatusText({
+            final_exam_score: 30,
+            grade: '4',
+            calculation_audit: { status: 'correct', issues: [] },
+        }),
+        'คำนวณตรงกัน',
+    );
+
+    assert.equal(
+        formatAuditStatusText({
+            final_exam_score: 40,
+            grade: '3.5',
+            calculation_audit: {
+                status: 'incorrect',
+                issues: [{ label: 'เกรดไม่ตรงกับคะแนนรวม', expected: 4, actual: 3.5 }],
+            },
+        }),
+        'เกรดไม่ตรงกับคะแนนรวม: ควรเป็น 4 แต่ ITW เป็น 3.5',
     );
 });
