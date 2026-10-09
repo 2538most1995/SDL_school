@@ -573,9 +573,22 @@ final class LearningScorebookTest extends TestCase
 
         $this->getJson('/api/v1/learning/scores/imported?calculation_status=incorrect')
             ->assertOk()
-            ->assertJsonStructure(['data' => ['calculation_audit' => ['total_rows', 'checked_rows', 'incorrect_rows', 'not_checkable_rows']]]);
+            ->assertJsonStructure(['data' => ['calculation_audit' => ['total_rows', 'checked_rows', 'incorrect_rows', 'not_checkable_rows', 'low_midterm_rows']]]);
 
         $this->getJson('/api/v1/learning/scores/imported?calculation_status=correct')
+            ->assertUnprocessable();
+
+        $lowMidtermResponse = $this->getJson('/api/v1/learning/scores/imported?midterm_status=below_40')
+            ->assertOk()
+            ->assertJsonStructure(['data' => ['calculation_audit' => ['total_rows', 'checked_rows', 'incorrect_rows', 'not_checkable_rows', 'low_midterm_rows']]]);
+        $lowMidtermRows = $lowMidtermResponse->json('data.rows');
+        $this->assertNotEmpty($lowMidtermRows);
+        foreach ($lowMidtermRows as $row) {
+            $this->assertNotNull($row['midterm_score']);
+            $this->assertLessThan(40.0, (float) $row['midterm_score']);
+        }
+
+        $this->getJson('/api/v1/learning/scores/imported?midterm_status=invalid')
             ->assertUnprocessable();
 
         $levelGroups = $this->getJson('/api/v1/learning/scores/imported?level=3')

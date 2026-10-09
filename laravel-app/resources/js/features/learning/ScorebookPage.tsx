@@ -13,9 +13,11 @@ import {
     Plus,
     Trash,
     Users,
+    WarningCircle,
 } from '@phosphor-icons/react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useDeferredValue, useEffect, useMemo, useRef, useState, type KeyboardEvent as ReactKeyboardEvent, type ReactNode } from 'react';
+import { useSearchParams } from 'react-router-dom';
 import { Button, Field, Input, Select } from '../../components/MaterialUI';
 import { PageHeader } from '../../components/PageHeader';
 import { Pagination } from '../../components/Pagination';
@@ -193,7 +195,7 @@ type ImportedScorePayload = {
     groups: ImportedScoreOption[];
     subjects: ImportedScoreOption[];
     score_labels: string[];
-    calculation_audit: { total_rows: number; checked_rows: number; incorrect_rows: number; not_checkable_rows: number };
+    calculation_audit: { total_rows: number; checked_rows: number; incorrect_rows: number; not_checkable_rows: number; low_midterm_rows?: number };
     rows: ImportedScoreRow[];
     pagination: { current_page: number; per_page: number; total: number; last_page: number };
 };
@@ -205,7 +207,7 @@ const emptyImportedScores: ImportedScorePayload = {
     groups: [],
     subjects: [],
     score_labels: [],
-    calculation_audit: { total_rows: 0, checked_rows: 0, incorrect_rows: 0, not_checkable_rows: 0 },
+    calculation_audit: { total_rows: 0, checked_rows: 0, incorrect_rows: 0, not_checkable_rows: 0, low_midterm_rows: 0 },
     rows: [],
     pagination: { current_page: 1, per_page: 100, total: 0, last_page: 1 },
 };
@@ -232,6 +234,7 @@ function auditIssueText(issue: ImportedScoreRow['calculation_audit']['issues'][n
 }
 
 function ImportedScoresPage({ sourceNavigation }: { sourceNavigation: ReactNode }) {
+    const [searchParams] = useSearchParams();
     const [term, setTerm] = useState('');
     const [level, setLevel] = useState('');
     const [group, setGroup] = useState('');
@@ -240,14 +243,35 @@ function ImportedScoresPage({ sourceNavigation }: { sourceNavigation: ReactNode 
     const [page, setPage] = useState(1);
     const [perPage, setPerPage] = useState(100);
     const [showScoreLegend, setShowScoreLegend] = useState(false);
-    const [showIncorrectOnly, setShowIncorrectOnly] = useState(false);
+    const [showIncorrectOnly, setShowIncorrectOnly] = useState(() => {
+        return searchParams.get('calculation_status') === 'incorrect' || searchParams.get('check') === 'incorrect';
+    });
+    const [showLowMidtermOnly, setShowLowMidtermOnly] = useState(() => {
+        return searchParams.get('midterm_status') === 'below_40'
+            || searchParams.get('check') === 'midterm_below_40'
+            || searchParams.get('filter') === 'low_midterm';
+    });
     const levelLabels = useRef(new Map<string, string>());
     const groupLabels = useRef(new Map<string, string>());
     const subjectLabels = useRef(new Map<string, string>());
     const deferredSearch = useDeferredValue(search);
     const importedScores = useQuery({
-        queryKey: ['learning', 'scores', 'imported', term, level, group, subjectCode, deferredSearch, showIncorrectOnly, page, perPage],
-        queryFn: ({ signal }) => getFeatureDataWithDemo<ImportedScorePayload>(buildImportedScoresPath({ term, level, group, subjectCode, search: deferredSearch, calculationStatus: showIncorrectOnly ? 'incorrect' : '', page, perPage }), emptyImportedScores, signal),
+        queryKey: ['learning', 'scores', 'imported', term, level, group, subjectCode, deferredSearch, showIncorrectOnly, showLowMidtermOnly, page, perPage],
+        queryFn: ({ signal }) => getFeatureDataWithDemo<ImportedScorePayload>(
+            buildImportedScoresPath({
+                term,
+                level,
+                group,
+                subjectCode,
+                search: deferredSearch,
+                calculationStatus: showIncorrectOnly ? 'incorrect' : '',
+                midtermStatus: showLowMidtermOnly ? 'below_40' : '',
+                page,
+                perPage,
+            }),
+            emptyImportedScores,
+            signal,
+        ),
         refetchOnWindowFocus: false,
     });
     const data = importedScores.data?.data;
@@ -309,7 +333,8 @@ function ImportedScoresPage({ sourceNavigation }: { sourceNavigation: ReactNode 
         || level !== ''
         || group !== ''
         || subjectCode !== ''
-        || showIncorrectOnly;
+        || showIncorrectOnly
+        || showLowMidtermOnly;
 
     const clearFilters = () => {
         setSearch('');
@@ -318,29 +343,39 @@ function ImportedScoresPage({ sourceNavigation }: { sourceNavigation: ReactNode 
         setGroup('');
         setSubjectCode('');
         setShowIncorrectOnly(false);
+        setShowLowMidtermOnly(false);
         setPage(1);
     };
 
-    const exportImportedScores = () => downloadExcel(`คะแนนนำเข้า-${data?.selected_term ?? (term || 'ทั้งหมด')}`, [{
-        name: 'คะแนนนำเข้า',
-        columns: ['ลำดับ', 'รหัสนักศึกษา', 'ชื่อ-นามสกุล', 'กลุ่ม', 'ระดับ', 'รหัสวิชา', 'รายวิชา', 'วิธีเรียน', ...scoreLabels, 'กลางภาค', 'ปลายภาค', 'รวม', 'เกรด', 'ผลตรวจการคำนวณ'],
-        rows: rows.map((row, index) => [
-            index + 1,
-            row.student_code,
-            row.full_name,
-            row.group_name || row.group_code,
-            levelLabel(row.level),
-            row.subject_code,
-            row.subject_name,
-            row.learning_method ?? '',
-            ...normalizeAssessmentScores(row.assessment_scores),
-            row.midterm_score,
-            row.final_exam_score,
-            row.total_score,
-            row.grade,
-            row.calculation_audit.issues.map(auditIssueText).join(' | ') || (row.calculation_audit.status === 'correct' ? 'คำนวณตรงกัน' : 'ข้อมูลไม่ครบสำหรับตรวจ'),
-        ]),
-    }]);
+    const exportImportedScores = () => {
+        const auditSuffix = showLowMidtermOnly && showIncorrectOnly
+            ? '-ตรวจคำนวณและกลางภาคต่ำกว่า40'
+            : showLowMidtermOnly
+                ? '-กลางภาคต่ำกว่า40'
+                : showIncorrectOnly
+                    ? '-ตรวจการคำนวณITW'
+                    : '';
+        return downloadExcel(`คะแนนนำเข้า${auditSuffix}-${data?.selected_term ?? (term || 'ทั้งหมด')}`, [{
+            name: 'คะแนนนำเข้า',
+            columns: ['ลำดับ', 'รหัสนักศึกษา', 'ชื่อ-นามสกุล', 'กลุ่ม', 'ระดับ', 'รหัสวิชา', 'รายวิชา', 'วิธีเรียน', ...scoreLabels, 'กลางภาค', 'ปลายภาค', 'รวม', 'เกรด', 'ผลตรวจการคำนวณ'],
+            rows: rows.map((row, index) => [
+                index + 1,
+                row.student_code,
+                row.full_name,
+                row.group_name || row.group_code,
+                levelLabel(row.level),
+                row.subject_code,
+                row.subject_name,
+                row.learning_method ?? '',
+                ...normalizeAssessmentScores(row.assessment_scores),
+                row.midterm_score,
+                row.final_exam_score,
+                row.total_score,
+                row.grade,
+                row.calculation_audit.issues.map(auditIssueText).join(' | ') || (row.calculation_audit.status === 'correct' ? 'คำนวณตรงกัน' : 'ข้อมูลไม่ครบสำหรับตรวจ'),
+            ]),
+        }]);
+    };
 
     return <div>
         <PageHeader category="learning" title="คะแนนจากข้อมูลนำเข้า" description="ดูคะแนนย่อย คะแนนเก็บ คะแนนสอบปลายภาค และเกรดจากไฟล์ผลการเรียนที่นำเข้า (GRADE.DBF)" icon={Database} actions={rows.length > 0 ? <Button type="button" appearance="outline" icon={<FileXls size={18} weight="bold" />} onClick={exportImportedScores}>ส่งออก Excel</Button> : undefined} />
@@ -364,19 +399,85 @@ function ImportedScoresPage({ sourceNavigation }: { sourceNavigation: ReactNode 
                 </Button>
             }
         >
-            <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-5">
+            <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-6">
                 <Field label="ค้นหา"><Input value={search} onChange={(_, input) => { setSearch(input.value); setPage(1); }} contentBefore={<MagnifyingGlass size={18} aria-hidden="true" />} placeholder="ชื่อหรือรหัสนักศึกษา" size="large" /></Field>
                 <Field label="ภาคเรียน"><Select value={term} onChange={(_, option) => { setTerm(option.value); setPage(1); }} size="large"><option value="all">ทุกภาคเรียน</option>{retainedTermOptions.map((option) => <option key={option.value} value={option.value}>{option.label}</option>)}</Select></Field>
                 <Field label="ระดับการศึกษา"><Select value={level} onChange={(_, option) => { setLevel(option.value); setPage(1); }} size="large"><option value="">ทุกระดับ</option>{retainedLevelOptions.map((option) => <option key={option.value} value={option.value}>{option.label}</option>)}</Select></Field>
                 <Field label="กลุ่มเรียน"><Select value={group} onChange={(_, option) => { setGroup(option.value); setPage(1); }} size="large"><option value="">ทุกกลุ่มเรียน</option>{retainedGroupOptions.map((option) => <option key={option.value} value={option.value}>{option.label}</option>)}</Select></Field>
                 <Field label="รายวิชา"><Select value={subjectCode} onChange={(_, option) => { setSubjectCode(option.value); setPage(1); }} size="large"><option value="">ทุกรายวิชา</option>{retainedSubjectOptions.map((option) => <option key={option.value} value={option.value}>{option.label}</option>)}</Select></Field>
+                <Field label="การตรวจเช็ค">
+                    <Select
+                        value={
+                            showLowMidtermOnly && showIncorrectOnly
+                                ? 'both'
+                                : showLowMidtermOnly
+                                    ? 'low_midterm'
+                                    : showIncorrectOnly
+                                        ? 'incorrect'
+                                        : 'all'
+                        }
+                        onChange={(_, option) => {
+                            if (option.value === 'low_midterm') {
+                                setShowLowMidtermOnly(true);
+                                setShowIncorrectOnly(false);
+                            } else if (option.value === 'incorrect') {
+                                setShowLowMidtermOnly(false);
+                                setShowIncorrectOnly(true);
+                            } else if (option.value === 'both') {
+                                setShowLowMidtermOnly(true);
+                                setShowIncorrectOnly(true);
+                            } else {
+                                setShowLowMidtermOnly(false);
+                                setShowIncorrectOnly(false);
+                            }
+                            setPage(1);
+                        }}
+                        size="large"
+                    >
+                        <option value="all">ทุกรายการ</option>
+                        <option value="low_midterm">คะแนนกลางภาค &lt; 40</option>
+                        <option value="incorrect">เช็คการคำนวณจาก ITW</option>
+                        <option value="both">ทั้งสองเงื่อนไข</option>
+                    </Select>
+                </Field>
             </div>
         </Panel>
 
         <Panel className="mt-5" title="ตารางคะแนนจากไฟล์นำเข้า" description={importedScores.isPending ? 'กำลังโหลดข้อมูล' : `พบทั้งหมด ${(data?.pagination.total ?? rows.length).toLocaleString('th-TH')} รายการ · หน้านี้ ${studentCount} คน และ ${subjectCount} วิชา`} action={
             <div className="flex flex-wrap items-center gap-2">
-                <Button type="button" appearance={showIncorrectOnly ? 'primary' : 'outline'} icon={<Calculator size={18} weight="bold" />} onClick={() => { setShowIncorrectOnly((current) => !current); setPage(1); }} disabled={importedScores.isFetching}>
+                <Button
+                    type="button"
+                    appearance={showIncorrectOnly ? 'primary' : 'outline'}
+                    icon={<Calculator size={18} weight="bold" />}
+                    onClick={() => {
+                        if (!showIncorrectOnly) {
+                            setShowLowMidtermOnly(false);
+                            setShowIncorrectOnly(true);
+                        } else {
+                            setShowIncorrectOnly(false);
+                        }
+                        setPage(1);
+                    }}
+                    disabled={importedScores.isFetching}
+                >
                     {showIncorrectOnly ? 'แสดงคะแนนทั้งหมด' : 'เช็คการคำนวณจาก ITW'}
+                </Button>
+                <Button
+                    type="button"
+                    appearance={showLowMidtermOnly ? 'primary' : 'outline'}
+                    icon={<WarningCircle size={18} weight="bold" />}
+                    onClick={() => {
+                        if (!showLowMidtermOnly) {
+                            setShowIncorrectOnly(false);
+                            setShowLowMidtermOnly(true);
+                        } else {
+                            setShowLowMidtermOnly(false);
+                        }
+                        setPage(1);
+                    }}
+                    disabled={importedScores.isFetching}
+                >
+                    {showLowMidtermOnly ? 'แสดงคะแนนทั้งหมด' : 'ตรวจคะแนนกลางภาค < 40'}
                 </Button>
                 <Button type="button" appearance="outline" icon={<ListChecks size={18} weight="bold" />} onClick={() => setShowScoreLegend((prev) => !prev)}>
                     {showScoreLegend ? 'ซ่อนคำอธิบาย 1-9' : 'คำอธิบายคะแนน 1-9'}
@@ -386,10 +487,22 @@ function ImportedScoresPage({ sourceNavigation }: { sourceNavigation: ReactNode 
                 </Button>
             </div>
         }>
-            {showIncorrectOnly && importedScores.data && (
+            {showIncorrectOnly && !showLowMidtermOnly && importedScores.data && (
                 <div className={`mb-4 rounded-xl border p-4 text-sm leading-6 ${data?.calculation_audit.incorrect_rows ? 'border-amber-300 bg-amber-50 text-amber-950' : 'border-emerald-300 bg-emerald-50 text-emerald-950'}`} role="status">
                     <p className="font-black">{data?.calculation_audit.incorrect_rows ? `พบ ${data.calculation_audit.incorrect_rows.toLocaleString('th-TH')} รายการที่ควรตรวจใน ITW` : 'ไม่พบการคำนวณที่ไม่ตรงกัน'}</p>
                     <p className="mt-1">ตรวจจากผลรวมคะแนนช่อง 1-9, คะแนนกลางภาค + ปลายภาค และเกรดตัวเลขตามคะแนนรวม เฉพาะรายการที่มีข้อมูลครบ ระบบนี้อ่านอย่างเดียวและไม่ได้แก้ข้อมูลต้นทาง</p>
+                </div>
+            )}
+            {showLowMidtermOnly && !showIncorrectOnly && importedScores.data && (
+                <div className={`mb-4 rounded-xl border p-4 text-sm leading-6 ${data?.calculation_audit.low_midterm_rows ? 'border-rose-300 bg-rose-50 text-rose-950' : 'border-emerald-300 bg-emerald-50 text-emerald-950'}`} role="status">
+                    <p className="font-black">{data?.calculation_audit.low_midterm_rows ? `พบ ${data.calculation_audit.low_midterm_rows.toLocaleString('th-TH')} รายการที่คะแนนกลางภาคต่ำกว่า 40 คะแนน` : 'ไม่พบคะแนนกลางภาคที่ต่ำกว่า 40 คะแนน'}</p>
+                    <p className="mt-1">แสดงเฉพาะรายการที่มีคะแนนกลางภาค (คะแนนเก็บ) ต่ำกว่า 40 คะแนน (รวมคะแนน 0 จริง) เพื่อให้ครูผู้สอนและผู้ดูแลระบบตรวจเช็คความถูกต้องหรือติดตามผู้เรียน</p>
+                </div>
+            )}
+            {showIncorrectOnly && showLowMidtermOnly && importedScores.data && (
+                <div className="mb-4 rounded-xl border border-purple-300 bg-purple-50 p-4 text-sm leading-6 text-purple-950" role="status">
+                    <p className="font-black">กำลังตรวจเช็คทั้งสองเงื่อนไข: รายการที่ควรตรวจใน ITW และคะแนนกลางภาคต่ำกว่า 40 คะแนน</p>
+                    <p className="mt-1">แสดงเฉพาะรายการที่เข้าทั้งสองเงื่อนไขพร้อมกัน</p>
                 </div>
             )}
             {showScoreLegend && (
@@ -421,7 +534,15 @@ function ImportedScoresPage({ sourceNavigation }: { sourceNavigation: ReactNode 
 
             {importedScores.isPending && <QuerySkeleton rows={7} />}
             {importedScores.isError && <QueryError onRetry={() => importedScores.refetch()} />}
-            {importedScores.data && rows.length === 0 && <div className="grid min-h-48 place-items-center rounded-xl border border-dashed border-slate-300 bg-slate-50 p-6 text-center text-sm leading-6 text-slate-600">{showIncorrectOnly ? 'ไม่พบรายการที่คำนวณไม่ตรงกันตามตัวกรองที่เลือก' : 'ไม่พบคะแนนจากข้อมูลนำเข้าตามตัวกรองที่เลือก'}</div>}
+            {importedScores.data && rows.length === 0 && <div className="grid min-h-48 place-items-center rounded-xl border border-dashed border-slate-300 bg-slate-50 p-6 text-center text-sm leading-6 text-slate-600">
+                {showLowMidtermOnly && showIncorrectOnly
+                    ? 'ไม่พบรายการที่คำนวณไม่ตรงกันและคะแนนกลางภาคต่ำกว่า 40 ตามตัวกรองที่เลือก'
+                    : showLowMidtermOnly
+                        ? 'ไม่พบคะแนนกลางภาคที่ต่ำกว่า 40 คะแนนตามตัวกรองที่เลือก'
+                        : showIncorrectOnly
+                            ? 'ไม่พบรายการที่คำนวณไม่ตรงกันตามตัวกรองที่เลือก'
+                            : 'ไม่พบคะแนนจากข้อมูลนำเข้าตามตัวกรองที่เลือก'}
+            </div>}
             {importedScores.data && rows.length > 0 && <div role="region" aria-label="ตารางคะแนนจากข้อมูลนำเข้า เลื่อนแนวนอนเพื่อดูคะแนนทุกช่อง" tabIndex={0} className="overflow-x-auto rounded-xl border border-slate-200 outline-none focus:ring-2 focus:ring-brand-200">
                 <table className="w-full min-w-[2240px] border-collapse text-sm">
                     <thead className="bg-slate-50 text-slate-700">

@@ -5,6 +5,7 @@ export type ImportedScoreFilters = {
     subjectCode: string;
     search: string;
     calculationStatus?: 'incorrect' | '';
+    midtermStatus?: 'below_40' | '';
     page?: number;
     perPage?: number;
 };
@@ -35,6 +36,7 @@ export function buildImportedScoresPath(filters: ImportedScoreFilters): string {
     if (filters.subjectCode) query.set('subject_code', filters.subjectCode);
     if (filters.search.trim()) query.set('search', filters.search.trim());
     if (filters.calculationStatus) query.set('calculation_status', filters.calculationStatus);
+    if (filters.midtermStatus) query.set('midterm_status', filters.midtermStatus);
     if ((filters.page ?? 1) > 1) query.set('page', String(filters.page));
     if (filters.perPage) query.set('per_page', String(filters.perPage));
 

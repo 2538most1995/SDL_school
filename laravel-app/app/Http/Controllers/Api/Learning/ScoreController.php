@@ -62,6 +62,7 @@ final class ScoreController extends Controller
             'subject_code' => ['nullable', 'string', 'max:32'],
             'search' => ['nullable', 'string', 'max:120'],
             'calculation_status' => ['nullable', 'string', Rule::in(['incorrect'])],
+            'midterm_status' => ['nullable', 'string', Rule::in(['below_40'])],
             'page' => ['nullable', 'integer', 'min:1'],
             'per_page' => ['nullable', 'integer', 'min:1', 'max:1000'],
         ]);

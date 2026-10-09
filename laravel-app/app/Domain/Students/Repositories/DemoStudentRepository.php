@@ -247,7 +247,7 @@ final class DemoStudentRepository implements StudentRepository
             ['3', '2.5', '2', '3.5', '3', null],
             ['2', '1.5', '0', '2.5', '2', null],
             ['4', '4', '3.5', '4', '4', '3.5'],
-            ['2', '1', '0', '2', '2.5', 'มส'],
+            ['2', '1', '0', '2', '0', 'มส'],
         ];
         $index = max(0, ((int) substr($student->code, -2)) - 1) % count($gradeSets);
         $grades = $gradeSets[$index];
@@ -265,7 +265,9 @@ final class DemoStudentRepository implements StudentRepository
             static function (array $subject, int $subjectIndex) use ($grades, $student, $assessmentTemplates): array {
                 $rawGrade = $grades[$subjectIndex];
                 $isAbsent = $rawGrade === 'มส';
-                $assessments = $assessmentTemplates[$subjectIndex % count($assessmentTemplates)];
+                $assessments = $rawGrade === '0'
+                    ? [8, null, null, 12, null, null, 5, 5, null]
+                    : $assessmentTemplates[$subjectIndex % count($assessmentTemplates)];
                 $coursework = array_sum(array_filter($assessments, static fn ($v): bool => $v !== null));
                 $final = $isAbsent ? null : match ($rawGrade) {
                     '4', '3.5' => 20.0 + ($subjectIndex * 2),

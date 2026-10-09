@@ -36,6 +36,13 @@ test('imported score path can request only rows with inconsistent ITW calculatio
     );
 });
 
+test('imported score path can request only rows with midterm scores below 40', () => {
+    assert.equal(
+        buildImportedScoresPath({ term: '1/2569', level: '2', group: '220001', subjectCode: '', search: '', midtermStatus: 'below_40', page: 1, perPage: 50 }),
+        '/api/v1/learning/scores/imported?term=1%2F2569&level=2&group=220001&midterm_status=below_40&per_page=50',
+    );
+});
+
 test('imported score columns default to confirmed ITW51 assessment labels', () => {
     assert.deepEqual(importedAssessmentLabels(), [
         'คะแนนบันทึกการเรียนรู้',

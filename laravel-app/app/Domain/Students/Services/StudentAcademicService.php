@@ -165,6 +165,7 @@ final readonly class StudentAcademicService
         };
         $subjectCode = trim((string) ($filters['subject_code'] ?? ''));
         $calculationStatus = trim((string) ($filters['calculation_status'] ?? ''));
+        $midtermStatus = trim((string) ($filters['midterm_status'] ?? ''));
         $subjects = [];
         $rows = [];
         $calculationAudit = [
@@ -172,6 +173,7 @@ final readonly class StudentAcademicService
             'checked_rows' => 0,
             'incorrect_rows' => 0,
             'not_checkable_rows' => 0,
+            'low_midterm_rows' => 0,
         ];
 
         foreach ($students as $student) {
@@ -192,7 +194,12 @@ final readonly class StudentAcademicService
 
                 $assessmentScores = array_slice(array_pad($grade->assessmentScores, 9, null), 0, 9);
                 $audit = ImportedScoreCalculationAudit::inspect($grade);
+                $isLowMidterm = $grade->courseworkScore !== null && is_numeric($grade->courseworkScore) && (float) $grade->courseworkScore < 40.0;
+
                 $calculationAudit['total_rows']++;
+                if ($isLowMidterm) {
+                    $calculationAudit['low_midterm_rows']++;
+                }
                 if ($audit['status'] === 'not_checkable') {
                     $calculationAudit['not_checkable_rows']++;
                 } else {
@@ -202,6 +209,9 @@ final readonly class StudentAcademicService
                     $calculationAudit['incorrect_rows']++;
                 }
                 if ($calculationStatus === 'incorrect' && $audit['status'] !== 'incorrect') {
+                    continue;
+                }
+                if ($midtermStatus === 'below_40' && ! $isLowMidterm) {
                     continue;
                 }
 
