@@ -11,11 +11,6 @@ export type ImportedScoreFilters = {
 
 export const IMPORTED_ASSESSMENT_COUNT = 9;
 
-export type ImportedScoreSelectOption = {
-    value: string;
-    label: string;
-};
-
 export const ITW51_ASSESSMENT_LABELS: readonly string[] = [
     'คะแนนบันทึกการเรียนรู้',
     'คะแนนบันทึกการฝึกทักษะ',
@@ -40,21 +35,6 @@ export function buildImportedScoresPath(filters: ImportedScoreFilters): string {
     if (filters.perPage) query.set('per_page', String(filters.perPage));
 
     return `/api/v1/learning/scores/imported${query.size ? `?${query.toString()}` : ''}`;
-}
-
-export function retainSelectedFilterOption(
-    options: ImportedScoreSelectOption[],
-    selectedValue: string,
-    selectedLabel?: string,
-): ImportedScoreSelectOption[] {
-    if (!selectedValue || options.some((option) => option.value === selectedValue)) {
-        return options;
-    }
-
-    return [
-        { value: selectedValue, label: selectedLabel?.trim() || selectedValue },
-        ...options,
-    ];
 }
 
 export function importedAssessmentLabels(labels?: string[]): string[] {

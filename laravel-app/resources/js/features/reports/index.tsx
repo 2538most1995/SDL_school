@@ -599,6 +599,14 @@ export function ReportPage({ kind }: { kind: ReportKind }) {
     ], [config, isAcademicReport, kind, viewMode]);
 
     const payload = report.data?.data;
+    const activeFilterCount = [search.trim(), level, canFilterGroups ? group : '', examStatus, subjectType].filter(Boolean).length;
+    const clearFilters = () => {
+        setSearch('');
+        setLevel('');
+        setGroup('');
+        setExamStatus('');
+        setSubjectType('');
+    };
     const termOptions = useMemo(() => {
         const available = payload?.terms?.filter(Boolean) ?? [];
         return Array.from(new Set([...(term ? [term] : []), ...available])).sort(compareAcademicTermsDescending);
@@ -641,7 +649,16 @@ export function ReportPage({ kind }: { kind: ReportKind }) {
                 </div>
             ))}
 
-            <Panel title="รายละเอียดรายงาน" description="ผลลัพธ์ถูกจำกัดตามอำเภอและสิทธิ์ของผู้ใช้งาน">
+            <Panel
+                title="รายละเอียดรายงาน"
+                description="ผลลัพธ์ถูกจำกัดตามอำเภอและสิทธิ์ของผู้ใช้งาน"
+                action={activeFilterCount > 0 ? (
+                    <button type="button" onClick={clearFilters} className="inline-flex h-9 items-center gap-1.5 rounded-xl border border-slate-300 bg-white px-3 text-xs font-bold text-slate-700 transition hover:border-rose-300 hover:text-rose-700">
+                        <X className="size-4" weight="bold" aria-hidden="true" />
+                        ล้างตัวกรอง ({activeFilterCount})
+                    </button>
+                ) : undefined}
+            >
                 {isAcademicReport && <div className="mb-5 flex flex-wrap items-center justify-between gap-3 rounded-2xl border border-slate-200 bg-slate-50 p-2.5">
                     <div className="inline-flex rounded-xl bg-white p-1 shadow-sm ring-1 ring-slate-200" aria-label="รูปแบบการแสดงรายงาน">
                         <button type="button" onClick={() => setViewMode('subject')} className={`inline-flex items-center gap-2 rounded-lg px-4 py-2 text-sm font-bold transition ${viewMode === 'subject' ? 'bg-brand-700 text-white' : 'text-slate-600 hover:bg-slate-100'}`}><Books size={17} /> ดูเป็นรายวิชา</button>
@@ -657,7 +674,7 @@ export function ReportPage({ kind }: { kind: ReportKind }) {
                             <input value={search} onChange={(event) => setSearch(event.target.value)} placeholder={viewMode === 'student' && isAcademicReport ? canFilterGroups ? 'ค้นหาชื่อ รหัส หรือกลุ่มเรียน' : 'ค้นหาชื่อหรือรหัสนักศึกษา' : `ค้นหา${config.primaryLabel} หรือ${config.secondaryLabel}`} className="h-11 w-full rounded-xl border border-slate-300 bg-white pl-11 pr-4 text-sm placeholder:text-slate-400" />
                         </span>
                     </label>
-                    <label><span className="mb-2 block text-sm font-bold text-slate-700">ระดับการศึกษา</span><select value={level} onChange={(event) => { setLevel(event.target.value); setGroup(''); }} className="h-11 w-full rounded-xl border border-slate-300 bg-white px-3 text-sm"><option value="">ทุกระดับ</option><option value="1">ประถมศึกษา</option><option value="2">มัธยมศึกษาตอนต้น</option><option value="3">มัธยมศึกษาตอนปลาย</option></select></label>
+                    <label><span className="mb-2 block text-sm font-bold text-slate-700">ระดับการศึกษา</span><select value={level} onChange={(event) => setLevel(event.target.value)} className="h-11 w-full rounded-xl border border-slate-300 bg-white px-3 text-sm"><option value="">ทุกระดับ</option><option value="1">ประถมศึกษา</option><option value="2">มัธยมศึกษาตอนต้น</option><option value="3">มัธยมศึกษาตอนปลาย</option></select></label>
                     {canFilterGroups && <label><span className="mb-2 block text-sm font-bold text-slate-700">กลุ่มเรียน</span><select value={group} onChange={(event) => setGroup(event.target.value)} className="h-11 w-full rounded-xl border border-slate-300 bg-white px-3 text-sm"><option value="">ทุกกลุ่มเรียน</option>{filterOptions.groups.map((option) => <option key={String(option.value)} value={String(option.value)}>{option.label}</option>)}</select></label>}
                     {kind === 'grade-threshold' && (
                         <label>

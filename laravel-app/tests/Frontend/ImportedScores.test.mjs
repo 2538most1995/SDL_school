@@ -5,8 +5,8 @@ import {
     importedAssessmentLabels,
     ITW51_ASSESSMENT_LABELS,
     normalizeAssessmentScores,
-    retainSelectedFilterOption,
 } from '../../resources/js/features/learning/importedScores.ts';
+import { retainSelectedFilterOption } from '../../resources/js/lib/filterOptions.ts';
 
 test('imported score path sends only active filters with the backend field names', () => {
     assert.equal(

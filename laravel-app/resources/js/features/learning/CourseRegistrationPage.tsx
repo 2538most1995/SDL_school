@@ -6,6 +6,7 @@ import {
     CheckCircle,
     FilePdf,
     FloppyDisk,
+    FunnelSimpleX,
     GraduationCap,
     MagnifyingGlass,
     Notebook,
@@ -29,6 +30,7 @@ import { StatGrid } from '../../components/StatGrid';
 import { StatTile } from '../../components/StatTile';
 import { StatusBadge } from '../../components/StatusBadge';
 import { showErrorAlert, showSuccessAlert } from '../../lib/feedback';
+import { useRetainedFilterOptions } from '../../lib/useRetainedFilterOptions';
 import { getFeatureDataWithDemo, sendFeatureData } from '../api';
 import { evaluateLiveRegistrationPolicy, type RegistrationCreditPolicy } from './registrationCreditPolicy';
 
@@ -265,6 +267,21 @@ export function CourseRegistrationPage() {
     });
 
     const workspaceData = workspaceQuery.data?.data ?? emptyWorkspace;
+    const retainedGroupOptions = useRetainedFilterOptions(workspaceData.groups ?? [], group);
+    const hasActiveListFilters = Boolean(
+        search.trim()
+        || level
+        || group
+        || graduationStatus
+        || (term && term !== workspaceData.term),
+    );
+    const clearListFilters = () => {
+        setTerm('');
+        setLevel('');
+        setGroup('');
+        setSearch('');
+        setGraduationStatus('');
+    };
 
     // Student detail query
     const studentDetailQuery = useQuery({
@@ -618,7 +635,14 @@ export function CourseRegistrationPage() {
                     </StatGrid>
 
                     {/* Filter Bar */}
-                    <Panel title="รายชื่อนักศึกษาสำหรับการลงทะเบียน">
+                    <Panel
+                        title="รายชื่อนักศึกษาสำหรับการลงทะเบียน"
+                        action={hasActiveListFilters ? (
+                            <Button type="button" aria-label="ล้างตัวกรอง" appearance="outline" icon={<FunnelSimpleX size={18} weight="bold" />} onClick={clearListFilters}>
+                                ล้างตัวกรอง
+                            </Button>
+                        ) : undefined}
+                    >
                         <p className="mb-4 text-xs font-medium text-slate-600">
                             <span aria-hidden="true" className="font-black text-emerald-700">**</span>{' '}
                             หน่วยกิตวิชาบังคับและวิชาเลือกครบแล้ว ·{' '}
@@ -645,10 +669,7 @@ export function CourseRegistrationPage() {
                                 <label className="block text-xs font-bold text-slate-700 mb-1">ระดับการศึกษา</label>
                                 <select
                                     value={level}
-                                    onChange={(e) => {
-                                        setLevel(e.target.value);
-                                        setGroup('');
-                                    }}
+                                    onChange={(e) => setLevel(e.target.value)}
                                     className="w-full rounded-xl border border-slate-300 bg-white p-2.5 text-sm"
                                 >
                                     <option value="">ทุกระดับชั้น</option>
@@ -666,7 +687,7 @@ export function CourseRegistrationPage() {
                                     className="w-full rounded-xl border border-slate-300 bg-white p-2.5 text-sm"
                                 >
                                     <option value="">ทุกกลุ่มเรียน</option>
-                                    {(workspaceData.groups || []).map((g) => (
+                                    {retainedGroupOptions.map((g) => (
                                         <option key={g.value} value={g.value}>
                                             {g.label}
                                         </option>

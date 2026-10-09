@@ -39,6 +39,7 @@ import { getFeatureDataWithDemo, sendFeatureData } from '../api';
 import { useDemoRole } from '../../context/DemoRoleContext';
 import { showErrorAlert, showSuccessAlert } from '../../lib/feedback';
 import { useLogout } from '../../lib/useLogout';
+import { useRetainedFilterOptions } from '../../lib/useRetainedFilterOptions';
 import { summarizeGradeRows, summarizeGradesByTerm } from './gradeSummary';
 
 export function FacebookIcon({ className = 'size-4' }: { className?: string }) {
@@ -377,6 +378,10 @@ export function StudentsPage() {
     const meta = students.data?.meta;
     const pagination = meta?.pagination;
     const summary = meta?.summary;
+    const retainedGroupOptions = useRetainedFilterOptions(
+        (meta?.filter_options.groups ?? []).map((option) => ({ value: String(option.value), label: option.label })),
+        group,
+    );
 
     const columns = useMemo<ColumnDef<StudentRow>[]>(() => [
         {
@@ -520,7 +525,7 @@ export function StudentsPage() {
                     {canFilterGroups && <Field label="กลุ่มเรียน">
                         <Select value={group} onChange={(_, data) => setGroup(data.value)} size="large">
                             <option value="">ทุกกลุ่มเรียน</option>
-                            {(meta?.filter_options.groups ?? []).map((option) => <option key={String(option.value)} value={String(option.value)}>{option.label}</option>)}
+                            {retainedGroupOptions.map((option) => <option key={option.value} value={option.value}>{option.label}</option>)}
                         </Select>
                     </Field>}
                 </div>
@@ -1251,6 +1256,10 @@ function StaffStudentMetricPage({ kind }: { kind: MetricKind }) {
     });
     const pageRows = directory.data?.data ?? [];
     const meta = directory.data?.meta;
+    const retainedGroupOptions = useRetainedFilterOptions(
+        (meta?.filter_options.groups ?? []).map((option) => ({ value: String(option.value), label: option.label })),
+        group,
+    );
     const title = kind === 'grades' ? 'ผลการเรียนและ GPAX นักศึกษา' : kind === 'kpch' ? 'กิจกรรม กพช. นักศึกษา' : 'ผลประเมินคุณธรรมนักศึกษา';
     const description = kind === 'grades' ? 'ตรวจ GPAX และหน่วยกิตสะสม พร้อมเปิดดูรายวิชาและผลการเรียนรายคน' : kind === 'kpch' ? 'ตรวจชั่วโมงสะสม กพช. และผลตามเกณฑ์ 200 ชั่วโมง' : 'ตรวจผลคุณธรรมล่าสุดจากตัวชี้วัด 11 รายการของแต่ละคน';
     const columns = useMemo<ColumnDef<StaffMetricStudent>[]>(() => [
@@ -1276,11 +1285,19 @@ function StaffStudentMetricPage({ kind }: { kind: MetricKind }) {
                 <StatTile label="นักศึกษาที่พบ" value={pagination?.total ?? 0} detail="ตามขอบเขตและตัวกรอง" icon={Student} tone="sky" />
                 <StatTile label="กลุ่มเรียน" value={meta?.summary.groups ?? 0} detail="กลุ่มในผลลัพธ์ปัจจุบัน" icon={UsersThree} />
             </div>
-            <Panel title="รายชื่อนักศึกษา" description={pagination ? `แสดง ${pagination.from ?? 0}-${pagination.to ?? 0} จาก ${pagination.total} คน` : 'กำลังโหลดข้อมูล'}>
+            <Panel
+                title="รายชื่อนักศึกษา"
+                description={pagination ? `แสดง ${pagination.from ?? 0}-${pagination.to ?? 0} จาก ${pagination.total} คน` : 'กำลังโหลดข้อมูล'}
+                action={(search || level || group || kpchStatus) ? (
+                    <Button type="button" aria-label="ล้างตัวกรอง" appearance="outline" onClick={() => { setSearch(''); setLevel(''); setGroup(''); setKpchStatus(''); setPage(1); }}>
+                        ล้างตัวกรองทั้งหมด
+                    </Button>
+                ) : undefined}
+            >
                 <div className={`mb-5 grid gap-3 ${kind === 'kpch' ? (canFilterGroups ? 'md:grid-cols-2 xl:grid-cols-4' : 'md:grid-cols-3') : (canFilterGroups ? 'md:grid-cols-3' : 'md:grid-cols-2')}`}>
                     <Field label="ค้นหา"><Input value={search} onChange={(_, data) => setSearch(data.value)} contentBefore={<MagnifyingGlass size={18} aria-hidden="true" />} placeholder="ชื่อ รหัส หรือกลุ่ม" size="large" /></Field>
                     <Field label="ระดับการศึกษา"><Select value={level} onChange={(_, data) => setLevel(data.value)} size="large"><option value="">ทุกระดับ</option><option value="1">ประถมศึกษา</option><option value="2">มัธยมศึกษาตอนต้น</option><option value="3">มัธยมศึกษาตอนปลาย</option></Select></Field>
-                    {canFilterGroups && <Field label="กลุ่มเรียน"><Select value={group} onChange={(_, data) => setGroup(data.value)} size="large"><option value="">ทุกกลุ่มเรียน</option>{(meta?.filter_options.groups ?? []).map((option) => <option key={String(option.value)} value={String(option.value)}>{option.label}</option>)}</Select></Field>}
+                    {canFilterGroups && <Field label="กลุ่มเรียน"><Select value={group} onChange={(_, data) => setGroup(data.value)} size="large"><option value="">ทุกกลุ่มเรียน</option>{retainedGroupOptions.map((option) => <option key={option.value} value={option.value}>{option.label}</option>)}</Select></Field>}
                     {kind === 'kpch' && <Field label="ผล กพช."><Select value={kpchStatus} onChange={(_, data) => setKpchStatus(data.value)} size="large"><option value="">ทั้งหมด</option><option value="complete">ครบ 200 ชั่วโมง</option><option value="incomplete">ไม่ครบ 200 ชั่วโมง</option></Select></Field>}
                 </div>
                 {directory.isPending && <QuerySkeleton />}

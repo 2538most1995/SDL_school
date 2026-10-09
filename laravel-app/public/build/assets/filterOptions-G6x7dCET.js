@@ -1,0 +1,1 @@
+function e(e,t,n){return!t||e.some(e=>e.value===t)?[...e]:[{value:t,label:n?.trim()||t},...e]}export{e as t};

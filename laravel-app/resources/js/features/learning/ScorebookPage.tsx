@@ -24,8 +24,9 @@ import { QueryError, QuerySkeleton } from '../../components/QueryState';
 import { useDemoRole } from '../../context/DemoRoleContext';
 import { showSuccessAlert } from '../../lib/feedback';
 import { downloadExcel } from '../../lib/excel';
+import { retainSelectedFilterOption } from '../../lib/filterOptions';
 import { getFeatureDataWithDemo, sendFeatureData } from '../api';
-import { buildImportedScoresPath, importedAssessmentLabels, normalizeAssessmentScores, retainSelectedFilterOption } from './importedScores';
+import { buildImportedScoresPath, importedAssessmentLabels, normalizeAssessmentScores } from './importedScores';
 import { isScoreGridNavigationKey, nextScoreGridPosition, scoreGridCellKey } from './scoreGridNavigation';
 
 type ScoreComponent = {

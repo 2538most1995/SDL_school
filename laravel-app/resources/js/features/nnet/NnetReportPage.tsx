@@ -30,6 +30,7 @@ import { getFeatureData, sendFeatureData } from '../api';
 import { downloadExcel } from '../../lib/excel';
 import { useDemoRole } from '../../context/DemoRoleContext';
 import { apiGet } from '../../lib/api';
+import { useRetainedFilterOptions } from '../../lib/useRetainedFilterOptions';
 import { StudentNnetScoreView } from './StudentNnetScoreView';
 
 export interface NnetRecord {
@@ -186,6 +187,19 @@ export function NnetReportPage() {
 
     const items = recordsQuery.data?.items ?? [];
     const summary = summaryQuery.data;
+    const retainedGroupOptions = useRetainedFilterOptions(
+        (recordsQuery.data?.available_groups ?? []).map((value) => ({ value, label: value })),
+        group,
+    );
+    const activeFilterCount = [level > 0, year.trim() !== '', round > 0, statusFilter !== '', group !== '', search.trim() !== ''].filter(Boolean).length;
+    const clearFilters = () => {
+        setLevel(0);
+        setYear('');
+        setRound(0);
+        setStatusFilter('');
+        setGroup('');
+        setSearch('');
+    };
 
     const handleOpenAddModal = () => {
         setFormDraft({
@@ -377,7 +391,15 @@ export function NnetReportPage() {
             />
 
             {/* Filter Bar */}
-            <Panel className="p-4">
+            <Panel
+                title="ตัวกรองรายงาน N-NET"
+                className="p-4"
+                action={activeFilterCount > 0 ? (
+                    <Button aria-label="ล้างตัวกรอง" appearance="outline" icon={<FunnelSimple size={18} weight="bold" />} onClick={clearFilters}>
+                        ล้างตัวกรอง ({activeFilterCount})
+                    </Button>
+                ) : undefined}
+            >
                 <div className="grid gap-3 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-6 items-end">
                     <div>
                         <label className="block text-xs font-bold text-slate-700 mb-1">ระดับชั้น</label>
@@ -426,9 +448,9 @@ export function NnetReportPage() {
                             className="w-full rounded-xl border border-slate-300 p-2 text-sm bg-white focus:border-indigo-500 focus:ring-2 focus:ring-indigo-100 outline-none"
                         >
                             <option value="">ทุกกลุ่มเรียน</option>
-                            {recordsQuery.data?.available_groups?.map((grp) => (
-                                <option key={grp} value={grp}>
-                                    {grp}
+                            {retainedGroupOptions.map((option) => (
+                                <option key={option.value} value={option.value}>
+                                    {option.label}
                                 </option>
                             ))}
                         </select>

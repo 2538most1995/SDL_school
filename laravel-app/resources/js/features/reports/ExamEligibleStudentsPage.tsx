@@ -260,7 +260,7 @@ export function ExamEligibleStudentsPage() {
                             <span className="mb-2 block text-sm font-bold text-slate-700">ระดับชั้น</span>
                             <select
                                 value={level}
-                                onChange={(event) => { setLevel(event.target.value); setGroup(''); }}
+                                onChange={(event) => setLevel(event.target.value)}
                                 className="h-11 w-full rounded-xl border border-slate-300 bg-white px-3 text-sm"
                             >
                                 <option value="">ทุกระดับชั้น</option>

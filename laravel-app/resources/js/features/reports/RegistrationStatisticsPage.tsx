@@ -1,7 +1,7 @@
 import { Books, CalendarBlank, ChartBar, FileXls, FunnelSimple, MagnifyingGlass, StackSimple, Trophy, UsersThree, X } from '@phosphor-icons/react';
 import { keepPreviousData, useQuery } from '@tanstack/react-query';
 import type { ColumnDef } from '@tanstack/react-table';
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { DataTable } from '../../components/DataTable';
 import { EmptyState, QueryError, QuerySkeleton } from '../../components/QueryState';
 import { PageHeader } from '../../components/PageHeader';
@@ -9,6 +9,7 @@ import { Panel } from '../../components/Panel';
 import { StatGrid } from '../../components/StatGrid';
 import { StatTile } from '../../components/StatTile';
 import { useDemoRole } from '../../context/DemoRoleContext';
+import { retainSelectedFilterOption } from '../../lib/filterOptions';
 import { showErrorAlert } from '../../lib/feedback';
 import { getFeatureDataWithDemo } from '../api';
 import { StudentSubjectsDialog } from './StudentSubjectsDialog';
@@ -388,6 +389,7 @@ export function RegistrationStatisticsPage() {
     const [filters, setFilters] = useState<Record<CategoryKey, string>>(emptyFilters);
     const [selectedItem, setSelectedItem] = useState<StatisticItem | null>(null);
     const [isExporting, setIsExporting] = useState(false);
+    const filterOptionLabels = useRef(new Map<string, string>());
     const filterKey = categoryOptions.map((option) => `${option.key}:${filters[option.key]}`).join('|');
     const statistics = useQuery({
         queryKey: ['registration-statistics', category, term, filterKey],
@@ -423,6 +425,21 @@ export function RegistrationStatisticsPage() {
     const largest = payload?.summary.largest_category;
     const activeFilterCount = Object.values(filters).filter(Boolean).length;
     const canExport = canExportRegistrationStatistics(role);
+    useEffect(() => {
+        categoryOptions.forEach((categoryOption) => {
+            (payload?.filter_options[categoryOption.key] ?? []).forEach((option) => {
+                filterOptionLabels.current.set(`${categoryOption.key}|${option.value}`, option.label);
+            });
+        });
+    }, [payload?.filter_options]);
+    const retainedFilterOptions = useMemo(() => Object.fromEntries(categoryOptions.map((categoryOption) => [
+        categoryOption.key,
+        retainSelectedFilterOption(
+            (payload?.filter_options[categoryOption.key] ?? []).filter((item) => item.value !== ''),
+            filters[categoryOption.key],
+            filterOptionLabels.current.get(`${categoryOption.key}|${filters[categoryOption.key]}`),
+        ),
+    ])) as Record<CategoryKey, ReturnType<typeof retainSelectedFilterOption>>, [filters, payload?.filter_options]);
 
     const updateFilter = (key: CategoryKey, value: string) => {
         setFilters((current) => ({ ...current, [key]: value }));
@@ -471,8 +488,8 @@ export function RegistrationStatisticsPage() {
                             aria-label="เลือกกลุ่มเรียนด่วน"
                         >
                             <option value="">ทุกกลุ่มเรียน</option>
-                            {(payload?.filter_options.group ?? []).filter((item) => item.value !== '').map((item) => (
-                                <option key={item.value} value={item.value}>{item.label} ({item.count.toLocaleString('th-TH')})</option>
+                            {retainedFilterOptions.group.map((item) => (
+                                <option key={item.value} value={item.value}>{item.label}{item.count !== undefined ? ` (${item.count.toLocaleString('th-TH')})` : ''}</option>
                             ))}
                         </select>
                     </label>
@@ -544,8 +561,8 @@ export function RegistrationStatisticsPage() {
                                     aria-label={`กรองตาม${option.label}`}
                                 >
                                     <option value="">ทั้งหมด</option>
-                                    {(payload?.filter_options[option.key] ?? []).filter((item) => item.value !== '').map((item) => (
-                                        <option key={item.value} value={item.value}>{item.label} ({item.count.toLocaleString('th-TH')})</option>
+                                    {retainedFilterOptions[option.key].map((item) => (
+                                        <option key={item.value} value={item.value}>{item.label}{item.count !== undefined ? ` (${item.count.toLocaleString('th-TH')})` : ''}</option>
                                     ))}
                                 </select>
                             </label>
