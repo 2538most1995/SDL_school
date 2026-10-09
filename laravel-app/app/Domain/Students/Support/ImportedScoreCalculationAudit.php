@@ -52,15 +52,34 @@ final class ImportedScoreCalculationAudit
 
         $totalForGrade = $grade->totalScore ?? ($grade->courseworkScore !== null && $grade->finalExamScore !== null ? $grade->courseworkScore + $grade->finalExamScore : null);
 
-        if (! $grade->transferred && $totalForGrade !== null && $grade->grade !== null && trim($grade->grade) !== '') {
-            $checkCount++;
-            self::compare(
-                $issues,
-                'grade',
-                'เกรดไม่ตรงกับคะแนนรวม',
-                self::gradeForTotal($totalForGrade),
-                trim($grade->grade),
-            );
+        if (! $grade->transferred && $grade->grade !== null && trim($grade->grade) !== '') {
+            $gradeValue = trim($grade->grade);
+            $isAbsentOrIneligible = in_array($gradeValue, ['ข', 'ม', 'มส'], true);
+
+            if ($isAbsentOrIneligible) {
+                // ไม่มีคะแนนปลายภาคแล้วได้เกรด ข/ม/มส ถือว่าถูกต้องตามระเบียบ
+                // แต่ถ้ามีคะแนนปลายภาคแล้วยังได้เกรด ข/ม/มส จะตรวจเทียบกับคะแนนรวม
+                if ($grade->finalExamScore !== null) {
+                    $checkCount++;
+                    $expectedGrade = $totalForGrade !== null ? self::gradeForTotal($totalForGrade) : 0.0;
+                    self::compare(
+                        $issues,
+                        'grade',
+                        'เกรดไม่ตรงกับคะแนนรวม',
+                        $expectedGrade,
+                        $gradeValue,
+                    );
+                }
+            } elseif ($totalForGrade !== null) {
+                $checkCount++;
+                self::compare(
+                    $issues,
+                    'grade',
+                    'เกรดไม่ตรงกับคะแนนรวม',
+                    self::gradeForTotal($totalForGrade),
+                    $gradeValue,
+                );
+            }
         }
 
         return [

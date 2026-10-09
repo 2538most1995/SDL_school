@@ -68,7 +68,7 @@ final class ImportedScoreCalculationAuditTest extends TestCase
     {
         // 85 -> grade 4 (matches)
         $audit85 = ImportedScoreCalculationAudit::inspect($this->grade(
-            assessments: [],
+            assessments: [25, 20],
             coursework: 45,
             finalExam: 40,
             total: 85,
@@ -79,7 +79,7 @@ final class ImportedScoreCalculationAuditTest extends TestCase
 
         // 85 -> grade 3.5 (mismatch)
         $audit85Wrong = ImportedScoreCalculationAudit::inspect($this->grade(
-            assessments: [],
+            assessments: [25, 20],
             coursework: 45,
             finalExam: 40,
             total: 85,
@@ -90,31 +90,28 @@ final class ImportedScoreCalculationAuditTest extends TestCase
         $this->assertSame(4.0, $audit85Wrong['issues'][0]['expected']);
         $this->assertSame(3.5, $audit85Wrong['issues'][0]['actual']);
 
-        // 50 total with grade 'ข' (absent final exam - mismatch against total score)
-        $audit50Absence = ImportedScoreCalculationAudit::inspect($this->grade(
-            assessments: [],
+        // ไม่มีคะแนนปลายภาค (finalExam: null) ขึ้นเกรด 'ข' ถือว่าถูกต้องตามระเบียบ
+        $auditAbsenceValid = ImportedScoreCalculationAudit::inspect($this->grade(
+            assessments: [10, 10, 10, 10, 10],
             coursework: 50,
             finalExam: null,
             total: 50,
             gradeValue: 'ข',
         ));
-        $this->assertSame('incorrect', $audit50Absence['status']);
-        $this->assertSame('grade', $audit50Absence['issues'][0]['code']);
-        $this->assertSame('1', $audit50Absence['issues'][0]['expected']);
-        $this->assertSame('ข', $audit50Absence['issues'][0]['actual']);
+        $this->assertSame('correct', $auditAbsenceValid['status']);
+        $this->assertSame([], $auditAbsenceValid['issues']);
 
-        // 49 total with grade 'ข'
-        $audit49Absence = ImportedScoreCalculationAudit::inspect($this->grade(
+        // มีคะแนนปลายภาค (finalExam: 12) แต่ได้เกรด 'ข' ถือว่าผิดปกติ
+        $auditAbsenceWithFinal = ImportedScoreCalculationAudit::inspect($this->grade(
             assessments: [],
-            coursework: 49,
-            finalExam: null,
-            total: 49,
+            coursework: 47,
+            finalExam: 12,
+            total: 47,
             gradeValue: 'ข',
         ));
-        $this->assertSame('incorrect', $audit49Absence['status']);
-        $this->assertSame('grade', $audit49Absence['issues'][0]['code']);
-        $this->assertSame('0', $audit49Absence['issues'][0]['expected']);
-        $this->assertSame('ข', $audit49Absence['issues'][0]['actual']);
+        $this->assertSame('incorrect', $auditAbsenceWithFinal['status']);
+        $issueCodes = array_column($auditAbsenceWithFinal['issues'], 'code');
+        $this->assertContains('grade', $issueCodes);
 
         // Fallback total calculation from coursework + final when total is null
         $auditFallbackTotal = ImportedScoreCalculationAudit::inspect($this->grade(
