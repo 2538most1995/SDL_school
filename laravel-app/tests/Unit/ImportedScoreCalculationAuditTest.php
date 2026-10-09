@@ -42,13 +42,13 @@ final class ImportedScoreCalculationAuditTest extends TestCase
         $this->assertSame([], $audit['issues']);
     }
 
-    public function test_it_skips_unverifiable_totals_special_grades_and_transfers(): void
+    public function test_it_skips_unverifiable_totals_and_transfers(): void
     {
-        $special = ImportedScoreCalculationAudit::inspect($this->grade(
+        $noTotal = ImportedScoreCalculationAudit::inspect($this->grade(
             assessments: [],
-            coursework: 50,
+            coursework: null,
             finalExam: null,
-            total: 50,
+            total: null,
             gradeValue: 'มส',
         ));
         $transfer = ImportedScoreCalculationAudit::inspect($this->grade(
@@ -60,8 +60,71 @@ final class ImportedScoreCalculationAuditTest extends TestCase
             transferred: true,
         ));
 
-        $this->assertSame('not_checkable', $special['status']);
+        $this->assertSame('not_checkable', $noTotal['status']);
         $this->assertSame('not_checkable', $transfer['status']);
+    }
+
+    public function test_it_validates_total_score_against_grade_including_non_numeric_grades(): void
+    {
+        // 85 -> grade 4 (matches)
+        $audit85 = ImportedScoreCalculationAudit::inspect($this->grade(
+            assessments: [],
+            coursework: 45,
+            finalExam: 40,
+            total: 85,
+            gradeValue: '4',
+        ));
+        $this->assertSame('correct', $audit85['status']);
+        $this->assertSame([], $audit85['issues']);
+
+        // 85 -> grade 3.5 (mismatch)
+        $audit85Wrong = ImportedScoreCalculationAudit::inspect($this->grade(
+            assessments: [],
+            coursework: 45,
+            finalExam: 40,
+            total: 85,
+            gradeValue: '3.5',
+        ));
+        $this->assertSame('incorrect', $audit85Wrong['status']);
+        $this->assertSame('grade', $audit85Wrong['issues'][0]['code']);
+        $this->assertSame(4.0, $audit85Wrong['issues'][0]['expected']);
+        $this->assertSame(3.5, $audit85Wrong['issues'][0]['actual']);
+
+        // 50 total with grade 'ข' (absent final exam - mismatch against total score)
+        $audit50Absence = ImportedScoreCalculationAudit::inspect($this->grade(
+            assessments: [],
+            coursework: 50,
+            finalExam: null,
+            total: 50,
+            gradeValue: 'ข',
+        ));
+        $this->assertSame('incorrect', $audit50Absence['status']);
+        $this->assertSame('grade', $audit50Absence['issues'][0]['code']);
+        $this->assertSame('1', $audit50Absence['issues'][0]['expected']);
+        $this->assertSame('ข', $audit50Absence['issues'][0]['actual']);
+
+        // 49 total with grade 'ข'
+        $audit49Absence = ImportedScoreCalculationAudit::inspect($this->grade(
+            assessments: [],
+            coursework: 49,
+            finalExam: null,
+            total: 49,
+            gradeValue: 'ข',
+        ));
+        $this->assertSame('incorrect', $audit49Absence['status']);
+        $this->assertSame('grade', $audit49Absence['issues'][0]['code']);
+        $this->assertSame('0', $audit49Absence['issues'][0]['expected']);
+        $this->assertSame('ข', $audit49Absence['issues'][0]['actual']);
+
+        // Fallback total calculation from coursework + final when total is null
+        $auditFallbackTotal = ImportedScoreCalculationAudit::inspect($this->grade(
+            assessments: [],
+            coursework: 50,
+            finalExam: 35,
+            total: null,
+            gradeValue: '4',
+        ));
+        $this->assertSame('correct', $auditFallbackTotal['status']);
     }
 
     /** @return iterable<string, array{float, string}> */

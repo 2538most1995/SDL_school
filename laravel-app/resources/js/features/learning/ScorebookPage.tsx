@@ -28,7 +28,7 @@ import { showSuccessAlert } from '../../lib/feedback';
 import { downloadExcel } from '../../lib/excel';
 import { retainSelectedFilterOption } from '../../lib/filterOptions';
 import { getFeatureDataWithDemo, sendFeatureData } from '../api';
-import { buildImportedScoresPath, importedAssessmentLabels, isLowImportedMidtermScore, normalizeAssessmentScores } from './importedScores';
+import { buildImportedScoresPath, formatAuditIssueText, importedAssessmentLabels, isLowImportedMidtermScore, normalizeAssessmentScores } from './importedScores';
 import { isScoreGridNavigationKey, nextScoreGridPosition, scoreGridCellKey } from './scoreGridNavigation';
 
 type ScoreComponent = {
@@ -132,7 +132,14 @@ function scorePath(term: string, selected: string, group: string): string {
     return `/api/v1/learning/scores/workspace${query.size ? `?${query.toString()}` : ''}`;
 }
 
-function formatScore(value: number): string {
+function formatScore(value: number | string): string {
+    if (typeof value === 'string') {
+        const numeric = Number(value);
+        if (!Number.isNaN(numeric) && value.trim() !== '') {
+            return Number.isInteger(numeric) ? String(numeric) : numeric.toFixed(2).replace(/0+$/, '').replace(/\.$/, '');
+        }
+        return value.trim();
+    }
     return Number.isInteger(value) ? String(value) : value.toFixed(2).replace(/0+$/, '').replace(/\.$/, '');
 }
 
@@ -184,7 +191,7 @@ type ImportedScoreRow = {
     calculation_audit: {
         status: 'correct' | 'incorrect' | 'not_checkable';
         check_count: number;
-        issues: Array<{ code: string; label: string; expected: number; actual: number }>;
+        issues: Array<{ code: string; label: string; expected: number | string; actual: number | string }>;
     };
 };
 
@@ -230,7 +237,7 @@ function nullableScore(value: number | null): string {
 }
 
 function auditIssueText(issue: ImportedScoreRow['calculation_audit']['issues'][number]): string {
-    return `${issue.label}: ควรเป็น ${formatScore(issue.expected)} แต่ ITW เป็น ${formatScore(issue.actual)}`;
+    return formatAuditIssueText(issue);
 }
 
 function ImportedScoresPage({ sourceNavigation }: { sourceNavigation: ReactNode }) {
@@ -490,7 +497,7 @@ function ImportedScoresPage({ sourceNavigation }: { sourceNavigation: ReactNode 
             {showIncorrectOnly && !showLowMidtermOnly && importedScores.data && (
                 <div className={`mb-4 rounded-xl border p-4 text-sm leading-6 ${data?.calculation_audit.incorrect_rows ? 'border-amber-300 bg-amber-50 text-amber-950' : 'border-emerald-300 bg-emerald-50 text-emerald-950'}`} role="status">
                     <p className="font-black">{data?.calculation_audit.incorrect_rows ? `พบ ${data.calculation_audit.incorrect_rows.toLocaleString('th-TH')} รายการที่ควรตรวจใน ITW` : 'ไม่พบการคำนวณที่ไม่ตรงกัน'}</p>
-                    <p className="mt-1">ตรวจจากผลรวมคะแนนช่อง 1-9, คะแนนกลางภาค + ปลายภาค และเกรดตัวเลขตามคะแนนรวม เฉพาะรายการที่มีข้อมูลครบ ระบบนี้อ่านอย่างเดียวและไม่ได้แก้ข้อมูลต้นทาง</p>
+                    <p className="mt-1">ตรวจจากผลรวมคะแนนช่อง 1-9, คะแนนกลางภาค + ปลายภาค และเทียบเกรดตามคะแนนรวม (เช่น 85 ได้เกรด 4, 50 ได้เกรด 1) กับเกรดใน ITW ระบบนี้อ่านอย่างเดียวและไม่ได้แก้ข้อมูลต้นทาง</p>
                 </div>
             )}
             {showLowMidtermOnly && !showIncorrectOnly && importedScores.data && (

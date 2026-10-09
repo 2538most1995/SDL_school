@@ -50,14 +50,16 @@ final class ImportedScoreCalculationAudit
             );
         }
 
-        if (! $grade->transferred && $grade->totalScore !== null && $grade->grade !== null && is_numeric($grade->grade)) {
+        $totalForGrade = $grade->totalScore ?? ($grade->courseworkScore !== null && $grade->finalExamScore !== null ? $grade->courseworkScore + $grade->finalExamScore : null);
+
+        if (! $grade->transferred && $totalForGrade !== null && $grade->grade !== null && trim($grade->grade) !== '') {
             $checkCount++;
             self::compare(
                 $issues,
                 'grade',
                 'เกรดไม่ตรงกับคะแนนรวม',
-                self::gradeForTotal($grade->totalScore),
-                (float) $grade->grade,
+                self::gradeForTotal($totalForGrade),
+                trim($grade->grade),
             );
         }
 
@@ -68,19 +70,36 @@ final class ImportedScoreCalculationAudit
         ];
     }
 
-    /** @param list<array{code: string, label: string, expected: float, actual: float}> $issues */
-    private static function compare(array &$issues, string $code, string $label, float $expected, float $actual): void
+    /** @param list<array{code: string, label: string, expected: float|string, actual: float|string}> $issues */
+    private static function compare(array &$issues, string $code, string $label, float|string $expected, float|string $actual): void
     {
-        $expected = round($expected, 2);
-        $actual = round($actual, 2);
-        if (abs($expected - $actual) <= 0.01) {
-            return;
+        if (is_numeric($expected) && is_numeric($actual)) {
+            $expectedNum = round((float) $expected, 2);
+            $actualNum = round((float) $actual, 2);
+            if (abs($expectedNum - $actualNum) <= 0.01) {
+                return;
+            }
+            $expected = $expectedNum;
+            $actual = $actualNum;
+        } else {
+            $expectedStr = is_numeric($expected) ? self::formatGradeValue((float) $expected) : trim((string) $expected);
+            $actualStr = trim((string) $actual);
+            if ($expectedStr === $actualStr) {
+                return;
+            }
+            $expected = is_numeric($expected) ? self::formatGradeValue((float) $expected) : $expectedStr;
+            $actual = $actualStr;
         }
 
         $issues[] = compact('code', 'label', 'expected', 'actual');
     }
 
-    private static function gradeForTotal(float $total): float
+    private static function formatGradeValue(float $grade): string
+    {
+        return fmod($grade, 1.0) === 0.0 ? (string) (int) $grade : (string) $grade;
+    }
+
+    public static function gradeForTotal(float $total): float
     {
         return match (true) {
             $total >= 80 => 4.0,

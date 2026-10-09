@@ -58,3 +58,25 @@ export function normalizeAssessmentScores(scores?: Array<number | null>): Array<
         return typeof value === 'number' && Number.isFinite(value) ? value : null;
     });
 }
+
+export function formatAuditScore(value: number | string | null | undefined): string {
+    if (value === null || value === undefined || value === '') {
+        return '-';
+    }
+    if (typeof value === 'string') {
+        const numeric = Number(value);
+        if (!Number.isNaN(numeric) && value.trim() !== '') {
+            return Number.isInteger(numeric) ? String(numeric) : numeric.toFixed(2).replace(/0+$/, '').replace(/\.$/, '');
+        }
+        return value.trim();
+    }
+    if (typeof value === 'number') {
+        if (!Number.isFinite(value)) return '-';
+        return Number.isInteger(value) ? String(value) : value.toFixed(2).replace(/0+$/, '').replace(/\.$/, '');
+    }
+    return String(value);
+}
+
+export function formatAuditIssueText(issue: { label: string; expected: number | string; actual: number | string }): string {
+    return `${issue.label}: ควรเป็น ${formatAuditScore(issue.expected)} แต่ ITW เป็น ${formatAuditScore(issue.actual)}`;
+}

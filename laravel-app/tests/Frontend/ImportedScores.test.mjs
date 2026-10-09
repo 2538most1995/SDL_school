@@ -2,6 +2,8 @@ import assert from 'node:assert/strict';
 import test from 'node:test';
 import {
     buildImportedScoresPath,
+    formatAuditIssueText,
+    formatAuditScore,
     importedAssessmentLabels,
     isLowImportedMidtermScore,
     ITW51_ASSESSMENT_LABELS,
@@ -86,4 +88,29 @@ test('selected filters remain visible when the refreshed option set no longer co
     ]);
     // The helper returns a copy; verify that selecting it again preserves values.
     assert.deepEqual(retainSelectedFilterOption(options, 'พว31001'), options);
+});
+
+test('calculation audit formats expected and actual score values including non-numeric grades', () => {
+    assert.equal(formatAuditScore(4), '4');
+    assert.equal(formatAuditScore(3.5), '3.5');
+    assert.equal(formatAuditScore('1'), '1');
+    assert.equal(formatAuditScore('ข'), 'ข');
+    assert.equal(formatAuditScore(null), '-');
+
+    assert.equal(
+        formatAuditIssueText({ label: 'เกรดไม่ตรงกับคะแนนรวม', expected: 4, actual: 3.5 }),
+        'เกรดไม่ตรงกับคะแนนรวม: ควรเป็น 4 แต่ ITW เป็น 3.5',
+    );
+    assert.equal(
+        formatAuditIssueText({ label: 'เกรดไม่ตรงกับคะแนนรวม', expected: 1, actual: 'ข' }),
+        'เกรดไม่ตรงกับคะแนนรวม: ควรเป็น 1 แต่ ITW เป็น ข',
+    );
+    assert.equal(
+        formatAuditIssueText({ label: 'เกรดไม่ตรงกับคะแนนรวม', expected: 4, actual: 'ข' }),
+        'เกรดไม่ตรงกับคะแนนรวม: ควรเป็น 4 แต่ ITW เป็น ข',
+    );
+    assert.equal(
+        formatAuditIssueText({ label: 'เกรดไม่ตรงกับคะแนนรวม', expected: 0, actual: 'ข' }),
+        'เกรดไม่ตรงกับคะแนนรวม: ควรเป็น 0 แต่ ITW เป็น ข',
+    );
 });
