@@ -90,7 +90,7 @@ final class ImportedScoreCalculationAuditTest extends TestCase
         $this->assertSame(4.0, $audit85Wrong['issues'][0]['expected']);
         $this->assertSame(3.5, $audit85Wrong['issues'][0]['actual']);
 
-        // ไม่มีคะแนนปลายภาค (finalExam: null) หรือขึ้นเกรด 'ข' (ขาดสอบ) ต้องไม่แจ้งเตือนผิดปกติ (not_checkable, issues ว่าง)
+        // ไม่มีคะแนนปลายภาคจริงและเกรด ข ต้องไม่แจ้งเตือนผิดปกติ
         // แม้ผลรวมคะแนนย่อย 1-9 (13 + 14 = 27) จะไม่ตรงกับคะแนนกลางภาค (54) ก็ต้องไม่แจ้งเตือน
         $auditAbsenceValid = ImportedScoreCalculationAudit::inspect($this->grade(
             assessments: [13, null, null, 14],
@@ -102,6 +102,7 @@ final class ImportedScoreCalculationAuditTest extends TestCase
         $this->assertSame('not_checkable', $auditAbsenceValid['status']);
         $this->assertSame(0, $auditAbsenceValid['check_count']);
         $this->assertSame([], $auditAbsenceValid['issues']);
+        $this->assertSame('missing_final_exam', $auditAbsenceValid['reason']);
 
         // กรณีไม่มีคะแนนปลายภาค (finalExam: null) ใดๆ ไม่ต้องตรวจการคำนวณ
         $auditNoFinal = ImportedScoreCalculationAudit::inspect($this->grade(
@@ -135,6 +136,72 @@ final class ImportedScoreCalculationAuditTest extends TestCase
             gradeValue: '4',
         ));
         $this->assertSame('correct', $auditFallbackTotal['status']);
+    }
+
+    public function test_it_flags_absent_grade_when_the_final_score_exists_as_in_the_reported_row(): void
+    {
+        $grade = $this->grade(
+            assessments: [14, null, null, 14, null, null, 8, 8, 8],
+            coursework: 52,
+            finalExam: 34,
+            total: 86,
+            gradeValue: ' ข ',
+        );
+        $audit = ImportedScoreCalculationAudit::inspect($grade);
+
+        $this->assertSame('incorrect', $audit['status']);
+        $this->assertSame(3, $audit['check_count']);
+        $this->assertNull($audit['reason']);
+        $this->assertSame(['grade'], array_column($audit['issues'], 'code'));
+        $this->assertSame('4', $audit['issues'][0]['expected']);
+        $this->assertSame('ข', $audit['issues'][0]['actual']);
+        $this->assertSame(' ข ', $grade->grade);
+        $this->assertSame(34.0, $grade->finalExamScore);
+    }
+
+    public function test_it_does_not_use_a_stale_total_to_override_absence_without_a_final_score(): void
+    {
+        $audit = ImportedScoreCalculationAudit::inspect($this->grade(
+            assessments: [14, null, null, 14, null, null, 8, 8, 8],
+            coursework: 52,
+            finalExam: null,
+            total: 86,
+            gradeValue: 'ข',
+        ));
+
+        $this->assertSame('not_checkable', $audit['status']);
+        $this->assertSame('missing_final_exam', $audit['reason']);
+        $this->assertSame(0, $audit['check_count']);
+        $this->assertSame([], $audit['issues']);
+    }
+
+    public function test_zero_final_score_is_checked_and_does_not_mean_absence(): void
+    {
+        foreach (['1' => 'correct', 'ข' => 'incorrect'] as $gradeValue => $status) {
+            $audit = ImportedScoreCalculationAudit::inspect($this->grade(
+                assessments: [25, 25],
+                coursework: 50,
+                finalExam: 0,
+                total: 50,
+                gradeValue: (string) $gradeValue,
+            ));
+            $this->assertSame($status, $audit['status']);
+            $this->assertSame(3, $audit['check_count']);
+            $this->assertNull($audit['reason']);
+        }
+    }
+
+    public function test_skip_reasons_distinguish_special_grades_and_transfers_from_missing_scores(): void
+    {
+        foreach (['ม', 'มส', 'ผ', 'มผ', 'ร'] as $special) {
+            $audit = ImportedScoreCalculationAudit::inspect($this->grade([], 52, 34, 86, $special));
+            $this->assertSame('not_checkable', $audit['status']);
+            $this->assertSame('special_grade', $audit['reason']);
+            $this->assertSame([], $audit['issues']);
+        }
+        $transfer = ImportedScoreCalculationAudit::inspect($this->grade([], 52, 34, 86, 'ข', true));
+        $this->assertSame('transferred', $transfer['reason']);
+        $this->assertSame([], $transfer['issues']);
     }
 
     /** @return iterable<string, array{float, string}> */

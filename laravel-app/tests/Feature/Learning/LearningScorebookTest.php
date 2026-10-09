@@ -2,6 +2,8 @@
 
 namespace Tests\Feature\Learning;
 
+use App\Domain\Students\Models\Grade;
+use App\Domain\Students\Repositories\StudentRepository;
 use App\Models\District;
 use App\Models\User;
 use Illuminate\Foundation\Testing\RefreshDatabase;
@@ -611,6 +613,50 @@ final class LearningScorebookTest extends TestCase
         $this->getJson('/api/v1/learning/scores/imported?term=all')
             ->assertOk()
             ->assertJsonPath('data.selected_term', null);
+    }
+
+    public function test_imported_audit_filter_includes_absent_grade_with_a_final_score_but_excludes_real_absence(): void
+    {
+        $students = app(StudentRepository::class)->students([$this->district->id]);
+        $student = $students[0];
+        $grades = [];
+        foreach (['has-final' => 34, 'missing-final' => null, 'zero-final' => 0] as $subject => $final) {
+            $grades[] = new Grade(
+                studentCode: $student->code,
+                subjectCode: $subject,
+                subjectName: 'วิชาทดสอบ',
+                credits: 3,
+                subjectType: 'compulsory',
+                term: '1/2569',
+                grade: 'ข',
+                assessmentScores: [14, null, null, 14, null, null, 8, 8, 8],
+                courseworkScore: 52,
+                finalExamScore: $final,
+                totalScore: $final === 0 ? 52 : 86,
+            );
+        }
+        $repository = \Mockery::mock(StudentRepository::class);
+        $repository->shouldReceive('students')->with([$this->district->id])->andReturn([$student]);
+        $repository->shouldReceive('gradesForMany')->with([$student])->andReturn([
+            "{$student->districtId}|{$student->level}|{$student->code}" => $grades,
+        ]);
+        $this->app->instance(StudentRepository::class, $repository);
+        Sanctum::actingAs(User::factory()->create(['role' => 'admin', 'district_id' => $this->district->id]));
+
+        $all = $this->getJson('/api/v1/learning/scores/imported')->assertOk();
+        $all->assertJsonPath('data.calculation_audit.total_rows', 3)
+            ->assertJsonPath('data.calculation_audit.incorrect_rows', 2)
+            ->assertJsonPath('data.calculation_audit.not_checkable_rows', 1);
+        $rows = array_column($all->json('data.rows'), null, 'subject_code');
+        $this->assertSame('missing_final_exam', $rows['missing-final']['calculation_audit']['reason']);
+        $this->assertSame([], $rows['missing-final']['calculation_audit']['issues']);
+        $this->assertSame('ข', $rows['has-final']['grade']);
+        $this->assertSame('4', $rows['has-final']['calculation_audit']['issues'][0]['expected']);
+        $this->assertEquals(34, $rows['has-final']['final_exam_score']);
+
+        $filtered = $this->getJson('/api/v1/learning/scores/imported?calculation_status=incorrect')
+            ->assertOk()->assertJsonCount(2, 'data.rows')->assertJsonPath('data.pagination.total', 2);
+        $this->assertSame(['has-final', 'zero-final'], array_column($filtered->json('data.rows'), 'subject_code'));
     }
 
     public function test_student_cannot_access_imported_scores(): void

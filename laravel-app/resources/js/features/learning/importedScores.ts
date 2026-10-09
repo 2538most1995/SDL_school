@@ -86,6 +86,7 @@ export function formatAuditStatusText(row: {
     grade?: string | null;
     calculation_audit: {
         status: 'correct' | 'incorrect' | 'not_checkable';
+        reason?: 'transferred' | 'special_grade' | 'missing_final_exam' | 'incomplete_data' | null;
         issues: Array<{ label: string; expected: number | string; actual: number | string }>;
     };
 }): string {
@@ -95,7 +96,14 @@ export function formatAuditStatusText(row: {
     if (row.calculation_audit.status === 'correct') {
         return 'คำนวณตรงกัน';
     }
-    if (row.final_exam_score === null || row.final_exam_score === undefined || row.grade === 'ข' || row.grade === 'ม' || row.grade === 'มส') {
+    if (row.calculation_audit.reason === 'transferred') {
+        return 'วิชาเทียบโอน — ไม่เทียบเกรดจากคะแนนรวม';
+    }
+    if (row.calculation_audit.reason === 'special_grade' || ['ม', 'มส', 'ผ', 'มผ', 'ร'].includes(row.grade?.trim() ?? '')) {
+        return `เกรดพิเศษ ${row.grade?.trim() ?? ''} — ไม่เทียบเกรดจากคะแนนรวม`;
+    }
+    if (row.final_exam_score === null || row.final_exam_score === undefined) {
+        if (row.grade?.trim() === 'ข') return 'ไม่มีคะแนนปลายภาค — เกรด ข ถูกต้องตามเงื่อนไข';
         return 'ไม่มีคะแนนปลายภาค';
     }
     return 'ข้อมูลไม่ครบสำหรับตรวจ';

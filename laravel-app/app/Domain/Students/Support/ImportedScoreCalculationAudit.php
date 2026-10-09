@@ -10,26 +10,30 @@ final class ImportedScoreCalculationAudit
      * Inspect calculations stored in GRADE.DBF without changing source data.
      *
      * A comparison is only made when every value required for that comparison
-     * is present. Special grades and transferred subjects are deliberately not
-     * converted to a numeric grade to avoid false positives.
+     * is present. An absent grade (ข) is only exempt when the final exam score
+     * is actually missing; a recorded zero is still a score. Other special
+     * grades and transferred subjects are not converted to a numeric grade.
      *
      * @return array{
      *     status: 'correct'|'incorrect'|'not_checkable',
      *     check_count: int,
-     *     issues: list<array{code: string, label: string, expected: float, actual: float}>
+     *     reason: 'transferred'|'special_grade'|'missing_final_exam'|'incomplete_data'|null,
+     *     issues: list<array{code: string, label: string, expected: float|string, actual: float|string}>
      * }
      */
     public static function inspect(Grade $grade): array
     {
-        // กรณีไม่มีคะแนนปลายภาคเรียน หรือขาดสอบ/ไม่ผ่าน/ไม่มีสิทธิ์สอบ หรือเทียบโอน ไม่ต้องแจ้งเตือนการคำนวณ
-        if (
-            $grade->transferred
-            || $grade->finalExamScore === null
-            || in_array(trim((string) $grade->grade), ['ข', 'ม', 'มส', 'ผ', 'มผ', 'ร'], true)
-        ) {
+        $reason = match (true) {
+            $grade->transferred => 'transferred',
+            in_array(trim((string) $grade->grade), ['ม', 'มส', 'ผ', 'มผ', 'ร'], true) => 'special_grade',
+            $grade->finalExamScore === null => 'missing_final_exam',
+            default => null,
+        };
+        if ($reason !== null) {
             return [
                 'status' => 'not_checkable',
                 'check_count' => 0,
+                'reason' => $reason,
                 'issues' => [],
             ];
         }
@@ -82,6 +86,7 @@ final class ImportedScoreCalculationAudit
         return [
             'status' => $checkCount === 0 ? 'not_checkable' : ($issues === [] ? 'correct' : 'incorrect'),
             'check_count' => $checkCount,
+            'reason' => $checkCount === 0 ? 'incomplete_data' : null,
             'issues' => $issues,
         ];
     }

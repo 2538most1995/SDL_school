@@ -116,14 +116,14 @@ test('calculation audit formats expected and actual score values including non-n
     );
 });
 
-test('formatAuditStatusText displays ไม่มีคะแนนปลายภาค for missing final exam or absent grade', () => {
+test('audit status uses actual missing final scores, not the absent grade label', () => {
     assert.equal(
         formatAuditStatusText({
             final_exam_score: null,
             grade: 'ข',
             calculation_audit: { status: 'not_checkable', issues: [] },
         }),
-        'ไม่มีคะแนนปลายภาค',
+        'ไม่มีคะแนนปลายภาค — เกรด ข ถูกต้องตามเงื่อนไข',
     );
 
     assert.equal(
@@ -155,4 +155,37 @@ test('formatAuditStatusText displays ไม่มีคะแนนปลาย�
         }),
         'เกรดไม่ตรงกับคะแนนรวม: ควรเป็น 4 แต่ ITW เป็น 3.5',
     );
+});
+
+test('audit status never describes a recorded final score as missing', () => {
+    for (const finalScore of [0, 34]) {
+        assert.equal(formatAuditStatusText({
+            final_exam_score: finalScore,
+            grade: 'ข',
+            calculation_audit: {
+                status: 'incorrect',
+                issues: [{ label: 'เกรดไม่ตรงกับคะแนนรวม', expected: 4, actual: 'ข' }],
+            },
+        }), 'เกรดไม่ตรงกับคะแนนรวม: ควรเป็น 4 แต่ ITW เป็น ข');
+        assert.equal(formatAuditStatusText({
+            final_exam_score: finalScore,
+            grade: 'ข',
+            calculation_audit: { status: 'not_checkable', issues: [] },
+        }), 'ข้อมูลไม่ครบสำหรับตรวจ');
+    }
+});
+
+test('audit status explains transfers and special grades separately from missing final exams', () => {
+    assert.equal(formatAuditStatusText({
+        final_exam_score: null,
+        grade: 'ข',
+        calculation_audit: { status: 'not_checkable', reason: 'transferred', issues: [] },
+    }), 'วิชาเทียบโอน — ไม่เทียบเกรดจากคะแนนรวม');
+    for (const grade of ['ม', 'มส', 'ผ', 'มผ', 'ร']) {
+        assert.equal(formatAuditStatusText({
+            final_exam_score: 34,
+            grade,
+            calculation_audit: { status: 'not_checkable', reason: 'special_grade', issues: [] },
+        }), `เกรดพิเศษ ${grade} — ไม่เทียบเกรดจากคะแนนรวม`);
+    }
 });

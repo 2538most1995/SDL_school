@@ -191,6 +191,7 @@ type ImportedScoreRow = {
     calculation_audit: {
         status: 'correct' | 'incorrect' | 'not_checkable';
         check_count: number;
+        reason?: 'transferred' | 'special_grade' | 'missing_final_exam' | 'incomplete_data' | null;
         issues: Array<{ code: string; label: string; expected: number | string; actual: number | string }>;
     };
 };
@@ -501,7 +502,7 @@ function ImportedScoresPage({ sourceNavigation }: { sourceNavigation: ReactNode 
             {showIncorrectOnly && !showLowMidtermOnly && importedScores.data && (
                 <div className={`mb-4 rounded-xl border p-4 text-sm leading-6 ${data?.calculation_audit.incorrect_rows ? 'border-amber-300 bg-amber-50 text-amber-950' : 'border-emerald-300 bg-emerald-50 text-emerald-950'}`} role="status">
                     <p className="font-black">{data?.calculation_audit.incorrect_rows ? `พบ ${data.calculation_audit.incorrect_rows.toLocaleString('th-TH')} รายการที่ควรตรวจใน ITW` : 'ไม่พบการคำนวณที่ไม่ตรงกัน'}</p>
-                    <p className="mt-1">ตรวจจากผลรวมคะแนนช่อง 1-9, คะแนนกลางภาค + ปลายภาค และเทียบเกรดตามคะแนนรวม (เช่น 85 ได้เกรด 4, 50 ได้เกรด 1) กับเกรดใน ITW ระบบนี้อ่านอย่างเดียวและไม่ได้แก้ข้อมูลต้นทาง</p>
+                    <p className="mt-1">ตรวจเฉพาะเงื่อนไขที่มีข้อมูลครบ ระบบนี้อ่านอย่างเดียวและไม่ได้แก้ข้อมูลต้นทาง</p>
                 </div>
             )}
             {showLowMidtermOnly && !showIncorrectOnly && importedScores.data && (
@@ -516,6 +517,17 @@ function ImportedScoresPage({ sourceNavigation }: { sourceNavigation: ReactNode 
                     <p className="mt-1">แสดงเฉพาะรายการที่เข้าทั้งสองเงื่อนไขพร้อมกัน</p>
                 </div>
             )}
+            <details className="mb-4 rounded-xl border border-slate-200 bg-slate-50 p-4 text-sm leading-6 text-slate-800">
+                <summary className="cursor-pointer font-bold">วิธีพิจารณาการคำนวณและเกรดจาก ITW</summary>
+                <ol className="mt-3 list-decimal space-y-1 pl-5">
+                    <li>วิชาเทียบโอนและเกรดพิเศษ ม, มส, ผ, มผ, ร: ไม่เทียบเกรดจากคะแนนรวม</li>
+                    <li>ปลายภาคว่าง (–): ไม่คำนวณเกรดตัวเลข แม้มีคะแนนรวมค้างอยู่; เกรด ข ถูกต้องตามเงื่อนไขไม่มีคะแนนปลายภาค</li>
+                    <li>มีคะแนนปลายภาค (รวม 0 จริง): ตรวจผลรวมช่อง 1–9 ที่มีค่าเทียบกับคะแนนกลางภาค และกลางภาค + ปลายภาคเทียบกับคะแนนรวม เมื่อมีข้อมูลสำหรับคู่ที่ตรวจ</li>
+                    <li>เทียบเกรดกับคะแนนรวม; ถ้าคะแนนรวมว่าง ใช้กลางภาค + ปลายภาคแทน: 80 ขึ้นไป = 4, 75–ต่ำกว่า 80 = 3.5, 70–ต่ำกว่า 75 = 3, 65–ต่ำกว่า 70 = 2.5, 60–ต่ำกว่า 65 = 2, 55–ต่ำกว่า 60 = 1.5, 50–ต่ำกว่า 55 = 1, ต่ำกว่า 50 = 0</li>
+                    <li>ตัวอย่าง: กลางภาค 52 + ปลายภาค 34 = 86 แต่เกรด ข ต้องตรวจใน ITW เพราะมีคะแนนปลายภาคแล้ว; หากปลายภาคว่างและเกรด ข จะไม่แจ้งว่าเกรดผิด</li>
+                    <li>ถ้าข้อมูลไม่ครบ ตรวจได้เฉพาะคู่ที่มีข้อมูล; คะแนนกลางภาคต่ำกว่า 40 เป็นตัวกรองติดตามผู้เรียนแยกจากการตรวจคำนวณ</li>
+                </ol>
+            </details>
             {showScoreLegend && (
                 <div className="mb-4 rounded-2xl border border-brand-200 bg-brand-50/70 p-4 text-sm text-slate-800 shadow-xs">
                     <div className="flex items-center justify-between pb-2 mb-3 border-b border-brand-200/60">
@@ -594,7 +606,7 @@ function ImportedScoresPage({ sourceNavigation }: { sourceNavigation: ReactNode 
                                     <span className="text-xs font-bold text-emerald-700">คำนวณตรงกัน</span>
                                 ) : (
                                     <span className="text-xs text-slate-500">
-                                        {row.final_exam_score === null || row.grade === 'ข' || row.grade === 'ม' || row.grade === 'มส' ? 'ไม่มีคะแนนปลายภาค' : 'ข้อมูลไม่ครบสำหรับตรวจ'}
+                                        {formatAuditStatusText(row)}
                                     </span>
                                 )}
                             </td>
