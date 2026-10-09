@@ -103,7 +103,7 @@ export function formatAuditStatusText(row: {
         return `เกรดพิเศษ ${row.grade?.trim() ?? ''} — ไม่เทียบเกรดจากคะแนนรวม`;
     }
     if (row.final_exam_score === null || row.final_exam_score === undefined) {
-        if (row.grade?.trim() === 'ข') return 'ไม่มีคะแนนปลายภาค — เกรด ข ถูกต้องตามเงื่อนไข';
+        if (row.grade?.trim() === 'ข') return 'คำนวณตรงกัน';
         return 'ไม่มีคะแนนปลายภาค';
     }
     return 'ข้อมูลไม่ครบสำหรับตรวจ';

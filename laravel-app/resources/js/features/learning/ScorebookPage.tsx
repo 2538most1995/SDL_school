@@ -521,7 +521,7 @@ function ImportedScoresPage({ sourceNavigation }: { sourceNavigation: ReactNode 
                 <summary className="cursor-pointer font-bold">วิธีพิจารณาการคำนวณและเกรดจาก ITW</summary>
                 <ol className="mt-3 list-decimal space-y-1 pl-5">
                     <li>วิชาเทียบโอนและเกรดพิเศษ ม, มส, ผ, มผ, ร: ไม่เทียบเกรดจากคะแนนรวม</li>
-                    <li>ปลายภาคว่าง (–): ไม่คำนวณเกรดตัวเลข แม้มีคะแนนรวมค้างอยู่; เกรด ข ถูกต้องตามเงื่อนไขไม่มีคะแนนปลายภาค</li>
+                    <li>ปลายภาคว่าง (–): ไม่คำนวณเกรดตัวเลข แม้มีคะแนนรวมค้างอยู่; หากเกรด ข ให้แสดง “คำนวณตรงกัน” เพราะถูกต้องตามเงื่อนไขไม่มีคะแนนปลายภาค</li>
                     <li>มีคะแนนปลายภาค (รวม 0 จริง): ตรวจผลรวมช่อง 1–9 ที่มีค่าเทียบกับคะแนนกลางภาค และกลางภาค + ปลายภาคเทียบกับคะแนนรวม เมื่อมีข้อมูลสำหรับคู่ที่ตรวจ</li>
                     <li>เทียบเกรดกับคะแนนรวม; ถ้าคะแนนรวมว่าง ใช้กลางภาค + ปลายภาคแทน: 80 ขึ้นไป = 4, 75–ต่ำกว่า 80 = 3.5, 70–ต่ำกว่า 75 = 3, 65–ต่ำกว่า 70 = 2.5, 60–ต่ำกว่า 65 = 2, 55–ต่ำกว่า 60 = 1.5, 50–ต่ำกว่า 55 = 1, ต่ำกว่า 50 = 0</li>
                     <li>ตัวอย่าง: กลางภาค 52 + ปลายภาค 34 = 86 แต่เกรด ข ต้องตรวจใน ITW เพราะมีคะแนนปลายภาคแล้ว; หากปลายภาคว่างและเกรด ข จะไม่แจ้งว่าเกรดผิด</li>
@@ -599,7 +599,7 @@ function ImportedScoresPage({ sourceNavigation }: { sourceNavigation: ReactNode 
                             <td className="border-b border-slate-200 px-3 py-3 text-center"><span className="inline-flex min-w-10 justify-center rounded-lg bg-slate-100 px-2 py-1 font-mono font-black text-slate-900">{row.grade || '-'}</span></td>
                             <td className="border-b border-slate-200 px-4 py-3">
                                 {row.calculation_audit.status === 'incorrect' ? (
-                                    <ul className="space-y-1 text-xs font-semibold leading-5 text-rose-800">
+                                    <ul className="space-y-1 text-xs font-semibold leading-5 text-orange-700">
                                         {row.calculation_audit.issues.map((issue) => <li key={issue.code}>{auditIssueText(issue)}</li>)}
                                     </ul>
                                 ) : row.calculation_audit.status === 'correct' ? (

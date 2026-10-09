@@ -646,9 +646,11 @@ final class LearningScorebookTest extends TestCase
         $all = $this->getJson('/api/v1/learning/scores/imported')->assertOk();
         $all->assertJsonPath('data.calculation_audit.total_rows', 3)
             ->assertJsonPath('data.calculation_audit.incorrect_rows', 2)
-            ->assertJsonPath('data.calculation_audit.not_checkable_rows', 1);
+            ->assertJsonPath('data.calculation_audit.checked_rows', 3)
+            ->assertJsonPath('data.calculation_audit.not_checkable_rows', 0);
         $rows = array_column($all->json('data.rows'), null, 'subject_code');
         $this->assertSame('missing_final_exam', $rows['missing-final']['calculation_audit']['reason']);
+        $this->assertSame('correct', $rows['missing-final']['calculation_audit']['status']);
         $this->assertSame([], $rows['missing-final']['calculation_audit']['issues']);
         $this->assertSame('ข', $rows['has-final']['grade']);
         $this->assertSame('4', $rows['has-final']['calculation_audit']['issues'][0]['expected']);

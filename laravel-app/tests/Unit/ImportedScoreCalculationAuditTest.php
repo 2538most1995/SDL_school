@@ -99,8 +99,8 @@ final class ImportedScoreCalculationAuditTest extends TestCase
             total: 54,
             gradeValue: 'ข',
         ));
-        $this->assertSame('not_checkable', $auditAbsenceValid['status']);
-        $this->assertSame(0, $auditAbsenceValid['check_count']);
+        $this->assertSame('correct', $auditAbsenceValid['status']);
+        $this->assertSame(1, $auditAbsenceValid['check_count']);
         $this->assertSame([], $auditAbsenceValid['issues']);
         $this->assertSame('missing_final_exam', $auditAbsenceValid['reason']);
 
@@ -169,9 +169,9 @@ final class ImportedScoreCalculationAuditTest extends TestCase
             gradeValue: 'ข',
         ));
 
-        $this->assertSame('not_checkable', $audit['status']);
+        $this->assertSame('correct', $audit['status']);
         $this->assertSame('missing_final_exam', $audit['reason']);
-        $this->assertSame(0, $audit['check_count']);
+        $this->assertSame(1, $audit['check_count']);
         $this->assertSame([], $audit['issues']);
     }
 

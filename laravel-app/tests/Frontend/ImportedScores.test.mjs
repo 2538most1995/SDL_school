@@ -123,7 +123,7 @@ test('audit status uses actual missing final scores, not the absent grade label'
             grade: 'ข',
             calculation_audit: { status: 'not_checkable', issues: [] },
         }),
-        'ไม่มีคะแนนปลายภาค — เกรด ข ถูกต้องตามเงื่อนไข',
+        'คำนวณตรงกัน',
     );
 
     assert.equal(

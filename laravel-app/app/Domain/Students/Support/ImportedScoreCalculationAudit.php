@@ -30,9 +30,11 @@ final class ImportedScoreCalculationAudit
             default => null,
         };
         if ($reason !== null) {
+            $validAbsence = $reason === 'missing_final_exam' && trim((string) $grade->grade) === 'ข';
+
             return [
-                'status' => 'not_checkable',
-                'check_count' => 0,
+                'status' => $validAbsence ? 'correct' : 'not_checkable',
+                'check_count' => $validAbsence ? 1 : 0,
                 'reason' => $reason,
                 'issues' => [],
             ];
