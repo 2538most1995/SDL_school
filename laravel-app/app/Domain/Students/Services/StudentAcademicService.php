@@ -230,6 +230,7 @@ final readonly class StudentAcademicService
                     'final_exam_score' => $grade->finalExamScore,
                     'total_score' => $grade->totalScore,
                     'grade' => $grade->grade,
+                    'is_remedial' => $grade->remedial,
                     'calculation_audit' => $audit,
                 ];
             }

@@ -188,6 +188,7 @@ type ImportedScoreRow = {
     final_exam_score: number | null;
     total_score: number | null;
     grade: string | null;
+    is_remedial?: boolean;
     calculation_audit: {
         status: 'correct' | 'incorrect' | 'not_checkable';
         check_count: number;
@@ -596,7 +597,7 @@ function ImportedScoresPage({ sourceNavigation }: { sourceNavigation: ReactNode 
                             <td className={`border-b border-r border-slate-200 bg-sky-50/60 px-3 py-3 text-center font-mono font-black tabular-nums ${isLowImportedMidtermScore(row.midterm_score) ? 'text-rose-700' : 'text-sky-900'}`}>{nullableScore(row.midterm_score)}{isLowImportedMidtermScore(row.midterm_score) && <span className="sr-only"> คะแนนกลางภาคต่ำกว่า 40</span>}</td>
                             <td className="border-b border-r border-slate-200 bg-amber-50/60 px-3 py-3 text-center font-mono font-black tabular-nums text-amber-900">{nullableScore(row.final_exam_score)}</td>
                             <td className="border-b border-r border-slate-200 bg-brand-50/60 px-3 py-3 text-center font-mono font-black tabular-nums text-brand-900">{nullableScore(row.total_score)}</td>
-                            <td className="border-b border-slate-200 px-3 py-3 text-center"><span className="inline-flex min-w-10 justify-center rounded-lg bg-slate-100 px-2 py-1 font-mono font-black text-slate-900">{row.grade || '-'}</span></td>
+                            <td className="border-b border-slate-200 px-3 py-3 text-center"><span className="inline-flex flex-wrap items-center justify-center gap-1"><span className="inline-flex min-w-10 justify-center rounded-lg bg-slate-100 px-2 py-1 font-mono font-black text-slate-900">{row.grade || '-'}</span>{row.is_remedial && <span className="rounded bg-amber-50 px-1 py-0.5 text-[10px] font-semibold leading-none text-amber-800" title="ผลการเรียนจากรายการสอบซ่อมใน ITW">ซ่อม</span>}</span></td>
                             <td className="border-b border-slate-200 px-4 py-3">
                                 {row.calculation_audit.status === 'incorrect' ? (
                                     <ul className="space-y-1 text-xs font-semibold leading-5">

@@ -1098,6 +1098,7 @@ final class LegacyStudentRepository implements StudentRepository
                 finalExamScore: $this->nullableDecimal($chosen['final_exam_score'] ?? null),
                 totalScore: $this->nullableDecimal($chosen['total_score'] ?? null),
                 learningMethod: $this->learningMethodLabel($chosen['learning_method_value'] ?? null),
+                remedial: trim((string) ($chosen['typ_code'] ?? '')) === '7',
             );
         }
 

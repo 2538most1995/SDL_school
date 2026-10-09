@@ -20,6 +20,7 @@ final readonly class Grade
         public ?float $finalExamScore = null,
         public ?float $totalScore = null,
         public ?string $learningMethod = null,
+        public bool $remedial = false,
     ) {}
 
     public function numericGrade(): ?float
@@ -54,6 +55,7 @@ final readonly class Grade
             'numeric_grade' => $this->numericGrade(),
             'is_passed' => $this->isPassed(),
             'is_transferred' => $this->transferred,
+            'is_remedial' => $this->remedial,
             'exam_attended' => $this->examAttended,
             'assessment_scores' => $this->assessmentScores,
             'coursework_score' => $this->courseworkScore,

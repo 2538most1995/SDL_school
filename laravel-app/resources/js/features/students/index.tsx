@@ -646,6 +646,7 @@ type StaffGradeDetailRow = {
     numeric_grade: number | null;
     is_passed: boolean;
     is_transferred: boolean;
+    is_remedial?: boolean;
     exam_attended: boolean;
     assessment_scores?: Array<number | null>;
     coursework_score?: number | null;
@@ -1153,7 +1154,7 @@ function StaffAcademicDetailDialog({ kind, student, onClose }: { kind: MetricKin
         { id: 'coursework', accessorFn: (row) => row.coursework_score, header: 'คะแนนเก็บ', size: 100, meta: { compactSize: 60, compactHeader: 'เก็บ', compactTextAlign: 'center' }, cell: ({ getValue }) => { const val = getValue<number | null | undefined>(); return val !== null && val !== undefined ? <span className="font-mono font-bold text-sky-900">{val}</span> : '-'; } },
         { id: 'final', accessorFn: (row) => row.final_exam_score, header: 'ปลายภาค', size: 100, meta: { compactSize: 60, compactHeader: 'ปลาย', compactTextAlign: 'center' }, cell: ({ getValue }) => { const val = getValue<number | null | undefined>(); return val !== null && val !== undefined ? <span className="font-mono font-bold text-amber-900">{val}</span> : '-'; } },
         { id: 'total', accessorFn: (row) => row.total_score, header: 'รวม', size: 88, meta: { compactSize: 52, compactTextAlign: 'center' }, cell: ({ getValue }) => { const val = getValue<number | null | undefined>(); return val !== null && val !== undefined ? <span className="font-mono font-black text-brand-900">{val}</span> : '-'; } },
-        { accessorKey: 'grade', header: 'ผลการเรียน', size: 110, meta: { compactSize: 64, compactHeader: 'เกรด', compactTextAlign: 'center' }, cell: ({ getValue }) => { const val = getValue<string | null>(); return <span className="font-mono font-black text-slate-900">{val ?? 'รอผล'}</span>; } },
+        { accessorKey: 'grade', header: 'ผลการเรียน', size: 110, meta: { compactSize: 64, compactHeader: 'เกรด', compactTextAlign: 'center' }, cell: ({ getValue, row }) => { const val = getValue<string | null>(); return <span className="inline-flex flex-wrap items-center justify-center gap-1"><span className="font-mono font-black text-slate-900">{val ?? 'รอผล'}</span>{row.original.is_remedial && <span className="rounded bg-amber-50 px-1 py-0.5 text-[10px] font-semibold leading-none text-amber-800" title="ผลการเรียนจากรายการสอบซ่อมใน ITW">ซ่อม</span>}</span>; } },
     ], []);
     const kpchColumns = useMemo<ColumnDef<KpchDetailRow>[]>(() => [
         { accessorKey: 'term', header: 'ภาคเรียน', size: 104, meta: { compactSize: 64, compactTextAlign: 'center' } },

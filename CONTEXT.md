@@ -28,6 +28,12 @@ District scope is resolved by `ResolveDistrictContext`; role checks are enforced
 
 ## Business rules
 
+### Remedial grade labels (2026-10-09)
+
+- Academic grade responses and imported-score rows expose additive `is_remedial`, sourced from `TYP_CODE = 7` on the selected ITW grade record. The staff grade-detail dialog and imported-score grade cell show a small `ซ่อม` label beside the original grade. Grade 1 or a mismatch between total and grade alone does not trigger the label; regular, transferred and unknown registration types are not inferred as remedial.
+- Existing per-student/subject/normalized-term row selection remains unchanged; the label belongs to the chosen row, not another duplicate or another term. Scores, numeric grade, GPA, district/group permissions and source records remain unchanged. No schema migration or additional per-student query is introduced.
+- The code-7 mapping is supported by a local historical DBF sample (grade 1 with high totals). The latest records shown in the user's screenshot were not available locally for direct verification; confirm the source registration type if they do not show a label after deployment.
+
 ### ITW imported-score audit (2026-10-09)
 
 - Audit uses the actual imported final-exam value, never the grade label, to determine whether the final score is missing. NULL means missing; a real zero remains a recorded score.

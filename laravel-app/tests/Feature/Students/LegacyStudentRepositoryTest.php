@@ -2,6 +2,7 @@
 
 namespace Tests\Feature\Students;
 
+use App\Domain\Students\Repositories\DemoStudentRepository;
 use App\Domain\Students\Repositories\LegacyStudentRepository;
 use App\Domain\Students\Support\LegacyTableSet;
 use App\Http\Resources\Students\StudentDetailResource;
@@ -16,6 +17,42 @@ use Tests\TestCase;
 
 final class LegacyStudentRepositoryTest extends TestCase
 {
+    public function test_remedial_label_uses_the_selected_itw_registration_type_not_the_numeric_grade(): void
+    {
+        $repository = new LegacyStudentRepository(Mockery::mock(ConnectionInterface::class));
+        $student = (new DemoStudentRepository)->students()[0];
+        $hydrate = new \ReflectionMethod($repository, 'hydrateGrades');
+        $base = [
+            'subject_code' => 'SUB01', 'subject_name' => 'วิชาทดสอบ',
+            'subject_credit' => '2', 'subject_type' => '1', 'raw_term' => '66/1',
+            'grade_value' => '1', 'coursework_score' => '55',
+            'final_exam_score' => '15', 'total_score' => '70',
+        ];
+
+        foreach (['7' => true, '0' => false, '1' => false, '2' => false, '' => false] as $type => $expected) {
+            $grades = $hydrate->invoke($repository, $student, [[...$base, 'typ_code' => (string) $type]]);
+            $this->assertSame($expected, $grades[0]->remedial);
+            $this->assertSame($expected, $grades[0]->toArray()['is_remedial']);
+            $this->assertSame('1', $grades[0]->grade);
+            $this->assertSame(70.0, $grades[0]->totalScore);
+        }
+
+        $grades = $hydrate->invoke($repository, $student, [
+            [...$base, 'typ_code' => '0', 'grade_value' => '0'],
+            [...$base, 'typ_code' => '7', 'grade_value' => '1'],
+        ]);
+        $this->assertCount(1, $grades);
+        $this->assertSame('1', $grades[0]->grade);
+        $this->assertTrue($grades[0]->remedial);
+
+        $regularChosen = $hydrate->invoke($repository, $student, [
+            [...$base, 'typ_code' => '7', 'grade_value' => '1'],
+            [...$base, 'typ_code' => '0', 'grade_value' => '3'],
+        ]);
+        $this->assertSame('3', $regularChosen[0]->grade);
+        $this->assertFalse($regularChosen[0]->remedial);
+    }
+
     public function test_phone_uses_valid_database_text_when_memo_files_are_unavailable(): void
     {
         $repository = new LegacyStudentRepository(
