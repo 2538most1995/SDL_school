@@ -137,3 +137,9 @@
 - Browser role scope: teacher เห็น 3 นักศึกษาใน 2 กลุ่มและเข้า admin route ไม่ได้; student เห็นข้อมูลตนเอง 1 คน ผลการเรียน 6 รายการ และเข้า admin route ไม่ได้
 - Login: staff และ student local/demo login รวมถึง logout
 - ไม่มีการ upload, import, delete หรือเขียนข้อมูลจริงระหว่าง smoke test
+
+## Imported-score layout and navigation (2026-10-10)
+
+- Group/subject typeahead filters the API-provided options in the browser and sends existing values; typing in these selectors adds no per-option database query. Student search/filter/pagination API behavior is unchanged.
+- Score-table scrolling uses native overflow and CSS sticky headings/name cells rather than scroll event handlers; it renders only the current API page as before. Verification used 40 synthetic rows at 390/820/1440px, not a production benchmark.
+- District navigation reads one nullable JSON preference from the selected district after a schema-column availability check; no query per menu item. Categories are limited to 30 and all existing menu keys must occur exactly once on save. Role filtering remains server-side. Live MySQL timings remain Not verified.

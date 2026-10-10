@@ -201,3 +201,5 @@ npm run build
 - สำรองฐานข้อมูลและไฟล์ import ก่อน deploy/migrate
 - ทดสอบ migration ในฐาน staging ก่อน production
 - รักษา district scope, role middleware, validation ZIP/DBF และ audit log
+
+การอัปเดตหมวดหมู่และเมนูวันที่ 10 ตุลาคม 2569 เพิ่มเมนู **จัดการระบบ → หมวดหมู่และเมนู** สำหรับ `admin`/`super_admin` สามารถเพิ่มหรือแก้ชื่อหมวดหมู่ ย้ายเมนูไปอีกหมวดหมู่ และเลื่อนหมวดหมู่/เมนูขึ้นลงได้ ลบได้เฉพาะหมวดหมู่ที่ไม่มีเมนูอยู่แล้ว Sidebar เปิด/ปิดเมนูย่อยได้และเปิดหมวดหมู่ของหน้าปัจจุบันให้อัตโนมัติ การตั้งค่าแยกตามอำเภอและยังใช้สิทธิ์เดิมของแต่ละเมนู หลัง deploy ให้รัน `php artisan migrate --force`, `php artisan optimize:clear` และ `npm run build` เพื่อเพิ่ม JSON `districts.navigation_preferences` โดยไม่เปลี่ยนข้อมูลนักศึกษาหรือตารางนำเข้า หากยังไม่รัน migration ระบบแสดงเมนูปกติได้แต่จะไม่ให้บันทึกการจัดเมนู

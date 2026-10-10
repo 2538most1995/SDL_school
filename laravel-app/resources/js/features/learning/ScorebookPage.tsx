@@ -19,6 +19,7 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useDeferredValue, useEffect, useMemo, useRef, useState, type KeyboardEvent as ReactKeyboardEvent, type ReactNode } from 'react';
 import { useSearchParams } from 'react-router-dom';
 import { Button, Field, Input, Select } from '../../components/MaterialUI';
+import { SearchableSelect } from '../../components/SearchableSelect';
 import { PageHeader } from '../../components/PageHeader';
 import { Pagination } from '../../components/Pagination';
 import { Panel } from '../../components/Panel';
@@ -248,6 +249,7 @@ function importedScoreAuditText(row: ImportedScoreRow): string {
 
 function ImportedScoresPage({ sourceNavigation }: { sourceNavigation: ReactNode }) {
     const [searchParams] = useSearchParams();
+    const tableScrollRef = useRef<HTMLDivElement>(null);
     const [term, setTerm] = useState('');
     const [level, setLevel] = useState('');
     const [group, setGroup] = useState('');
@@ -412,12 +414,12 @@ function ImportedScoresPage({ sourceNavigation }: { sourceNavigation: ReactNode 
                 </Button>
             }
         >
-            <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-6">
+            <div className="grid gap-x-5 gap-y-5 md:grid-cols-2 xl:grid-cols-3">
                 <Field label="ค้นหา"><Input value={search} onChange={(_, input) => { setSearch(input.value); setPage(1); }} contentBefore={<MagnifyingGlass size={18} aria-hidden="true" />} placeholder="ชื่อหรือรหัสนักศึกษา" size="large" /></Field>
                 <Field label="ภาคเรียน"><Select value={term} onChange={(_, option) => { setTerm(option.value); setPage(1); }} size="large"><option value="all">ทุกภาคเรียน</option>{retainedTermOptions.map((option) => <option key={option.value} value={option.value}>{option.label}</option>)}</Select></Field>
                 <Field label="ระดับการศึกษา"><Select value={level} onChange={(_, option) => { setLevel(option.value); setPage(1); }} size="large"><option value="">ทุกระดับ</option>{retainedLevelOptions.map((option) => <option key={option.value} value={option.value}>{option.label}</option>)}</Select></Field>
-                <Field label="กลุ่มเรียน"><Select value={group} onChange={(_, option) => { setGroup(option.value); setPage(1); }} size="large"><option value="">ทุกกลุ่มเรียน</option>{retainedGroupOptions.map((option) => <option key={option.value} value={option.value}>{option.label}</option>)}</Select></Field>
-                <Field label="รายวิชา"><Select value={subjectCode} onChange={(_, option) => { setSubjectCode(option.value); setPage(1); }} size="large"><option value="">ทุกรายวิชา</option>{retainedSubjectOptions.map((option) => <option key={option.value} value={option.value}>{option.label}</option>)}</Select></Field>
+                <Field label="กลุ่มเรียน"><SearchableSelect value={group} options={retainedGroupOptions} allLabel="ทุกกลุ่มเรียน" onChange={(value) => { setGroup(value); setPage(1); }} /></Field>
+                <Field label="รายวิชา"><SearchableSelect value={subjectCode} options={retainedSubjectOptions} allLabel="ทุกรายวิชา" onChange={(value) => { setSubjectCode(value); setPage(1); }} /></Field>
                 <Field label="การตรวจเช็ค">
                     <Select
                         value={
@@ -567,29 +569,43 @@ function ImportedScoresPage({ sourceNavigation }: { sourceNavigation: ReactNode 
                             ? 'ไม่พบรายการที่คำนวณไม่ตรงกันตามตัวกรองที่เลือก'
                             : 'ไม่พบคะแนนจากข้อมูลนำเข้าตามตัวกรองที่เลือก'}
             </div>}
-            {importedScores.data && rows.length > 0 && <div role="region" aria-label="ตารางคะแนนจากข้อมูลนำเข้า เลื่อนแนวนอนเพื่อดูคะแนนทุกช่อง" tabIndex={0} className="overflow-x-auto rounded-xl border border-slate-200 outline-none focus:ring-2 focus:ring-brand-200">
-                <table className="w-full min-w-[2240px] border-collapse text-sm">
+            {importedScores.data && rows.length > 0 && <>
+                <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
+                    <p className="text-xs leading-5 text-slate-500">เลื่อนซ้าย–ขวาเพื่อดูทุกช่อง · หัวตารางและชื่อคงอยู่ขณะเลื่อน</p>
+                    <div className="flex flex-wrap gap-2">
+                        <Button appearance="outline" size="small" onClick={() => tableScrollRef.current?.scrollTo({ left: 0 })}>ข้อมูลนักศึกษา</Button>
+                        <Button appearance="outline" size="small" onClick={() => {
+                            const container = tableScrollRef.current;
+                            const target = container?.querySelector<HTMLElement>('[data-score-column]');
+                            if (container && target) container.scrollTo({ left: Math.max(0, target.offsetLeft - (window.innerWidth >= 768 ? 240 : 160)) });
+                        }}>ไปช่องคะแนน</Button>
+                        <Button appearance="outline" size="small" onClick={() => tableScrollRef.current?.scrollTo({ left: tableScrollRef.current.scrollWidth })}>ผลตรวจการคำนวณ</Button>
+                    </div>
+                </div>
+                <div ref={tableScrollRef} role="region" aria-label="ตารางคะแนนจากข้อมูลนำเข้า เลื่อนแนวนอนเพื่อดูคะแนนทุกช่อง" tabIndex={0} className="imported-score-scroll rounded-xl border border-slate-200 outline-none focus:ring-2 focus:ring-brand-200">
+                <table className="imported-score-table w-full min-w-[2080px] text-sm">
+                    <caption className="sr-only">คะแนนจากข้อมูลนำเข้า ตามตัวกรองที่เลือก</caption>
                     <thead className="bg-slate-50 text-slate-700">
                         <tr>
-                            <th className="sticky left-0 z-20 w-14 border-b border-r border-slate-200 bg-slate-50 px-2 py-3 text-center">ลำดับ</th>
-                            <th className="sticky left-14 z-20 min-w-36 border-b border-r border-slate-200 bg-slate-50 px-3 py-3 text-left">รหัสนักศึกษา</th>
-                            <th className="sticky left-[200px] z-20 min-w-60 border-b border-r border-slate-200 bg-slate-50 px-4 py-3 text-left">ชื่อ-นามสกุล</th>
-                            <th className="min-w-36 border-b border-r border-slate-200 px-3 py-3 text-left">กลุ่ม</th>
-                            <th className="min-w-64 border-b border-r border-slate-200 px-4 py-3 text-left">วิชา</th>
-                            <th className="min-w-28 border-b border-r border-slate-200 px-3 py-3 text-center">วิธีเรียน</th>
-                            {scoreLabels.map((label, index) => <th key={`${label}-${index}`} className="w-16 border-b border-r border-slate-200 px-2 py-3 text-center" title={label}><span className="block truncate">{index + 1}</span><span className="sr-only">{label}</span></th>)}
-                            <th className="w-24 border-b border-r border-slate-200 bg-sky-50 px-3 py-3 text-center">กลางภาค</th>
-                            <th className="w-24 border-b border-r border-slate-200 bg-amber-50 px-3 py-3 text-center">ปลายภาค</th>
-                            <th className="w-20 border-b border-r border-slate-200 bg-brand-50 px-3 py-3 text-center">รวม</th>
-                            <th className="w-20 border-b border-slate-200 px-3 py-3 text-center">เกรด</th>
-                            <th className="min-w-72 border-b border-slate-200 px-4 py-3 text-left">ผลตรวจการคำนวณ</th>
+                            <th scope="col" className="w-14 border-b border-r border-slate-200 bg-slate-50 px-2 py-3 text-center">ลำดับ</th>
+                            <th scope="col" className="min-w-36 border-b border-r border-slate-200 bg-slate-50 px-3 py-3 text-left">รหัสนักศึกษา</th>
+                            <th scope="col" className="score-student-column min-w-40 border-b border-r border-slate-200 bg-slate-50 px-4 py-3 text-left">ชื่อ-นามสกุล</th>
+                            <th scope="col" className="min-w-36 border-b border-r border-slate-200 px-3 py-3 text-left">กลุ่ม</th>
+                            <th scope="col" className="min-w-64 border-b border-r border-slate-200 px-4 py-3 text-left">วิชา</th>
+                            <th scope="col" className="min-w-28 border-b border-r border-slate-200 px-3 py-3 text-center">วิธีเรียน</th>
+                            {scoreLabels.map((label, index) => <th scope="col" data-score-column={index === 0 ? true : undefined} key={`${label}-${index}`} className="w-16 border-b border-r border-slate-200 px-2 py-3 text-center" title={label}><span className="block truncate">{index + 1}</span><span className="sr-only">{label}</span></th>)}
+                            <th scope="col" className="w-24 border-b border-r border-slate-200 bg-sky-50 px-3 py-3 text-center">กลางภาค</th>
+                            <th scope="col" className="w-24 border-b border-r border-slate-200 bg-amber-50 px-3 py-3 text-center">ปลายภาค</th>
+                            <th scope="col" className="w-20 border-b border-r border-slate-200 bg-brand-50 px-3 py-3 text-center">รวม</th>
+                            <th scope="col" className="w-20 border-b border-slate-200 px-3 py-3 text-center">เกรด</th>
+                            <th scope="col" className="min-w-72 border-b border-slate-200 px-4 py-3 text-left">ผลตรวจการคำนวณ</th>
                         </tr>
                     </thead>
                     <tbody>
-                        {rows.map((row, rowIndex) => <tr key={`${row.level}|${row.student_code}|${row.subject_code}|${rowIndex}`} className="bg-white hover:bg-slate-50/70">
-                            <td className="sticky left-0 z-10 border-b border-r border-slate-200 bg-inherit px-2 py-3 text-center font-mono text-xs text-slate-500">{(((data?.pagination.current_page ?? page) - 1) * (data?.pagination.per_page ?? perPage)) + rowIndex + 1}</td>
-                            <td className="sticky left-14 z-10 border-b border-r border-slate-200 bg-inherit px-3 py-3 font-mono font-bold text-slate-700">{row.student_code}</td>
-                            <td className="sticky left-[200px] z-10 border-b border-r border-slate-200 bg-inherit px-4 py-3"><p className="font-black text-slate-950">{row.full_name}</p><p className="mt-1 text-xs text-slate-500">{levelLabel(row.level)}</p></td>
+                        {rows.map((row, rowIndex) => <tr key={`${row.level}|${row.student_code}|${row.subject_code}|${rowIndex}`} className="score-data-row">
+                            <td className="border-b border-r border-slate-200 bg-inherit px-2 py-3 text-center font-mono text-xs text-slate-500">{(((data?.pagination.current_page ?? page) - 1) * (data?.pagination.per_page ?? perPage)) + rowIndex + 1}</td>
+                            <td className="border-b border-r border-slate-200 bg-inherit px-3 py-3 font-mono font-bold text-slate-700">{row.student_code}</td>
+                            <td className="score-student-column border-b border-r border-slate-200 bg-inherit px-4 py-3"><p className="font-black text-slate-950">{row.full_name}</p><p className="mt-1 text-xs text-slate-500">{levelLabel(row.level)}</p></td>
                             <td className="border-b border-r border-slate-200 px-3 py-3"><p className="font-bold text-slate-800">{row.group_name || row.group_code || '-'}</p>{row.group_name && row.group_code && <p className="mt-1 font-mono text-xs text-slate-500">{row.group_code}</p>}</td>
                             <td className="border-b border-r border-slate-200 px-4 py-3"><p className="font-black text-slate-950">{row.subject_name || '-'}</p><p className="mt-1 font-mono text-xs text-slate-500">{row.subject_code}</p></td>
                             <td className="border-b border-r border-slate-200 px-3 py-3 text-center text-slate-700">{row.learning_method || '-'}</td>
@@ -614,7 +630,7 @@ function ImportedScoresPage({ sourceNavigation }: { sourceNavigation: ReactNode 
                         </tr>)}
                     </tbody>
                 </table>
-            </div>}
+            </div></>}
             {importedScores.data && <Pagination currentPage={data?.pagination.current_page ?? page} totalPages={data?.pagination.last_page ?? 1} totalItems={data?.pagination.total ?? rows.length} pageSize={data?.pagination.per_page ?? perPage} itemLabel="รายการคะแนน" disabled={importedScores.isFetching} onPageChange={setPage} onPageSizeChange={(nextPageSize) => { setPerPage(nextPageSize); setPage(1); }} />}
         </Panel>
     </div>;

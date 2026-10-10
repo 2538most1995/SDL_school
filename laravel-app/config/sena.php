@@ -80,6 +80,7 @@ return [
                 ['key' => 'exam-rooms', 'label' => 'ห้องสอบ', 'description' => 'จัดห้องสอบและตรวจสอบรายชื่อ', 'route' => '/admin/exam-rooms', 'icon' => 'door', 'roles' => ['teacher', 'admin', 'super_admin']],
                 ['key' => 'imports', 'label' => 'นำเข้าข้อมูล', 'description' => 'ZIP, DBF, batch และผล validation', 'route' => '/admin/imports', 'icon' => 'upload', 'roles' => ['admin', 'super_admin']],
                 ['key' => 'maintenance', 'label' => 'ดูแลข้อมูล', 'description' => 'ประวัติ batch และพื้นที่อันตราย', 'route' => '/admin/data-maintenance', 'icon' => 'database', 'roles' => ['admin', 'super_admin']],
+                ['key' => 'navigation', 'label' => 'หมวดหมู่และเมนู', 'description' => 'จัดหมวดหมู่และลำดับเมนูของอำเภอ', 'route' => '/admin/navigation', 'icon' => 'folder', 'roles' => ['admin', 'super_admin']],
                 ['key' => 'branding', 'label' => 'แบรนด์และสื่อของระบบ', 'description' => 'ชื่อ สี โลโก้ และภาพหลักของพื้นที่', 'route' => '/admin/branding', 'icon' => 'palette', 'roles' => ['admin', 'super_admin']],
             ],
         ],

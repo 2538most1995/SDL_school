@@ -19,6 +19,7 @@ const LearningListPage = lazyWithReload(async () => ({ default: (await import('.
 const CourseRegistrationPage = lazyWithReload(async () => ({ default: (await import('./learning/CourseRegistrationPage')).CourseRegistrationPage }));
 const NnetImportPage = lazyWithReload(async () => ({ default: (await import('./nnet')).NnetImportPage }));
 const NnetReportPage = lazyWithReload(async () => ({ default: (await import('./nnet')).NnetReportPage }));
+const NavigationPage = lazyWithReload(async () => ({ default: (await import('./admin/NavigationPage')).NavigationPage }));
 const AdminUsersPage = lazyWithReload(async () => ({ default: (await import('./admin')).AdminUsersPage }));
 const AdminAnnouncementsPage = lazyWithReload(async () => ({ default: (await import('./admin/AnnouncementsPage')).AdminAnnouncementsPage }));
 const AdminPublicRelationsPage = lazyWithReload(async () => ({ default: (await import('./admin/PublicRelationsPage')).AdminPublicRelationsPage }));
@@ -74,6 +75,7 @@ export const featureRouteCatalog: FeatureRoute[] = [
     { path: '/n-net/report', label: 'รายงานผล N-NET', roles: ['student', 'teacher', 'admin', 'super_admin'], element: <NnetReportPage /> },
     { path: '/n-net', label: 'รายงานผล N-NET', roles: ['student', 'teacher', 'admin', 'super_admin'], element: <NnetReportPage /> },
 
+    { path: '/admin/navigation', label: 'หมวดหมู่และเมนู', roles: ['admin', 'super_admin'], element: <NavigationPage /> },
     { path: '/admin/users', label: 'ผู้ใช้งาน', roles: ['admin', 'super_admin'], element: <AdminUsersPage /> },
     { path: '/admin/announcements', label: 'ประกาศป๊อปอัปนักศึกษา', roles: ['admin', 'super_admin'], element: <AdminAnnouncementsPage /> },
     { path: '/admin/public-relations', label: 'ข่าวประชาสัมพันธ์', roles: ['admin', 'super_admin'], element: <AdminPublicRelationsPage /> },

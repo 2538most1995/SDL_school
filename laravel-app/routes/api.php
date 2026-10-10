@@ -6,6 +6,7 @@ use App\Http\Controllers\Api\Admin\DistrictController;
 use App\Http\Controllers\Api\Admin\ExamRoomController;
 use App\Http\Controllers\Api\Admin\ImportController;
 use App\Http\Controllers\Api\Admin\ImportSafetyController;
+use App\Http\Controllers\Api\Admin\NavigationController;
 use App\Http\Controllers\Api\Admin\PublicRelationsController;
 use App\Http\Controllers\Api\Admin\UserController;
 use App\Http\Controllers\Api\Auth\DistrictOptionsController;
@@ -121,6 +122,8 @@ Route::prefix('v1')->group(function (): void {
         });
 
     Route::middleware(['auth:sanctum', 'active', 'district'])->group(function (): void {
+        Route::get('/admin/navigation', [NavigationController::class, 'show'])->middleware('role:admin,super_admin');
+        Route::patch('/admin/navigation', [NavigationController::class, 'update'])->middleware('role:admin,super_admin');
         Route::get('/portal', PortalController::class);
         Route::get('/learning', LearningOverviewController::class)->middleware('learning.schema');
         Route::get('/learning/assignments', [AssignmentWorkflowController::class, 'index'])->middleware('learning.schema');

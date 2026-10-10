@@ -2479,3 +2479,38 @@ textarea {
         animation-iteration-count: 1 !important;
     }
 }
+
+/* Imported results: one stable identity column even on narrow touch screens. */
+.imported-score-scroll {
+    position: relative;
+    overflow: auto;
+    max-height: min(70dvh, 760px);
+    overscroll-behavior: contain;
+    scrollbar-width: auto;
+    -webkit-overflow-scrolling: touch;
+}
+.imported-score-table { border-collapse: separate; border-spacing: 0; }
+.imported-score-table thead th { position: sticky; top: 0; z-index: 2; background-color: #f1f5f9; }
+.imported-score-table .score-data-row { background-color: #fff; }
+.imported-score-table .score-data-row:nth-child(even) { background-color: #f8fafc; }
+.imported-score-table .score-data-row:hover { background-color: #eef2ff; }
+.imported-score-table .score-student-column {
+    position: sticky;
+    left: 0;
+    z-index: 1;
+    width: 160px;
+    min-width: 160px;
+    max-width: 160px;
+    overflow-wrap: anywhere;
+    background-color: inherit;
+    box-shadow: 3px 0 5px -3px rgb(15 23 42 / 25%);
+}
+.imported-score-table thead .score-student-column { z-index: 3; background-color: #f1f5f9; }
+@media (min-width: 768px) {
+    .imported-score-table .score-student-column { width: 240px; min-width: 240px; max-width: 240px; }
+}
+[data-ui-mode='dark'] .imported-score-table thead th { background-color: #243449; }
+[data-ui-mode='dark'] .imported-score-table .score-data-row { background-color: #172435; }
+[data-ui-mode='dark'] .imported-score-table .score-data-row:nth-child(even) { background-color: #1d2c40; }
+[data-ui-mode='dark'] .imported-score-table .score-data-row:hover { background-color: #293c56; }
+[data-ui-mode='dark'] .imported-score-table thead .score-student-column { background-color: #243449; }

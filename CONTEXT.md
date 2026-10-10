@@ -137,3 +137,10 @@ Request → route → Sanctum/auth + active + district/role middleware
 - Default database connection and import write flags
 - Student academic-term normalization and grade selection rules
 - Frontend response shapes and compatibility redirect routes
+
+### Imported-score filters and district navigation (2026-10-10)
+
+- Imported-score filters use three columns/two rows on desktop, two columns on tablets, and one column on phones. Group and subject selectors search existing labels/codes and submit only selected values; current server filtering, pagination, audit rules, and teacher/district scope remain unchanged.
+- The score table has an independently scrolling, height-limited region, sticky column headings, one sticky student-name column (160px on phones / 240px on tablets and desktop), alternating row backgrounds, and buttons to jump to student details, assessment scores, or audit results. XLSX output keeps its existing values and scope.
+- Admin/super-admin can manage district navigation at `/admin/navigation`: add/rename/remove empty categories, reorder categories/items, and move existing menu items between categories. Sidebar categories expand/collapse. Original server-defined roles/routes stay authoritative; customization never grants access. A nullable `districts.navigation_preferences` JSON column stores the layout; deployment requires the additive migration before saving.
+- Verification used synthetic score responses and an isolated temporary SQLite database, with browser viewport checks at 390px, 820px and 1440px; physical iPad/iOS Safari and production MySQL timings remain Not verified.

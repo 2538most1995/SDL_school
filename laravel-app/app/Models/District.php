@@ -13,6 +13,7 @@ class District extends Model
     {
         return [
             'is_active' => 'boolean',
+            'navigation_preferences' => 'array',
             'logo_updated_at' => 'datetime',
             'login_hero_updated_at' => 'datetime',
             'dashboard_hero_updated_at' => 'datetime',

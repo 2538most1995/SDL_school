@@ -153,6 +153,7 @@ export function PortalLayout() {
     const { role, setRole } = useDemoRole();
     const location = useLocation();
     const navigate = useNavigate();
+    const [collapsedGroups, setCollapsedGroups] = useState<Record<string, boolean>>({});
     const [sidebarOpen, setSidebarOpen] = useState(false);
     const [roleMenuOpen, setRoleMenuOpen] = useState(false);
     const [notificationOpen, setNotificationOpen] = useState(false);
@@ -199,11 +200,16 @@ export function PortalLayout() {
     }, [location.pathname]);
 
     const catalog = useQuery({
-        queryKey: ['system', 'catalog', me.data?.role],
+        queryKey: ['system', 'catalog', me.data?.role, selectedDistrictId],
         queryFn: ({ signal }) => apiGet<Catalog>('/api/v1/system/catalog', signal).then((response) => response.data),
         staleTime: 5 * 60_000,
         enabled: me.isSuccess,
     });
+
+    useEffect(() => {
+        const activeGroup = catalog.data?.groups.find((group) => group.items.some((item) => item.route === location.pathname));
+        if (activeGroup) setCollapsedGroups((previous) => ({ ...previous, [activeGroup.key]: false }));
+    }, [location.pathname, catalog.data]);
 
     const branding = useQuery({
         queryKey: ['auth', 'branding', selectedDistrictId],
@@ -238,6 +244,7 @@ export function PortalLayout() {
         setSelectedDistrictId(districtId);
         const isDistrictScoped = (query: { queryKey: readonly unknown[] }) => !['auth', 'system'].includes(String(query.queryKey[0]));
         void queryClient.invalidateQueries({ predicate: isDistrictScoped });
+        void queryClient.invalidateQueries({ queryKey: ['system', 'catalog'] });
     };
 
     if (me.isPending) {
@@ -291,10 +298,8 @@ export function PortalLayout() {
                     {catalog.isPending && <SidebarSkeleton />}
                     {catalog.data?.groups.map((group) => (
                         <section key={group.key} className="mt-4">
-                            <div className="mb-1 px-2.5">
-                                <h2 className="text-[10px] font-bold tracking-[0.04em] text-brand-200/80">{group.label}</h2>
-                            </div>
-                            <div className="space-y-0.5">
+                            <h2 className="mb-1"><button type="button" className="flex w-full items-center justify-between rounded-xl px-2.5 py-2 text-left text-xs font-bold text-brand-100 hover:bg-white/10 focus-visible:outline focus-visible:outline-2 focus-visible:outline-white" aria-expanded={!collapsedGroups[group.key]} aria-controls={`navigation-${group.key}`} onClick={() => setCollapsedGroups((previous) => ({ ...previous, [group.key]: !previous[group.key] }))}><span>{group.label}</span><CaretDown size={14} className={`transition-transform ${collapsedGroups[group.key] ? '-rotate-90' : ''}`} aria-hidden="true" /></button></h2>
+                            <div id={`navigation-${group.key}`} hidden={Boolean(collapsedGroups[group.key])} className="space-y-0.5">
                                 {group.items.map((item) => {
                                     const Icon = icons[item.icon as keyof typeof icons] ?? BookOpenText;
                                     return (
