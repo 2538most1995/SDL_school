@@ -1413,7 +1413,7 @@ function StaffCourseRegistrationPage() {
                                 {/* Common Electives Quick Add Chips */}
                                 {studentDetail.common_electives?.length > 0 && (
                                     <div className="rounded-xl bg-slate-50 p-3 space-y-2">
-                                        <div className="flex items-center justify-between">
+                                        <div className="flex flex-wrap items-center justify-between gap-2">
                                             <span className="text-xs font-bold text-slate-700">
                                                 วิชาเลือกที่เคยบันทึกและวิชาแนะนำ (คลิกเพื่อเพิ่ม):
                                             </span>
@@ -1421,7 +1421,7 @@ function StaffCourseRegistrationPage() {
                                                 * คลิกวิชาเพื่อเพิ่มในรายการลงทะเบียน
                                             </span>
                                         </div>
-                                        <div className="flex flex-wrap gap-2">
+                                        <div className="grid grid-cols-1 gap-3 md:grid-cols-2">
                                             {studentDetail.common_electives.map((ce) => {
                                                 const isAlreadyInList = electiveRows.some((r) => r.code === ce.code);
                                                 return (
@@ -1456,7 +1456,7 @@ function StaffCourseRegistrationPage() {
                                                             ]);
                                                             setIsFormDirty(true);
                                                         }}
-                                                        className={`inline-flex items-center gap-1.5 rounded-lg border px-2.5 py-1.5 text-xs font-semibold shadow-2xs transition ${
+                                                        className={`flex w-full min-w-0 items-start gap-3 rounded-lg border p-3 text-left text-sm font-semibold shadow-2xs transition ${
                                                             isAlreadyInList
                                                                 ? 'border-slate-200 bg-slate-100 text-slate-400 cursor-not-allowed'
                                                                 : ce.course_status?.status === 'not_taken'
@@ -1468,11 +1468,13 @@ function StaffCourseRegistrationPage() {
                                                                 : 'border-slate-200 bg-white text-slate-700 hover:border-brand-500 hover:bg-brand-50'
                                                         }`}
                                                     >
-                                                        <Plus size={13} className="shrink-0" />
-                                                        <span>
-                                                            {ce.code} {ce.name} ({ce.credits} นก.)
+                                                        <Plus size={16} className="mt-0.5 shrink-0" />
+                                                        <span className="flex min-w-0 flex-1 flex-col items-start gap-2">
+                                                            <span className="break-words leading-6">
+                                                                {ce.code} {ce.name} ({ce.credits} นก.)
+                                                            </span>
+                                                            <CourseStatusBadge status={ce.course_status} />
                                                         </span>
-                                                        <CourseStatusBadge status={ce.course_status} />
                                                     </button>
                                                 );
                                             })}
