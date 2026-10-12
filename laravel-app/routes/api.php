@@ -144,6 +144,7 @@ Route::prefix('v1')->group(function (): void {
         Route::put('/learning/exam-attendance', [ExamAttendanceController::class, 'save'])->middleware(['learning.schema', 'role:teacher,admin,super_admin']);
         Route::get('/learning/exam-schedule/signed-url', [ExamScheduleDocumentController::class, 'signedUrl']);
         Route::get('/learning/registration/signed-url', [CourseRegistrationDocumentController::class, 'signedUrl']);
+        Route::get('/learning/registration/me', [CourseRegistrationController::class, 'mine'])->middleware(['learning.schema', 'role:student']);
         Route::get('/learning/registration/workspace', [CourseRegistrationController::class, 'workspace'])->middleware('role:teacher,admin,super_admin');
         Route::get('/learning/registration/student/{student}', [CourseRegistrationController::class, 'studentRegistration'])->middleware('role:teacher,admin,super_admin');
         Route::post('/learning/registration/student/{student}', [CourseRegistrationController::class, 'saveRegistration'])->middleware('role:teacher,admin,super_admin');

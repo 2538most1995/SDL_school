@@ -21,6 +21,8 @@ import {
 } from '@phosphor-icons/react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useEffect, useMemo, useState } from 'react';
+import { useDemoRole } from '../../context/DemoRoleContext';
+import { MyRegistrationPage } from './MyRegistrationPage';
 import { DataTable } from '../../components/DataTable';
 import { Button } from '../../components/MaterialUI';
 import { PageHeader } from '../../components/PageHeader';
@@ -217,6 +219,11 @@ function CourseStatusBadge({ status }: { status?: CourseStatus }) {
 }
 
 export function CourseRegistrationPage() {
+    const { role } = useDemoRole();
+    return role === 'student' ? <MyRegistrationPage /> : <StaffCourseRegistrationPage />;
+}
+
+function StaffCourseRegistrationPage() {
     const queryClient = useQueryClient();
     const [selectedStudentCode, setSelectedStudentCode] = useState<string | null>(null);
     const [term, setTerm] = useState('');
@@ -802,7 +809,7 @@ export function CourseRegistrationPage() {
                     ) : (
                         <>
                             {/* Student Info Card */}
-                            <div className="rounded-2xl border border-slate-200 bg-white p-6 shadow-sm space-y-4">
+                            <div className="min-w-0 rounded-2xl border border-slate-200 bg-white p-4 sm:p-6 shadow-sm space-y-4">
                                 <div className="flex flex-wrap items-start justify-between gap-4 border-b border-slate-100 pb-4">
                                     <div>
                                         <div className="flex items-center gap-2">
@@ -1236,8 +1243,9 @@ export function CourseRegistrationPage() {
                                 </span>
                             </div>
 
+                            <div className="grid items-start gap-6 xl:grid-cols-2">
                             {/* Section 1: Compulsory Subjects */}
-                            <div className="rounded-2xl border border-slate-200 bg-white p-6 shadow-sm space-y-4">
+                            <div className="min-w-0 rounded-2xl border border-slate-200 bg-white p-4 sm:p-6 shadow-sm space-y-4">
                                 <div className="flex items-center justify-between border-b border-slate-100 pb-3">
                                     <div>
                                         <h3 className="text-base font-bold text-slate-900">
@@ -1253,24 +1261,15 @@ export function CourseRegistrationPage() {
                                 </div>
 
                                 <div className="overflow-x-auto">
-                                    <table className="w-full min-w-[800px] text-left text-sm">
-                                        <thead>
-                                            <tr className="border-b border-slate-200 bg-slate-50 text-xs font-bold text-slate-700">
-                                                <th className="p-3">สาระการเรียนรู้</th>
-                                                <th className="p-3 w-28 text-center">รหัสวิชา</th>
-                                                <th className="p-3 w-24 text-center">หน่วยกิต</th>
-                                                <th className="p-3 w-28 text-center">ลงทะเบียน</th>
-                                                <th className="p-3 w-28 text-center">เทียบโอน</th>
-                                                <th className="p-3 w-40">หมายเหตุ</th>
-                                            </tr>
-                                        </thead>
-                                        <tbody className="divide-y divide-slate-100">
+                                    <div className="space-y-3">
+
+                                        <div className="space-y-3">
                                             {compulsoryRows.map((row, idx) => (
-                                                <tr
+                                                <div
                                                     key={row.code}
-                                                    className={`hover:bg-slate-50/80 ${row.registered ? 'bg-blue-50/30' : ''}`}
+                                                    className={`grid grid-cols-2 gap-3 rounded-xl border border-slate-200 p-3 hover:bg-slate-50/80 ${row.registered ? 'bg-blue-50/30' : ''}`}
                                                 >
-                                                    <td className="p-3">
+                                                    <div className="min-w-0 col-span-2">
                                                         <div className="flex flex-wrap items-center gap-2">
                                                             <span className="font-bold text-slate-900">{row.name}</span>
                                                             <CourseStatusBadge status={row.course_status} />
@@ -1293,14 +1292,14 @@ export function CourseRegistrationPage() {
                                                                 <span>{row.course_status.warning}</span>
                                                             </div>
                                                         )}
-                                                    </td>
-                                                    <td className="p-3 text-center font-mono text-xs font-bold text-slate-700">
+                                                    </div>
+                                                    <div className="min-w-0"><span className="mb-1 block text-xs font-semibold text-slate-500">รหัสวิชา</span>
                                                         {row.code}
-                                                    </td>
-                                                    <td className="p-3 text-center tabular-nums text-slate-700">
+                                                    </div>
+                                                    <div className="min-w-0"><span className="mb-1 block text-xs font-semibold text-slate-500">หน่วยกิต</span>
                                                         {row.credits}
-                                                    </td>
-                                                    <td className="p-3 text-center">
+                                                    </div>
+                                                    <div className="min-w-0"><span className="mb-1 block text-xs font-semibold text-slate-500">ลงทะเบียน</span>
                                                         <input
                                                             type="checkbox"
                                                             checked={row.registered}
@@ -1320,8 +1319,8 @@ export function CourseRegistrationPage() {
                                                             }}
                                                             className="size-4.5 rounded border-slate-300 text-brand-600 focus:ring-brand-500"
                                                         />
-                                                    </td>
-                                                    <td className="p-3 text-center">
+                                                    </div>
+                                                    <div className="min-w-0"><span className="mb-1 block text-xs font-semibold text-slate-500">เทียบโอน</span>
                                                         <input
                                                             type="checkbox"
                                                             checked={row.transferred}
@@ -1341,11 +1340,12 @@ export function CourseRegistrationPage() {
                                                             }}
                                                             className="size-4.5 rounded border-slate-300 text-brand-600 focus:ring-brand-500"
                                                         />
-                                                    </td>
-                                                    <td className="p-3">
+                                                    </div>
+                                                    <div className="min-w-0 col-span-2"><span className="mb-1 block text-xs font-semibold text-slate-500">หมายเหตุ</span>
                                                         <input
                                                             type="text"
-                                                            value={row.remark}
+                                                            aria-label={`หมายเหตุ ${row.name || row.code || idx + 1}`}
+                                                                value={row.remark}
                                                             placeholder="หมายเหตุ..."
                                                             onChange={(e) => {
                                                                 const updated = [...compulsoryRows];
@@ -1355,23 +1355,23 @@ export function CourseRegistrationPage() {
                                                             }}
                                                             className="w-full rounded-lg border border-slate-200 px-2 py-1 text-xs"
                                                         />
-                                                    </td>
-                                                </tr>
+                                                    </div>
+                                                </div>
                                             ))}
-                                        </tbody>
-                                    </table>
+                                        </div>
+                                    </div>
                                 </div>
                             </div>
 
                             {/* Section 2: Elective Subjects */}
-                            <div className="rounded-2xl border border-slate-200 bg-white p-6 shadow-sm space-y-4">
+                            <div className="min-w-0 rounded-2xl border border-slate-200 bg-white p-4 sm:p-6 shadow-sm space-y-4">
                                 <div className="flex flex-wrap items-center justify-between border-b border-slate-100 pb-3 gap-2">
                                     <div>
                                         <h3 className="text-base font-bold text-slate-900">
                                             รายวิชาเลือก ({studentDetail.requirements.elective_required} หน่วยกิต)
                                         </h3>
                                         <p className="text-xs text-slate-500">
-                                            สามารถเลือกจากวิชาแนะนำ หรือพิมพ์รหัส/ชื่อวิชาเลือกเพิ่มเติมได้
+                                            เลือกวิชาที่เคยบันทึกไว้ หรือเพิ่มวิชาใหม่แล้วบันทึกเพื่อใช้ซ้ำ
                                         </p>
                                     </div>
                                     <div className="flex items-center gap-2">
@@ -1407,7 +1407,7 @@ export function CourseRegistrationPage() {
                                     <div className="rounded-xl bg-slate-50 p-3 space-y-2">
                                         <div className="flex items-center justify-between">
                                             <span className="text-xs font-bold text-slate-700">
-                                                วิชาเลือกแนะนำสำหรับระดับนี้ (คลิกเพื่อเพิ่ม พร้อมตรวจสอบสถานะเกรด):
+                                                วิชาเลือกที่เคยบันทึกและวิชาแนะนำ (คลิกเพื่อเพิ่ม):
                                             </span>
                                             <span className="text-[11px] text-slate-500">
                                                 * คลิกวิชาเพื่อเพิ่มในรายการลงทะเบียน
@@ -1473,33 +1473,24 @@ export function CourseRegistrationPage() {
                                 )}
 
                                 <div className="overflow-x-auto">
-                                    <table className="w-full min-w-[800px] text-left text-sm">
-                                        <thead>
-                                            <tr className="border-b border-slate-200 bg-slate-50 text-xs font-bold text-slate-700">
-                                                <th className="p-3">สาระการเรียนรู้</th>
-                                                <th className="p-3 w-32">รหัสวิชา</th>
-                                                <th className="p-3 w-24 text-center">หน่วยกิต</th>
-                                                <th className="p-3 w-28 text-center">ลงทะเบียน</th>
-                                                <th className="p-3 w-28 text-center">เทียบโอน</th>
-                                                <th className="p-3 w-36">หมายเหตุ</th>
-                                                <th className="p-3 w-16 text-center">ลบ</th>
-                                            </tr>
-                                        </thead>
-                                        <tbody className="divide-y divide-slate-100">
+                                    <div className="space-y-3">
+
+                                        <div className="space-y-3">
                                             {electiveRows.length === 0 ? (
-                                                <tr>
-                                                    <td colSpan={7} className="p-4 text-center text-xs text-slate-400">
+                                                <div>
+                                                    <div className="p-4 text-center text-sm text-slate-500">
                                                         ยังไม่มีการเพิ่มวิชาเลือก (สามารถกดปุ่ม "เพิ่มวิชาเลือก" ด้านบน)
-                                                    </td>
-                                                </tr>
+                                                    </div>
+                                                </div>
                                             ) : (
                                                 electiveRows.map((row, idx) => (
-                                                    <tr key={idx} className="hover:bg-slate-50/80">
-                                                        <td className="p-3">
+                                                    <div key={idx} className="grid grid-cols-2 gap-3 rounded-xl border border-slate-200 p-3 hover:bg-slate-50/80">
+                                                        <div className="min-w-0 col-span-2">
                                                             <div className="space-y-1">
                                                                 <input
                                                                     type="text"
-                                                                    value={row.name}
+                                                                    aria-label={`ชื่อวิชา ${row.name || row.code || idx + 1}`}
+                                                                value={row.name}
                                                                     placeholder="ชื่อวิชาเลือก..."
                                                                     onChange={(e) => {
                                                                         const updated = [...electiveRows];
@@ -1531,10 +1522,11 @@ export function CourseRegistrationPage() {
                                                                     )}
                                                                 </div>
                                                             </div>
-                                                        </td>
-                                                        <td className="p-3">
+                                                        </div>
+                                                        <div className="min-w-0"><span className="mb-1 block text-xs font-semibold text-slate-500">รหัสวิชา</span>
                                                             <input
                                                                 type="text"
+                                                                aria-label={`รหัสวิชา ${row.name || row.code || idx + 1}`}
                                                                 value={row.code}
                                                                 placeholder="รหัสวิชา"
                                                                 onChange={(e) => {
@@ -1550,13 +1542,14 @@ export function CourseRegistrationPage() {
                                                                 }}
                                                                 className="w-full rounded-lg border border-slate-200 px-2 py-1 font-mono text-xs font-bold"
                                                             />
-                                                        </td>
-                                                        <td className="p-3 text-center">
+                                                        </div>
+                                                        <div className="min-w-0"><span className="mb-1 block text-xs font-semibold text-slate-500">หน่วยกิต</span>
                                                             <input
                                                                 type="number"
                                                                 step="0.5"
                                                                 min="0.5"
                                                                 max="10"
+                                                                aria-label={`หน่วยกิต ${row.name || row.code || idx + 1}`}
                                                                 value={row.credits}
                                                                 onChange={(e) => {
                                                                     const updated = [...electiveRows];
@@ -1566,8 +1559,8 @@ export function CourseRegistrationPage() {
                                                                 }}
                                                                 className="w-16 rounded-lg border border-slate-200 p-1 text-center font-bold text-xs"
                                                             />
-                                                        </td>
-                                                        <td className="p-3 text-center">
+                                                        </div>
+                                                        <div className="min-w-0"><span className="mb-1 block text-xs font-semibold text-slate-500">ลงทะเบียน</span>
                                                             <input
                                                                 type="checkbox"
                                                                 checked={row.registered}
@@ -1587,8 +1580,8 @@ export function CourseRegistrationPage() {
                                                                 }}
                                                                 className="size-4.5 rounded border-slate-300 text-brand-600 focus:ring-brand-500"
                                                             />
-                                                        </td>
-                                                        <td className="p-3 text-center">
+                                                        </div>
+                                                        <div className="min-w-0"><span className="mb-1 block text-xs font-semibold text-slate-500">เทียบโอน</span>
                                                             <input
                                                                 type="checkbox"
                                                                 checked={row.transferred}
@@ -1608,10 +1601,11 @@ export function CourseRegistrationPage() {
                                                                 }}
                                                                 className="size-4.5 rounded border-slate-300 text-brand-600 focus:ring-brand-500"
                                                             />
-                                                        </td>
-                                                        <td className="p-3">
+                                                        </div>
+                                                        <div className="min-w-0 col-span-2"><span className="mb-1 block text-xs font-semibold text-slate-500">หมายเหตุ</span>
                                                             <input
                                                                 type="text"
+                                                                aria-label={`หมายเหตุ ${row.name || row.code || idx + 1}`}
                                                                 value={row.remark}
                                                                 placeholder="หมายเหตุ..."
                                                                 onChange={(e) => {
@@ -1622,8 +1616,8 @@ export function CourseRegistrationPage() {
                                                                 }}
                                                                 className="w-full rounded-lg border border-slate-200 px-2 py-1 text-xs"
                                                             />
-                                                        </td>
-                                                        <td className="p-3 text-center">
+                                                        </div>
+                                                        <div className="min-w-0 col-span-2"><span className="mb-1 block text-xs font-semibold text-slate-500">ลบรายวิชา</span>
                                                             <button
                                                                 type="button"
                                                                 onClick={() => {
@@ -1635,13 +1629,15 @@ export function CourseRegistrationPage() {
                                                             >
                                                                 <Trash size={16} />
                                                             </button>
-                                                        </td>
-                                                    </tr>
+                                                        </div>
+                                                    </div>
                                                 ))
                                             )}
-                                        </tbody>
-                                    </table>
+                                        </div>
+                                    </div>
                                 </div>
+                            </div>
+
                             </div>
 
                             <details open className="rounded-2xl border border-purple-200 bg-white p-4 shadow-2xs">

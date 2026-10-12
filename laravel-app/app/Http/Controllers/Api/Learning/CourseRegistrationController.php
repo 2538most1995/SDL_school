@@ -14,6 +14,15 @@ final class CourseRegistrationController extends Controller
         private readonly CourseRegistrationService $service,
     ) {}
 
+    public function mine(Request $request): JsonResponse
+    {
+        $filters = $request->validate(['term' => ['nullable', 'regex:/^[12]\/25\d{2}$/']]);
+        $data = $this->service->myRegistration($request->user(), $filters['term'] ?? null);
+        abort_if($data === null, 404, 'ไม่พบข้อมูลนักศึกษาหรือไม่มีสิทธิ์เข้าถึง');
+
+        return response()->json(['data' => $data]);
+    }
+
     public function workspace(Request $request): JsonResponse
     {
         $filters = $request->validate([

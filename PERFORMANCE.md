@@ -143,3 +143,13 @@
 - Group/subject typeahead filters the API-provided options in the browser and sends existing values; typing in these selectors adds no per-option database query. Student search/filter/pagination API behavior is unchanged.
 - Score-table scrolling uses native overflow and CSS sticky headings/name cells rather than scroll event handlers; it renders only the current API page as before. Verification used 40 synthetic rows at 390/820/1440px, not a production benchmark.
 - District navigation reads one nullable JSON preference from the selected district after a schema-column availability check; no query per menu item. Categories are limited to 30 and all existing menu keys must occur exactly once on save. Role filtering remains server-side. Live MySQL timings remain Not verified.
+
+## Registration elective reuse (2026-10-12)
+
+- Staff registration detail adds one district+education-level query streaming only elective JSON from saved registrations, ordered by updated_at/id. It deduplicates by course code and merges the fixed curriculum suggestions without per-student queries. Learner reads skip this district-wide catalog query. No index/schema changes were introduced.
+- This reads saved registration history in the selected district/level on each staff detail load; production volume, sort execution plan and latency are Not verified. The existing district/term/student unique index supplies district filtering, but not update-time ordering.
+- API verification uses in-memory SQLite fixtures; browser verification uses a separate temporary SQLite demo database, not real student data.
+
+- Browser smoke checks passed at 1440px and 390px for student/staff: two desktop columns, one mobile column and no page horizontal overflow. On isolated demo data, staff saved a new elective, another learner's editor offered it without auto-selecting it, and the owning student saw the saved course after reload. No browser errors in the staff session. Typecheck, production build, 40 frontend tests and registration feature/PDF tests passed.
+
+- Final full PHPUnit run: 370 passed, 1 skipped; changed PHP files pass Pint. Repository-wide Pint still reports pre-existing formatting violations in seven untouched files (DistrictBranding, announcement controllers, CurriculumCatalog, registration export service, web routes and PDF tests). Real MySQL data was not used or modified.

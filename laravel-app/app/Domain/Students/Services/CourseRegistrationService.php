@@ -480,7 +480,7 @@ final readonly class CourseRegistrationService
 
             // Check if student has electives in this term from historical data
             foreach ($historicalRegisteredInTerm as $code => $grade) {
-                if ($grade->subjectType === 'elective') {
+                if ($grade->subjectType === 'elective' && ! in_array($code, array_column($catalogCompulsory, 'code'), true)) {
                     $statusInfo = $resolveStatus($code);
                     $electiveList[] = [
                         'code' => $code,
@@ -615,8 +615,8 @@ final readonly class CourseRegistrationService
             )),
             'compulsory_subjects' => $compulsoryList,
             'elective_subjects' => $electiveList,
-            'common_electives' => (function () use ($student, $catalogCompulsory, $historyUnpassed, $resolveStatus): array {
-                $commonElectives = CurriculumCatalog::commonElectiveSubjects($student->level);
+            'common_electives' => (function () use ($viewer, $student, $catalogCompulsory, $historyUnpassed, $resolveStatus): array {
+                $commonElectives = $viewer->role === 'student' ? [] : $this->rememberedElectives($student);
                 $existingCodes = array_flip(array_map(static fn ($e) => trim((string) $e['code']), $commonElectives));
                 $compulsoryCodes = array_flip(array_map(static fn ($c) => trim((string) $c['code']), $catalogCompulsory));
 
@@ -646,6 +646,69 @@ final readonly class CourseRegistrationService
             'credit_policy' => $creditPolicy,
             'notes' => $notes,
             'is_saved' => $saved !== null,
+        ];
+    }
+
+    /** Only course metadata is reused; student details and selection flags stay private. */
+    private function rememberedElectives(Student $student): array
+    {
+        $subjects = [];
+        $rows = DB::table('learning_course_registrations')
+            ->where('district_id', $student->districtId)
+            ->where('education_level', $student->level)
+            ->orderByDesc('updated_at')->orderByDesc('id')
+            ->cursor(['elective_subjects']);
+
+        foreach ($rows as $row) {
+            foreach (json_decode((string) $row->elective_subjects, true) ?: [] as $subject) {
+                $code = trim((string) ($subject['code'] ?? ''));
+                $name = trim((string) ($subject['name'] ?? ''));
+                if ($code !== '' && $name !== '' && ! isset($subjects[$code])) {
+                    $subjects[$code] = ['code' => $code, 'name' => $name, 'credits' => (float) ($subject['credits'] ?? 2)];
+                }
+            }
+        }
+        foreach (CurriculumCatalog::commonElectiveSubjects($student->level) as $subject) {
+            $subjects[$subject['code']] ??= $subject;
+        }
+
+        return array_values($subjects);
+    }
+
+    /** Read-only projection for the authenticated learner, without contact data or staff notes. */
+    public function myRegistration(User $viewer, ?string $term = null): ?array
+    {
+        $code = (string) ($viewer->student_code ?: $viewer->username);
+        $student = $this->directory->findAccessible($viewer, $code);
+        if ($student === null) {
+            return null;
+        }
+        if ($term === null) {
+            $terms = DB::table('learning_course_registrations')
+                ->where('district_id', $student->districtId)->where('student_code', $student->code)
+                ->pluck('academic_term')->all();
+            $terms[] = AcademicTerm::normalize($student->currentTerm) ?? $student->currentTerm;
+            $terms = array_values(array_filter($terms));
+            usort($terms, static fn (string $a, string $b): int => AcademicTerm::sortKey($b) <=> AcademicTerm::sortKey($a));
+            $term = $terms[0] ?? null;
+        }
+        $data = $this->studentRegistration($viewer, $student->code, $term);
+        if ($data === null) {
+            return null;
+        }
+        $selected = static fn (array $subjects): array => array_values(array_map(
+            static fn (array $subject): array => [
+                'code' => $subject['code'], 'name' => $subject['name'], 'credits' => $subject['credits'],
+                'transferred' => $subject['transferred'],
+            ],
+            array_filter($subjects, static fn (array $subject): bool => $subject['registered'] || $subject['transferred']),
+        ));
+
+        return [
+            'student' => ['code' => $student->code, 'name' => $student->fullName(), 'level_label' => $data['student']['level_label']],
+            'academic_term' => $data['academic_term'], 'available_terms' => $data['available_terms'],
+            'compulsory_subjects' => $selected($data['compulsory_subjects']),
+            'elective_subjects' => $selected($data['elective_subjects']), 'is_saved' => $data['is_saved'],
         ];
     }
 

@@ -732,6 +732,87 @@ final class CourseRegistrationTest extends TestCase
         $this->assertStringContainsString('แนะนำให้ลงทะเบียนเรียนใหม่', $foundKh['warning']);
     }
 
+    public function test_student_reads_only_own_selected_subjects_and_cannot_write(): void
+    {
+        Sanctum::actingAs($this->viewer('admin'));
+        $this->postJson('/api/v1/learning/registration/student/6650100001', [
+            'academic_term' => '2/2569',
+            'compulsory_subjects' => [
+                ['code' => 'พท11001', 'registered' => true],
+                ['code' => 'ทร11001', 'registered' => false],
+            ],
+            'elective_subjects' => [['code' => 'เลือก101', 'name' => 'วิชาเพิ่มเติม', 'credits' => 2, 'registered' => true]],
+            'notes' => 'private staff note',
+            'student_info' => ['phone' => 'private phone'],
+        ])->assertOk();
+
+        Sanctum::actingAs($this->viewer('student', [], '6650100001'));
+        $this->getJson('/api/v1/learning/registration/me?student=6650100002')->assertOk()
+            ->assertJsonPath('data.student.code', '6650100001')
+            ->assertJsonPath('data.academic_term', '2/2569')
+            ->assertJsonCount(1, 'data.compulsory_subjects')
+            ->assertJsonPath('data.compulsory_subjects.0.code', 'พท11001')
+            ->assertJsonPath('data.elective_subjects.0.code', 'เลือก101')
+            ->assertJsonMissingPath('data.student.citizen_id')
+            ->assertJsonMissingPath('data.student_info')
+            ->assertJsonMissingPath('data.notes');
+        $this->getJson('/api/v1/learning/registration/me?term=1/2569')->assertOk()->assertJsonPath('data.academic_term', '1/2569');
+        $this->getJson('/api/v1/learning/registration/me?term=bad')->assertUnprocessable();
+        $this->getJson('/api/v1/learning/registration/workspace')->assertForbidden();
+        $this->getJson('/api/v1/learning/registration/student/6650100002')->assertForbidden();
+        $this->postJson('/api/v1/learning/registration/student/6650100001', [])->assertForbidden();
+    }
+
+    public function test_imported_subjects_do_not_appear_in_both_columns(): void
+    {
+        Sanctum::actingAs($this->viewer('student', [], '6650100001'));
+        $data = $this->getJson('/api/v1/learning/registration/me?term=2/2568')->assertOk()->json('data');
+        $this->assertNotEmpty($data['compulsory_subjects']);
+        $this->assertNotEmpty($data['elective_subjects']);
+        $this->assertSame([], array_values(array_intersect(
+            array_column($data['compulsory_subjects'], 'code'),
+            array_column($data['elective_subjects'], 'code'),
+        )));
+    }
+
+    public function test_student_registration_requires_matching_district_and_identity(): void
+    {
+        $student = $this->viewer('student', [], '6650100001');
+        $student->district_id = District::create(['name' => 'อื่น', 'code' => 'other', 'is_active' => true])->id;
+        $student->save();
+        Sanctum::actingAs($student);
+        $this->getJson('/api/v1/learning/registration/me')->assertNotFound();
+        Sanctum::actingAs($this->viewer('student', [], 'missing-student'));
+        $this->getJson('/api/v1/learning/registration/me')->assertNotFound();
+    }
+
+    public function test_saved_electives_are_reusable_only_in_same_district_and_level(): void
+    {
+        Sanctum::actingAs($this->viewer('admin'));
+        $otherDistrict = District::create(['name' => 'อื่น', 'code' => 'other', 'is_active' => true]);
+        foreach ([
+            [$this->district->id, 1, 'shared', 'เลือก101', 'วิชาที่จำไว้'],
+            [$this->district->id, 2, 'level2', 'เลือก201', 'ระดับอื่น'],
+            [$otherDistrict->id, 1, 'district2', 'เลือก301', 'อำเภออื่น'],
+        ] as [$district, $level, $code, $subjectCode, $name]) {
+            DB::table('learning_course_registrations')->insert([
+                'district_id' => $district, 'student_code' => $code, 'academic_term' => '1/2568',
+                'education_level' => $level, 'group_code' => 'test', 'compulsory_subjects' => '[]',
+                'elective_subjects' => json_encode([['code' => $subjectCode, 'name' => $name, 'credits' => 3, 'registered' => true, 'remark' => 'private']]),
+                'created_at' => now(), 'updated_at' => now(),
+            ]);
+        }
+        $data = $this->getJson('/api/v1/learning/registration/student/6650100001?term=2/2569')->assertOk()->json('data');
+        $catalog = collect($data['common_electives'])->keyBy('code');
+        $this->assertSame('วิชาที่จำไว้', $catalog['เลือก101']['name']);
+        $this->assertSame(3, $catalog['เลือก101']['credits']);
+        $this->assertArrayNotHasKey('remark', $catalog['เลือก101']);
+        $this->assertArrayNotHasKey('registered', $catalog['เลือก101']);
+        $this->assertFalse($catalog->has('เลือก201'));
+        $this->assertFalse($catalog->has('เลือก301'));
+        $this->assertNotContains('เลือก101', array_column($data['elective_subjects'], 'code'));
+    }
+
     /** @param list<string> $groups */
     private function viewer(string $role, array $groups = [], ?string $username = null): User
     {
