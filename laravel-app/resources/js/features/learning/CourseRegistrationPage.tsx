@@ -34,6 +34,7 @@ import { StatusBadge } from '../../components/StatusBadge';
 import { showErrorAlert, showSuccessAlert } from '../../lib/feedback';
 import { useRetainedFilterOptions } from '../../lib/useRetainedFilterOptions';
 import { getFeatureDataWithDemo, sendFeatureData } from '../api';
+import { electivesForSave } from './registrationElectives';
 import { evaluateLiveRegistrationPolicy, type RegistrationCreditPolicy } from './registrationCreditPolicy';
 
 export interface CourseStatus {
@@ -312,7 +313,14 @@ function StaffCourseRegistrationPage() {
     // Sync form state when student data loads
     const loadStudentDataIntoForm = (data: StudentRegistrationData) => {
         setCompulsoryRows(data.compulsory_subjects ?? []);
-        setElectiveRows(data.elective_subjects ?? []);
+        const existingElectives = data.elective_subjects ?? [];
+        const existingCodes = new Set(existingElectives.map((subject) => subject.code.trim()));
+        setElectiveRows([
+            ...existingElectives,
+            ...(data.common_electives ?? []).filter((subject) => !existingCodes.has(subject.code.trim())).map((subject) => ({
+                ...subject, registered: false, transferred: false, remark: '',
+            })),
+        ]);
         setElectiveEditModes({});
         setNotes(data.notes ?? '');
         setStudentInfo(
@@ -376,7 +384,7 @@ function StaffCourseRegistrationPage() {
                 academic_term: studentDetail.academic_term,
                 student_info: studentInfo,
                 compulsory_subjects: compulsoryRows,
-                elective_subjects: electiveRows,
+                elective_subjects: electivesForSave(electiveRows, studentDetail.elective_subjects.map((subject) => subject.code), studentDetail.common_electives),
                 notes,
             };
             return sendFeatureData(
@@ -1382,303 +1390,85 @@ function StaffCourseRegistrationPage() {
 
                             {/* Section 2: Elective Subjects */}
                             <div className="min-w-0 rounded-2xl border border-slate-200 bg-white p-4 sm:p-6 shadow-sm space-y-4">
-                                <div className="flex flex-wrap items-center justify-between border-b border-slate-100 pb-3 gap-2">
+                                <div className="flex flex-wrap items-center justify-between gap-3 border-b border-slate-100 pb-3">
                                     <div>
-                                        <h3 className="text-base font-bold text-slate-900">
-                                            รายวิชาเลือก ({studentDetail.requirements.elective_required} หน่วยกิต)
-                                        </h3>
-                                        <p className="text-xs text-slate-500">
-                                            เลือกวิชาที่เคยบันทึกไว้ หรือเพิ่มวิชาใหม่แล้วบันทึกเพื่อใช้ซ้ำ
-                                        </p>
+                                        <h3 className="text-base font-bold text-slate-900">รายวิชาเลือก ({studentDetail.requirements.elective_required} หน่วยกิต)</h3>
+                                        <p className="text-xs text-slate-500">ติ๊กลงทะเบียนหรือเทียบโอนจากวิชาที่เคยบันทึกและวิชาแนะนำ หรือเพิ่มวิชาใหม่</p>
                                     </div>
-                                    <div className="flex items-center gap-2">
-                                        <span className="text-xs font-bold text-purple-700 mr-2">
-                                            ลงทะเบียน {termElectiveCredits} นก.
-                                        </span>
-                                        <Button
-                                            size="small"
-                                            appearance="primary"
-                                            icon={<Plus size={14} />}
-                                            onClick={() => {
-                                                setElectiveEditModes((modes) => ({ ...modes, [electiveRows.length]: true }));
-                                                setElectiveRows([
-                                                    ...electiveRows,
-                                                    {
-                                                        code: '',
-                                                        name: '',
-                                                        credits: 2.0,
-                                                        registered: true,
-                                                        transferred: false,
-                                                        remark: '',
-                                                    },
-                                                ]);
-                                                setIsFormDirty(true);
-                                            }}
-                                        >
-                                            เพิ่มวิชาเลือก
-                                        </Button>
+                                    <div className="flex items-center gap-3">
+                                        <span className="text-xs font-bold text-purple-700">ลงทะเบียน {termElectiveCredits} นก.</span>
+                                        <Button size="small" appearance="primary" icon={<Plus size={14} />} onClick={() => {
+                                            setElectiveEditModes((modes) => ({ ...modes, [electiveRows.length]: true }));
+                                            setElectiveRows((rows) => [...rows, { code: '', name: '', credits: 2, registered: false, transferred: false, remark: '' }]);
+                                            setIsFormDirty(true);
+                                        }}>เพิ่มวิชาเลือกใหม่</Button>
                                     </div>
                                 </div>
-
-                                {/* Common Electives Quick Add Chips */}
-                                {studentDetail.common_electives?.length > 0 && (
-                                    <div className="rounded-xl bg-slate-50 p-3 space-y-2">
-                                        <div className="flex flex-wrap items-center justify-between gap-2">
-                                            <span className="text-xs font-bold text-slate-700">
-                                                วิชาเลือกที่เคยบันทึกและวิชาแนะนำ (คลิกเพื่อเพิ่ม):
-                                            </span>
-                                            <span className="text-[11px] text-slate-500">
-                                                * คลิกวิชาเพื่อเพิ่มในรายการลงทะเบียน
-                                            </span>
-                                        </div>
-                                        <div className="grid grid-cols-1 gap-3 md:grid-cols-2">
-                                            {studentDetail.common_electives.map((ce) => {
-                                                const isAlreadyInList = electiveRows.some((r) => r.code === ce.code);
-                                                return (
-                                                    <button
-                                                        key={ce.code}
-                                                        type="button"
-                                                        onClick={() => {
-                                                            if (isAlreadyInList) {
-                                                                showErrorAlert(`วิชา ${ce.code} มีอยู่ในรายการแล้ว`);
-                                                                return;
-                                                            }
-                                                            if (ce.course_status?.status === 'passed') {
-                                                                if (!window.confirm(`คำเตือน: วิชา ${ce.code} มีผลการเรียนแล้ว (${ce.course_status.status_label}) คุณต้องการเลือกลงทะเบียนซ้ำหรือไม่?`)) {
-                                                                    return;
-                                                                }
-                                                            } else if (ce.course_status?.status === 'pending_grade') {
-                                                                if (!window.confirm(`คำเตือน: วิชา ${ce.code} อยู่ระหว่างรอผลการเรียน (${ce.course_status.status_label}) คุณต้องการเลือกลงทะเบียนซ้ำหรือไม่?`)) {
-                                                                    return;
-                                                                }
-                                                            }
-                                                            setElectiveRows([
-                                                                ...electiveRows,
-                                                                {
-                                                                    code: ce.code,
-                                                                    name: ce.name,
-                                                                    credits: ce.credits,
-                                                                    registered: true,
-                                                                    transferred: false,
-                                                                    remark: '',
-                                                                    course_status: ce.course_status,
-                                                                },
-                                                            ]);
+                                <div className="overflow-x-auto">
+                                    <table className="w-full min-w-[900px] text-left text-sm" aria-label="รายวิชาเลือก">
+                                        <thead>
+                                            <tr className="border-b border-slate-200 bg-slate-50 text-xs font-bold text-slate-700">
+                                                <th className="p-3">รายวิชา</th>
+                                                <th className="p-3 w-28 text-center">รหัสวิชา</th>
+                                                <th className="p-3 w-24 text-center">หน่วยกิต</th>
+                                                <th className="p-3 w-28 text-center">ลงทะเบียน</th>
+                                                <th className="p-3 w-28 text-center">เทียบโอน</th>
+                                                <th className="p-3 w-40">หมายเหตุ</th>
+                                                <th className="p-3 w-24 text-center">จัดการ</th>
+                                            </tr>
+                                        </thead>
+                                        <tbody className="divide-y divide-slate-100">
+                                            {electiveRows.length === 0 ? <tr><td colSpan={7} className="p-6 text-center text-slate-500">ยังไม่มีรายวิชาเลือก กด “เพิ่มวิชาเลือกใหม่” เพื่อเพิ่มรายวิชา</td></tr> : electiveRows.map((row, idx) => {
+                                                const status = row.course_status || getCourseStatusForCode(row.code);
+                                                const editable = isElectiveEditable(row, idx);
+                                                const updateDetails = (field: 'name' | 'code' | 'credits' | 'remark', value: string | number) => {
+                                                    setElectiveRows((rows) => rows.map((subject, index) => index === idx ? { ...subject, [field]: value, ...(field === 'code' ? { course_status: getCourseStatusForCode(String(value)) } : {}) } : subject));
+                                                    setIsFormDirty(true);
+                                                };
+                                                return <tr key={idx} className={`hover:bg-slate-50/80 ${row.registered ? 'bg-blue-50/30' : ''}`}>
+                                                    <td className="p-3">
+                                                        <div className="flex flex-wrap items-center gap-2">
+                                                            {editable ? <input type="text" aria-label={`ชื่อวิชา ${row.name || row.code || idx + 1}`} value={row.name} placeholder="ชื่อวิชาเลือก" onChange={(event) => updateDetails('name', event.target.value)} className="w-full rounded-lg border border-slate-200 px-2 py-1 text-sm font-bold" /> : <span className="font-bold text-slate-900">{row.name}</span>}
+                                                            <CourseStatusBadge status={status} />
+                                                        </div>
+                                                        {row.registered && status?.warning && <p className="mt-1 text-xs text-amber-800">{status.warning}</p>}
+                                                    </td>
+                                                    <td className="p-3 text-center font-mono text-xs font-bold text-slate-700">
+                                                        {editable ? <input type="text" aria-label={`รหัสวิชา ${row.name || idx + 1}`} value={row.code} placeholder="รหัสวิชา" onChange={(event) => updateDetails('code', event.target.value)} className="w-full rounded-lg border border-slate-200 px-2 py-1" /> : row.code}
+                                                    </td>
+                                                    <td className="p-3 text-center tabular-nums text-slate-700">
+                                                        {editable ? <input type="number" aria-label={`หน่วยกิต ${row.name || idx + 1}`} value={row.credits} step="0.5" min="0.5" max="10" onChange={(event) => updateDetails('credits', Number(event.target.value) || 0)} className="w-16 rounded-lg border border-slate-200 p-1 text-center" /> : row.credits}
+                                                    </td>
+                                                    <td className="p-3 text-center">
+                                                        <input type="checkbox" aria-label={`ลงทะเบียนวิชา ${row.name || row.code || idx + 1}`} checked={row.registered} onChange={(event) => {
+                                                            const checked = event.target.checked;
+                                                            if (checked && status?.warning && (status.status === 'passed' || status.status === 'pending_grade') && !window.confirm(`${status.warning} ต้องการลงทะเบียนวิชานี้หรือไม่?`)) return;
+                                                            setElectiveRows((rows) => rows.map((subject, index) => index === idx ? { ...subject, registered: checked, transferred: checked ? false : subject.transferred } : subject));
                                                             setIsFormDirty(true);
-                                                        }}
-                                                        className={`flex w-full min-w-0 items-start gap-3 rounded-lg border p-3 text-left text-sm font-semibold shadow-2xs transition ${
-                                                            isAlreadyInList
-                                                                ? 'border-slate-200 bg-slate-100 text-slate-400 cursor-not-allowed'
-                                                                : ce.course_status?.status === 'not_taken'
-                                                                ? 'border-sky-300 bg-sky-50/60 text-sky-900 hover:bg-sky-100 hover:border-sky-400'
-                                                                : ce.course_status?.status === 'absent_exam'
-                                                                ? 'border-orange-300 bg-orange-50/80 text-orange-950 hover:bg-orange-100 hover:border-orange-400'
-                                                                : ce.course_status?.status === 'failed'
-                                                                ? 'border-rose-300 bg-rose-50/80 text-rose-950 hover:bg-rose-100 hover:border-rose-400'
-                                                                : 'border-slate-200 bg-white text-slate-700 hover:border-brand-500 hover:bg-brand-50'
-                                                        }`}
-                                                    >
-                                                        {isAlreadyInList ? <Check size={16} className="mt-0.5 shrink-0" /> : <Plus size={16} className="mt-0.5 shrink-0" />}
-                                                        <span className="flex min-w-0 flex-1 flex-col items-start gap-2">
-                                                            <span className="break-words leading-6">
-                                                                {ce.code} {ce.name} ({ce.credits} นก.)
-                                                            </span>
-                                                            <span className="flex flex-wrap items-center gap-2">
-                                                                <CourseStatusBadge status={ce.course_status} />
-                                                                {isAlreadyInList && <span className="text-xs text-slate-500">อยู่ในรายการแล้ว</span>}
-                                                            </span>
-                                                        </span>
-                                                    </button>
-                                                );
+                                                        }} className="size-4.5 rounded border-slate-300 text-brand-600 focus:ring-brand-500" />
+                                                    </td>
+                                                    <td className="p-3 text-center">
+                                                        <input type="checkbox" aria-label={`เทียบโอนวิชา ${row.name || row.code || idx + 1}`} checked={row.transferred} onChange={(event) => {
+                                                            const checked = event.target.checked;
+                                                            setElectiveRows((rows) => rows.map((subject, index) => index === idx ? { ...subject, transferred: checked, registered: checked ? false : subject.registered } : subject));
+                                                            setIsFormDirty(true);
+                                                        }} className="size-4.5 rounded border-slate-300 text-brand-600 focus:ring-brand-500" />
+                                                    </td>
+                                                    <td className="p-3"><input type="text" aria-label={`หมายเหตุ ${row.name || row.code || idx + 1}`} value={row.remark} placeholder="หมายเหตุ..." onChange={(event) => updateDetails('remark', event.target.value)} className="w-full rounded-lg border border-slate-200 px-2 py-1 text-xs" /></td>
+                                                    <td className="p-3 text-center">
+                                                        <div className="flex items-center justify-center gap-2">
+                                                            <button type="button" aria-label={`${editable ? 'เสร็จสิ้นการแก้ไข' : 'แก้ไขรายละเอียดวิชา'} ${row.name || row.code || idx + 1}`} title={editable ? 'เสร็จสิ้นการแก้ไข' : 'แก้ไขรายละเอียดวิชา'} onClick={() => setElectiveEditModes((modes) => ({ ...modes, [idx]: !editable }))} className="text-brand-700 hover:text-brand-900">{editable ? <Check size={16} /> : <PencilSimple size={16} />}</button>
+                                                            <button type="button" aria-label={`ลบวิชา ${row.name || row.code || idx + 1}`} title="ลบวิชานี้" onClick={() => {
+                                                                setElectiveRows((rows) => rows.filter((_, index) => index !== idx));
+                                                                setElectiveEditModes({});
+                                                                setIsFormDirty(true);
+                                                            }} className="text-slate-400 hover:text-rose-600"><Trash size={16} /></button>
+                                                        </div>
+                                                    </td>
+                                                </tr>;
                                             })}
-                                        </div>
-                                    </div>
-                                )}
-
-                                <div>
-                                    <div>
-                                        <div className="grid items-start gap-4 md:grid-cols-2">
-                                            {electiveRows.length === 0 ? (
-                                                <div className="md:col-span-2">
-                                                    <div className="p-4 text-center text-sm text-slate-500">
-                                                        ยังไม่มีการเพิ่มวิชาเลือก (สามารถกดปุ่ม "เพิ่มวิชาเลือก" ด้านบน)
-                                                    </div>
-                                                </div>
-                                            ) : (
-                                                electiveRows.map((row, idx) => (
-                                                    <div key={idx} className="grid grid-cols-2 gap-3 rounded-xl border border-slate-200 p-3 hover:bg-slate-50/80">
-                                                        <div className="min-w-0 col-span-2">
-                                                            <div className="space-y-1">
-                                                                {isElectiveEditable(row, idx) ? (
-                                                                    <input
-                                                                        type="text"
-                                                                        aria-label={`ชื่อวิชา ${row.name || row.code || idx + 1}`}
-                                                                        value={row.name}
-                                                                        placeholder="ชื่อวิชาเลือก..."
-                                                                        onChange={(e) => {
-                                                                            const updated = [...electiveRows];
-                                                                            updated[idx].name = e.target.value;
-                                                                            setElectiveRows(updated);
-                                                                            setIsFormDirty(true);
-                                                                        }}
-                                                                        className="w-full rounded-lg border border-slate-200 px-2 py-1 text-sm font-bold text-slate-800"
-                                                                    />
-                                                                ) : (
-                                                                    <h4 className="break-words font-bold leading-6 text-slate-900">{row.name}</h4>
-                                                                )}
-                                                                <div className="flex flex-wrap items-center gap-1.5">
-                                                                    <CourseStatusBadge status={row.course_status || getCourseStatusForCode(row.code)} />
-                                                                    {row.registered && (row.course_status?.warning || getCourseStatusForCode(row.code)?.warning) && (
-                                                                        <span className={`flex items-center gap-1 text-[11px] font-medium px-1.5 py-0.5 rounded border ${
-                                                                            (row.course_status?.status || getCourseStatusForCode(row.code)?.status) === 'absent_exam'
-                                                                                ? 'text-orange-950 bg-orange-50 border-orange-200'
-                                                                                : (row.course_status?.status || getCourseStatusForCode(row.code)?.status) === 'failed'
-                                                                                ? 'text-rose-950 bg-rose-50 border-rose-200'
-                                                                                : 'text-amber-950 bg-amber-50 border-amber-200'
-                                                                        }`}>
-                                                                            <Warning size={12} className={`shrink-0 ${
-                                                                                (row.course_status?.status || getCourseStatusForCode(row.code)?.status) === 'absent_exam'
-                                                                                    ? 'text-orange-600'
-                                                                                    : (row.course_status?.status || getCourseStatusForCode(row.code)?.status) === 'failed'
-                                                                                    ? 'text-rose-600'
-                                                                                    : 'text-amber-600'
-                                                                            }`} />
-                                                                            <span>{row.course_status?.warning || getCourseStatusForCode(row.code)?.warning}</span>
-                                                                        </span>
-                                                                    )}
-                                                                </div>
-                                                            </div>
-                                                        </div>
-                                                        <div className="min-w-0"><span className="mb-1 block text-xs font-semibold text-slate-500">รหัสวิชา</span>
-                                                            {isElectiveEditable(row, idx) ? (
-                                                                <input
-                                                                    type="text"
-                                                                    aria-label={`รหัสวิชา ${row.name || row.code || idx + 1}`}
-                                                                    value={row.code}
-                                                                    placeholder="รหัสวิชา"
-                                                                    onChange={(e) => {
-                                                                        const updated = [...electiveRows];
-                                                                        const val = e.target.value;
-                                                                        updated[idx].code = val;
-                                                                        const resolved = getCourseStatusForCode(val);
-                                                                        if (resolved) {
-                                                                            updated[idx].course_status = resolved;
-                                                                        }
-                                                                        setElectiveRows(updated);
-                                                                        setIsFormDirty(true);
-                                                                    }}
-                                                                    className="w-full rounded-lg border border-slate-200 px-2 py-1 font-mono text-xs font-bold"
-                                                                />
-                                                            ) : (
-                                                                <p className="break-all font-mono text-sm font-semibold text-slate-700">{row.code}</p>
-                                                            )}
-                                                        </div>
-                                                        <div className="min-w-0"><span className="mb-1 block text-xs font-semibold text-slate-500">หน่วยกิต</span>
-                                                            {isElectiveEditable(row, idx) ? (
-                                                                <input
-                                                                    type="number"
-                                                                    step="0.5"
-                                                                    min="0.5"
-                                                                    max="10"
-                                                                    aria-label={`หน่วยกิต ${row.name || row.code || idx + 1}`}
-                                                                    value={row.credits}
-                                                                    onChange={(e) => {
-                                                                        const updated = [...electiveRows];
-                                                                        updated[idx].credits = parseFloat(e.target.value) || 0;
-                                                                        setElectiveRows(updated);
-                                                                        setIsFormDirty(true);
-                                                                    }}
-                                                                    className="w-16 rounded-lg border border-slate-200 p-1 text-center font-bold text-xs"
-                                                                />
-                                                            ) : (
-                                                                <p className="text-sm font-semibold text-slate-700">{row.credits} หน่วยกิต</p>
-                                                            )}
-                                                        </div>
-                                                        <div className="min-w-0"><span className="mb-1 block text-xs font-semibold text-slate-500">ลงทะเบียน</span>
-                                                            <input
-                                                                type="checkbox"
-                                                                checked={row.registered}
-                                                                aria-label={`ลงทะเบียนวิชา ${row.name}`}
-                                                                onChange={(e) => {
-                                                                    const checked = e.target.checked;
-                                                                    setElectiveRows((rows) => rows.map((subject, subjectIndex) => (
-                                                                        subjectIndex === idx
-                                                                            ? {
-                                                                                ...subject,
-                                                                                registered: checked,
-                                                                                transferred: checked ? false : subject.transferred,
-                                                                            }
-                                                                            : subject
-                                                                    )));
-                                                                    setIsFormDirty(true);
-                                                                }}
-                                                                className="size-4.5 rounded border-slate-300 text-brand-600 focus:ring-brand-500"
-                                                            />
-                                                        </div>
-                                                        <div className="min-w-0"><span className="mb-1 block text-xs font-semibold text-slate-500">เทียบโอน</span>
-                                                            <input
-                                                                type="checkbox"
-                                                                checked={row.transferred}
-                                                                aria-label={`เทียบโอนวิชา ${row.name}`}
-                                                                onChange={(e) => {
-                                                                    const checked = e.target.checked;
-                                                                    setElectiveRows((rows) => rows.map((subject, subjectIndex) => (
-                                                                        subjectIndex === idx
-                                                                            ? {
-                                                                                ...subject,
-                                                                                transferred: checked,
-                                                                                registered: checked ? false : subject.registered,
-                                                                            }
-                                                                            : subject
-                                                                    )));
-                                                                    setIsFormDirty(true);
-                                                                }}
-                                                                className="size-4.5 rounded border-slate-300 text-brand-600 focus:ring-brand-500"
-                                                            />
-                                                        </div>
-                                                        <div className="min-w-0 col-span-2"><span className="mb-1 block text-xs font-semibold text-slate-500">หมายเหตุ</span>
-                                                            <input
-                                                                type="text"
-                                                                aria-label={`หมายเหตุ ${row.name || row.code || idx + 1}`}
-                                                                value={row.remark}
-                                                                placeholder="หมายเหตุ..."
-                                                                onChange={(e) => {
-                                                                    const updated = [...electiveRows];
-                                                                    updated[idx].remark = e.target.value;
-                                                                    setElectiveRows(updated);
-                                                                    setIsFormDirty(true);
-                                                                }}
-                                                                className="w-full rounded-lg border border-slate-200 px-2 py-1 text-xs"
-                                                            />
-                                                        </div>
-                                                        <div className="col-span-2 flex items-center justify-between gap-3 border-t border-slate-100 pt-2">
-                                                            <button
-                                                                type="button"
-                                                                onClick={() => setElectiveEditModes((modes) => ({ ...modes, [idx]: !isElectiveEditable(row, idx) }))}
-                                                                className="inline-flex items-center gap-1.5 text-xs font-semibold text-brand-700 hover:underline"
-                                                                aria-label={`แก้ไขรายละเอียดวิชา ${row.name || row.code || idx + 1}`}
-                                                            >
-                                                                <PencilSimple size={14} />
-                                                                {isElectiveEditable(row, idx) ? 'เสร็จสิ้นการแก้ไข' : 'แก้ไขรายละเอียดวิชา'}
-                                                            </button>
-                                                            <button
-                                                                type="button"
-                                                                onClick={() => {
-                                                                    setElectiveRows(electiveRows.filter((_, i) => i !== idx));
-                                                                    setElectiveEditModes({});
-                                                                    setIsFormDirty(true);
-                                                                }}
-                                                                className="text-slate-400 hover:text-rose-600 transition"
-                                                                title="ลบวิชานี้"
-                                                            >
-                                                                <Trash size={16} />
-                                                            </button>
-                                                        </div>
-                                                    </div>
-                                                ))
-                                            )}
-                                        </div>
-                                    </div>
+                                        </tbody>
+                                    </table>
                                 </div>
                             </div>
 

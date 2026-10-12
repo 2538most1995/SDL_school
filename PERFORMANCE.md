@@ -161,3 +161,5 @@
 - Pending-status verification: 29 registration feature/PDF tests pass; full suite has 372 passed and 1 skipped. PHP syntax and Pint checks pass for changed files. Tests use isolated in-memory SQLite and synthetic grade fixtures.
 
 - Elective metadata display correction: known/saved course metadata is shown as text by default, with explicit per-course editing. Browser checks on isolated demo data confirm no metadata inputs for saved/quick-added courses, inputs when editing or adding a new course, and no mobile overflow at 390px. No API/schema/query changes; typecheck and production build pass.
+
+- Unified elective table merges existing API data in the browser without new queries. Verification: 43 frontend tests, typecheck and production build pass; isolated demo browser checks registration/transfer exclusivity and saving only the two selected courses rather than all six displayed suggestions. Real student data was not modified.
