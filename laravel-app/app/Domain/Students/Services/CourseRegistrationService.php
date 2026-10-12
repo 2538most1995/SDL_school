@@ -205,7 +205,7 @@ final readonly class CourseRegistrationService
             }
 
             $rawGrade = $grade->grade !== null ? trim((string) $grade->grade) : '';
-            $isAbsent = in_array($rawGrade, ['ข', 'ขาดสอบ'], true) || (! $grade->examAttended && in_array($rawGrade, ['ข', 'ม', ''], true));
+            $isAbsent = in_array($rawGrade, ['ข', 'ขาดสอบ'], true);
             $isFailedZero = $rawGrade === '0';
 
             if ($grade->transferred) {
@@ -274,7 +274,47 @@ final readonly class CourseRegistrationService
             }
         }
 
-        $resolveStatus = static function (string $code) use ($historyPassed, $historyTransferred, $historyPending, $learningPending, $historyUnpassed): array {
+        // Check if saved registration exists in learning_course_registrations
+        $saved = DB::table('learning_course_registrations')
+            ->where('district_id', $student->districtId)
+            ->where('academic_term', $targetTerm)
+            ->where('student_code', $student->code)
+            ->first();
+
+        // Unresolved results stay pending; an import attendance flag alone is not an absence result.
+        $currentPending = [];
+        $currentResults = [];
+        foreach ($historicalRegisteredInTerm as $code => $grade) {
+            $rawGrade = trim((string) $grade->grade);
+            if ($grade->transferred || $grade->isPassed() || in_array($rawGrade, ['ข', 'ขาดสอบ', '0'], true)) {
+                $currentResults[$code] = true;
+                if (in_array($rawGrade, ['ข', 'ขาดสอบ', '0'], true)) {
+                    $historyUnpassed[$code] = [
+                        'type' => $rawGrade === '0' ? 'failed' : 'absent_exam',
+                        'term' => $targetTerm, 'grade' => $rawGrade === '0' ? '0' : 'ข',
+                        'credits' => $grade->credits, 'name' => $grade->subjectName,
+                    ];
+                }
+            }
+            if (! isset($currentResults[$code])) {
+                $currentPending[$code] = true;
+            }
+        }
+        if ($saved !== null) {
+            $selectedSubjects = array_merge(
+                json_decode((string) $saved->compulsory_subjects, true) ?: [],
+                json_decode((string) $saved->elective_subjects, true) ?: [],
+            );
+            foreach ($selectedSubjects as $subject) {
+                $code = trim((string) ($subject['code'] ?? ''));
+                if ($code !== '' && ! empty($subject['registered']) && empty($subject['transferred'])
+                    && ! isset($historicalRegisteredInTerm[$code])) {
+                    $currentPending[$code] = true;
+                }
+            }
+        }
+
+        $resolveStatus = static function (string $code) use ($historyPassed, $historyTransferred, $historyPending, $learningPending, $historyUnpassed, $currentPending, $currentResults, $targetTerm): array {
             $code = trim($code);
             if (isset($historyPassed[$code])) {
                 $p = $historyPassed[$code];
@@ -311,7 +351,21 @@ final readonly class CourseRegistrationService
                     'warning' => 'วิชานี้ได้รับการเทียบโอนแล้ว',
                 ];
             }
-            if (isset($historyPending[$code])) {
+            if (isset($currentPending[$code])) {
+                return [
+                    'status' => 'pending_grade',
+                    'status_label' => "ลงทะเบียนเทอม {$targetTerm} · รอผลการเรียน",
+                    'status_badge' => "รอผลการเรียน (เทอม {$targetTerm})",
+                    'status_color' => 'amber',
+                    'has_grade' => false,
+                    'is_pending' => true,
+                    'is_transferred' => false,
+                    'grade' => null,
+                    'term' => $targetTerm,
+                    'warning' => null,
+                ];
+            }
+            if (isset($historyPending[$code]) && ! isset($currentResults[$code])) {
                 $hp = $historyPending[$code];
                 $t = (string) $hp['term'];
 
@@ -328,7 +382,7 @@ final readonly class CourseRegistrationService
                     'warning' => "วิชานี้ลงทะเบียนไว้ในเทอม {$t} แล้วและกำลังรอผลการเรียน",
                 ];
             }
-            if (isset($learningPending[$code])) {
+            if (isset($learningPending[$code]) && ! isset($currentResults[$code])) {
                 $lp = $learningPending[$code];
                 $t = (string) $lp['term'];
 
@@ -395,13 +449,6 @@ final readonly class CourseRegistrationService
         // Standard compulsory subjects for level
         $catalogCompulsory = CurriculumCatalog::compulsorySubjects($student->level);
         $reqs = CurriculumCatalog::creditRequirements($student->level);
-
-        // Check if saved registration exists in learning_course_registrations
-        $saved = DB::table('learning_course_registrations')
-            ->where('district_id', $student->districtId)
-            ->where('academic_term', $targetTerm)
-            ->where('student_code', $student->code)
-            ->first();
 
         $compulsoryList = [];
         $electiveList = [];

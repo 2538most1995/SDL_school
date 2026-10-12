@@ -813,6 +813,62 @@ final class CourseRegistrationTest extends TestCase
         $this->assertNotContains('เลือก101', array_column($data['elective_subjects'], 'code'));
     }
 
+    public function test_blank_current_results_are_pending_instead_of_absent_even_when_exam_flag_is_false(): void
+    {
+        $this->registrationGrades([
+            new Grade('6650100001', 'ทร11001', 'ทักษะการเรียนรู้', 5, 'compulsory', '2/2569', null, examAttended: false),
+            new Grade('6650100001', 'อช12001', 'โครงการอาชีพ', 3, 'elective', '1/2569', 'ข', examAttended: false),
+            new Grade('6650100001', 'อช12001', 'โครงการอาชีพ', 3, 'elective', '2/2569', '', examAttended: false),
+            new Grade('6650100001', 'พว12010', 'พลังงาน', 2, 'elective', '2/2569', '-', examAttended: false),
+            new Grade('6650100001', 'สค12021', 'การเงิน', 2, 'elective', '2/2569', 'ข', examAttended: false),
+            new Grade('6650100001', 'สค12025', 'ประวัติศาสตร์', 2, 'elective', '2/2569', '0', examAttended: true),
+            new Grade('6650100001', 'สค12026', 'การป้องกันการทุจริต', 2, 'elective', '1/2569', 'ข', examAttended: false),
+            new Grade('6650100001', 'สค12026', 'การป้องกันการทุจริต', 2, 'elective', '2/2569', 'ม', examAttended: false),
+        ]);
+        Sanctum::actingAs($this->viewer('admin'));
+        $data = $this->getJson('/api/v1/learning/registration/student/6650100001?term=2/2569')->assertOk()->json('data');
+        $subjects = collect(array_merge($data['compulsory_subjects'], $data['elective_subjects']))->keyBy('code');
+        foreach (['ทร11001', 'อช12001', 'พว12010', 'สค12026'] as $code) {
+            $status = $subjects[$code]['course_status'];
+            $this->assertSame('pending_grade', $status['status']);
+            $this->assertSame('2/2569', $status['term']);
+            $this->assertNull($status['grade']);
+            $this->assertNull($status['warning']);
+            $this->assertFalse($status['has_grade']);
+        }
+        $this->assertSame('absent_exam', $subjects['สค12021']['course_status']['status']);
+        $this->assertSame('failed', $subjects['สค12025']['course_status']['status']);
+    }
+
+    public function test_saved_new_term_registration_is_pending_without_reusing_previous_absence(): void
+    {
+        $this->registrationGrades([
+            new Grade('6650100001', 'อช12001', 'โครงการอาชีพ', 3, 'elective', '1/2569', 'ข', examAttended: false),
+        ]);
+        Sanctum::actingAs($this->viewer('admin'));
+        $this->postJson('/api/v1/learning/registration/student/6650100001', [
+            'academic_term' => '2/2569', 'compulsory_subjects' => [],
+            'elective_subjects' => [['code' => 'อช12001', 'name' => 'โครงการอาชีพ', 'credits' => 3, 'registered' => true]],
+        ])->assertOk()->assertJsonPath('data.elective_subjects.0.course_status.status', 'pending_grade')
+            ->assertJsonPath('data.elective_subjects.0.course_status.term', '2/2569');
+        $this->getJson('/api/v1/learning/registration/student/6650100001?term=2/2569')->assertOk()
+            ->assertJsonPath('data.elective_subjects.0.course_status.status', 'pending_grade');
+        $this->getJson('/api/v1/learning/registration/student/6650100001?term=1/2569')->assertOk()
+            ->assertJsonPath('data.elective_subjects.0.course_status.status', 'absent_exam');
+    }
+
+    /** @param list<Grade> $grades */
+    private function registrationGrades(array $grades): void
+    {
+        $demo = $this->app->make(DemoStudentRepository::class);
+        $repository = \Mockery::mock(StudentRepository::class);
+        foreach (['students', 'find', 'gradesForMany', 'subjectsFor', 'kpchFor', 'moralFor'] as $method) {
+            $repository->shouldReceive($method)->andReturnUsing(static fn (...$args) => $demo->{$method}(...$args));
+        }
+        $repository->shouldReceive('gradesFor')->andReturn($grades);
+        $this->app->instance(StudentRepository::class, $repository);
+    }
+
     /** @param list<string> $groups */
     private function viewer(string $role, array $groups = [], ?string $username = null): User
     {

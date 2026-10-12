@@ -153,3 +153,8 @@ Request → route → Sanctum/auth + active + district/role middleware
 - Staff compulsory subjects retain the original full-width table. Electives appear below it as a two-column grid of course fields (one column on small screens).
 
 - The saved/recommended elective quick-add selector also uses two equal-width columns on desktop, with a wrapped course title and its status on a separate line; mobile uses one column.
+
+### Pending registration results (2026-10-12)
+
+- Course-registration status identifies absence only from an explicit source grade `ข`/`ขาดสอบ`. A blank, NULL or `-` result with `examAttended=false` means pending, not absence; the imported attendance flag also represents missing grades. It is not evidence that an exam already happened.
+- Selected-term blank imported grades and saved selected courses without an imported result display pending for that term, ahead of older failed/absent attempts and other-term pending records. Existing prior-pass/transfer warnings retain their precedence. Explicit selected-term `ข` and `0` results remain absent/failed; another term's pending registration cannot replace them. No source scores, grades, registration selections or district/group permissions are rewritten.

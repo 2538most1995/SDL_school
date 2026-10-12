@@ -156,3 +156,6 @@
 
 - Layout correction: compulsory subjects restored to their original table above electives; only elective cards use a responsive two-column grid. This is a presentation-only change with no API/database updates.
 - Corrected layout verified in the isolated demo browser: compulsory input belongs to the original table; the elective grid starts below that table and has two 522px columns at 1440px, one 324px column at 390px. Page width matches viewport at both sizes. Typecheck and production build pass.
+
+- Registration pending-status correction reuses the existing selected-term saved-registration query, moving it before status resolution; it adds no database queries, schema, indexes or source-data writes. Regression fixtures cover false exam flags on blank results, historical absence followed by a new pending registration, and preservation of explicit absence/zero outcomes. Live production data for the screenshot remains Not verified.
+- Pending-status verification: 29 registration feature/PDF tests pass; full suite has 372 passed and 1 skipped. PHP syntax and Pint checks pass for changed files. Tests use isolated in-memory SQLite and synthetic grade fixtures.
