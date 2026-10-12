@@ -40,7 +40,7 @@ export function MyRegistrationPage() {
                     </label>
                 </div>
                 <p className="text-sm text-slate-600">{data.is_saved ? 'รายการที่ครูหรือผู้ดูแลบันทึกไว้' : 'รายการจากข้อมูลลงทะเบียนที่นำเข้า'} · ภาคเรียน {data.academic_term}</p>
-                <div className="grid items-start gap-6 md:grid-cols-2">
+                <div className="space-y-6">
                     <SubjectColumn title="วิชาบังคับ" subjects={data.compulsory_subjects} tone="blue" />
                     <SubjectColumn title="วิชาเลือก" subjects={data.elective_subjects} tone="purple" />
                 </div>
@@ -57,8 +57,8 @@ function SubjectColumn({ title, subjects, tone }: { title: string; subjects: Sub
                 <h3 className="text-lg font-bold">{title}</h3>
                 <p className="mt-1 text-sm">{subjects.length} วิชา · ลงทะเบียน {credits} หน่วยกิต</p>
             </div>
-            {subjects.length === 0 ? <p className="p-5 text-sm text-slate-500">ไม่มี{title}ในภาคเรียนนี้</p> : <ul className="divide-y divide-slate-100">
-                {subjects.map((subject) => <li key={subject.code} className="flex items-start justify-between gap-3 p-5">
+            {subjects.length === 0 ? <p className="p-5 text-sm text-slate-500">ไม่มี{title}ในภาคเรียนนี้</p> : <ul className={tone === 'purple' ? 'grid items-start gap-4 p-4 md:grid-cols-2' : 'divide-y divide-slate-100'}>
+                {subjects.map((subject) => <li key={subject.code} className={`flex min-w-0 items-start justify-between gap-3 p-5 ${tone === 'purple' ? 'rounded-xl border border-slate-200' : ''}`}>
                     <div className="min-w-0"><p className="break-words font-semibold text-slate-900">{subject.name}</p><p className="mt-1 text-sm text-slate-500">{subject.code}{subject.transferred && ' · เทียบโอน'}</p></div>
                     <span className="shrink-0 text-sm font-bold text-slate-700">{subject.credits} นก.</span>
                 </li>)}

@@ -153,3 +153,6 @@
 - Browser smoke checks passed at 1440px and 390px for student/staff: two desktop columns, one mobile column and no page horizontal overflow. On isolated demo data, staff saved a new elective, another learner's editor offered it without auto-selecting it, and the owning student saw the saved course after reload. No browser errors in the staff session. Typecheck, production build, 40 frontend tests and registration feature/PDF tests passed.
 
 - Final full PHPUnit run: 370 passed, 1 skipped; changed PHP files pass Pint. Repository-wide Pint still reports pre-existing formatting violations in seven untouched files (DistrictBranding, announcement controllers, CurriculumCatalog, registration export service, web routes and PDF tests). Real MySQL data was not used or modified.
+
+- Layout correction: compulsory subjects restored to their original table above electives; only elective cards use a responsive two-column grid. This is a presentation-only change with no API/database updates.
+- Corrected layout verified in the isolated demo browser: compulsory input belongs to the original table; the elective grid starts below that table and has two 522px columns at 1440px, one 324px column at 390px. Page width matches viewport at both sizes. Typecheck and production build pass.

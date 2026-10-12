@@ -1243,9 +1243,8 @@ function StaffCourseRegistrationPage() {
                                 </span>
                             </div>
 
-                            <div className="grid items-start gap-6 xl:grid-cols-2">
                             {/* Section 1: Compulsory Subjects */}
-                            <div className="min-w-0 rounded-2xl border border-slate-200 bg-white p-4 sm:p-6 shadow-sm space-y-4">
+                            <div className="rounded-2xl border border-slate-200 bg-white p-6 shadow-sm space-y-4">
                                 <div className="flex items-center justify-between border-b border-slate-100 pb-3">
                                     <div>
                                         <h3 className="text-base font-bold text-slate-900">
@@ -1261,15 +1260,24 @@ function StaffCourseRegistrationPage() {
                                 </div>
 
                                 <div className="overflow-x-auto">
-                                    <div className="space-y-3">
-
-                                        <div className="space-y-3">
+                                    <table className="w-full min-w-[800px] text-left text-sm">
+                                        <thead>
+                                            <tr className="border-b border-slate-200 bg-slate-50 text-xs font-bold text-slate-700">
+                                                <th className="p-3">สาระการเรียนรู้</th>
+                                                <th className="p-3 w-28 text-center">รหัสวิชา</th>
+                                                <th className="p-3 w-24 text-center">หน่วยกิต</th>
+                                                <th className="p-3 w-28 text-center">ลงทะเบียน</th>
+                                                <th className="p-3 w-28 text-center">เทียบโอน</th>
+                                                <th className="p-3 w-40">หมายเหตุ</th>
+                                            </tr>
+                                        </thead>
+                                        <tbody className="divide-y divide-slate-100">
                                             {compulsoryRows.map((row, idx) => (
-                                                <div
+                                                <tr
                                                     key={row.code}
-                                                    className={`grid grid-cols-2 gap-3 rounded-xl border border-slate-200 p-3 hover:bg-slate-50/80 ${row.registered ? 'bg-blue-50/30' : ''}`}
+                                                    className={`hover:bg-slate-50/80 ${row.registered ? 'bg-blue-50/30' : ''}`}
                                                 >
-                                                    <div className="min-w-0 col-span-2">
+                                                    <td className="p-3">
                                                         <div className="flex flex-wrap items-center gap-2">
                                                             <span className="font-bold text-slate-900">{row.name}</span>
                                                             <CourseStatusBadge status={row.course_status} />
@@ -1292,14 +1300,14 @@ function StaffCourseRegistrationPage() {
                                                                 <span>{row.course_status.warning}</span>
                                                             </div>
                                                         )}
-                                                    </div>
-                                                    <div className="min-w-0"><span className="mb-1 block text-xs font-semibold text-slate-500">รหัสวิชา</span>
+                                                    </td>
+                                                    <td className="p-3 text-center font-mono text-xs font-bold text-slate-700">
                                                         {row.code}
-                                                    </div>
-                                                    <div className="min-w-0"><span className="mb-1 block text-xs font-semibold text-slate-500">หน่วยกิต</span>
+                                                    </td>
+                                                    <td className="p-3 text-center tabular-nums text-slate-700">
                                                         {row.credits}
-                                                    </div>
-                                                    <div className="min-w-0"><span className="mb-1 block text-xs font-semibold text-slate-500">ลงทะเบียน</span>
+                                                    </td>
+                                                    <td className="p-3 text-center">
                                                         <input
                                                             type="checkbox"
                                                             checked={row.registered}
@@ -1319,8 +1327,8 @@ function StaffCourseRegistrationPage() {
                                                             }}
                                                             className="size-4.5 rounded border-slate-300 text-brand-600 focus:ring-brand-500"
                                                         />
-                                                    </div>
-                                                    <div className="min-w-0"><span className="mb-1 block text-xs font-semibold text-slate-500">เทียบโอน</span>
+                                                    </td>
+                                                    <td className="p-3 text-center">
                                                         <input
                                                             type="checkbox"
                                                             checked={row.transferred}
@@ -1340,12 +1348,12 @@ function StaffCourseRegistrationPage() {
                                                             }}
                                                             className="size-4.5 rounded border-slate-300 text-brand-600 focus:ring-brand-500"
                                                         />
-                                                    </div>
-                                                    <div className="min-w-0 col-span-2"><span className="mb-1 block text-xs font-semibold text-slate-500">หมายเหตุ</span>
+                                                    </td>
+                                                    <td className="p-3">
                                                         <input
                                                             type="text"
-                                                            aria-label={`หมายเหตุ ${row.name || row.code || idx + 1}`}
-                                                                value={row.remark}
+                                                            aria-label={`หมายเหตุ ${row.name}`}
+                                                            value={row.remark}
                                                             placeholder="หมายเหตุ..."
                                                             onChange={(e) => {
                                                                 const updated = [...compulsoryRows];
@@ -1355,11 +1363,11 @@ function StaffCourseRegistrationPage() {
                                                             }}
                                                             className="w-full rounded-lg border border-slate-200 px-2 py-1 text-xs"
                                                         />
-                                                    </div>
-                                                </div>
+                                                    </td>
+                                                </tr>
                                             ))}
-                                        </div>
-                                    </div>
+                                        </tbody>
+                                    </table>
                                 </div>
                             </div>
 
@@ -1472,12 +1480,11 @@ function StaffCourseRegistrationPage() {
                                     </div>
                                 )}
 
-                                <div className="overflow-x-auto">
-                                    <div className="space-y-3">
-
-                                        <div className="space-y-3">
+                                <div>
+                                    <div>
+                                        <div className="grid items-start gap-4 md:grid-cols-2">
                                             {electiveRows.length === 0 ? (
-                                                <div>
+                                                <div className="md:col-span-2">
                                                     <div className="p-4 text-center text-sm text-slate-500">
                                                         ยังไม่มีการเพิ่มวิชาเลือก (สามารถกดปุ่ม "เพิ่มวิชาเลือก" ด้านบน)
                                                     </div>
@@ -1636,8 +1643,6 @@ function StaffCourseRegistrationPage() {
                                         </div>
                                     </div>
                                 </div>
-                            </div>
-
                             </div>
 
                             <details open className="rounded-2xl border border-purple-200 bg-white p-4 shadow-2xs">
