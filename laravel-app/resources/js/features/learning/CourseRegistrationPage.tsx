@@ -237,6 +237,7 @@ function StaffCourseRegistrationPage() {
     // Form editing state
     const [compulsoryRows, setCompulsoryRows] = useState<SubjectRow[]>([]);
     const [electiveRows, setElectiveRows] = useState<SubjectRow[]>([]);
+    const [electiveEditModes, setElectiveEditModes] = useState<Record<number, boolean>>({});
     const [studentInfo, setStudentInfo] = useState<StudentInfoForm | null>(null);
     const [showEditInfo, setShowEditInfo] = useState(false);
     const [notes, setNotes] = useState('');
@@ -312,6 +313,7 @@ function StaffCourseRegistrationPage() {
     const loadStudentDataIntoForm = (data: StudentRegistrationData) => {
         setCompulsoryRows(data.compulsory_subjects ?? []);
         setElectiveRows(data.elective_subjects ?? []);
+        setElectiveEditModes({});
         setNotes(data.notes ?? '');
         setStudentInfo(
             data.student_info ?? {
@@ -436,6 +438,13 @@ function StaffCourseRegistrationPage() {
         const foundCompulsory = studentDetail.compulsory_subjects?.find((c) => c.code.trim() === trimmed);
         if (foundCompulsory?.course_status) return foundCompulsory.course_status;
         return undefined;
+    };
+
+    const isElectiveEditable = (row: SubjectRow, index: number): boolean => {
+        if (index in electiveEditModes) return electiveEditModes[index];
+        const knownSubjects = [...(studentDetail?.common_electives ?? []), ...(studentDetail?.elective_subjects ?? [])];
+        return !knownSubjects.some((subject) => subject.code.trim() === row.code.trim()
+            && subject.name === row.name && subject.credits === row.credits);
     };
 
     // Table columns in list view
@@ -1391,6 +1400,7 @@ function StaffCourseRegistrationPage() {
                                             appearance="primary"
                                             icon={<Plus size={14} />}
                                             onClick={() => {
+                                                setElectiveEditModes((modes) => ({ ...modes, [electiveRows.length]: true }));
                                                 setElectiveRows([
                                                     ...electiveRows,
                                                     {
@@ -1468,12 +1478,15 @@ function StaffCourseRegistrationPage() {
                                                                 : 'border-slate-200 bg-white text-slate-700 hover:border-brand-500 hover:bg-brand-50'
                                                         }`}
                                                     >
-                                                        <Plus size={16} className="mt-0.5 shrink-0" />
+                                                        {isAlreadyInList ? <Check size={16} className="mt-0.5 shrink-0" /> : <Plus size={16} className="mt-0.5 shrink-0" />}
                                                         <span className="flex min-w-0 flex-1 flex-col items-start gap-2">
                                                             <span className="break-words leading-6">
                                                                 {ce.code} {ce.name} ({ce.credits} นก.)
                                                             </span>
-                                                            <CourseStatusBadge status={ce.course_status} />
+                                                            <span className="flex flex-wrap items-center gap-2">
+                                                                <CourseStatusBadge status={ce.course_status} />
+                                                                {isAlreadyInList && <span className="text-xs text-slate-500">อยู่ในรายการแล้ว</span>}
+                                                            </span>
                                                         </span>
                                                     </button>
                                                 );
@@ -1496,19 +1509,23 @@ function StaffCourseRegistrationPage() {
                                                     <div key={idx} className="grid grid-cols-2 gap-3 rounded-xl border border-slate-200 p-3 hover:bg-slate-50/80">
                                                         <div className="min-w-0 col-span-2">
                                                             <div className="space-y-1">
-                                                                <input
-                                                                    type="text"
-                                                                    aria-label={`ชื่อวิชา ${row.name || row.code || idx + 1}`}
-                                                                value={row.name}
-                                                                    placeholder="ชื่อวิชาเลือก..."
-                                                                    onChange={(e) => {
-                                                                        const updated = [...electiveRows];
-                                                                        updated[idx].name = e.target.value;
-                                                                        setElectiveRows(updated);
-                                                                        setIsFormDirty(true);
-                                                                    }}
-                                                                    className="w-full rounded-lg border border-slate-200 px-2 py-1 text-sm font-bold text-slate-800"
-                                                                />
+                                                                {isElectiveEditable(row, idx) ? (
+                                                                    <input
+                                                                        type="text"
+                                                                        aria-label={`ชื่อวิชา ${row.name || row.code || idx + 1}`}
+                                                                        value={row.name}
+                                                                        placeholder="ชื่อวิชาเลือก..."
+                                                                        onChange={(e) => {
+                                                                            const updated = [...electiveRows];
+                                                                            updated[idx].name = e.target.value;
+                                                                            setElectiveRows(updated);
+                                                                            setIsFormDirty(true);
+                                                                        }}
+                                                                        className="w-full rounded-lg border border-slate-200 px-2 py-1 text-sm font-bold text-slate-800"
+                                                                    />
+                                                                ) : (
+                                                                    <h4 className="break-words font-bold leading-6 text-slate-900">{row.name}</h4>
+                                                                )}
                                                                 <div className="flex flex-wrap items-center gap-1.5">
                                                                     <CourseStatusBadge status={row.course_status || getCourseStatusForCode(row.code)} />
                                                                     {row.registered && (row.course_status?.warning || getCourseStatusForCode(row.code)?.warning) && (
@@ -1533,41 +1550,49 @@ function StaffCourseRegistrationPage() {
                                                             </div>
                                                         </div>
                                                         <div className="min-w-0"><span className="mb-1 block text-xs font-semibold text-slate-500">รหัสวิชา</span>
-                                                            <input
-                                                                type="text"
-                                                                aria-label={`รหัสวิชา ${row.name || row.code || idx + 1}`}
-                                                                value={row.code}
-                                                                placeholder="รหัสวิชา"
-                                                                onChange={(e) => {
-                                                                    const updated = [...electiveRows];
-                                                                    const val = e.target.value;
-                                                                    updated[idx].code = val;
-                                                                    const resolved = getCourseStatusForCode(val);
-                                                                    if (resolved) {
-                                                                        updated[idx].course_status = resolved;
-                                                                    }
-                                                                    setElectiveRows(updated);
-                                                                    setIsFormDirty(true);
-                                                                }}
-                                                                className="w-full rounded-lg border border-slate-200 px-2 py-1 font-mono text-xs font-bold"
-                                                            />
+                                                            {isElectiveEditable(row, idx) ? (
+                                                                <input
+                                                                    type="text"
+                                                                    aria-label={`รหัสวิชา ${row.name || row.code || idx + 1}`}
+                                                                    value={row.code}
+                                                                    placeholder="รหัสวิชา"
+                                                                    onChange={(e) => {
+                                                                        const updated = [...electiveRows];
+                                                                        const val = e.target.value;
+                                                                        updated[idx].code = val;
+                                                                        const resolved = getCourseStatusForCode(val);
+                                                                        if (resolved) {
+                                                                            updated[idx].course_status = resolved;
+                                                                        }
+                                                                        setElectiveRows(updated);
+                                                                        setIsFormDirty(true);
+                                                                    }}
+                                                                    className="w-full rounded-lg border border-slate-200 px-2 py-1 font-mono text-xs font-bold"
+                                                                />
+                                                            ) : (
+                                                                <p className="break-all font-mono text-sm font-semibold text-slate-700">{row.code}</p>
+                                                            )}
                                                         </div>
                                                         <div className="min-w-0"><span className="mb-1 block text-xs font-semibold text-slate-500">หน่วยกิต</span>
-                                                            <input
-                                                                type="number"
-                                                                step="0.5"
-                                                                min="0.5"
-                                                                max="10"
-                                                                aria-label={`หน่วยกิต ${row.name || row.code || idx + 1}`}
-                                                                value={row.credits}
-                                                                onChange={(e) => {
-                                                                    const updated = [...electiveRows];
-                                                                    updated[idx].credits = parseFloat(e.target.value) || 0;
-                                                                    setElectiveRows(updated);
-                                                                    setIsFormDirty(true);
-                                                                }}
-                                                                className="w-16 rounded-lg border border-slate-200 p-1 text-center font-bold text-xs"
-                                                            />
+                                                            {isElectiveEditable(row, idx) ? (
+                                                                <input
+                                                                    type="number"
+                                                                    step="0.5"
+                                                                    min="0.5"
+                                                                    max="10"
+                                                                    aria-label={`หน่วยกิต ${row.name || row.code || idx + 1}`}
+                                                                    value={row.credits}
+                                                                    onChange={(e) => {
+                                                                        const updated = [...electiveRows];
+                                                                        updated[idx].credits = parseFloat(e.target.value) || 0;
+                                                                        setElectiveRows(updated);
+                                                                        setIsFormDirty(true);
+                                                                    }}
+                                                                    className="w-16 rounded-lg border border-slate-200 p-1 text-center font-bold text-xs"
+                                                                />
+                                                            ) : (
+                                                                <p className="text-sm font-semibold text-slate-700">{row.credits} หน่วยกิต</p>
+                                                            )}
                                                         </div>
                                                         <div className="min-w-0"><span className="mb-1 block text-xs font-semibold text-slate-500">ลงทะเบียน</span>
                                                             <input
@@ -1626,11 +1651,21 @@ function StaffCourseRegistrationPage() {
                                                                 className="w-full rounded-lg border border-slate-200 px-2 py-1 text-xs"
                                                             />
                                                         </div>
-                                                        <div className="min-w-0 col-span-2"><span className="mb-1 block text-xs font-semibold text-slate-500">ลบรายวิชา</span>
+                                                        <div className="col-span-2 flex items-center justify-between gap-3 border-t border-slate-100 pt-2">
+                                                            <button
+                                                                type="button"
+                                                                onClick={() => setElectiveEditModes((modes) => ({ ...modes, [idx]: !isElectiveEditable(row, idx) }))}
+                                                                className="inline-flex items-center gap-1.5 text-xs font-semibold text-brand-700 hover:underline"
+                                                                aria-label={`แก้ไขรายละเอียดวิชา ${row.name || row.code || idx + 1}`}
+                                                            >
+                                                                <PencilSimple size={14} />
+                                                                {isElectiveEditable(row, idx) ? 'เสร็จสิ้นการแก้ไข' : 'แก้ไขรายละเอียดวิชา'}
+                                                            </button>
                                                             <button
                                                                 type="button"
                                                                 onClick={() => {
                                                                     setElectiveRows(electiveRows.filter((_, i) => i !== idx));
+                                                                    setElectiveEditModes({});
                                                                     setIsFormDirty(true);
                                                                 }}
                                                                 className="text-slate-400 hover:text-rose-600 transition"
