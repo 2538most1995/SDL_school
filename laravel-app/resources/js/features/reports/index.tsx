@@ -28,6 +28,7 @@ import { StatGrid } from '../../components/StatGrid';
 import { StatusBadge } from '../../components/StatusBadge';
 import { useDemoRole } from '../../context/DemoRoleContext';
 import { getFeatureDataWithDemo } from '../api';
+import { EyeViewIcon } from '../students';
 
 export type ReportKind = 'new-students' | 'graduates' | 'expected-graduates' | 'transfers' | 'registered-subjects' | 'grade-threshold' | 'exam-attendance';
 
@@ -605,7 +606,7 @@ export function ReportPage({ kind }: { kind: ReportKind }) {
         ...(isAcademicReport ? [{
             id: 'details', header: 'รายละเอียด', size: 145, meta: { compactSize: 52, compactTextAlign: 'center' }, enableSorting: false,
             cell: ({ row }: { row: { original: ReportRow } }) => viewMode === 'student'
-                ? <button type="button" onClick={() => setSelectedStudent(row.original)} className="responsive-table-action inline-flex items-center gap-1.5 whitespace-nowrap rounded-lg border border-brand-200 bg-brand-50 px-2.5 py-1.5 text-xs font-bold text-brand-800 hover:bg-brand-100" aria-label={`เปิดรายละเอียด ${row.original.primary}`}><Eye size={16} weight="bold" /> <span>เปิดดู</span></button>
+                ? <button type="button" onClick={() => setSelectedStudent(row.original)} className="responsive-table-action inline-flex items-center gap-1.5 whitespace-nowrap rounded-lg border border-teal-200/90 bg-teal-50/80 px-2.5 py-1.5 text-xs font-bold text-teal-800 shadow-2xs hover:border-teal-300 hover:bg-teal-100/90 transition active:scale-[0.98]" aria-label={`เปิดรายละเอียด ${row.original.primary}`}><EyeViewIcon size={14} className="text-teal-700" /> <span>เปิดดู</span></button>
                 : <button type="button" onClick={() => setSelectedSubject(row.original)} className="responsive-table-action inline-flex items-center gap-1.5 whitespace-nowrap rounded-lg border border-sky-200 bg-sky-50 px-2.5 py-1.5 text-xs font-bold text-sky-800 hover:bg-sky-100" aria-label={`ดูรายชื่อ ${row.original.primary}`}><UsersThree size={16} weight="bold" /> <span>ดูรายชื่อ</span></button>,
         } as ColumnDef<ReportRow>] : []),
     ], [config, isAcademicReport, kind, viewMode]);

@@ -21,7 +21,7 @@ import {
     WarningCircle,
 } from '@phosphor-icons/react';
 import type { Icon } from '@phosphor-icons/react';
-import { type ReactNode } from 'react';
+import { useState, type ReactNode } from 'react';
 import { Link } from 'react-router-dom';
 import { EducationIllustration } from '../components/EducationIllustration';
 import { StatTile } from '../components/StatTile';
@@ -499,6 +499,7 @@ export function DashboardHomePage() {
     const { role } = useDemoRole();
     const content = roleContent[role];
     const districtId = window.localStorage.getItem('sena-district-id');
+    const [heroImageError, setHeroImageError] = useState(false);
     const portal = useQuery({
         queryKey: [...queryKeys.portal, role, districtId],
         queryFn: ({ signal }) => apiGet<PortalData>('/api/v1/portal', signal).then((response) => response.data),
@@ -599,27 +600,33 @@ export function DashboardHomePage() {
     }
 
     return (
-        <div className="space-y-5 pb-2">
+        <div className="space-y-4 pb-2">
             <section className="dashboard-hero" aria-labelledby="dashboard-hero-title">
                 <div className="dashboard-hero__content">
                     <div className="dashboard-hero__intro">
-                        <span className="dashboard-hero__icon"><ChartBar size={29} weight="duotone" aria-hidden="true" /></span>
+                        <span className="dashboard-hero__icon"><ChartBar size={28} weight="duotone" aria-hidden="true" /></span>
                         <div className="min-w-0">
-                            <p className="dashboard-hero__greeting"><Sparkle size={15} weight="fill" aria-hidden="true" />สวัสดี {portal.data.viewer.name}</p>
+                            <p className="dashboard-hero__greeting"><Sparkle size={14} weight="fill" aria-hidden="true" />สวัสดี {portal.data.viewer.name}</p>
                             <h1 id="dashboard-hero-title" className="dashboard-hero-title">{content.title}</h1>
                             <p className="dashboard-hero__description">{content.subtitle}</p>
                         </div>
                     </div>
                     <dl className="dashboard-scope-panel">
-                        <div><MapPin size={16} weight="duotone" aria-hidden="true" /><dt className="sr-only">พื้นที่ข้อมูล</dt><dd>{portal.data.viewer.district}</dd></div>
-                        <div><BookOpenText size={16} weight="duotone" aria-hidden="true" /><dt>ภาคเรียน</dt><dd>{analytics.current_term ?? '-'}</dd></div>
-                        <div><CalendarBlank size={16} weight="duotone" aria-hidden="true" /><dt>เปิดดู</dt><dd>{viewedAt}</dd></div>
+                        <div><MapPin size={15} weight="duotone" aria-hidden="true" /><dt className="sr-only">พื้นที่ข้อมูล</dt><dd>{portal.data.viewer.district}</dd></div>
+                        <div><BookOpenText size={15} weight="duotone" aria-hidden="true" /><dt>ภาคเรียน</dt><dd>{analytics.current_term ?? '-'}</dd></div>
+                        <div><CalendarBlank size={15} weight="duotone" aria-hidden="true" /><dt>เปิดดู</dt><dd>{viewedAt}</dd></div>
                     </dl>
                 </div>
                 <div className="dashboard-hero__art" aria-hidden="true">
-                    {publicAssetUrl(branding.data?.dashboardHeroImageUrl)
-                        ? <img src={publicAssetUrl(branding.data?.dashboardHeroImageUrl)!} alt="" />
-                        : <EducationIllustration />}
+                    {publicAssetUrl(branding.data?.dashboardHeroImageUrl) && !heroImageError ? (
+                        <img
+                            src={publicAssetUrl(branding.data?.dashboardHeroImageUrl)!}
+                            alt=""
+                            onError={() => setHeroImageError(true)}
+                        />
+                    ) : (
+                        <EducationIllustration />
+                    )}
                 </div>
             </section>
 

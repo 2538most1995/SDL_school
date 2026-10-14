@@ -291,15 +291,7 @@ export function PortalLayout() {
                     </span>
                 </div>
 
-                <div className="sidebar-context-card mx-4 mt-1 flex items-center gap-3 px-3 py-3">
-                    <span className="sidebar-context-card__icon grid size-9 shrink-0 place-items-center rounded-xl">
-                        <User size={20} weight="duotone" aria-hidden="true" />
-                    </span>
-                    <div className="min-w-0">
-                        <p className="text-sm font-semibold">{currentRole.label}</p>
-                        <p className="sidebar-muted mt-0.5 truncate text-xs">{currentDistrict?.name ?? availableDistricts[0]?.name ?? 'เลือกอำเภอ'}</p>
-                    </div>
-                </div>
+
 
                 <nav aria-label="เมนูหลัก" className="mt-2 min-h-0 flex-1 overflow-y-auto px-4 pb-5">
                     {catalog.isPending && <SidebarSkeleton />}
@@ -500,7 +492,7 @@ export function PortalLayout() {
                 )}
 
                 <main className={`portal-content relative overflow-hidden ${isStudent ? 'min-h-[calc(100dvh-72px)] pb-[calc(5.5rem+env(safe-area-inset-bottom))] md:pb-0' : 'min-h-[calc(100dvh-68px)]'}`}>
-                    <div className={`relative mx-auto px-4 py-4 sm:px-6 lg:py-5 ${isStudent ? 'max-w-[1440px]' : 'max-w-[1500px]'}`}>
+                    <div className={`relative mx-auto px-4 py-3 sm:px-6 lg:py-3.5 ${isStudent ? 'max-w-[1440px]' : 'max-w-[1500px]'}`}>
                         {role !== me.data.role ? <SidebarSkeleton /> : me.data.role !== 'super_admin' || selectedDistrictId ? <Outlet /> : <div className="rounded-3xl border border-amber-200 bg-amber-50 p-6 font-bold text-amber-900">กรุณาเลือกอำเภอเพื่อดูข้อมูล</div>}
                     </div>
                 </main>

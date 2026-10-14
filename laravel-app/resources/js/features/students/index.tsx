@@ -45,6 +45,41 @@ import { useLogout } from '../../lib/useLogout';
 import { useRetainedFilterOptions } from '../../lib/useRetainedFilterOptions';
 import { summarizeGradeRows, summarizeGradesByTerm } from './gradeSummary';
 
+export function EyeViewIcon({ size = 15, className = '' }: { size?: number; className?: string }) {
+    return (
+        <svg
+            width={size}
+            height={size}
+            viewBox="0 0 20 20"
+            fill="none"
+            xmlns="http://www.w3.org/2000/svg"
+            className={className}
+            aria-hidden="true"
+        >
+            <path
+                d="M1.667 10C3.056 5.833 6.25 3.333 10 3.333c3.75 0 6.944 2.5 8.333 6.667-1.389 4.167-4.583 6.667-8.333 6.667-3.75 0-6.944-2.5-8.333-6.667Z"
+                stroke="currentColor"
+                strokeWidth="1.6"
+                strokeLinecap="round"
+                strokeLinejoin="round"
+            />
+            <circle
+                cx="10"
+                cy="10"
+                r="3.333"
+                stroke="currentColor"
+                strokeWidth="1.6"
+            />
+            <circle
+                cx="10"
+                cy="10"
+                r="1.4"
+                fill="currentColor"
+            />
+        </svg>
+    );
+}
+
 export function FacebookIcon({ className = 'size-4' }: { className?: string }) {
     return (
         <svg viewBox="0 0 24 24" fill="currentColor" className={className} aria-hidden="true">
@@ -431,17 +466,17 @@ export function StudentsPage() {
         {
             id: 'details',
             header: 'จัดการ',
-            size: 320,
-            meta: { compactSize: 180, compactTextAlign: 'center' },
+            size: 340,
+            meta: { compactSize: 220, compactTextAlign: 'center' },
             enableSorting: false,
             cell: ({ row }) => (
-                <div className="student-directory-actions flex flex-wrap items-center justify-center gap-1.5">
+                <div className="student-directory-actions flex flex-nowrap items-center justify-center gap-1.5 whitespace-nowrap">
                     <Link
                         to={`/students/${encodeURIComponent(String(row.original.id))}`}
-                        className="responsive-table-action inline-flex shrink-0 items-center gap-1.5 rounded-lg border border-brand-200 bg-brand-50 px-2.5 py-1.5 text-xs font-bold text-brand-800 hover:bg-brand-100 active:scale-[0.98] transition"
+                        className="responsive-table-action inline-flex shrink-0 items-center gap-1.5 rounded-lg border border-teal-200/90 bg-teal-50/80 px-2.5 py-1.5 text-xs font-bold text-teal-800 shadow-2xs hover:border-teal-300 hover:bg-teal-100/90 active:scale-[0.98] transition"
                         aria-label={`เปิดรายละเอียด ${row.original.name}`}
                     >
-                        <Eye size={14} weight="bold" /> <span>เปิดดู</span>
+                        <EyeViewIcon size={14} className="text-teal-700" /> <span>เปิดดู</span>
                     </Link>
 
                     <Link

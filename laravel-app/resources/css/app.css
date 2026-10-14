@@ -1,9 +1,7 @@
-@import '@fontsource/noto-sans-thai/400.css';
-@import '@fontsource/noto-sans-thai/500.css';
-@import '@fontsource/noto-sans-thai/600.css';
-@import '@fontsource/noto-sans-thai/700.css';
-@import '@fontsource/noto-sans-thai/800.css';
-@import '@fontsource/noto-sans-thai/900.css';
+@import '@fontsource/anuphan/400.css';
+@import '@fontsource/anuphan/500.css';
+@import '@fontsource/anuphan/600.css';
+@import '@fontsource/anuphan/700.css';
 @import '@fontsource/prompt/thai-400.css';
 @import '@fontsource/prompt/latin-400.css';
 @import '@fontsource/prompt/thai-500.css';
@@ -18,7 +16,7 @@
 @source '../js/**/*.{ts,tsx}';
 
 @theme {
-    --font-sans: 'Noto Sans Thai', 'Leelawadee UI', Tahoma, ui-sans-serif, system-ui, sans-serif;
+    --font-sans: 'Anuphan', 'Noto Sans Thai', 'Leelawadee UI', Tahoma, ui-sans-serif, system-ui, sans-serif;
     --color-brand-50: var(--ui-accent-50);
     --color-brand-100: var(--ui-accent-100);
     --color-brand-200: var(--ui-accent-200);
@@ -321,7 +319,7 @@ textarea {
 }
 
 .portal-sidebar {
-    font-family: 'Prompt', 'Noto Sans Thai', sans-serif;
+    font-family: 'Anuphan', var(--font-sans);
     border-right: 1px solid var(--ui-border);
     background: var(--ui-surface);
     color: var(--ui-text);
@@ -340,36 +338,117 @@ textarea {
 .sidebar-nav-icon {
     --nav-icon: #0f766e;
     color: var(--nav-icon);
-    background: color-mix(in srgb, var(--nav-icon) 8%, var(--ui-surface));
-    box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--nav-icon) 10%, transparent);
+    background: color-mix(in srgb, var(--nav-icon) 12%, var(--ui-surface));
+    box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--nav-icon) 20%, transparent);
     border-radius: 10px;
+    transition: transform 0.15s ease, background-color 0.15s ease, box-shadow 0.15s ease;
 }
 
-.sidebar-nav-icon:is([data-icon='students'], [data-icon='student'], [data-icon='chart']) {
-    --nav-icon: #2563eb;
+.sidebar-nav-link:hover .sidebar-nav-icon {
+    background: color-mix(in srgb, var(--nav-icon) 22%, var(--ui-surface));
+    transform: scale(1.06);
 }
 
-.sidebar-nav-icon:is([data-icon='heart'], [data-icon='medal'], [data-icon='trophy']) {
-    --nav-icon: #be185d;
-}
+/* — ข้อมูลนักศึกษา — */
+.sidebar-nav-icon[data-icon='students'] { --nav-icon: #2563eb; }
 
-.sidebar-nav-icon:is([data-icon='sparkle'], [data-icon='palette'], [data-icon='planet']) {
-    --nav-icon: #7c3aed;
-}
+/* — ข้อมูลส่วนตัว / student — */
+.sidebar-nav-icon[data-icon='student'] { --nav-icon: #0891b2; }
 
-.sidebar-nav-icon:is([data-icon='books'], [data-icon='folder'], [data-icon='calendar'], [data-icon='clock']) {
-    --nav-icon: #b45309;
-}
+/* — ผลการเรียน / chart — */
+.sidebar-nav-icon[data-icon='chart'] { --nav-icon: #0d9488; }
+
+/* — คุณธรรม — */
+.sidebar-nav-icon[data-icon='heart'] { --nav-icon: #e11d48; }
+
+/* — กพช. / medal — */
+.sidebar-nav-icon[data-icon='medal'] { --nav-icon: #d97706; }
+
+/* — คะแนน / trophy — */
+.sidebar-nav-icon[data-icon='trophy'] { --nav-icon: #c026d3; }
+
+/* — กิจกรรม / sparkle — */
+.sidebar-nav-icon[data-icon='sparkle'] { --nav-icon: #7c3aed; }
+
+/* — แบรนด์ / palette — */
+.sidebar-nav-icon[data-icon='palette'] { --nav-icon: #ec4899; }
+
+/* — learning portal / planet — */
+.sidebar-nav-icon[data-icon='planet'] { --nav-icon: #6366f1; }
+
+/* — วิชาลงทะเบียน / books — */
+.sidebar-nav-icon[data-icon='books'] { --nav-icon: #ea580c; }
+
+/* — คลังสื่อ / folder — */
+.sidebar-nav-icon[data-icon='folder'] { --nav-icon: #0284c7; }
+
+/* — ปฏิทิน / calendar — */
+.sidebar-nav-icon[data-icon='calendar'] { --nav-icon: #0284c7; }
+
+/* — ตารางสอบ / clock — */
+.sidebar-nav-icon[data-icon='clock'] { --nav-icon: #059669; }
+
+/* — งานและการส่งงาน / assignment — */
+.sidebar-nav-icon[data-icon='assignment'] { --nav-icon: #dc2626; }
+
+/* — แผนการสอน / notebook — */
+.sidebar-nav-icon[data-icon='notebook'] { --nav-icon: #a855f7; }
+
+/* — สถิติ / information — */
+.sidebar-nav-icon[data-icon='information'] { --nav-icon: #0369a1; }
+
+/* — ผู้ใช้งาน / users-three — */
+.sidebar-nav-icon[data-icon='users-three'] { --nav-icon: #4f46e5; }
+
+/* — อาคาร / buildings — */
+.sidebar-nav-icon[data-icon='buildings'] { --nav-icon: #854d0e; }
+
+/* — ห้องสอบ / door — */
+.sidebar-nav-icon[data-icon='door'] { --nav-icon: #be185d; }
+
+/* — นำเข้า / upload — */
+.sidebar-nav-icon[data-icon='upload'] { --nav-icon: #16a34a; }
+
+/* — ดูแลข้อมูล / database — */
+.sidebar-nav-icon[data-icon='database'] { --nav-icon: #475569; }
+
+/* — ผู้ใช้ / user — */
+.sidebar-nav-icon[data-icon='user'] { --nav-icon: #0284c7; }
+
+/* — แบรนด์ / paint-brush — */
+.sidebar-nav-icon[data-icon='paint-brush'] { --nav-icon: #f43f5e; }
+
+/* — หน้าหลัก / house — */
+.sidebar-nav-icon[data-icon='house'] { --nav-icon: #2563eb; }
+
+/* — สถิติ / trend — */
+.sidebar-nav-icon[data-icon='trend'] { --nav-icon: #10b981; }
+
+/* — clipboard — */
+.sidebar-nav-icon[data-icon='clipboard'] { --nav-icon: #9333ea; }
+
+/* — ข่าวประชาสัมพันธ์ / newspaper — */
+.sidebar-nav-icon[data-icon='newspaper'] { --nav-icon: #0ea5e9; }
+
+/* — ประกาศ / megaphone — */
+.sidebar-nav-icon[data-icon='megaphone'] { --nav-icon: #f97316; }
+
+/* — เพิ่มผู้ใช้ / user-plus — */
+.sidebar-nav-icon[data-icon='user-plus'] { --nav-icon: #6366f1; }
+
+/* — ทิศทาง / arrows — */
+.sidebar-nav-icon[data-icon='arrows'] { --nav-icon: #8b5cf6; }
 
 [data-ui-mode='dark'] .sidebar-nav-icon {
-    color: color-mix(in srgb, var(--nav-icon) 50%, white);
-    background: color-mix(in srgb, var(--nav-icon) 15%, var(--ui-surface));
+    color: color-mix(in srgb, var(--nav-icon) 65%, white);
+    background: color-mix(in srgb, var(--nav-icon) 20%, var(--ui-surface));
+    box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--nav-icon) 25%, transparent);
 }
 
 .sidebar-nav-link.is-active .sidebar-nav-icon {
     color: #ffffff;
-    background: rgb(255 255 255 / 0.16);
-    box-shadow: none;
+    background: var(--nav-icon);
+    box-shadow: 0 3px 10px -1px color-mix(in srgb, var(--nav-icon) 45%, transparent);
 }
 
 .sidebar-brand__icon {
@@ -467,10 +546,19 @@ textarea {
     background: var(--ui-page);
 }
 
-.student-directory-actions > :where(a, button) {
-    min-height: 44px;
-    min-width: 44px;
+.student-directory-actions {
+    display: flex;
+    flex-wrap: nowrap;
+    align-items: center;
+    justify-content: center;
+    gap: 0.375rem;
     white-space: nowrap;
+}
+
+.student-directory-actions > :where(a, button) {
+    min-height: 34px;
+    white-space: nowrap;
+    flex-shrink: 0;
 }
 
 .metric-detail-button {
@@ -2566,63 +2654,128 @@ textarea {
     display: flex;
     min-width: 0;
     align-items: center;
+    justify-content: space-between;
     gap: 1.5rem;
     overflow: hidden;
-    border: 1px solid color-mix(in srgb, var(--ui-accent-200) 60%, var(--ui-border));
+    border: 1px solid color-mix(in srgb, var(--ui-accent-500) 24%, var(--ui-border));
     border-radius: var(--ui-radius-card);
     padding: 1.25rem 1.5rem;
-    background: linear-gradient(110deg, var(--ui-surface), color-mix(in srgb, var(--ui-accent-100) 48%, var(--ui-surface)));
-    box-shadow: var(--ui-shadow-card);
+    background:
+        radial-gradient(120% 140% at 0% 0%, color-mix(in srgb, var(--ui-accent-50) 85%, var(--ui-surface)) 0%, color-mix(in srgb, var(--ui-accent-100) 30%, var(--ui-surface)) 50%, var(--ui-surface) 100%);
+    box-shadow: 0 4px 20px -2px color-mix(in srgb, var(--ui-accent-500) 10%, transparent), 0 1px 3px 0 rgb(0 0 0 / 0.05);
+    position: relative;
 }
-.dashboard-hero__content { min-width: 0; flex: 1; }
-.dashboard-hero__intro { display: flex; align-items: center; gap: 1rem; }
+
+[data-ui-mode='dark'] .dashboard-hero {
+    background:
+        radial-gradient(120% 140% at 0% 0%, color-mix(in srgb, var(--ui-accent-950) 90%, var(--ui-surface)) 0%, var(--ui-surface) 70%);
+    border-color: color-mix(in srgb, var(--ui-accent-400) 20%, var(--ui-border));
+}
+
+.dashboard-hero::before {
+    content: '';
+    position: absolute;
+    inset: 0;
+    opacity: 0.05;
+    background-image:
+        radial-gradient(circle at 15% 50%, var(--ui-accent-500) 0, transparent 50%),
+        radial-gradient(circle at 85% 20%, var(--ui-accent-400) 0, transparent 40%);
+    pointer-events: none;
+}
+
+.dashboard-hero__content { min-width: 0; flex: 1; z-index: 1; }
+.dashboard-hero__intro { display: flex; align-items: flex-start; gap: 1rem; }
 .dashboard-hero__icon {
     display: grid;
-    width: 3.5rem;
-    height: 3.5rem;
+    width: 3.25rem;
+    height: 3.25rem;
     flex: 0 0 auto;
     place-items: center;
-    border-radius: 16px;
-    color: var(--ui-accent-700);
-    background: color-mix(in srgb, var(--ui-accent-200) 60%, var(--ui-surface));
+    border-radius: 14px;
+    color: #ffffff;
+    background: linear-gradient(135deg, var(--ui-accent-500), var(--ui-accent-700));
+    box-shadow: 0 4px 12px color-mix(in srgb, var(--ui-accent-600) 35%, transparent);
 }
 .dashboard-hero__greeting {
-    display: flex;
+    display: inline-flex;
     align-items: center;
-    gap: 0.4rem;
+    gap: 0.35rem;
     font-size: 0.75rem;
-    font-weight: 600;
+    font-weight: 700;
     line-height: 1.5;
-    color: var(--ui-accent-700);
+    padding: 0.15rem 0.6rem;
+    border-radius: 9999px;
+    color: var(--ui-accent-800);
+    background: color-mix(in srgb, var(--ui-accent-200) 50%, var(--ui-surface));
+    border: 1px solid color-mix(in srgb, var(--ui-accent-300) 40%, transparent);
+}
+[data-ui-mode='dark'] .dashboard-hero__greeting {
+    color: var(--ui-accent-200);
+    background: color-mix(in srgb, var(--ui-accent-900) 60%, transparent);
 }
 .dashboard-hero-title {
-    margin-top: 0.375rem;
+    margin-top: 0.35rem;
     color: var(--ui-text);
-    font-size: clamp(1.25rem, 2vw, 1.75rem);
-    font-weight: 700;
+    font-size: clamp(1.2rem, 1.8vw, 1.55rem);
+    font-weight: 800;
     line-height: 1.35;
-    letter-spacing: -0.025em;
+    letter-spacing: -0.02em;
 }
-.dashboard-hero__description { margin-top: 0.375rem; color: var(--ui-text-muted); font-size: 0.8125rem; line-height: 1.7; }
-.dashboard-scope-panel { display: flex; flex-wrap: wrap; align-items: center; gap: 0.5rem; margin-top: 1rem; }
+.dashboard-hero__description {
+    margin-top: 0.25rem;
+    color: var(--ui-text-muted);
+    font-size: 0.8125rem;
+    line-height: 1.6;
+}
+.dashboard-scope-panel {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 0.5rem;
+    margin-top: 0.875rem;
+}
 .dashboard-scope-panel > div {
     display: flex;
     min-width: 0;
     align-items: center;
     gap: 0.375rem;
-    border: 1px solid color-mix(in srgb, var(--ui-accent-200) 42%, var(--ui-border));
+    border: 1px solid color-mix(in srgb, var(--ui-accent-200) 60%, var(--ui-border));
     border-radius: 8px;
-    padding: 0.375rem 0.625rem;
-    background: color-mix(in srgb, var(--ui-surface) 76%, transparent);
+    padding: 0.3rem 0.65rem;
+    background: color-mix(in srgb, var(--ui-surface) 90%, transparent);
     color: var(--ui-text-muted);
-    font-size: 0.6875rem;
-    line-height: 1.5;
+    font-size: 0.7rem;
+    font-weight: 500;
+    backdrop-filter: blur(8px);
 }
 .dashboard-scope-panel svg { flex-shrink: 0; color: var(--ui-accent-600); }
-.dashboard-scope-panel dd { color: var(--ui-text); font-weight: 600; overflow-wrap: anywhere; }
-.dashboard-hero__art { width: 8rem; flex: 0 0 auto; color: var(--ui-accent-600); }
-.dashboard-hero__art .education-illustration { display: block; width: 100%; height: auto; }
-.dashboard-hero__art img { width: 100%; height: 6rem; border-radius: 12px; object-fit: cover; }
+.dashboard-scope-panel dd { color: var(--ui-text); font-weight: 700; overflow-wrap: anywhere; }
+
+.dashboard-hero__art {
+    width: 7.5rem;
+    max-height: 6rem;
+    flex: 0 0 auto;
+    color: var(--ui-accent-600);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    position: relative;
+    z-index: 1;
+}
+.dashboard-hero__art .education-illustration {
+    display: block;
+    width: 100%;
+    height: auto;
+    filter: drop-shadow(0 4px 10px color-mix(in srgb, var(--ui-accent-500) 15%, transparent));
+}
+.dashboard-hero__art img {
+    width: 100%;
+    height: 5.5rem;
+    border-radius: 12px;
+    object-fit: cover;
+    box-shadow: 0 4px 12px rgb(0 0 0 / 0.08);
+    border: 1px solid color-mix(in srgb, var(--ui-accent-200) 40%, var(--ui-border));
+}
 .dashboard-level-breakdown {
     display: flex;
     flex-wrap: wrap;

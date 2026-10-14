@@ -46,7 +46,7 @@ function buildTheme(settings: AppearanceSettings, mode: 'light' | 'dark'): Theme
         },
         shape: { borderRadius: 12 },
         typography: {
-            fontFamily: "'Noto Sans Thai', 'Leelawadee UI', Tahoma, sans-serif",
+            fontFamily: "'Anuphan', 'Noto Sans Thai', 'Leelawadee UI', Tahoma, sans-serif",
             h1: { fontWeight: 800, letterSpacing: '-0.025em' },
             h2: { fontWeight: 800, letterSpacing: '-0.02em' },
             h3: { fontWeight: 800, letterSpacing: '-0.015em' },
@@ -221,7 +221,7 @@ function buildTheme(settings: AppearanceSettings, mode: 'light' | 'dark'): Theme
                 defaultProps: { enterDelay: 350 },
                 styleOverrides: {
                     tooltip: {
-                        fontFamily: "'Noto Sans Thai', 'Leelawadee UI', Tahoma, sans-serif",
+                        fontFamily: "'Anuphan', 'Noto Sans Thai', 'Leelawadee UI', Tahoma, sans-serif",
                         fontSize: '0.75rem',
                     },
                 },
