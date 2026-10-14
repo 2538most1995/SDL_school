@@ -599,28 +599,33 @@ export function DashboardHomePage() {
         );
     }
 
+    const rawDistrict = portal.data.viewer.district || '';
+    const districtLabel = rawDistrict.startsWith('สกร.')
+        ? rawDistrict
+        : (rawDistrict.startsWith('อำเภอ') ? `สกร.ระดับ${rawDistrict}` : `สกร.ระดับอำเภอ${rawDistrict}`);
+    const heroImageUrl = publicAssetUrl(branding.data?.dashboardHeroImageUrl) ?? withAppBasePath('/images/dashboard-hero-sena-v2.webp');
+
     return (
         <div className="space-y-4 pb-2">
             <section className="dashboard-hero" aria-labelledby="dashboard-hero-title">
+                <div className="dashboard-hero__dots" aria-hidden="true" />
                 <div className="dashboard-hero__content">
-                    <div className="dashboard-hero__intro">
-                        <span className="dashboard-hero__icon"><ChartBar size={28} weight="duotone" aria-hidden="true" /></span>
-                        <div className="min-w-0">
-                            <p className="dashboard-hero__greeting"><Sparkle size={14} weight="fill" aria-hidden="true" />สวัสดี {portal.data.viewer.name}</p>
-                            <h1 id="dashboard-hero-title" className="dashboard-hero-title">{content.title}</h1>
-                            <p className="dashboard-hero__description">{content.subtitle}</p>
-                        </div>
+                    <div className="dashboard-hero__header-row">
+                        <span className="dashboard-hero__icon"><ChartBar size={26} weight="bold" aria-hidden="true" /></span>
+                        <p className="dashboard-hero__greeting"><Sparkle size={14} weight="fill" aria-hidden="true" />สวัสดี {portal.data.viewer.name}</p>
                     </div>
+                    <h1 id="dashboard-hero-title" className="dashboard-hero-title">{content.title}</h1>
+                    <p className="dashboard-hero__description">{content.subtitle}</p>
                     <dl className="dashboard-scope-panel">
-                        <div><MapPin size={15} weight="duotone" aria-hidden="true" /><dt className="sr-only">พื้นที่ข้อมูล</dt><dd>{portal.data.viewer.district}</dd></div>
-                        <div><BookOpenText size={15} weight="duotone" aria-hidden="true" /><dt>ภาคเรียน</dt><dd>{analytics.current_term ?? '-'}</dd></div>
-                        <div><CalendarBlank size={15} weight="duotone" aria-hidden="true" /><dt>เปิดดู</dt><dd>{viewedAt}</dd></div>
+                        <div><MapPin size={16} weight="bold" aria-hidden="true" /><dt className="sr-only">พื้นที่ข้อมูล</dt><dd>{districtLabel}</dd></div>
+                        <div><BookOpenText size={16} weight="bold" aria-hidden="true" /><dt>ภาคเรียน</dt><dd>{analytics.current_term ?? '-'}</dd></div>
+                        <div><CalendarBlank size={16} weight="bold" aria-hidden="true" /><dt>เปิดดู</dt><dd>{viewedAt}</dd></div>
                     </dl>
                 </div>
                 <div className="dashboard-hero__art" aria-hidden="true">
-                    {publicAssetUrl(branding.data?.dashboardHeroImageUrl) && !heroImageError ? (
+                    {!heroImageError ? (
                         <img
-                            src={publicAssetUrl(branding.data?.dashboardHeroImageUrl)!}
+                            src={heroImageUrl}
                             alt=""
                             onError={() => setHeroImageError(true)}
                         />
