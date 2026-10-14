@@ -5,6 +5,7 @@ import {
     BookOpenText,
     Books,
     CalendarBlank,
+    Camera,
     CaretRight,
     ChartBar,
     CheckSquare,
@@ -613,6 +614,16 @@ export function DashboardHomePage() {
                     <div className="dashboard-hero__header-row">
                         <span className="dashboard-hero__icon"><ChartBar size={26} weight="bold" aria-hidden="true" /></span>
                         <p className="dashboard-hero__greeting"><Sparkle size={14} weight="fill" aria-hidden="true" />สวัสดี {portal.data.viewer.name}</p>
+                        {(role === 'admin' || role === 'super_admin') && (
+                            <Link
+                                to="/settings/appearance#dashboard-hero"
+                                className="dashboard-hero__edit-btn"
+                                title="เปลี่ยนรูปภาพหน้าปก หรือปรับรูปแบบการแสดงผล"
+                            >
+                                <Camera size={14} weight="bold" aria-hidden="true" />
+                                <span>เปลี่ยนรูปภาพ</span>
+                            </Link>
+                        )}
                     </div>
                     <h1 id="dashboard-hero-title" className="dashboard-hero-title">{content.title}</h1>
                     <p className="dashboard-hero__description">{content.subtitle}</p>

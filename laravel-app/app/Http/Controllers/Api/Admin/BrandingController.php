@@ -81,7 +81,7 @@ final class BrandingController extends Controller
     {
         $rules = match ($slot) {
             'logo' => ['required', 'file', 'image', 'mimes:jpg,jpeg,png,webp', 'max:2048', 'dimensions:min_width=128,min_height=128,max_width=3000,max_height=3000'],
-            'dashboard-hero' => ['required', 'file', 'image', 'mimes:jpg,jpeg,png,webp', 'max:8192', 'dimensions:min_width=1200,min_height=600,max_width=7000,max_height=5000'],
+            'dashboard-hero' => ['required', 'file', 'image', 'mimes:jpg,jpeg,png,webp', 'max:8192', 'dimensions:min_width=600,min_height=300,max_width=7000,max_height=5000'],
             default => abort(404),
         };
         $validated = $request->validate(['asset' => $rules]);

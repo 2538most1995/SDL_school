@@ -3,12 +3,14 @@ import {
     Camera,
     Check,
     Eye,
+    Image as ImageIcon,
     LockKey,
     Monitor,
     Moon,
     PaintBrush,
     ShieldCheck,
     SignOut,
+    Sparkle,
     Sun,
     Trash,
     UploadSimple,
@@ -21,6 +23,8 @@ import { Panel } from '../../components/Panel';
 import { QueryError, QuerySkeleton } from '../../components/QueryState';
 import { StatusBadge } from '../../components/StatusBadge';
 import { applyAppearance, DEFAULT_APPEARANCE, type AppearanceSettings, type ColorScheme } from '../../lib/appearance';
+import { apiGet } from '../../lib/api';
+import { publicAssetUrl, publicBrandingPath, type PublicBranding } from '../../lib/publicBranding';
 import { withAppBasePath } from '../../lib/urls';
 import { useLogout } from '../../lib/useLogout';
 import { getFeatureDataWithDemo, sendFeatureData } from '../api';
@@ -185,7 +189,71 @@ const colorOptions: Array<{ value: ColorScheme; label: string; color: string }> 
 export function AppearanceSettingsPage() {
     const queryClient = useQueryClient();
     const appearance = useQuery({ queryKey: ['settings', 'appearance'], queryFn: ({ signal }) => getFeatureDataWithDemo<AppearanceSettings>('/api/v1/settings/appearance', demoAppearance, signal) });
+    const me = useQuery({
+        queryKey: ['auth', 'me'],
+        queryFn: ({ signal }) => apiGet<{ role: string; district_id: number | null }>('/api/v1/me', signal).then((response) => response.data),
+    });
+    const districtId = window.localStorage.getItem('sena-district-id') ?? (me.data?.district_id ? String(me.data.district_id) : null);
+    const branding = useQuery({
+        queryKey: ['auth', 'branding', districtId ?? 'default'],
+        queryFn: ({ signal }) => apiGet<PublicBranding>(publicBrandingPath(districtId), signal).then((response) => response.data),
+        staleTime: 60_000,
+    });
+
     const [draft, setDraft] = useState<AppearanceSettings | null>(null);
+    const [heroFile, setHeroFile] = useState<File | null>(null);
+    const [heroPreview, setHeroPreview] = useState<string | null>(null);
+
+    const canManageHero = me.data?.role === 'admin' || me.data?.role === 'super_admin';
+
+    useEffect(() => {
+        if (!heroFile) {
+            setHeroPreview(null);
+            return;
+        }
+        const preview = URL.createObjectURL(heroFile);
+        setHeroPreview(preview);
+        return () => URL.revokeObjectURL(preview);
+    }, [heroFile]);
+
+    const uploadHero = useMutation({
+        meta: { notification: { success: 'อัปโหลดภาพหน้าปกภาพรวมอำเภอสำเร็จ' } },
+        mutationFn: () => {
+            const form = new FormData();
+            if (heroFile) form.append('asset', heroFile);
+            const endpoint = me.data?.role === 'super_admin'
+                ? '/api/v1/super-admin/branding/assets/dashboard-hero'
+                : '/api/v1/admin/branding/assets/dashboard-hero';
+            return sendFeatureData(endpoint, 'POST', form);
+        },
+        onSuccess: async () => {
+            setHeroFile(null);
+            await queryClient.invalidateQueries({ queryKey: ['auth', 'branding'] });
+            await queryClient.invalidateQueries({ queryKey: ['admin', 'branding'] });
+            await queryClient.invalidateQueries({ queryKey: ['portal'] });
+        },
+    });
+
+    const removeHero = useMutation({
+        meta: { notification: { success: 'เปลี่ยนกลับเป็นภาพเริ่มต้นระบบสำเร็จ' } },
+        mutationFn: () => {
+            const endpoint = me.data?.role === 'super_admin'
+                ? '/api/v1/super-admin/branding/assets/dashboard-hero'
+                : '/api/v1/admin/branding/assets/dashboard-hero';
+            return sendFeatureData(endpoint, 'DELETE');
+        },
+        onSuccess: async () => {
+            setHeroFile(null);
+            await queryClient.invalidateQueries({ queryKey: ['auth', 'branding'] });
+            await queryClient.invalidateQueries({ queryKey: ['admin', 'branding'] });
+            await queryClient.invalidateQueries({ queryKey: ['portal'] });
+        },
+    });
+
+    const activeHeroUrl = heroPreview
+        ?? (branding.data?.dashboardHeroImageUrl ? publicAssetUrl(branding.data.dashboardHeroImageUrl) : null)
+        ?? withAppBasePath('/images/dashboard-hero-sena-v2.webp');
+
     const values = draft ?? appearance.data?.data ?? demoAppearance;
     const save = useMutation({
         meta: { notification: { success: 'บันทึกรูปแบบการแสดงผลสำเร็จ' } },
@@ -205,14 +273,157 @@ export function AppearanceSettingsPage() {
         return () => { if (saved) applyAppearance(saved); };
     }, [appearance.data?.data, draft]);
 
+    useEffect(() => {
+        if (window.location.hash === '#dashboard-hero') {
+            const timer = setTimeout(() => {
+                const element = document.getElementById('dashboard-hero');
+                if (element) {
+                    element.scrollIntoView({ behavior: 'smooth', block: 'start' });
+                }
+            }, 120);
+            return () => clearTimeout(timer);
+        }
+    }, [appearance.isSuccess]);
+
     return (
         <div>
-            <PageHeader category="การตั้งค่า" title="รูปแบบการแสดงผล" description="เลือกธีม ขนาดตัวอักษร และระยะห่างที่อ่านสบายสำหรับคุณ" icon={PaintBrush} />
+            <PageHeader category="การตั้งค่า" title="รูปแบบการแสดงผล" description="เลือกธีม ขนาดตัวอักษร ระยะห่าง และปรับแต่งภาพหน้าปกภาพรวมอำเภอ" icon={PaintBrush} />
             {appearance.isPending && <QuerySkeleton rows={5} />}
             {appearance.isError && <QueryError onRetry={() => appearance.refetch()} />}
             {appearance.data && (
-                <div className="grid gap-5 lg:grid-cols-[1.2fr_0.8fr]">
+                <div className="grid gap-5 lg:grid-cols-[1.2fr_0.8fr] items-start">
                     <div className="space-y-5">
+                        <Panel title="ภาพหน้าปกหน้าแรก (ภาพรวมระบบประจำอำเภอ)" description="ปรับแต่งภาพกราฟิกบนแบนเนอร์ภาพรวมระบบประจำอำเภอที่แสดงหลังเข้าสู่ระบบ">
+                            <div id="dashboard-hero" className="space-y-4">
+                                <div className="relative overflow-hidden rounded-2xl border border-teal-200/80 bg-gradient-to-r from-teal-50/80 via-white to-emerald-50/70 p-4 shadow-sm">
+                                    <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+                                        <div className="min-w-0 max-w-md">
+                                            <div className="flex items-center gap-2">
+                                                <span className="grid size-8 place-items-center rounded-xl bg-teal-600 text-white shadow-xs">
+                                                    <ImageIcon size={18} weight="bold" />
+                                                </span>
+                                                <h3 className="font-black text-slate-900">ภาพหน้าปกแบนเนอร์ปัจจุบัน</h3>
+                                            </div>
+                                            <p className="mt-1.5 text-xs leading-5 text-slate-600">
+                                                {heroPreview
+                                                    ? '✨ กำลังแสดงตัวอย่างภาพใหม่ที่เลือก กรุณากด "บันทึกภาพหน้าปก" เพื่อใช้งานจริง'
+                                                    : branding.data?.hasCustomDashboardHero
+                                                    ? 'กำลังใช้งานภาพที่ปรับแต่งเฉพาะอำเภอของคุณ'
+                                                    : 'กำลังใช้งานภาพกราฟิกมาตรฐานของระบบ'}
+                                            </p>
+                                        </div>
+                                        <div className="relative h-24 w-full shrink-0 overflow-hidden rounded-xl border border-teal-200 bg-white sm:w-48 shadow-2xs">
+                                            <img
+                                                src={activeHeroUrl}
+                                                alt="ตัวอย่างภาพหน้าปกภาพรวมอำเภอ"
+                                                className="size-full object-cover object-right"
+                                            />
+                                            <div className="pointer-events-none absolute inset-0 bg-gradient-to-r from-teal-50/50 via-transparent to-transparent" />
+                                        </div>
+                                    </div>
+
+                                    {canManageHero ? (
+                                        <div className="mt-4 flex flex-wrap items-center gap-2.5 border-t border-teal-100/90 pt-3.5">
+                                            <label className="inline-flex cursor-pointer items-center gap-2 rounded-xl border border-teal-300 bg-white px-4 py-2 text-xs font-bold text-teal-900 shadow-2xs hover:bg-teal-50 transition active:scale-[0.98]">
+                                                <Camera size={16} weight="bold" />
+                                                <span>{heroFile ? 'เลือกไฟล์อื่น' : 'เปลี่ยนรูปภาพหน้าปก'}</span>
+                                                <input
+                                                    type="file"
+                                                    accept="image/jpeg,image/png,image/webp"
+                                                    className="sr-only"
+                                                    onChange={(e) => setHeroFile(e.target.files?.[0] ?? null)}
+                                                />
+                                            </label>
+
+                                            {heroFile && (
+                                                <>
+                                                    <button
+                                                        type="button"
+                                                        onClick={() => uploadHero.mutate()}
+                                                        disabled={uploadHero.isPending}
+                                                        className="inline-flex items-center gap-2 rounded-xl bg-teal-700 px-4 py-2 text-xs font-bold text-white shadow-xs hover:bg-teal-800 disabled:opacity-50 transition active:scale-[0.98]"
+                                                    >
+                                                        <Check size={16} weight="bold" />
+                                                        <span>{uploadHero.isPending ? 'กำลังอัปโหลด...' : 'บันทึกภาพหน้าปก'}</span>
+                                                    </button>
+                                                    <button
+                                                        type="button"
+                                                        onClick={() => setHeroFile(null)}
+                                                        className="rounded-xl border border-slate-200 bg-white px-3 py-2 text-xs font-bold text-slate-600 hover:bg-slate-50 transition"
+                                                    >
+                                                        ยกเลิก
+                                                    </button>
+                                                    <span className="truncate text-xs font-semibold text-teal-800">
+                                                        📎 {heroFile.name} ({(heroFile.size / 1024).toFixed(0)} KB)
+                                                    </span>
+                                                </>
+                                            )}
+
+                                            {branding.data?.hasCustomDashboardHero && !heroFile && (
+                                                <button
+                                                    type="button"
+                                                    onClick={() => removeHero.mutate()}
+                                                    disabled={removeHero.isPending}
+                                                    className="inline-flex items-center gap-1.5 rounded-xl border border-rose-200 bg-white px-3.5 py-2 text-xs font-bold text-rose-700 shadow-2xs hover:bg-rose-50 disabled:opacity-50 transition active:scale-[0.98]"
+                                                >
+                                                    <Trash size={15} />
+                                                    <span>{removeHero.isPending ? 'กำลังเปลี่ยนกลับ...' : 'ใช้รูปเริ่มต้นระบบ'}</span>
+                                                </button>
+                                            )}
+                                        </div>
+                                    ) : (
+                                        <p className="mt-3 border-t border-teal-100/70 pt-2.5 text-xs text-slate-500">
+                                            ℹ️ ภาพหน้าปกนี้กำหนดโดยผู้ดูแลระบบระดับอำเภอเพื่อใช้ร่วมกันในพื้นที่
+                                        </p>
+                                    )}
+
+                                    {(uploadHero.isError || removeHero.isError) && (
+                                        <p role="alert" className="mt-3 rounded-xl bg-rose-50 p-2.5 text-xs font-bold text-rose-700">
+                                            {uploadHero.error?.message ?? removeHero.error?.message ?? 'เกิดข้อผิดพลาดในการจัดการรูปภาพ'}
+                                        </p>
+                                    )}
+                                </div>
+
+                                {/* Dimension & Placement Guidelines */}
+                                <div className="rounded-2xl border border-teal-200/80 bg-teal-50/60 p-4">
+                                    <div className="flex items-center gap-2 text-sm font-black text-teal-950">
+                                        <Sparkle size={18} weight="fill" className="text-teal-600" />
+                                        <span>คำแนะนำขนาดรูปภาพที่พอดีที่สุด</span>
+                                    </div>
+                                    <div className="mt-3 grid gap-2.5 sm:grid-cols-2 text-xs text-slate-700">
+                                        <div className="rounded-xl border border-teal-100 bg-white/95 p-3 shadow-2xs">
+                                            <p className="font-bold text-teal-900">📐 ขนาดที่พอดีและแนะนำ</p>
+                                            <p className="mt-1 font-bold text-slate-900">
+                                                1200 × 600 พิกเซล <span className="font-normal text-slate-500">(สัดส่วน 2:1)</span>
+                                            </p>
+                                            <p className="mt-0.5 text-slate-500">หรืออัตราส่วนแนวนอน 16:9 (ความกว้างอย่างน้อย 600 px)</p>
+                                        </div>
+                                        <div className="rounded-xl border border-teal-100 bg-white/95 p-3 shadow-2xs">
+                                            <p className="font-bold text-teal-900">🎯 ตำแหน่งขององค์ประกอบสำคัญ</p>
+                                            <p className="mt-1 font-bold text-slate-900">
+                                                อยู่ <span className="text-teal-700">ทางฝั่งขวาของภาพ</span>
+                                            </p>
+                                            <p className="mt-0.5 text-slate-500">เพื่อให้ตัวละครหรือสถานที่เด่นชัด ไม่ถูกตัวหนังสือฝั่งซ้ายบัง</p>
+                                        </div>
+                                        <div className="rounded-xl border border-teal-100 bg-white/95 p-3 shadow-2xs">
+                                            <p className="font-bold text-teal-900">📁 ชนิดไฟล์และขนาดสูงสุด</p>
+                                            <p className="mt-1 font-bold text-slate-900">
+                                                JPG, PNG หรือ WebP
+                                            </p>
+                                            <p className="mt-0.5 text-slate-500">ขนาดไฟล์ไม่เกิน 8 MB (แนะนำ WebP เพื่อโหลดได้รวดเร็ว)</p>
+                                        </div>
+                                        <div className="rounded-xl border border-teal-100 bg-white/95 p-3 shadow-2xs">
+                                            <p className="font-bold text-teal-900">✨ การประมวลผลและการแสดงผล</p>
+                                            <p className="mt-1 font-bold text-slate-900">
+                                                เกลี่ยสีซ้ายอัตโนมัติ (Left Gradient Mask)
+                                            </p>
+                                            <p className="mt-0.5 text-slate-500">ภาพจะกลืนเข้ากับโทนสีมินต์ของแบนเนอร์อย่างนุ่มนวล</p>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                        </Panel>
+
                         <Panel title="โหมดหน้าจอ" description="เลือกความสว่างให้เหมาะกับอุปกรณ์และสภาพแวดล้อม">
                             <div className="grid gap-3 sm:grid-cols-3">
                                 {themeOptions.map((option) => <button key={option.value} type="button" onClick={() => update('theme', option.value)} aria-pressed={values.theme === option.value} className={`relative rounded-2xl border p-4 text-left transition active:scale-[0.98] ${values.theme === option.value ? 'border-brand-600 bg-brand-50 text-brand-900' : 'border-slate-200 bg-white text-slate-700 hover:border-brand-300'}`}><option.icon size={24} weight="duotone" /><p className="mt-3 font-bold">{option.label}</p><p className="mt-1 text-xs leading-5 opacity-75">{option.description}</p>{values.theme === option.value && <span className="absolute right-3 top-3 grid size-6 place-items-center rounded-full bg-brand-700 text-white"><Check size={14} weight="bold" /></span>}</button>)}
@@ -236,23 +447,25 @@ export function AppearanceSettingsPage() {
                             </div>
                         </Panel>
                     </div>
-                    <Panel title="ตัวอย่างแบบทันที" description="ทุกตัวเลือกจะแสดงผลกับทั้งระบบก่อนบันทึก">
-                        <div className="rounded-2xl border border-slate-200 bg-slate-50 p-5 text-slate-950">
-                            <span className="grid size-10 place-items-center rounded-xl bg-brand-700 text-white"><Eye size={21} weight="fill" /></span>
-                            <h2 className="mt-4 text-xl font-bold">ตัวอย่างข้อมูล</h2>
-                            <label className="mt-4 block"><span className="mb-2 block text-sm font-bold">ค้นหารายการ</span><input placeholder="พิมพ์คำค้นหา" className="w-full rounded-xl border px-3" /></label>
-                            <div className="mt-4 overflow-hidden rounded-xl border border-slate-200 bg-white">
-                                <div className="grid grid-cols-[1fr_auto] bg-slate-50 px-3 py-2 text-xs font-bold text-slate-600"><span>ชื่อรายการ</span><span>สถานะ</span></div>
-                                <div className="grid grid-cols-[1fr_auto] items-center px-3 py-3 text-sm"><span>งานวิทยาศาสตร์</span><span className="rounded-full bg-brand-50 px-2.5 py-1 text-xs font-bold text-brand-800">พร้อมใช้งาน</span></div>
+                    <div className="lg:sticky lg:top-6 self-start space-y-4">
+                        <Panel title="ตัวอย่างแบบทันที" description="ทุกตัวเลือกจะแสดงผลกับทั้งระบบก่อนบันทึก">
+                            <div className="rounded-2xl border border-slate-200 bg-slate-50 p-5 text-slate-950">
+                                <span className="grid size-10 place-items-center rounded-xl bg-brand-700 text-white"><Eye size={21} weight="fill" /></span>
+                                <h2 className="mt-4 text-xl font-bold">ตัวอย่างข้อมูล</h2>
+                                <label className="mt-4 block"><span className="mb-2 block text-sm font-bold">ค้นหารายการ</span><input placeholder="พิมพ์คำค้นหา" className="w-full rounded-xl border px-3" /></label>
+                                <div className="mt-4 overflow-hidden rounded-xl border border-slate-200 bg-white">
+                                    <div className="grid grid-cols-[1fr_auto] bg-slate-50 px-3 py-2 text-xs font-bold text-slate-600"><span>ชื่อรายการ</span><span>สถานะ</span></div>
+                                    <div className="grid grid-cols-[1fr_auto] items-center px-3 py-3 text-sm"><span>งานวิทยาศาสตร์</span><span className="rounded-full bg-brand-50 px-2.5 py-1 text-xs font-bold text-brand-800">พร้อมใช้งาน</span></div>
+                                </div>
                             </div>
-                        </div>
-                        {save.isError && <p role="alert" className="mt-4 rounded-xl bg-rose-50 p-3 text-sm font-bold text-rose-800">{save.error.message}</p>}
-                        <div className="mt-5 grid gap-2 sm:grid-cols-2">
-                            <button type="button" onClick={() => setDraft(DEFAULT_APPEARANCE)} className="inline-flex items-center justify-center gap-2 whitespace-nowrap rounded-full border border-slate-200 bg-white px-5 py-3 text-sm font-bold text-slate-700 hover:border-brand-300"><ArrowCounterClockwise size={17} weight="bold" />ค่าเริ่มต้นสีน้ำเงิน</button>
-                            <button type="button" onClick={() => save.mutate()} disabled={!draft || save.isPending} className="whitespace-nowrap rounded-full bg-brand-700 px-5 py-3 text-sm font-bold text-white hover:bg-brand-800 disabled:bg-slate-300 active:scale-[0.98]">{save.isPending ? 'กำลังบันทึก' : 'บันทึกรูปแบบ'}</button>
-                            {draft && <button type="button" onClick={() => setDraft(null)} className="text-sm font-bold text-slate-600 hover:text-brand-700 sm:col-span-2">ยกเลิกการเปลี่ยนแปลง</button>}
-                        </div>
-                    </Panel>
+                            {save.isError && <p role="alert" className="mt-4 rounded-xl bg-rose-50 p-3 text-sm font-bold text-rose-800">{save.error.message}</p>}
+                            <div className="mt-5 grid gap-2 sm:grid-cols-2">
+                                <button type="button" onClick={() => setDraft(DEFAULT_APPEARANCE)} className="inline-flex items-center justify-center gap-2 whitespace-nowrap rounded-full border border-slate-200 bg-white px-5 py-3 text-sm font-bold text-slate-700 hover:border-brand-300"><ArrowCounterClockwise size={17} weight="bold" />ค่าเริ่มต้นสีน้ำเงิน</button>
+                                <button type="button" onClick={() => save.mutate()} disabled={!draft || save.isPending} className="whitespace-nowrap rounded-full bg-brand-700 px-5 py-3 text-sm font-bold text-white hover:bg-brand-800 disabled:bg-slate-300 active:scale-[0.98]">{save.isPending ? 'กำลังบันทึก' : 'บันทึกรูปแบบ'}</button>
+                                {draft && <button type="button" onClick={() => setDraft(null)} className="text-sm font-bold text-slate-600 hover:text-brand-700 sm:col-span-2">ยกเลิกการเปลี่ยนแปลง</button>}
+                            </div>
+                        </Panel>
+                    </div>
                 </div>
             )}
         </div>

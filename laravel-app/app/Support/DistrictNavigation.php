@@ -17,6 +17,7 @@ final class DistrictNavigation
         }
         $items = collect($defaults)->flatMap(fn (array $group) => $group['items'])->keyBy('key');
         $used = [];
+        $defaultGroupMap = collect($defaults)->keyBy('key');
         $groups = [];
         foreach ($saved as $group) {
             $resolved = [];
@@ -26,7 +27,8 @@ final class DistrictNavigation
                     $used[$key] = true;
                 }
             }
-            $groups[] = ['key' => $group['key'], 'label' => $group['label'], 'color' => 'blue', 'items' => $resolved];
+            $color = $group['color'] ?? ($defaultGroupMap->get($group['key'])['color'] ?? 'blue');
+            $groups[] = ['key' => $group['key'], 'label' => $group['label'], 'color' => $color, 'items' => $resolved];
         }
         // New application modules remain reachable after a deployment.
         foreach ($defaults as $default) {

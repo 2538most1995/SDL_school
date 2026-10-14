@@ -14,7 +14,7 @@ return [
         [
             'key' => 'basic-information',
             'label' => 'ข้อมูลพื้นฐาน',
-            'color' => 'blue',
+            'color' => 'emerald',
             'items' => [
                 ['key' => 'students', 'label' => 'ข้อมูลนักศึกษา', 'description' => 'ค้นหา กรอง และดูข้อมูลนักศึกษา', 'route' => '/students', 'icon' => 'students', 'roles' => ['teacher', 'admin', 'super_admin']],
                 ['key' => 'my-learning', 'label' => 'ข้อมูลการเรียนของฉัน', 'description' => 'ข้อมูลประจำตัวและสถานะการศึกษา', 'route' => '/my-learning', 'icon' => 'student', 'roles' => ['student']],
