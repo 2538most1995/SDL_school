@@ -386,22 +386,34 @@ export function StudentsPage() {
 
     const columns = useMemo<ColumnDef<StudentRow>[]>(() => [
         {
+            accessorKey: 'code',
+            header: 'รหัสนักศึกษา',
+            size: 125,
+            cell: ({ getValue }) => <span className="whitespace-nowrap font-mono text-xs" style={{ color: 'var(--ui-text-muted)' }}>{getValue<string>()}</span>,
+        },
+        {
             accessorKey: 'name',
-            header: 'นักศึกษา',
-            size: 240,
-            meta: { compactSize: 120, exportFields: studentNameExportFields<StudentRow>((row) => row.code, (row) => row.name) },
+            header: 'ชื่อ - สกุล',
+            size: 195,
             cell: ({ row }) => (
                 <div className="min-w-0">
-                    <Link to={`/students/${row.original.id}`} className="block min-w-0 text-sm font-black leading-6 text-slate-950 hover:text-brand-700"><EllipsisText title={row.original.name}>{row.original.name}</EllipsisText></Link>
-                    <p className="mt-0.5 whitespace-nowrap font-mono text-xs text-slate-500">{row.original.code}</p>
+                    <Link to={`/students/${row.original.id}`} className="block min-w-0 text-sm font-semibold leading-6 text-slate-950 hover:text-brand-700"><EllipsisText title={row.original.name}>{row.original.name}</EllipsisText></Link>
                 </div>
             ),
         },
-        { accessorKey: 'citizenIdMasked', header: 'เลขบัตรประชาชน', size: 165, meta: { compactSize: 92, compactTextAlign: 'center' }, cell: ({ getValue }) => <span className="whitespace-nowrap font-mono text-xs font-bold text-slate-700">{getValue<string>()}</span> },
+        { accessorKey: 'level', header: 'ระดับชั้น', size: 165, cell: ({ getValue }) => <span className="text-xs">{getValue<string>()}</span> },
+        {
+            accessorKey: 'group',
+            header: 'กลุ่มเรียน',
+            size: 200,
+            meta: { exportFields: [{ header: 'กลุ่มเรียน', value: (row) => row.group }, { header: 'รหัสกลุ่มเรียน', value: (row) => row.groupCode }] },
+            cell: ({ row }) => <div className="min-w-0"><EllipsisText title={row.original.group}><span className="text-[13px] font-medium leading-5 text-slate-900">{row.original.group}</span></EllipsisText><span className="mt-0.5 block font-mono text-xs text-slate-500">{row.original.groupCode}</span></div>,
+        },
+        { accessorKey: 'citizenIdMasked', header: 'เลขบัตรประชาชน', size: 155, meta: { compactSize: 92, compactTextAlign: 'center' }, cell: ({ getValue }) => <span className="whitespace-nowrap font-mono text-xs text-slate-700">{getValue<string>()}</span> },
         {
             accessorKey: 'birthDate',
             header: 'วันเกิด',
-            size: 115,
+            size: 105,
             meta: { compactSize: 62, compactTextAlign: 'center' },
             cell: ({ getValue }) => {
                 const val = getValue<string>() || '';
@@ -410,20 +422,13 @@ export function StudentsPage() {
             },
         },
         {
-            accessorKey: 'group',
-            header: 'กลุ่มเรียน',
-            size: 240,
-            meta: { compactSize: 120, exportFields: studentGroupExportFields<StudentRow>((row) => row.level, (row) => row.group, (row) => row.groupCode) },
-            cell: ({ row }) => <div className="min-w-0"><EllipsisText title={row.original.group}><span className="text-[13px] font-semibold leading-5 text-slate-900">{row.original.group}</span></EllipsisText><EllipsisText title={`${row.original.level} · ${row.original.groupCode}`}><span className="mt-0.5 text-[10px] leading-4 text-slate-500">{row.original.level} · {row.original.groupCode}</span></EllipsisText></div>,
-        },
-        {
             id: 'details',
             header: 'จัดการ',
             size: 320,
             meta: { compactSize: 180, compactTextAlign: 'center' },
             enableSorting: false,
             cell: ({ row }) => (
-                <div className="flex items-center justify-center gap-1.5 whitespace-nowrap">
+                <div className="student-directory-actions flex flex-wrap items-center justify-center gap-1.5">
                     <Link
                         to={`/students/${encodeURIComponent(String(row.original.id))}`}
                         className="responsive-table-action inline-flex shrink-0 items-center gap-1.5 rounded-lg border border-brand-200 bg-brand-50 px-2.5 py-1.5 text-xs font-bold text-brand-800 hover:bg-brand-100 active:scale-[0.98] transition"
@@ -498,20 +503,20 @@ export function StudentsPage() {
         <div>
             <PageHeader
                 category="ฐานข้อมูลนักศึกษา"
-                title="ค้นหานักศึกษาได้รวดเร็ว"
-                description="แสดงข้อมูลนักศึกษาภาคเรียนล่าสุดครบทุกหน้า พร้อมกรองระดับและกลุ่มเรียนตามขอบเขตที่รับผิดชอบ"
+                title="ข้อมูลนักศึกษา"
+                description="ค้นหาและดูข้อมูลนักศึกษาภาคเรียนล่าสุด แยกตามระดับชั้นและกลุ่มเรียน"
                 icon={UsersThree}
-                actions={<StatusBadge tone="info">ข้อมูลจริงล่าสุด</StatusBadge>}
+                actions={<StatusBadge tone="success">ข้อมูลภาคเรียนล่าสุด</StatusBadge>}
             />
 
             <div className="mb-5 grid gap-3 sm:grid-cols-3">
                 <StatTile label="นักศึกษาที่พบ" value={pagination?.total ?? 0} detail="ครบทุกหน้าตามตัวกรอง" icon={Student} tone="sky" />
-                <StatTile label="กลุ่มเรียน" value={summary?.groups ?? 0} detail="กลุ่มที่อยู่ในผลลัพธ์" icon={GraduationCap} tone="amber" />
+                <StatTile label="กลุ่มเรียน" value={summary?.groups ?? 0} detail="กลุ่มที่อยู่ในผลลัพธ์" icon={GraduationCap} tone="emerald" />
                 <StatTile label="ชาย / หญิง" value={`${summary?.male ?? 0} / ${summary?.female ?? 0}`} detail={`เฉลี่ย GPAX ${summary?.average_gpax ?? '-'}`} icon={UsersThree} tone="rose" />
             </div>
 
             <Panel title="รายชื่อนักศึกษา" description={pagination ? `แสดง ${pagination.from ?? 0}-${pagination.to ?? 0} จากทั้งหมด ${pagination.total} คน · แสดงข้อมูลตามสิทธิ์และกลุ่มที่รับผิดชอบ` : 'ข้อมูลส่วนบุคคลละเอียดจะแสดงตามสิทธิ์ของผู้ใช้งาน'}>
-                <div className={`mb-5 grid gap-3 md:grid-cols-2 ${canFilterGroups ? 'xl:grid-cols-[minmax(300px,1.5fr)_minmax(200px,0.8fr)_minmax(240px,1fr)]' : 'xl:grid-cols-[minmax(300px,1.5fr)_minmax(200px,0.8fr)]'}`}>
+                <div className={`mb-5 grid gap-4 md:grid-cols-2 ${canFilterGroups ? 'xl:grid-cols-[minmax(0,1.5fr)_minmax(0,0.8fr)_minmax(0,1fr)]' : 'xl:grid-cols-[minmax(0,1.5fr)_minmax(0,0.8fr)]'}`}>
                     <Field label="ค้นหา">
                         <Input value={search} onChange={(_, data) => setSearch(data.value)} contentBefore={<MagnifyingGlass size={18} aria-hidden="true" />} placeholder="ชื่อ รหัส หรือกลุ่ม" size="large" />
                     </Field>

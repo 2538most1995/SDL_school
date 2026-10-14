@@ -112,18 +112,20 @@
 
 :root {
     color-scheme: light;
-    --ui-page: #f3f6fb;
+    --ui-page: #f4f8fa;
     --ui-page-top: #ffffff;
     --ui-surface: #ffffff;
-    --ui-surface-muted: #f8faff;
-    --ui-surface-subtle: #edf2f8;
-    --ui-border: #dbe3ee;
-    --ui-border-strong: #becbda;
+    --ui-surface-muted: #f7fafb;
+    --ui-surface-subtle: #eef4f6;
+    --ui-border: #e1e9ef;
+    --ui-border-strong: #c6d3de;
     --ui-text: #10213d;
     --ui-text-muted: #52627a;
     --ui-text-soft: #718198;
     --ui-shadow: 35 55 88;
-    --ui-shadow-card: 0 10px 30px rgb(35 55 88 / 0.08), 0 1px 2px rgb(35 55 88 / 0.05);
+    --ui-shadow-card: 0 3px 16px rgb(35 55 88 / 0.035);
+    --ui-navigation: #0f766e;
+    --ui-navigation-hover: #e8f5f2;
     --ui-radius-card: 18px;
     --ui-radius-control: 12px;
     --ui-radius-small: 10px;
@@ -306,66 +308,116 @@ textarea {
 
 .portal-shell {
     min-height: 100dvh;
-    background:
-        radial-gradient(circle at 88% 2%, color-mix(in srgb, var(--ui-accent-100) 36%, transparent) 0, transparent 24rem),
-        var(--ui-page);
+    background: var(--ui-page);
     color: var(--ui-text);
 }
 
 .portal-sidebar {
-    border-right: 1px solid color-mix(in srgb, var(--ui-accent-300) 18%, transparent);
-    background:
-        radial-gradient(circle at 12% 12%, rgb(255 255 255 / 0.08), transparent 11rem),
-        linear-gradient(165deg, var(--ui-sidebar-start), var(--ui-sidebar-middle) 48%, var(--ui-sidebar-end));
-    box-shadow: 12px 0 34px rgb(8 24 55 / 0.08);
+    border-right: 1px solid var(--ui-border);
+    background: var(--ui-surface);
+    color: var(--ui-text);
+    box-shadow: 4px 0 20px rgb(var(--ui-shadow) / 0.025);
+}
+
+.sidebar-brand__icon {
+    background: var(--ui-surface);
+    color: var(--ui-navigation);
+    box-shadow: 0 2px 10px rgb(var(--ui-shadow) / 0.07);
+}
+
+.sidebar-muted,
+.sidebar-group-heading {
+    color: var(--ui-text-muted);
 }
 
 .sidebar-context-card {
-    border-radius: 16px;
-    background: linear-gradient(145deg, rgb(255 255 255 / 0.13), rgb(255 255 255 / 0.06));
-    box-shadow: inset 0 1px 0 rgb(255 255 255 / 0.08);
+    border-radius: 12px;
+    background: var(--ui-surface-muted);
+}
+
+.sidebar-context-card__icon {
+    color: var(--ui-navigation);
+    background: color-mix(in srgb, var(--ui-navigation) 10%, var(--ui-surface));
 }
 
 .sidebar-nav-link {
     position: relative;
     border-radius: 12px;
-    transition: background-color 150ms ease, color 150ms ease, transform 150ms var(--ui-ease-out);
+    color: var(--ui-text-muted);
+    transition: background-color 150ms ease, color 150ms ease;
 }
 
 @media (hover: hover) and (pointer: fine) {
-    .sidebar-nav-link:hover {
-        background: rgb(255 255 255 / 0.09);
-        transform: translateX(2px);
+    .sidebar-nav-link:not(.is-active):hover,
+    .sidebar-group-heading:hover {
+        background: var(--ui-navigation-hover);
+        color: var(--ui-navigation);
     }
 }
 
 .sidebar-nav-link.is-active {
-    background: linear-gradient(135deg, var(--ui-accent-600), var(--ui-accent-700));
-    box-shadow: 0 9px 22px color-mix(in srgb, var(--ui-accent-950) 30%, transparent), inset 0 1px 0 rgb(255 255 255 / 0.14);
-}
-
-.sidebar-nav-link.is-active::before {
-    content: "";
-    position: absolute;
-    inset-block: 0.65rem;
-    inset-inline-start: -0.62rem;
-    width: 3px;
-    border-radius: 999px;
-    background: var(--ui-accent-200);
+    background: var(--ui-navigation);
+    color: #ffffff;
+    font-weight: 600;
 }
 
 .sidebar-icon-button {
-    color: #fff !important;
+    color: var(--ui-text-muted) !important;
+}
+
+.sidebar-footer {
+    border-top: 1px solid var(--ui-border);
+}
+
+.sidebar-profile-link {
+    background: var(--ui-surface-subtle);
+    color: var(--ui-text-muted);
+}
+
+.sidebar-profile-link:hover {
+    background: var(--ui-navigation-hover);
+    color: var(--ui-navigation);
+}
+
+.sidebar-logout {
+    background: color-mix(in srgb, #e11d48 7%, var(--ui-surface));
+    color: #be123c;
+}
+
+.sidebar-logout:hover {
+    background: color-mix(in srgb, #e11d48 13%, var(--ui-surface));
+}
+
+[data-ui-mode='dark'] .portal-sidebar {
+    --ui-navigation-hover: #193b3b;
+}
+
+[data-ui-mode='dark'] .sidebar-brand__icon,
+[data-ui-mode='dark'] .sidebar-context-card__icon,
+[data-ui-mode='dark'] .sidebar-profile-link:hover,
+[data-ui-mode='dark'] .sidebar-nav-link:not(.is-active):hover,
+[data-ui-mode='dark'] .sidebar-group-heading:hover {
+    color: #5eead4;
+}
+
+[data-ui-mode='dark'] .sidebar-logout {
+    color: #fda4af;
 }
 
 .portal-topbar {
     border-color: var(--ui-border);
-    background: color-mix(in srgb, var(--ui-page-top) 91%, transparent);
-    box-shadow: 0 5px 18px rgb(var(--ui-shadow) / 0.045);
+    background: color-mix(in srgb, var(--ui-page-top) 94%, transparent);
+    box-shadow: none;
 }
 
 .portal-content {
     background: var(--ui-page);
+}
+
+.student-directory-actions > :where(a, button) {
+    min-height: 44px;
+    min-width: 44px;
+    white-space: nowrap;
 }
 
 .ui-panel {
@@ -386,37 +438,17 @@ textarea {
 .ui-page-header {
     border: 1px solid var(--ui-border);
     border-radius: var(--ui-radius-card);
-    background:
-        linear-gradient(130deg, color-mix(in srgb, var(--ui-accent-50) 78%, var(--ui-surface)), var(--ui-surface) 66%);
-    box-shadow: var(--ui-shadow-card);
+    background: linear-gradient(130deg, color-mix(in srgb, var(--ui-accent-50) 78%, var(--ui-surface)), var(--ui-surface) 75%);
+    box-shadow: none;
 }
 
 .ui-page-header__icon {
     border-radius: 16px;
-    box-shadow: 0 10px 22px color-mix(in srgb, var(--ui-accent-700) 24%, transparent), inset 0 1px 0 rgb(255 255 255 / 0.2);
+    box-shadow: none;
 }
 
-.ui-page-header__orb {
-    position: absolute;
-    display: block;
-    border-radius: 999px;
-    pointer-events: none;
-}
-
-.ui-page-header__orb--one {
-    width: 8rem;
-    height: 8rem;
-    inset-inline-end: 7%;
-    inset-block-start: -5.5rem;
-    background: color-mix(in srgb, var(--ui-accent-200) 42%, transparent);
-}
-
-.ui-page-header__orb--two {
-    width: 4.5rem;
-    height: 4.5rem;
-    inset-inline-end: -1.5rem;
-    inset-block-end: -2.4rem;
-    background: color-mix(in srgb, var(--ui-accent-100) 58%, transparent);
+[data-ui-mode='dark'] .ui-page-header__icon {
+    color: var(--ui-accent-300) !important;
 }
 
 [data-ui-mode='dark'] .ui-page-header {
@@ -753,8 +785,8 @@ textarea {
 }
 
 [data-ui-mode='dark'] .portal-shell .user-menu-trigger,
-[data-ui-mode='dark'] .portal-shell .MuiButton-textPrimary,
-[data-ui-mode='dark'] .portal-shell .MuiButton-outlinedPrimary,
+[data-ui-mode='dark'] .portal-shell .MuiButton-text.MuiButton-colorPrimary,
+[data-ui-mode='dark'] .portal-shell .MuiButton-outlined.MuiButton-colorPrimary,
 [data-ui-mode='dark'] .portal-shell .portal-topbar .MuiIconButton-colorPrimary {
     color: var(--ui-accent-200);
 }

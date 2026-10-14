@@ -34,11 +34,11 @@ function buildTheme(settings: AppearanceSettings, mode: 'light' | 'dark'): Theme
             primary: brandPalettes[settings.colorScheme],
             background: mode === 'dark'
                 ? { default: '#07101f', paper: '#101c30' }
-                : { default: '#f3f6fb', paper: '#ffffff' },
+                : { default: '#f4f8fa', paper: '#ffffff' },
             text: mode === 'dark'
                 ? { primary: '#eef4ff', secondary: '#b9c6d9' }
                 : { primary: '#10213d', secondary: '#52627a' },
-            divider: mode === 'dark' ? '#293a55' : '#dbe3ee',
+            divider: mode === 'dark' ? '#293a55' : '#e1e9ef',
             success: { main: '#0b7d68', light: '#d9f7ed' },
             warning: { main: '#a95f00', light: '#fff1cf' },
             error: { main: '#c4315a', light: '#ffe1e9' },
@@ -65,22 +65,22 @@ function buildTheme(settings: AppearanceSettings, mode: 'light' | 'dark'): Theme
                 defaultProps: { disableRipple: false },
                 styleOverrides: {
                     root: {
-                        minHeight: 42,
+                        minHeight: 44,
                         borderRadius: 12,
                         letterSpacing: 0,
                         transition: 'transform 140ms cubic-bezier(0.23, 1, 0.32, 1), background-color 160ms ease, border-color 160ms ease, box-shadow 160ms ease',
                         '&:active:not(:disabled)': {
                             transform: 'scale(0.97)',
                         },
-                        '&.MuiButton-textPrimary, &.MuiButton-outlinedPrimary': {
+                        '&.MuiButton-text.MuiButton-colorPrimary, &.MuiButton-outlined.MuiButton-colorPrimary': {
                             color: mode === 'dark' ? 'var(--ui-accent-200)' : brandPalettes[settings.colorScheme].main,
                         },
                     },
                     sizeLarge: { minHeight: 48, paddingInline: 20 },
                     contained: {
-                        boxShadow: '0 7px 18px color-mix(in srgb, var(--ui-accent-700) 24%, transparent)',
+                        boxShadow: '0 2px 6px color-mix(in srgb, var(--ui-accent-700) 14%, transparent)',
                         '&:hover': {
-                            boxShadow: '0 9px 22px color-mix(in srgb, var(--ui-accent-700) 30%, transparent)',
+                            boxShadow: '0 3px 10px color-mix(in srgb, var(--ui-accent-700) 20%, transparent)',
                         },
                     },
                     outlined: {

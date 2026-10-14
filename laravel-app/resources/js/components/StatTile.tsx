@@ -12,7 +12,6 @@ type StatTileProps = {
 
 type MetricVariables = CSSProperties & {
     '--metric-accent': string;
-    '--metric-accent-strong': string;
     '--metric-surface': string;
     '--metric-border': string;
 };
@@ -20,25 +19,21 @@ type MetricVariables = CSSProperties & {
 const tones: Record<NonNullable<StatTileProps['tone']>, MetricVariables> = {
     sky: {
         '--metric-accent': '#1876d2',
-        '--metric-accent-strong': '#0d4f98',
         '--metric-surface': '#edf6ff',
         '--metric-border': '#b7dbfb',
     },
     emerald: {
         '--metric-accent': '#0a8f75',
-        '--metric-accent-strong': '#07614f',
         '--metric-surface': '#eafaf5',
         '--metric-border': '#a9e5d5',
     },
     amber: {
         '--metric-accent': '#c87309',
-        '--metric-accent-strong': '#855005',
         '--metric-surface': '#fff8e8',
         '--metric-border': '#f4d28e',
     },
     rose: {
         '--metric-accent': '#d23d68',
-        '--metric-accent-strong': '#982649',
         '--metric-surface': '#fff1f6',
         '--metric-border': '#f3b9cc',
     },
@@ -51,93 +46,59 @@ export function StatTile({ label, value, detail, icon: Icon, tone = 'emerald' }:
             role="article"
             style={tones[tone]}
             sx={{
-                position: 'relative',
                 minWidth: 0,
-                minHeight: 182,
-                overflow: 'hidden',
-                p: 2.75,
-                borderRadius: '18px',
-                borderColor: 'color-mix(in srgb, var(--metric-border) 74%, var(--ui-border))',
+                minHeight: 172,
+                p: 2.5,
+                borderRadius: 'var(--ui-radius-card)',
+                borderColor: 'color-mix(in srgb, var(--metric-border) 50%, var(--ui-border))',
                 bgcolor: 'var(--metric-surface)',
-                backgroundImage: 'linear-gradient(150deg, color-mix(in srgb, var(--metric-surface) 92%, white), color-mix(in srgb, var(--metric-surface) 72%, white))',
-                boxShadow: '0 12px 28px color-mix(in srgb, var(--metric-accent) 8%, transparent), 0 2px 4px rgb(var(--ui-shadow) / 0.05)',
-                transition: 'transform 160ms cubic-bezier(0.23, 1, 0.32, 1), border-color 160ms ease, box-shadow 160ms ease',
+                backgroundImage: 'linear-gradient(135deg, var(--metric-surface), color-mix(in srgb, var(--metric-surface) 50%, var(--ui-surface)))',
+                boxShadow: '0 2px 8px rgb(var(--ui-shadow) / 0.025)',
                 '[data-ui-mode="dark"] &': {
-                    borderColor: 'color-mix(in srgb, var(--metric-accent) 38%, var(--ui-border))',
-                    bgcolor: 'color-mix(in srgb, var(--metric-accent) 12%, var(--ui-surface))',
-                    backgroundImage: 'linear-gradient(150deg, color-mix(in srgb, var(--metric-accent) 16%, var(--ui-surface)), var(--ui-surface))',
-                },
-                '@media (hover: hover) and (pointer: fine)': {
-                    '&:hover': {
-                        transform: 'translateY(-3px)',
-                        borderColor: 'var(--metric-border)',
-                        boxShadow: '0 18px 36px color-mix(in srgb, var(--metric-accent) 13%, transparent), 0 3px 6px rgb(var(--ui-shadow) / 0.06)',
-                    },
-                },
-                '&::before': {
-                    content: '""',
-                    position: 'absolute',
-                    insetInlineStart: 0,
-                    insetBlockStart: 0,
-                    insetBlockEnd: 0,
-                    width: 5,
-                    bgcolor: 'var(--metric-accent)',
-                },
-                '&::after': {
-                    content: '""',
-                    position: 'absolute',
-                    insetInlineEnd: -36,
-                    insetBlockEnd: -48,
-                    width: 142,
-                    height: 142,
-                    borderRadius: '50%',
-                    bgcolor: 'color-mix(in srgb, var(--metric-accent) 10%, transparent)',
-                    pointerEvents: 'none',
+                    borderColor: 'color-mix(in srgb, var(--metric-accent) 26%, var(--ui-border))',
+                    bgcolor: 'color-mix(in srgb, var(--metric-accent) 10%, var(--ui-surface))',
+                    backgroundImage: 'linear-gradient(135deg, color-mix(in srgb, var(--metric-accent) 12%, var(--ui-surface)), var(--ui-surface))',
                 },
             }}
         >
-            <Box sx={{ position: 'relative', zIndex: 1, display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: 2 }}>
-                <Typography component="p" variant="body1" sx={{ minWidth: 0, color: 'var(--metric-accent-strong)', lineHeight: '22px', fontWeight: 700, '[data-ui-mode="dark"] &': { color: 'color-mix(in srgb, var(--metric-accent) 44%, white)' } }}>
-                    {label}
-                </Typography>
+            <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.5 }}>
                 <Box
                     component="span"
                     aria-hidden="true"
                     sx={{
                         display: 'grid',
                         flexShrink: 0,
-                        width: 52,
-                        height: 52,
+                        width: 46,
+                        height: 46,
                         placeItems: 'center',
-                        borderRadius: '16px',
+                        borderRadius: '50%',
                         color: 'var(--metric-accent)',
-                        bgcolor: 'color-mix(in srgb, white 84%, var(--metric-surface))',
-                        border: '1px solid color-mix(in srgb, var(--metric-accent) 20%, transparent)',
-                        boxShadow: '0 8px 18px color-mix(in srgb, var(--metric-accent) 10%, transparent)',
+                        bgcolor: 'color-mix(in srgb, var(--metric-accent) 11%, var(--metric-surface))',
                         '[data-ui-mode="dark"] &': {
                             color: 'color-mix(in srgb, var(--metric-accent) 46%, white)',
                             bgcolor: 'color-mix(in srgb, var(--metric-accent) 18%, var(--ui-surface))',
-                            borderColor: 'color-mix(in srgb, var(--metric-accent) 36%, var(--ui-border))',
                         },
                     }}
                 >
-                    <Icon size={29} weight="duotone" />
+                    <Icon size={26} weight="duotone" />
                 </Box>
+                <Typography component="p" variant="body1" sx={{ minWidth: 0, color: 'var(--ui-text-muted)', lineHeight: '22px', fontWeight: 600 }}>
+                    {label}
+                </Typography>
             </Box>
             <Typography
                 component="p"
                 title={String(value)}
                 sx={{
-                    position: 'relative',
-                    zIndex: 1,
-                    mt: 2.25,
+                    mt: 1.75,
                     minWidth: 0,
                     overflow: 'hidden',
-                    color: 'text.primary',
-                    fontSize: 'clamp(30px, 2.25vw, 42px)',
-                    fontWeight: 800,
-                    letterSpacing: '-0.035em',
-                    lineHeight: 1.05,
+                    color: 'var(--ui-text)',
+                    fontSize: 'clamp(30px, 2.25vw, 36px)',
+                    fontWeight: 700,
+                    fontVariantNumeric: 'tabular-nums',
+                    letterSpacing: '-0.025em',
+                    lineHeight: 1.15,
                     textOverflow: 'ellipsis',
                     whiteSpace: 'nowrap',
                 }}
@@ -147,17 +108,12 @@ export function StatTile({ label, value, detail, icon: Icon, tone = 'emerald' }:
             <Typography
                 component="p"
                 variant="body2"
-                title={detail}
                 sx={{
-                    position: 'relative',
-                    zIndex: 1,
-                    mt: 1.25,
+                    mt: 0.75,
                     minWidth: 0,
-                    overflow: 'hidden',
-                    color: 'text.secondary',
+                    color: 'var(--ui-text-muted)',
                     lineHeight: '20px',
-                    textOverflow: 'ellipsis',
-                    whiteSpace: 'nowrap',
+                    overflowWrap: 'anywhere',
                 }}
             >
                 {detail}

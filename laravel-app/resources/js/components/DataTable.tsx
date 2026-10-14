@@ -250,10 +250,11 @@ export function DataTable<T>({
             <Box
                 sx={{
                     display: 'flex',
+                    flexWrap: 'wrap',
                     alignItems: 'center',
                     justifyContent: 'space-between',
                     gap: 2,
-                    mb: 1,
+                    mb: 1.5,
                     px: 0.5,
                     color: 'text.secondary',
                 }}
@@ -261,7 +262,7 @@ export function DataTable<T>({
                 <Typography variant="caption" sx={{ fontWeight: 700 }}>
                     ทั้งหมด {data.length.toLocaleString('th-TH')} รายการ
                 </Typography>
-                <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.5 }}>
+                <Box sx={{ display: 'flex', flexWrap: 'wrap', alignItems: 'center', gap: 1.5 }}>
                     <Typography variant="caption" sx={{ display: compactTable ? 'none' : 'block', '@media (min-width:1024px)': { display: 'block' } }}>
                         เลือกชื่อคอลัมน์เพื่อเรียงข้อมูล
                     </Typography>
@@ -283,7 +284,7 @@ export function DataTable<T>({
                     borderColor: 'divider',
                     borderRadius: compactTable ? '12px' : '16px',
                     bgcolor: 'background.paper',
-                    boxShadow: '0 10px 28px rgb(var(--ui-shadow) / 0.055)',
+                    boxShadow: 'none',
                     '@media (min-width:768px)': { display: 'block' },
                     ...(compactTable ? {
                         '@media (min-width:1024px)': {
@@ -321,7 +322,7 @@ export function DataTable<T>({
                                             width: compactTable ? `${(getCompactColumnSize(header.column) / compactTotalColumnSize) * 100}%` : header.getSize(),
                                             minWidth: compactTable ? 0 : header.getSize(),
                                             maxWidth: compactTable ? `${(getCompactColumnSize(header.column) / compactTotalColumnSize) * 100}%` : 'none',
-                                            height: compactTable ? 42 : 52,
+                                            height: compactTable ? 42 : 48,
                                             overflow: compactTable ? 'hidden' : 'visible',
                                             px: compactTable ? 0.3 : 2,
                                             py: compactTable ? 0.5 : 1,
@@ -336,7 +337,7 @@ export function DataTable<T>({
                                                     width: header.getSize(),
                                                     minWidth: header.getSize(),
                                                     maxWidth: 'none',
-                                                    height: 52,
+                                                    height: 48,
                                                     overflow: 'visible',
                                                     px: 2,
                                                     whiteSpace: 'nowrap',
@@ -359,11 +360,11 @@ export function DataTable<T>({
                                 key={row.id}
                                 hover
                                 sx={{
-                                    height: compactTable ? 'auto' : 76,
-                                    '&:nth-of-type(even)': { bgcolor: 'color-mix(in srgb, var(--ui-surface-subtle) 42%, var(--ui-surface))' },
-                                    '&:hover': { bgcolor: 'color-mix(in srgb, var(--ui-accent-50) 58%, var(--ui-surface))' },
+                                    height: compactTable ? 'auto' : 60,
+                                    '&:nth-of-type(even)': { bgcolor: 'color-mix(in srgb, var(--ui-surface-muted) 38%, var(--ui-surface))' },
+                                    '&:hover': { bgcolor: 'color-mix(in srgb, var(--ui-accent-50) 65%, var(--ui-surface))' },
                                     ...(compactTable ? {
-                                        '@media (min-width:1024px)': { height: 76 },
+                                        '@media (min-width:1024px)': { height: 60 },
                                     } : {}),
                                 }}
                             >
@@ -376,7 +377,7 @@ export function DataTable<T>({
                                             width: compactTable ? `${(getCompactColumnSize(cell.column) / compactTotalColumnSize) * 100}%` : cell.column.getSize(),
                                             minWidth: 0,
                                             maxWidth: compactTable ? `${(getCompactColumnSize(cell.column) / compactTotalColumnSize) * 100}%` : '100%',
-                                            height: compactTable ? 'auto' : 76,
+                                            height: compactTable ? 'auto' : 60,
                                             overflow: compactTable && isActionColumn(cell.column) ? 'visible' : 'hidden',
                                             overflowWrap: compactTable ? 'normal' : 'normal',
                                             px: compactTable ? (isActionColumn(cell.column) ? 0.1 : 0.3) : 2,
@@ -396,7 +397,7 @@ export function DataTable<T>({
                                                 '@media (min-width:1024px)': {
                                                     width: cell.column.getSize(),
                                                     maxWidth: '100%',
-                                                    height: 76,
+                                                    height: 60,
                                                     overflowWrap: 'normal',
                                                     px: 2,
                                                     fontSize: '0.875rem',

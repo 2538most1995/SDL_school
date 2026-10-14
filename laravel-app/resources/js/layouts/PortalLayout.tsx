@@ -140,9 +140,9 @@ function SidebarSkeleton() {
         <div className="animate-pulse space-y-3 px-2 py-3">
             {[1, 2, 3].map((group) => (
                 <div key={group} className="space-y-1.5">
-                    <div className="h-3 w-20 rounded bg-white/15" />
-                    <div className="h-8 rounded-xl bg-white/[0.08]" />
-                    <div className="h-8 rounded-xl bg-white/[0.08]" />
+                    <div className="h-3 w-20 rounded bg-slate-200" />
+                    <div className="h-10 rounded-xl bg-slate-100" />
+                    <div className="h-10 rounded-xl bg-slate-100" />
                 </div>
             ))}
         </div>
@@ -272,18 +272,18 @@ export function PortalLayout() {
             {isStudent && <StudentAnnouncementModal />}
             {sidebarOpen && <button className={`fixed inset-0 z-30 bg-slate-950/30 ${isStudent ? '' : 'lg:hidden'}`} onClick={() => setSidebarOpen(false)} aria-label="ปิดเมนู" />}
             <aside
-                className={`portal-sidebar fixed inset-y-0 left-0 z-40 flex w-[282px] flex-col overflow-hidden text-white transition-transform lg:w-[266px] ${isStudent ? (sidebarOpen ? 'translate-x-0' : '-translate-x-full') : `${sidebarOpen ? 'translate-x-0' : '-translate-x-full'} lg:translate-x-0`}`}
+                className={`portal-sidebar fixed inset-y-0 left-0 z-40 flex w-[280px] max-w-[calc(100vw-24px)] flex-col overflow-hidden transition-transform ${isStudent ? (sidebarOpen ? 'translate-x-0' : '-translate-x-full') : `${sidebarOpen ? 'translate-x-0' : '-translate-x-full'} lg:translate-x-0`}`}
                 aria-hidden={!sidebarOpen && (isStudent || !desktopSidebar)}
                 inert={!sidebarOpen && (isStudent || !desktopSidebar)}
             >
-                <div className="flex h-[78px] items-center justify-between border-b border-white/10 px-4">
+                <div className="sidebar-brand flex h-[84px] shrink-0 items-center justify-between px-5">
                     <Link to="/app" className="flex items-center gap-2.5">
-                        <span className="grid size-11 place-items-center overflow-hidden rounded-2xl border border-white/70 bg-white text-brand-700 shadow-[0_10px_26px_rgb(3_15_52_/_0.22)]">
+                        <span className="sidebar-brand__icon grid size-12 shrink-0 place-items-center overflow-hidden rounded-2xl">
                             {branding.data?.logoImageUrl ? <img src={publicAssetUrl(branding.data.logoImageUrl) ?? ''} alt="" className="size-full object-contain p-1" /> : <GraduationCap size={23} weight="fill" aria-hidden="true" />}
                         </span>
-                        <span className="leading-tight text-white">
-                            <strong className="block max-w-40 truncate text-[16px] font-black tracking-[-0.025em]">{branding.data?.portalName ?? 'SDL School'}</strong>
-                            <span className="block max-w-40 truncate text-[10px] font-semibold text-brand-100">{branding.data?.districtName ?? currentDistrict?.name ?? 'Digital Campus'}</span>
+                        <span className="leading-tight">
+                            <strong className="block max-w-40 truncate text-lg font-bold tracking-[-0.025em]">{branding.data?.portalName ?? 'SDL School'}</strong>
+                            <span className="sidebar-muted mt-1 block max-w-40 truncate text-xs">{branding.data?.districtName ?? currentDistrict?.name ?? 'Digital Campus'}</span>
                         </span>
                     </Link>
                     <span className={isStudent ? '' : 'lg:hidden'}>
@@ -291,23 +291,22 @@ export function PortalLayout() {
                     </span>
                 </div>
 
-                <div className="sidebar-context-card mx-3 mt-4 flex items-center gap-3 border border-white/15 px-3.5 py-3">
-                    <span className="grid size-10 shrink-0 place-items-center rounded-[14px] bg-white/10 text-brand-100 shadow-[inset_0_0_0_1px_rgb(255_255_255_/_0.08)]">
+                <div className="sidebar-context-card mx-4 mt-1 flex items-center gap-3 px-3 py-3">
+                    <span className="sidebar-context-card__icon grid size-9 shrink-0 place-items-center rounded-xl">
                         <User size={20} weight="duotone" aria-hidden="true" />
                     </span>
                     <div className="min-w-0">
-                        <p className="text-[10px] font-bold text-brand-100">สิทธิ์การใช้งาน</p>
-                        <p className="mt-0.5 text-[14px] font-black text-white">{currentRole.label}</p>
-                        <p className="truncate text-[10px] text-sky-100/75">{currentDistrict?.name ?? availableDistricts[0]?.name ?? 'เลือกอำเภอ'}</p>
+                        <p className="text-sm font-semibold">{currentRole.label}</p>
+                        <p className="sidebar-muted mt-0.5 truncate text-xs">{currentDistrict?.name ?? availableDistricts[0]?.name ?? 'เลือกอำเภอ'}</p>
                     </div>
                 </div>
 
-                <nav aria-label="เมนูหลัก" className="mt-2 flex-1 overflow-y-auto px-2.5 pb-4">
+                <nav aria-label="เมนูหลัก" className="mt-2 min-h-0 flex-1 overflow-y-auto px-4 pb-5">
                     {catalog.isPending && <SidebarSkeleton />}
                     {catalog.data?.groups.map((group) => (
                         <section key={group.key} className="mt-4">
-                            <h2 className="mb-1"><button type="button" className="flex w-full items-center justify-between rounded-xl px-2.5 py-2 text-left text-xs font-bold text-brand-100 hover:bg-white/10 focus-visible:outline focus-visible:outline-2 focus-visible:outline-white" aria-expanded={!collapsedGroups[group.key]} aria-controls={`navigation-${group.key}`} onClick={() => setCollapsedGroups((previous) => ({ ...previous, [group.key]: !previous[group.key] }))}><span>{group.label}</span><CaretDown size={14} className={`transition-transform ${collapsedGroups[group.key] ? '-rotate-90' : ''}`} aria-hidden="true" /></button></h2>
-                            <div id={`navigation-${group.key}`} hidden={Boolean(collapsedGroups[group.key])} className="space-y-0.5">
+                            <h2 className="mb-1"><button type="button" className="sidebar-group-heading flex min-h-11 w-full items-center justify-between rounded-xl px-3 py-2 text-left text-xs font-semibold" aria-expanded={!collapsedGroups[group.key]} aria-controls={`navigation-${group.key}`} onClick={() => setCollapsedGroups((previous) => ({ ...previous, [group.key]: !previous[group.key] }))}><span>{group.label}</span><CaretDown size={14} className={`transition-transform ${collapsedGroups[group.key] ? '-rotate-90' : ''}`} aria-hidden="true" /></button></h2>
+                            <div id={`navigation-${group.key}`} hidden={Boolean(collapsedGroups[group.key])} className="space-y-1">
                                 {group.items.map((item) => {
                                     const Icon = icons[item.icon as keyof typeof icons] ?? BookOpenText;
                                     return (
@@ -316,10 +315,10 @@ export function PortalLayout() {
                                             to={item.route}
                                             end={item.route === '/app'}
                                             onClick={() => setSidebarOpen(false)}
-                                            className={({ isActive }) => `sidebar-nav-link flex items-center gap-2.5 px-2.5 py-2 text-[13px] font-bold leading-5 ${isActive ? 'is-active text-white' : 'text-white/80 hover:text-white'}`}
+                                            className={({ isActive }) => `sidebar-nav-link flex min-h-11 items-center gap-3 px-3 py-2.5 text-sm font-medium leading-5 ${isActive ? 'is-active' : ''}`}
                                         >
-                                            <span className="grid size-7 shrink-0 place-items-center rounded-[9px] bg-white/[0.07]">
-                                                <Icon size={17} weight="duotone" aria-hidden="true" />
+                                            <span className="grid size-7 shrink-0 place-items-center">
+                                                <Icon size={21} weight="regular" aria-hidden="true" />
                                             </span>
                                             <span className="truncate">{item.label}</span>
                                         </NavLink>
@@ -330,19 +329,19 @@ export function PortalLayout() {
                     ))}
                 </nav>
 
-                <div className="border-t border-white/10 bg-black/15 p-3">
+                <div className="sidebar-footer shrink-0 p-4">
                     <div className="flex items-center gap-2.5 px-1 py-1">
                         <Avatar name={me.data.name} image={me.data.avatar_url ? { src: withAppBasePath(me.data.avatar_url) } : undefined} size={36} color="colorful" />
                         <div className="min-w-0 flex-1">
-                            <p className="truncate text-xs font-bold text-white">{me.data.name}</p>
-                            <p className="truncate text-[10px] text-brand-200">{me.data.username} · {currentRole.label}</p>
+                            <p className="truncate text-sm font-semibold">{me.data.name}</p>
+                            <p className="sidebar-muted mt-0.5 truncate text-xs">{me.data.username} · {currentRole.label}</p>
                         </div>
                     </div>
                     <div className="mt-2.5 flex items-center gap-2">
                         <Link
                             to="/settings/profile"
                             onClick={() => setSidebarOpen(false)}
-                            className="flex flex-1 items-center justify-center gap-1.5 rounded-xl bg-white/10 py-2 text-center text-xs font-bold text-white hover:bg-white/20 active:scale-[0.98]"
+                            className="sidebar-profile-link flex min-h-11 flex-1 items-center justify-center gap-1.5 rounded-xl py-2 text-center text-xs font-semibold"
                         >
                             <User size={15} />
                             <span>โปรไฟล์</span>
@@ -354,7 +353,7 @@ export function PortalLayout() {
                                 setSidebarOpen(false);
                                 logout.mutate();
                             }}
-                            className="flex flex-1 items-center justify-center gap-1.5 rounded-xl bg-rose-500/25 py-2 text-center text-xs font-bold text-rose-100 hover:bg-rose-500/40 hover:text-white disabled:opacity-60 active:scale-[0.98]"
+                            className="sidebar-logout flex min-h-11 flex-1 items-center justify-center gap-1.5 rounded-xl py-2 text-center text-xs font-semibold disabled:opacity-60"
                         >
                             <SignOut size={15} />
                             <span>{logout.isPending ? 'กำลังออก...' : 'ออกจากระบบ'}</span>
@@ -363,7 +362,7 @@ export function PortalLayout() {
                 </div>
             </aside>
 
-            <div className={isStudent ? 'student-portal' : 'lg:pl-[266px]'}>
+            <div className={isStudent ? 'student-portal' : 'lg:pl-[280px]'}>
                 {isStudent ? (
                     <header className="student-portal-header sticky top-0 z-20 border-b backdrop-blur-xl">
                         <div className="mx-auto flex h-[72px] max-w-[1440px] items-center gap-3 px-4 sm:px-6 lg:px-8">

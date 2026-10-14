@@ -79,7 +79,7 @@ export function Button({
             startIcon={icon && iconPosition === 'before' && !iconOnly ? icon : undefined}
             endIcon={icon && iconPosition === 'after' && !iconOnly ? icon : undefined}
             sx={{
-                minWidth: iconOnly ? 40 : undefined,
+                minWidth: iconOnly ? 44 : undefined,
                 paddingInline: iconOnly ? 1 : undefined,
                 ...(props.sx ?? {}),
             }}
@@ -299,7 +299,7 @@ export function Avatar({
             src={image?.src}
             alt={name}
             className={className}
-            sx={{ width: size, height: size, bgcolor: 'primary.main', fontSize: size * 0.34, fontWeight: 700 }}
+            sx={{ width: size, height: size, bgcolor: 'primary.main', color: 'primary.contrastText', fontSize: size * 0.34, fontWeight: 700 }}
         >
             {initials}
         </MuiAvatar>
