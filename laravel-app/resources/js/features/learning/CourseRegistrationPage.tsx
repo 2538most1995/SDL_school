@@ -771,8 +771,26 @@ function StaffCourseRegistrationPage() {
                     {/* Header bar */}
                     <div className="flex flex-wrap items-center justify-between gap-3">
                         <Button
-                            appearance="subtle"
-                            icon={<ArrowLeft size={18} />}
+                            type="button"
+                            appearance="primary"
+                            size="large"
+                            icon={<ArrowLeft size={22} weight="bold" aria-hidden="true" />}
+                            sx={{
+                                minHeight: 48,
+                                px: 2.5,
+                                borderRadius: '12px',
+                                fontSize: '1rem',
+                                fontWeight: 800,
+                                border: '1px solid',
+                                borderColor: 'primary.dark',
+                                boxShadow: '0 4px 12px rgb(var(--ui-shadow) / 0.18)',
+                                '&:hover': { boxShadow: '0 6px 16px rgb(var(--ui-shadow) / 0.24)' },
+                                '&:focus-visible': {
+                                    outline: '3px solid',
+                                    outlineColor: 'primary.light',
+                                    outlineOffset: 3,
+                                },
+                            }}
                             onClick={handleBackToList}
                         >
                             กลับหน้ารายชื่อ
