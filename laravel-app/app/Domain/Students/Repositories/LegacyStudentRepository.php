@@ -191,6 +191,10 @@ final class LegacyStudentRepository implements StudentRepository
             return $matches[0];
         }
 
+        if (count($matches) > 1) {
+            return null;
+        }
+
         $code = trim($code);
         if ($code === '') {
             return null;
@@ -202,6 +206,7 @@ final class LegacyStudentRepository implements StudentRepository
                 $sets[] = $s;
             }
         }
+        $historicalMatches = [];
         foreach ($sets as $set) {
             if ($level !== null && $set->level !== $level) {
                 continue;
@@ -255,7 +260,7 @@ final class LegacyStudentRepository implements StudentRepository
                     (string) ($row['transfer_date'] ?? ''),
                 );
 
-                return new Student(
+                $historicalMatches[] = new Student(
                     code: $code,
                     districtId: $set->districtId,
                     districtName: $set->districtName,
@@ -313,7 +318,7 @@ final class LegacyStudentRepository implements StudentRepository
             }
         }
 
-        return null;
+        return count($historicalMatches) === 1 ? $historicalMatches[0] : null;
     }
 
     /** @return list<Grade> */

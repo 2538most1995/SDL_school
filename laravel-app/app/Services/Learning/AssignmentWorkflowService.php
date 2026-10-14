@@ -2,6 +2,7 @@
 
 namespace App\Services\Learning;
 
+use App\Domain\Students\Support\StudentIdentityGuard;
 use App\Models\User;
 use Illuminate\Database\DatabaseManager;
 use Illuminate\Http\UploadedFile;
@@ -477,6 +478,7 @@ final readonly class AssignmentWorkflowService
             ->first();
         abort_unless($submission !== null && in_array($submission->submission_type, ['pdf', 'image'], true), 404);
         if ($viewer->role === 'student') {
+            app(StudentIdentityGuard::class)->assertUnambiguous($viewer);
             abort_unless((string) $submission->student_code === trim((string) ($viewer->student_code ?: $viewer->username)), 404);
         } elseif ($viewer->role === 'teacher') {
             abort_unless((int) $submission->created_by === (int) $viewer->id, 404);
@@ -514,6 +516,7 @@ final readonly class AssignmentWorkflowService
             ->first();
         abort_unless($attachment !== null, 404);
         if ($viewer->role === 'student') {
+            app(StudentIdentityGuard::class)->assertUnambiguous($viewer);
             abort_unless((string) $attachment->student_code === trim((string) ($viewer->student_code ?: $viewer->username)), 404);
         } elseif ($viewer->role === 'teacher') {
             abort_unless((int) $attachment->created_by === (int) $viewer->id, 404);

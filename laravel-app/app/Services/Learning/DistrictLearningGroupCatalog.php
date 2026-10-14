@@ -3,6 +3,7 @@
 namespace App\Services\Learning;
 
 use App\Domain\Students\Repositories\StudentRepository;
+use App\Domain\Students\Support\StudentIdentityGuard;
 use App\Models\User;
 use Illuminate\Database\DatabaseManager;
 
@@ -117,6 +118,7 @@ final class DistrictLearningGroupCatalog
      */
     public function aliasesForViewer(User $viewer, int $districtId): array
     {
+        app(StudentIdentityGuard::class)->assertUnambiguous($viewer);
         $cacheKey = $viewer->role.'|'.(string) $viewer->id.'|'.$districtId.'|'.json_encode($viewer->assigned_groups ?? []);
         if (array_key_exists($cacheKey, $this->aliasesByViewer)) {
             return $this->aliasesByViewer[$cacheKey];
@@ -165,6 +167,7 @@ final class DistrictLearningGroupCatalog
 
     public function educationLevelForViewer(User $viewer, int $districtId): ?int
     {
+        app(StudentIdentityGuard::class)->assertUnambiguous($viewer);
         if ($viewer->role !== 'student') {
             return null;
         }

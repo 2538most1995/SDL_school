@@ -2,6 +2,7 @@
 
 namespace App\Http\Middleware;
 
+use App\Domain\Students\Support\StudentIdentityGuard;
 use App\Models\District;
 use Closure;
 use Illuminate\Http\Request;
@@ -38,6 +39,7 @@ final class ResolveDistrictContext
 
         $request->attributes->set('district_id', (int) $districtId);
         $user->setRelation('selectedDistrictContext', (int) $districtId);
+        app(StudentIdentityGuard::class)->assertUnambiguous($user);
 
         return $next($request);
     }

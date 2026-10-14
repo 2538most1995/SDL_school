@@ -34,6 +34,12 @@ final readonly class SystemStudentAuthenticator
         }
 
         $student = $matches[0];
+        $codeMatches = array_filter($this->students->students([$student->districtId]),
+            static fn (Student $candidate): bool => $candidate->districtId === $student->districtId
+                && hash_equals($candidate->code, $student->code));
+        if (count($codeMatches) !== 1) {
+            return null;
+        }
 
         return DB::transaction(function () use ($student): ?User {
             $user = User::query()

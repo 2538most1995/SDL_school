@@ -5,6 +5,7 @@ namespace App\Domain\Students\Services;
 use App\Domain\Students\Models\Student;
 use App\Domain\Students\Repositories\StudentRepository;
 use App\Domain\Students\Support\StudentAccessScope;
+use App\Domain\Students\Support\StudentIdentityGuard;
 use App\Models\User;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Schema;
@@ -121,8 +122,8 @@ final readonly class StudentDirectoryService
             : ($viewer->district_id !== null ? (int) $viewer->district_id : null);
 
         if ($districtId !== null && $districtId > 0) {
-            $student = $this->repository->find($code, $districtId, $levelInt);
-            if ($student !== null) {
+            $student = $this->repository->find($code, $districtId, $viewer->role === 'student' ? null : $levelInt);
+            if ($student !== null && ($levelInt === null || $student->level === $levelInt)) {
                 $scope = StudentAccessScope::forUser($viewer);
                 if ($scope->allows($student)) {
                     return $student;
@@ -143,6 +144,7 @@ final readonly class StudentDirectoryService
     /** @return list<Student> */
     public function accessibleStudents(User $viewer): array
     {
+        app(StudentIdentityGuard::class)->assertUnambiguous($viewer);
         $scope = StudentAccessScope::forUser($viewer);
         $districtId = $viewer->relationLoaded('selectedDistrictContext')
             ? (int) $viewer->getRelation('selectedDistrictContext')

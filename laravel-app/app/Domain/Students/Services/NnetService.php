@@ -4,6 +4,7 @@ namespace App\Domain\Students\Services;
 
 use App\Domain\Students\Models\Student;
 use App\Domain\Students\Repositories\StudentRepository;
+use App\Domain\Students\Support\StudentIdentityGuard;
 use App\Models\District;
 use App\Models\NnetResult;
 use App\Models\User;
@@ -743,11 +744,22 @@ final class NnetService
                 : null;
         }
 
-        if (isset($data['subject_scores'])) {
-            $record->subject_scores = $data['subject_scores'];
+        foreach (['subject_scores', 'subject_levels'] as $field) {
+            if (isset($data[$field])) {
+                $allowedCodes = array_map('strval', $record->subject_codes ?? []);
+                $submittedCodes = array_map('strval', array_keys($data[$field]));
+                if (array_diff($submittedCodes, $allowedCodes) !== []) {
+                    throw ValidationException::withMessages([$field => 'รหัสวิชาต้องตรงกับรายวิชาของผลสอบเดิม']);
+                }
+            }
         }
 
-        if (isset($data['subject_levels'])) {
+        if (isset($data['subject_scores'])) {
+            $record->subject_scores = $data['subject_scores'];
+            // Imported achievement labels refer to the previous scores; keep
+            // them only when explicitly supplied with the replacement scores.
+            $record->subject_levels = $data['subject_levels'] ?? [];
+        } elseif (isset($data['subject_levels'])) {
             $record->subject_levels = $data['subject_levels'];
         }
 
@@ -770,7 +782,7 @@ final class NnetService
     }
 
     /**
-     * @return array{citizen_ids: list<string>, student_codes: list<string>}
+     * @return array{citizen_ids: list<string>, student_codes: list<string>, education_level?: ?int}
      */
     public function resolveStudentIdentifiers(User $user): array
     {
@@ -778,8 +790,10 @@ final class NnetService
             return ['citizen_ids' => [], 'student_codes' => []];
         }
 
+        app(StudentIdentityGuard::class)->assertUnambiguous($user);
         $citizenIds = [];
         $studentCodes = [];
+        $educationLevel = null;
 
         if (! empty($user->student_code)) {
             $studentCodes[] = trim((string) $user->student_code);
@@ -809,13 +823,14 @@ final class NnetService
             if ($lookupCode !== '') {
                 $student = $this->studentRepository->find($lookupCode, $user->district_id);
                 if ($student !== null) {
+                    $educationLevel = $student->level;
                     if (! empty($student->citizenId)) {
                         $c = preg_replace('/\D+/u', '', (string) $student->citizenId);
                         if (strlen($c) > 0 && strlen($c) < 13) {
                             $c = str_pad($c, 13, '0', STR_PAD_LEFT);
                         }
                         if (strlen($c) === 13) {
-                            $citizenIds[] = $c;
+                            $citizenIds = [$c];
                         }
                     }
                     if (! empty($student->code)) {
@@ -830,6 +845,7 @@ final class NnetService
         return [
             'citizen_ids' => array_values(array_unique(array_filter($citizenIds))),
             'student_codes' => array_values(array_unique(array_filter($studentCodes))),
+            'education_level' => $educationLevel,
         ];
     }
 
@@ -856,18 +872,18 @@ final class NnetService
             return false;
         }
 
-        $query->where(function ($q) use ($citizenIds, $studentCodes): void {
-            if (! empty($citizenIds)) {
-                $q->whereIn('citizen_id', $citizenIds);
-            }
-            if (! empty($studentCodes)) {
-                if (! empty($citizenIds)) {
-                    $q->orWhereIn('student_code', $studentCodes);
-                } else {
-                    $q->whereIn('student_code', $studentCodes);
-                }
-            }
-        });
+        // A code cannot override a known person's identity. Without a citizen
+        // identifier, bind the code fallback to the uniquely resolved level.
+        if ($citizenIds !== []) {
+            $query->whereIn('citizen_id', $citizenIds);
+        } elseif ($studentCodes !== [] && $identifiers['education_level'] !== null) {
+            $query->whereIn('student_code', $studentCodes)
+                ->where('education_level', $identifiers['education_level']);
+        } else {
+            $query->whereRaw('1 = 0');
+
+            return false;
+        }
 
         return true;
     }
@@ -878,18 +894,22 @@ final class NnetService
             return;
         }
 
-        if ($user->role === 'admin' || $user->role === 'teacher') {
-            if ($user->district_id && $record->district_id !== $user->district_id) {
-                abort(403, 'คุณไม่มีสิทธิ์เข้าถึงข้อมูลของอำเภออื่น');
-            }
+        if (! $user->district_id || (int) $record->district_id !== (int) $user->district_id) {
+            abort(403, 'คุณไม่มีสิทธิ์เข้าถึงข้อมูลของอำเภออื่น');
+        }
 
+        if ($user->role === 'admin' || $user->role === 'teacher') {
             return;
         }
 
         if ($user->role === 'student') {
             $identifiers = $this->resolveStudentIdentifiers($user);
             $matchesCitizen = ! empty($identifiers['citizen_ids']) && in_array($record->citizen_id, $identifiers['citizen_ids'], true);
-            $matchesCode = ! empty($identifiers['student_codes']) && in_array($record->student_code, $identifiers['student_codes'], true);
+            $matchesCode = empty($identifiers['citizen_ids'])
+                && ! empty($identifiers['student_codes'])
+                && $identifiers['education_level'] !== null
+                && (int) $record->education_level === $identifiers['education_level']
+                && in_array($record->student_code, $identifiers['student_codes'], true);
 
             if (! $matchesCitizen && ! $matchesCode) {
                 abort(403, 'คุณสามารถดูผลคะแนน N-NET ของตนเองได้เท่านั้น');

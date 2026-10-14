@@ -3,6 +3,7 @@
 namespace App\Http\Controllers\Api\Learning;
 
 use App\Domain\Students\Services\ExamScheduleExportService;
+use App\Domain\Students\Support\StudentIdentityGuard;
 use App\Http\Controllers\Controller;
 use App\Models\District;
 use App\Models\User;
@@ -63,12 +64,12 @@ final class ExamScheduleDocumentController extends Controller
             $this->resolveDistrict($request, $user);
             $selection = $export->build($user, $filters = $this->filters($request));
 
-            $pdfParams = $request->query();
+            $pdfParams = $this->documentParameters($request, $user, $filters);
             $pdfParams['disposition'] = 'attachment';
             $pdfParams['signature'] = $this->signatureFor($pdfParams);
             $selection['pdfDownloadUrl'] = $this->documentUrl($request, 'pdf', $pdfParams);
 
-            $printParams = $request->query();
+            $printParams = $this->documentParameters($request, $user, $filters);
             $printParams['disposition'] = 'inline';
             $printParams['signature'] = $this->signatureFor($printParams);
             $selection['pdfPrintUrl'] = $this->documentUrl($request, 'pdf', $printParams);
@@ -78,7 +79,12 @@ final class ExamScheduleDocumentController extends Controller
                 'Content-Type' => 'text/html; charset=UTF-8',
             ]);
         } catch (\Throwable $e) {
-            $message = $e->getMessage() ?: 'ไม่สามารถแสดงตารางสอบได้';
+            if ($e instanceof HttpExceptionInterface && in_array($e->getStatusCode(), [401, 403], true)) {
+                throw $e;
+            }
+            $message = $e instanceof HttpExceptionInterface
+                ? $e->getMessage()
+                : 'ไม่สามารถแสดงตารางสอบได้';
             if ($e instanceof HttpExceptionInterface && $e->getStatusCode() === 404) {
                 $message = 'ไม่พบข้อมูลตารางสอบของนักศึกษา หรือยังไม่มีการประกาศตารางสอบในภาคเรียนนี้';
             }
@@ -146,10 +152,31 @@ final class ExamScheduleDocumentController extends Controller
         ]);
     }
 
+    /** Bind outgoing capabilities to the principal and district actually authorized. */
+    private function documentParameters(Request $request, User $user, array $filters): array
+    {
+        $authenticated = ($request->user() ?? $request->user('sanctum')) !== null;
+        // Re-previewing a guest capability must not extend its original lifetime.
+        // Legacy Laravel links without expiry receive a bounded replacement.
+        $expires = $authenticated || ! $request->query('expires')
+            ? now()->addHours(24)->timestamp
+            : (int) $request->query('expires');
+
+        return array_filter([
+            ...$filters,
+            'user_id' => (string) $user->id,
+            'district_id' => (string) $request->attributes->get('district_id'),
+            'expires' => (string) $expires,
+            'openExternalBrowser' => '1',
+        ], static fn ($value) => $value !== null && $value !== '');
+    }
+
     private function resolveUser(Request $request): User
     {
         $user = $request->user('sanctum');
         if ($user !== null) {
+            abort_if($user->disabled_at !== null, 401, 'บัญชีนี้ไม่ได้รับอนุญาตให้ใช้งาน');
+
             return $user;
         }
 
@@ -164,11 +191,17 @@ final class ExamScheduleDocumentController extends Controller
 
     private function verifySignature(Request $request): bool
     {
+        foreach ($request->query() as $value) {
+            if (! is_scalar($value) && $value !== null) {
+                return false;
+            }
+        }
+
         $signature = (string) $request->query('signature');
         $expires = (int) $request->query('expires');
         if ($signature !== '' && $expires >= now()->timestamp) {
             $signedPayload = $this->signedPayload($request->query());
-            $expected = hash_hmac('sha256', 'exam-schedule:'.http_build_query($signedPayload), (string) config('app.key'));
+            $expected = hash_hmac('sha256', 'exam-schedule:v2:'.http_build_query($signedPayload), (string) config('app.key'));
             if (hash_equals($expected, $signature)) {
                 return true;
             }
@@ -199,7 +232,7 @@ final class ExamScheduleDocumentController extends Controller
     {
         return hash_hmac(
             'sha256',
-            'exam-schedule:'.http_build_query($this->signedPayload($query)),
+            'exam-schedule:v2:'.http_build_query($this->signedPayload($query)),
             (string) config('app.key'),
         );
     }
@@ -215,6 +248,7 @@ final class ExamScheduleDocumentController extends Controller
     private function resolveDistrict(Request $request, User $user): void
     {
         $requestedDistrict = $request->header('X-District-Id') ?: $request->query('district_id');
+        abort_if(is_array($requestedDistrict), 422, 'รหัสอำเภอไม่ถูกต้อง');
         if ($user->role === 'super_admin') {
             abort_if(blank($requestedDistrict), 422, 'กรุณาเลือกอำเภอก่อนเรียกดูข้อมูล');
             $districtId = filter_var($requestedDistrict, FILTER_VALIDATE_INT, ['options' => ['min_range' => 1]]);
@@ -235,6 +269,7 @@ final class ExamScheduleDocumentController extends Controller
 
         $request->attributes->set('district_id', (int) $districtId);
         $user->setRelation('selectedDistrictContext', (int) $districtId);
+        app(StudentIdentityGuard::class)->assertUnambiguous($user);
     }
 
     /** @return array{scope: string, student?: string, group?: string, level?: int} */
