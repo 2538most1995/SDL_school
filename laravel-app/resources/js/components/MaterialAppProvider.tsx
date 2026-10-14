@@ -66,7 +66,7 @@ function buildTheme(settings: AppearanceSettings, mode: 'light' | 'dark'): Theme
                 styleOverrides: {
                     root: {
                         minHeight: 44,
-                        borderRadius: 12,
+                        borderRadius: 'var(--ui-radius-control)',
                         letterSpacing: 0,
                         transition: 'transform 140ms cubic-bezier(0.23, 1, 0.32, 1), background-color 160ms ease, border-color 160ms ease, box-shadow 160ms ease',
                         '&:active:not(:disabled)': {
@@ -93,7 +93,7 @@ function buildTheme(settings: AppearanceSettings, mode: 'light' | 'dark'): Theme
                 styleOverrides: {
                     root: {
                         borderColor: 'var(--ui-border)',
-                        borderRadius: 18,
+                        borderRadius: 'var(--ui-radius-card)',
                         backgroundImage: 'none',
                         boxShadow: 'var(--ui-shadow-card)',
                     },
@@ -105,7 +105,7 @@ function buildTheme(settings: AppearanceSettings, mode: 'light' | 'dark'): Theme
                         backgroundImage: 'none',
                     },
                     rounded: {
-                        borderRadius: 18,
+                        borderRadius: 'var(--ui-radius-card)',
                     },
                 },
             },
@@ -113,7 +113,7 @@ function buildTheme(settings: AppearanceSettings, mode: 'light' | 'dark'): Theme
                 styleOverrides: {
                     root: {
                         minHeight: 'var(--ui-control-height)',
-                        borderRadius: 12,
+                        borderRadius: 'var(--ui-radius-control)',
                         backgroundColor: 'color-mix(in srgb, var(--ui-surface) 97%, var(--ui-accent-50))',
                         transition: 'box-shadow 160ms ease, background-color 160ms ease',
                         '&:hover .MuiOutlinedInput-notchedOutline': {
@@ -173,7 +173,7 @@ function buildTheme(settings: AppearanceSettings, mode: 'light' | 'dark'): Theme
                     },
                     head: {
                         color: 'var(--ui-text)',
-                        fontWeight: 800,
+                        fontWeight: 600,
                         backgroundColor: 'color-mix(in srgb, var(--ui-accent-50) 62%, var(--ui-surface))',
                     },
                 },

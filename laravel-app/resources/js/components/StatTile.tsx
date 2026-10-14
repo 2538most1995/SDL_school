@@ -5,9 +5,10 @@ import type { CSSProperties } from 'react';
 type StatTileProps = {
     label: string;
     value: string | number;
+    unit?: string;
     detail: string;
     icon: Icon;
-    tone?: 'emerald' | 'sky' | 'amber' | 'rose';
+    tone?: 'emerald' | 'sky' | 'amber' | 'rose' | 'violet';
 };
 
 type MetricVariables = CSSProperties & {
@@ -37,9 +38,14 @@ const tones: Record<NonNullable<StatTileProps['tone']>, MetricVariables> = {
         '--metric-surface': '#fff1f6',
         '--metric-border': '#f3b9cc',
     },
+    violet: {
+        '--metric-accent': '#8350dc',
+        '--metric-surface': '#f6f2ff',
+        '--metric-border': '#dfd0fa',
+    },
 };
 
-export function StatTile({ label, value, detail, icon: Icon, tone = 'emerald' }: StatTileProps) {
+export function StatTile({ label, value, unit, detail, icon: Icon, tone = 'emerald' }: StatTileProps) {
     return (
         <Card
             variant="outlined"
@@ -47,8 +53,10 @@ export function StatTile({ label, value, detail, icon: Icon, tone = 'emerald' }:
             style={tones[tone]}
             sx={{
                 minWidth: 0,
-                minHeight: 172,
-                p: 2.5,
+                minHeight: { xs: 132, sm: 144 },
+                p: { xs: 2, sm: 2.25 },
+                position: 'relative',
+                overflow: 'hidden',
                 borderRadius: 'var(--ui-radius-card)',
                 borderColor: 'color-mix(in srgb, var(--metric-border) 50%, var(--ui-border))',
                 bgcolor: 'var(--metric-surface)',
@@ -61,15 +69,28 @@ export function StatTile({ label, value, detail, icon: Icon, tone = 'emerald' }:
                 },
             }}
         >
-            <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.5 }}>
+            <Box
+                aria-hidden="true"
+                sx={{
+                    position: 'absolute',
+                    right: 12,
+                    bottom: 10,
+                    color: 'var(--metric-accent)',
+                    opacity: 0.08,
+                    pointerEvents: 'none',
+                }}
+            >
+                <Icon size={62} weight="duotone" />
+            </Box>
+            <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.25, position: 'relative', zIndex: 1 }}>
                 <Box
                     component="span"
                     aria-hidden="true"
                     sx={{
                         display: 'grid',
                         flexShrink: 0,
-                        width: 46,
-                        height: 46,
+                        width: 40,
+                        height: 40,
                         placeItems: 'center',
                         borderRadius: '50%',
                         color: 'var(--metric-accent)',
@@ -80,21 +101,23 @@ export function StatTile({ label, value, detail, icon: Icon, tone = 'emerald' }:
                         },
                     }}
                 >
-                    <Icon size={26} weight="duotone" />
+                    <Icon size={23} weight="duotone" />
                 </Box>
-                <Typography component="p" variant="body1" sx={{ minWidth: 0, color: 'var(--ui-text-muted)', lineHeight: '22px', fontWeight: 600 }}>
+                <Typography component="p" sx={{ minWidth: 0, color: 'var(--ui-text-muted)', fontSize: '0.875rem', lineHeight: 1.5, fontWeight: 600 }}>
                     {label}
                 </Typography>
             </Box>
             <Typography
                 component="p"
-                title={String(value)}
+                title={unit ? `${value} ${unit}` : String(value)}
                 sx={{
-                    mt: 1.75,
+                    mt: 1.25,
+                    position: 'relative',
+                    zIndex: 1,
                     minWidth: 0,
                     overflow: 'hidden',
                     color: 'var(--ui-text)',
-                    fontSize: 'clamp(30px, 2.25vw, 36px)',
+                    fontSize: 'clamp(28px, 2.1vw, 32px)',
                     fontWeight: 700,
                     fontVariantNumeric: 'tabular-nums',
                     letterSpacing: '-0.025em',
@@ -104,15 +127,23 @@ export function StatTile({ label, value, detail, icon: Icon, tone = 'emerald' }:
                 }}
             >
                 {value}
+                {unit && (
+                    <Box component="span" sx={{ ml: 1, fontSize: '0.875rem', fontWeight: 600, letterSpacing: 0 }}>
+                        {unit}
+                    </Box>
+                )}
             </Typography>
             <Typography
                 component="p"
                 variant="body2"
                 sx={{
-                    mt: 0.75,
+                    mt: 0.625,
+                    position: 'relative',
+                    zIndex: 1,
                     minWidth: 0,
                     color: 'var(--ui-text-muted)',
-                    lineHeight: '20px',
+                    fontSize: '0.8125rem',
+                    lineHeight: 1.5,
                     overflowWrap: 'anywhere',
                 }}
             >

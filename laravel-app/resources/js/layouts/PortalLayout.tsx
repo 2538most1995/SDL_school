@@ -276,7 +276,7 @@ export function PortalLayout() {
                 aria-hidden={!sidebarOpen && (isStudent || !desktopSidebar)}
                 inert={!sidebarOpen && (isStudent || !desktopSidebar)}
             >
-                <div className="sidebar-brand flex h-[84px] shrink-0 items-center justify-between px-5">
+                <div className="sidebar-brand flex h-[76px] shrink-0 items-center justify-between px-5">
                     <Link to="/app" className="flex items-center gap-2.5">
                         <span className="sidebar-brand__icon grid size-12 shrink-0 place-items-center overflow-hidden rounded-2xl">
                             {branding.data?.logoImageUrl ? <img src={publicAssetUrl(branding.data.logoImageUrl) ?? ''} alt="" className="size-full object-contain p-1" /> : <GraduationCap size={23} weight="fill" aria-hidden="true" />}
@@ -434,7 +434,7 @@ export function PortalLayout() {
                         </div>
                     </header>
                 ) : (
-                <header className="portal-topbar sticky top-0 z-20 flex h-[78px] items-center gap-3 border-b px-4 backdrop-blur-xl sm:px-7 lg:px-8">
+                <header className="portal-topbar sticky top-0 z-20 flex h-[68px] items-center gap-3 border-b px-4 backdrop-blur-xl sm:px-6">
                     <span className="lg:hidden">
                         <Button appearance="subtle" icon={<List size={22} />} onClick={() => setSidebarOpen(true)} aria-label="เปิดเมนู" />
                     </span>
@@ -498,8 +498,8 @@ export function PortalLayout() {
                 </header>
                 )}
 
-                <main className={`portal-content relative overflow-hidden ${isStudent ? 'min-h-[calc(100dvh-72px)] pb-[calc(5.5rem+env(safe-area-inset-bottom))] md:pb-0' : 'min-h-[calc(100dvh-78px)]'}`}>
-                    <div className={`relative mx-auto px-4 py-5 sm:px-6 lg:px-8 lg:py-7 ${isStudent ? 'max-w-[1440px]' : 'max-w-[1500px]'}`}>
+                <main className={`portal-content relative overflow-hidden ${isStudent ? 'min-h-[calc(100dvh-72px)] pb-[calc(5.5rem+env(safe-area-inset-bottom))] md:pb-0' : 'min-h-[calc(100dvh-68px)]'}`}>
+                    <div className={`relative mx-auto px-4 py-4 sm:px-6 lg:py-5 ${isStudent ? 'max-w-[1440px]' : 'max-w-[1500px]'}`}>
                         {role !== me.data.role ? <SidebarSkeleton /> : me.data.role !== 'super_admin' || selectedDistrictId ? <Outlet /> : <div className="rounded-3xl border border-amber-200 bg-amber-50 p-6 font-bold text-amber-900">กรุณาเลือกอำเภอเพื่อดูข้อมูล</div>}
                     </div>
                 </main>

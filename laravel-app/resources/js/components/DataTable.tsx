@@ -151,8 +151,9 @@ function TableHeaderLabel<T>({ header, compactTable }: { header: Header<T, unkno
         px: 0,
         overflow: compactTable ? 'hidden' : 'visible',
         color: 'inherit',
-        fontWeight: 700,
-        fontSize: compactTable ? '0.58rem' : '0.875rem',
+        fontWeight: 600,
+        '&.MuiButton-text.MuiButton-colorPrimary': { color: 'var(--ui-text)' },
+        fontSize: compactTable ? '0.58rem' : '0.8125rem',
         lineHeight: compactTable ? 1.3 : 1.5,
         whiteSpace: compactTable ? 'normal' : 'nowrap',
         letterSpacing: 0,
@@ -163,7 +164,7 @@ function TableHeaderLabel<T>({ header, compactTable }: { header: Header<T, unkno
                 minWidth: 0,
                 justifyContent: justify,
                 overflow: 'visible',
-                fontSize: '0.875rem',
+                fontSize: '0.8125rem',
                 lineHeight: 1.5,
                 whiteSpace: 'nowrap',
             },
@@ -260,15 +261,15 @@ export function DataTable<T>({
                 }}
             >
                 <Typography variant="caption" sx={{ fontWeight: 700 }}>
-                    ทั้งหมด {data.length.toLocaleString('th-TH')} รายการ
+                    {showPagination ? 'ทั้งหมด' : 'หน้านี้'} {data.length.toLocaleString('th-TH')} รายการ
                 </Typography>
                 <Box sx={{ display: 'flex', flexWrap: 'wrap', alignItems: 'center', gap: 1.5 }}>
                     <Typography variant="caption" sx={{ display: compactTable ? 'none' : 'block', '@media (min-width:1024px)': { display: 'block' } }}>
                         เลือกชื่อคอลัมน์เพื่อเรียงข้อมูล
                     </Typography>
                     {!disableExport && exportColumns.length > 0 && (
-                        <Button variant="outlined" size="small" startIcon={<ExcelFileIcon size={20} />} onClick={exportToExcel}>
-                            ส่งออก Excel (ข้อมูลที่แสดง)
+                        <Button variant="outlined" size="small" startIcon={<ExcelFileIcon size={18} />} aria-label="ส่งออก Excel (ข้อมูลที่แสดง)" title="ส่งออกเฉพาะข้อมูลที่แสดงตามตัวกรอง" onClick={exportToExcel}>
+                            ส่งออก Excel
                         </Button>
                     )}
                 </Box>
@@ -322,24 +323,24 @@ export function DataTable<T>({
                                             width: compactTable ? `${(getCompactColumnSize(header.column) / compactTotalColumnSize) * 100}%` : header.getSize(),
                                             minWidth: compactTable ? 0 : header.getSize(),
                                             maxWidth: compactTable ? `${(getCompactColumnSize(header.column) / compactTotalColumnSize) * 100}%` : 'none',
-                                            height: compactTable ? 42 : 48,
+                                            height: 44,
                                             overflow: compactTable ? 'hidden' : 'visible',
-                                            px: compactTable ? 0.3 : 2,
-                                            py: compactTable ? 0.5 : 1,
+                                            px: compactTable ? 0.3 : 1.5,
+                                            py: 0,
                                             whiteSpace: compactTable ? 'normal' : 'nowrap',
                                             overflowWrap: compactTable ? 'normal' : 'normal',
                                             verticalAlign: 'middle',
                                             textAlign: getColumnAlignment(header.column, compactTable),
-                                            bgcolor: 'color-mix(in srgb, var(--ui-accent-50) 68%, var(--ui-surface))',
+                                            bgcolor: 'color-mix(in srgb, var(--ui-navigation) 7%, var(--ui-surface))',
                                             ...(compactTable ? {
-                                                '@media (min-width:640px)': { px: 0.6, py: 0.65 },
+                                                '@media (min-width:640px)': { px: 0.6, py: 0 },
                                                 '@media (min-width:1024px)': {
                                                     width: header.getSize(),
                                                     minWidth: header.getSize(),
                                                     maxWidth: 'none',
-                                                    height: 48,
+                                                    height: 44,
                                                     overflow: 'visible',
-                                                    px: 2,
+                                                    px: 1.5,
                                                     whiteSpace: 'nowrap',
                                                     textAlign: getColumnAlignment(header.column, compactTable),
                                                 },
@@ -360,11 +361,11 @@ export function DataTable<T>({
                                 key={row.id}
                                 hover
                                 sx={{
-                                    height: compactTable ? 'auto' : 60,
+                                    height: compactTable ? 'auto' : 52,
                                     '&:nth-of-type(even)': { bgcolor: 'color-mix(in srgb, var(--ui-surface-muted) 38%, var(--ui-surface))' },
                                     '&:hover': { bgcolor: 'color-mix(in srgb, var(--ui-accent-50) 65%, var(--ui-surface))' },
                                     ...(compactTable ? {
-                                        '@media (min-width:1024px)': { height: 60 },
+                                        '@media (min-width:1024px)': { height: 52 },
                                     } : {}),
                                 }}
                             >
@@ -377,14 +378,14 @@ export function DataTable<T>({
                                             width: compactTable ? `${(getCompactColumnSize(cell.column) / compactTotalColumnSize) * 100}%` : cell.column.getSize(),
                                             minWidth: 0,
                                             maxWidth: compactTable ? `${(getCompactColumnSize(cell.column) / compactTotalColumnSize) * 100}%` : '100%',
-                                            height: compactTable ? 'auto' : 60,
+                                            height: compactTable ? 'auto' : 52,
                                             overflow: compactTable && isActionColumn(cell.column) ? 'visible' : 'hidden',
                                             overflowWrap: compactTable ? 'normal' : 'normal',
-                                            px: compactTable ? (isActionColumn(cell.column) ? 0.1 : 0.3) : 2,
-                                            py: compactTable ? 0.55 : 1,
+                                            px: compactTable ? (isActionColumn(cell.column) ? 0.1 : 0.3) : 1.5,
+                                            py: compactTable ? 0.55 : 0.5,
                                             verticalAlign: 'middle',
                                             color: 'text.secondary',
-                                            fontSize: compactTable ? '0.62rem' : '0.875rem',
+                                            fontSize: compactTable ? '0.62rem' : '0.8125rem',
                                             lineHeight: compactTable ? 1.38 : 1.5,
                                             letterSpacing: 0,
                                             textAlign: getColumnAlignment(cell.column, compactTable),
@@ -397,10 +398,10 @@ export function DataTable<T>({
                                                 '@media (min-width:1024px)': {
                                                     width: cell.column.getSize(),
                                                     maxWidth: '100%',
-                                                    height: 60,
+                                                    height: 52,
                                                     overflowWrap: 'normal',
-                                                    px: 2,
-                                                    fontSize: '0.875rem',
+                                                    px: 1.5,
+                                                    fontSize: '0.8125rem',
                                                     lineHeight: 1.5,
                                                     textAlign: getColumnAlignment(cell.column, compactTable),
                                                 },
@@ -484,7 +485,7 @@ export function DataTable<T>({
                                         <Typography component="dt" variant="caption" color="text.secondary" sx={{ fontWeight: 700, fontSize: '0.8125rem' }}>
                                             {typeof header === 'string' ? header : ''}
                                         </Typography>
-                                        <Box component="dd" sx={{ minWidth: 0, m: 0, overflow: 'hidden', color: 'text.primary', fontSize: '0.875rem', lineHeight: 1.5 }}>
+                                        <Box component="dd" sx={{ minWidth: 0, m: 0, overflow: 'hidden', color: 'text.primary', fontSize: '0.8125rem', lineHeight: 1.5 }}>
                                             {flexRender(cell.column.columnDef.cell, cell.getContext())}
                                         </Box>
                                     </Box>

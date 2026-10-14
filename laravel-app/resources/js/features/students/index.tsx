@@ -35,6 +35,7 @@ import { Panel } from '../../components/Panel';
 import { QueryError, QuerySkeleton } from '../../components/QueryState';
 import { StatTile } from '../../components/StatTile';
 import { StatGrid } from '../../components/StatGrid';
+import { FilterToggle } from '../../components/FilterToggle';
 import { StatusBadge, type StatusTone } from '../../components/StatusBadge';
 import { getFeatureDataWithDemo, sendFeatureData } from '../api';
 import { useDemoRole } from '../../context/DemoRoleContext';
@@ -305,6 +306,10 @@ export function StudentSocialModal({
     );
 }
 
+function shortEducationLevel(level: string): string {
+    return ({ 'ประถมศึกษา': 'ประถม', 'มัธยมศึกษาตอนต้น': 'ม.ต้น', 'มัธยมศึกษาตอนปลาย': 'ม.ปลาย' } as Record<string, string>)[level] ?? level;
+}
+
 type FilterOption = { value: string | number; label: string };
 type StudentDirectoryMeta = {
     mode?: string;
@@ -320,6 +325,7 @@ export function StudentsPage() {
     const [group, setGroup] = useState('');
     const [page, setPage] = useState(1);
     const [perPage, setPerPage] = useState(25);
+    const [filtersOpen, setFiltersOpen] = useState(true);
     const [editingSocialStudent, setEditingSocialStudent] = useState<{ code: string; name: string; social?: StudentSocial } | null>(null);
     const deferredSearch = useDeferredValue(search);
     const canFilterGroups = role === 'teacher' || role === 'admin' || role === 'super_admin';
@@ -401,7 +407,7 @@ export function StudentsPage() {
                 </div>
             ),
         },
-        { accessorKey: 'level', header: 'ระดับชั้น', size: 165, cell: ({ getValue }) => <span className="text-xs">{getValue<string>()}</span> },
+        { accessorKey: 'level', header: 'ระดับชั้น', size: 95, meta: { exportFields: [{ header: 'ระดับชั้น', value: (row) => row.level }] }, cell: ({ getValue }) => <span className="text-xs" title={getValue<string>()}>{shortEducationLevel(getValue<string>())}</span> },
         {
             accessorKey: 'group',
             header: 'กลุ่มเรียน',
@@ -506,17 +512,19 @@ export function StudentsPage() {
                 title="ข้อมูลนักศึกษา"
                 description="ค้นหาและดูข้อมูลนักศึกษาภาคเรียนล่าสุด แยกตามระดับชั้นและกลุ่มเรียน"
                 icon={UsersThree}
+                illustration
                 actions={<StatusBadge tone="success">ข้อมูลภาคเรียนล่าสุด</StatusBadge>}
             />
 
-            <div className="mb-5 grid gap-3 sm:grid-cols-3">
-                <StatTile label="นักศึกษาที่พบ" value={pagination?.total ?? 0} detail="ครบทุกหน้าตามตัวกรอง" icon={Student} tone="sky" />
-                <StatTile label="กลุ่มเรียน" value={summary?.groups ?? 0} detail="กลุ่มที่อยู่ในผลลัพธ์" icon={GraduationCap} tone="emerald" />
-                <StatTile label="ชาย / หญิง" value={`${summary?.male ?? 0} / ${summary?.female ?? 0}`} detail={`เฉลี่ย GPAX ${summary?.average_gpax ?? '-'}`} icon={UsersThree} tone="rose" />
-            </div>
+            <StatGrid>
+                <StatTile label="นักศึกษาที่พบ" value={pagination?.total ?? 0} unit="คน" detail="ครบทุกหน้าตามตัวกรอง" icon={Student} tone="sky" />
+                <StatTile label="กลุ่มเรียน" value={summary?.groups ?? 0} unit="กลุ่ม" detail="กลุ่มในผลลัพธ์ปัจจุบัน" icon={GraduationCap} tone="emerald" />
+                <StatTile label="ชาย / หญิง" value={`${summary?.male ?? 0} / ${summary?.female ?? 0}`} unit="คน" detail="ตามข้อมูลที่มีในระบบ" icon={UsersThree} tone="amber" />
+                <StatTile label="GPAX เฉลี่ย" value={summary?.average_gpax ?? '-'} detail="จากคะแนนเต็ม 4.00" icon={ChartLineUp} tone="violet" />
+            </StatGrid>
 
-            <Panel title="รายชื่อนักศึกษา" description={pagination ? `แสดง ${pagination.from ?? 0}-${pagination.to ?? 0} จากทั้งหมด ${pagination.total} คน · แสดงข้อมูลตามสิทธิ์และกลุ่มที่รับผิดชอบ` : 'ข้อมูลส่วนบุคคลละเอียดจะแสดงตามสิทธิ์ของผู้ใช้งาน'}>
-                <div className={`mb-5 grid gap-4 md:grid-cols-2 ${canFilterGroups ? 'xl:grid-cols-[minmax(0,1.5fr)_minmax(0,0.8fr)_minmax(0,1fr)]' : 'xl:grid-cols-[minmax(0,1.5fr)_minmax(0,0.8fr)]'}`}>
+            <Panel title="รายชื่อนักศึกษา" icon={UsersThree} description={pagination ? `แสดง ${pagination.from ?? 0}-${pagination.to ?? 0} จากทั้งหมด ${pagination.total} คน` : 'ข้อมูลส่วนบุคคลละเอียดจะแสดงตามสิทธิ์ของผู้ใช้งาน'} action={<div className="flex flex-wrap items-center gap-2"><FilterToggle expanded={filtersOpen} controls="student-directory-filters" activeCount={[search, level, group].filter(Boolean).length} onToggle={() => setFiltersOpen((open) => !open)} />{(search || level || group) && <Button type="button" appearance="subtle" icon={<X size={15} />} onClick={resetFilters}>ล้างตัวกรองทั้งหมด</Button>}</div>}>
+                <div id="student-directory-filters" hidden={!filtersOpen} className={`mb-4 gap-3 md:grid-cols-2 ${filtersOpen ? 'grid' : 'hidden'} ${canFilterGroups ? 'xl:grid-cols-[minmax(0,1.5fr)_minmax(0,0.8fr)_minmax(0,1fr)]' : 'xl:grid-cols-[minmax(0,1.5fr)_minmax(0,0.8fr)]'}`}>
                     <Field label="ค้นหา">
                         <Input value={search} onChange={(_, data) => setSearch(data.value)} contentBefore={<MagnifyingGlass size={18} aria-hidden="true" />} placeholder="ชื่อ รหัส หรือกลุ่ม" size="large" />
                     </Field>
@@ -535,7 +543,6 @@ export function StudentsPage() {
                         </Select>
                     </Field>}
                 </div>
-                {(search || level || group) && <Button type="button" appearance="subtle" onClick={resetFilters} className="mb-4">ล้างตัวกรองทั้งหมด</Button>}
                 {students.isPending && <QuerySkeleton />}
                 {students.isError && <QueryError onRetry={() => students.refetch()} />}
                 {students.data && <DataTable data={rows} columns={columns} pageSize={perPage} showPagination={false} minWidth="wide" responsiveMode="cards" emptyTitle="ไม่พบนักศึกษา" emptyDescription="ลองเปลี่ยนคำค้น ระดับ หรือกลุ่มเรียน" />}
@@ -1231,6 +1238,7 @@ function StaffStudentMetricPage({ kind }: { kind: MetricKind }) {
     const [kpchStatus, setKpchStatus] = useState('');
     const [page, setPage] = useState(1);
     const [perPage, setPerPage] = useState(25);
+    const [filtersOpen, setFiltersOpen] = useState(true);
     const [selectedStudent, setSelectedStudent] = useState<StaffMetricStudent | null>(null);
     const deferredSearch = useDeferredValue(search);
     const canFilterGroups = role === 'teacher' || role === 'admin' || role === 'super_admin';
@@ -1270,8 +1278,10 @@ function StaffStudentMetricPage({ kind }: { kind: MetricKind }) {
     const title = kind === 'grades' ? 'ผลการเรียนและ GPAX นักศึกษา' : kind === 'kpch' ? 'กิจกรรม กพช. นักศึกษา' : 'ผลประเมินคุณธรรมนักศึกษา';
     const description = kind === 'grades' ? 'ตรวจ GPAX และหน่วยกิตสะสม พร้อมเปิดดูรายวิชาและผลการเรียนรายคน' : kind === 'kpch' ? 'ตรวจชั่วโมงสะสม กพช. และผลตามเกณฑ์ 200 ชั่วโมง' : 'ตรวจผลคุณธรรมล่าสุดจากตัวชี้วัด 11 รายการของแต่ละคน';
     const columns = useMemo<ColumnDef<StaffMetricStudent>[]>(() => [
-        { accessorKey: 'name', header: 'นักศึกษา', size: 255, meta: { compactSize: kind === 'grades' ? 150 : 140, exportFields: studentNameExportFields<StaffMetricStudent>((row) => row.code, (row) => row.name) }, cell: ({ row }) => <div className="min-w-0"><Link to={`/students/${row.original.code}`} title={row.original.name} className="thai-table-primary hover:text-brand-700 sm:text-sm">{row.original.name}</Link><p className="thai-table-secondary font-mono sm:text-[10px]">{row.original.code}</p></div> },
-        { accessorKey: 'group', header: 'ระดับ / กลุ่มเรียน', size: 235, meta: { compactSize: kind === 'grades' ? 160 : kind === 'moral' ? 140 : 134, compactHeader: 'ระดับ/กลุ่ม', exportFields: studentGroupExportFields<StaffMetricStudent>((row) => row.level, (row) => row.group, (row) => row.groupCode) }, cell: ({ row }) => <div className="min-w-0" title={`${row.original.group}\n${row.original.level} ${row.original.groupCode}`}><p className="thai-table-primary sm:text-[13px]">{row.original.group}</p><p className="thai-table-secondary sm:text-[10px]">{row.original.level} <span aria-hidden="true">•</span> {row.original.groupCode}</p></div> },
+        { accessorKey: 'code', header: 'รหัสนักศึกษา', size: 125, cell: ({ getValue }) => <span className="font-mono text-xs">{getValue<string>()}</span> },
+        { accessorKey: 'name', header: 'ชื่อ - สกุล', size: 210, cell: ({ row }) => <Link to={`/students/${row.original.code}`} title={row.original.name} className="block truncate text-[13px] font-medium text-slate-900 hover:text-brand-700">{row.original.name}</Link> },
+        { accessorKey: 'level', header: 'ระดับชั้น', size: 95, meta: { exportFields: [{ header: 'ระดับชั้น', value: (row) => row.level }] }, cell: ({ getValue }) => <span title={getValue<string>()}>{shortEducationLevel(getValue<string>())}</span> },
+        { accessorKey: 'group', header: 'กลุ่มเรียน', size: 220, meta: { exportFields: [{ header: 'กลุ่มเรียน', value: (row) => row.group }, { header: 'รหัสกลุ่มเรียน', value: (row) => row.groupCode }] }, cell: ({ row }) => <div className="min-w-0" title={`${row.original.group} · ${row.original.groupCode}`}><p className="truncate text-[13px]">{row.original.group}</p><p className="mt-0.5 font-mono text-[11px] text-slate-500">{row.original.groupCode}</p></div> },
         ...(kind === 'grades' ? [
             { accessorKey: 'gpax', header: 'GPAX', size: 115, meta: { compactSize: 56, compactTextAlign: 'center' }, cell: ({ getValue }) => <span className="font-bold tabular-nums text-sky-700 sm:text-sm">{Number(getValue<number>()).toFixed(2)}</span> },
             { accessorKey: 'creditsEarned', header: 'หน่วยกิตสะสม', size: 150, meta: { compactSize: 72, compactHeader: 'หน่วยกิต', compactTextAlign: 'center' }, cell: ({ row }) => <span className="whitespace-nowrap font-semibold tabular-nums">{row.original.creditsEarned} / {row.original.creditsRequired}</span> },
@@ -1281,27 +1291,28 @@ function StaffStudentMetricPage({ kind }: { kind: MetricKind }) {
         ] as ColumnDef<StaffMetricStudent>[] : [
             { accessorKey: 'moralResult', header: 'ผลคุณธรรมล่าสุด', size: 175, meta: { compactSize: 96, compactHeader: 'คุณธรรม', compactTextAlign: 'center' }, cell: ({ getValue }) => { const value = getValue<string>(); return <StatusBadge tone={value === 'ปรับปรุง' ? 'danger' : value === 'พอใช้' ? 'warning' : value === 'ยังไม่มีผลประเมิน' ? 'neutral' : 'success'}>{value}</StatusBadge>; } },
         ] as ColumnDef<StaffMetricStudent>[]),
-        { id: 'details', header: 'รายละเอียด', size: 170, meta: { compactSize: 48, compactTextAlign: 'center' }, enableSorting: false, cell: ({ row }) => <button type="button" className="metric-detail-button" onClick={() => setSelectedStudent(row.original)} aria-label={`เปิดรายละเอียด ${row.original.name}`} title={`เปิดรายละเอียด ${row.original.name}`}><Eye size={15} weight="bold" aria-hidden="true" /><span className="metric-detail-button__label">เปิดดู</span></button> },
+        { id: 'details', header: 'รายละเอียด', size: 100, meta: { compactSize: 48, compactTextAlign: 'center' }, enableSorting: false, cell: ({ row }) => <button type="button" className="metric-detail-button" onClick={() => setSelectedStudent(row.original)} aria-label={`เปิดรายละเอียด ${row.original.name}`} title={`เปิดรายละเอียด ${row.original.name}`}><Eye size={18} weight="regular" aria-hidden="true" /><span className="sr-only">เปิดดู</span></button> },
     ], [kind]);
     const pagination = meta?.pagination;
 
     return (
         <div>
-            <PageHeader title={title} description={description} icon={kind === 'grades' ? ChartLineUp : kind === 'kpch' ? Sparkle : Heart} category="ข้อมูลนักศึกษา" actions={<StatusBadge tone="info">ข้อมูลจากระบบจริง</StatusBadge>} />
-            <div className="mb-5 grid gap-3 sm:grid-cols-2">
-                <StatTile label="นักศึกษาที่พบ" value={pagination?.total ?? 0} detail="ตามขอบเขตและตัวกรอง" icon={Student} tone="sky" />
-                <StatTile label="กลุ่มเรียน" value={meta?.summary.groups ?? 0} detail="กลุ่มในผลลัพธ์ปัจจุบัน" icon={UsersThree} />
-            </div>
+            <PageHeader title={title} description={description} icon={kind === 'grades' ? ChartLineUp : kind === 'kpch' ? Sparkle : Heart} category="ข้อมูลนักศึกษา" illustration actions={<StatusBadge tone="success">ข้อมูลจากระบบจริง</StatusBadge>} />
+            <StatGrid columns={2}>
+                <StatTile label="นักศึกษาที่พบ" value={pagination?.total ?? 0} unit="คน" detail="ตามขอบเขตและตัวกรอง" icon={Student} tone="sky" />
+                <StatTile label="กลุ่มเรียน" value={meta?.summary.groups ?? 0} unit="กลุ่ม" detail="กลุ่มในผลลัพธ์ปัจจุบัน" icon={UsersThree} />
+            </StatGrid>
             <Panel
                 title="รายชื่อนักศึกษา"
+                icon={UsersThree}
                 description={pagination ? `แสดง ${pagination.from ?? 0}-${pagination.to ?? 0} จาก ${pagination.total} คน` : 'กำลังโหลดข้อมูล'}
-                action={(search || level || group || kpchStatus) ? (
+                action={<div className="flex flex-wrap items-center gap-2"><FilterToggle expanded={filtersOpen} controls={`student-metric-${kind}-filters`} activeCount={[search, level, group, kpchStatus].filter(Boolean).length} onToggle={() => setFiltersOpen((open) => !open)} />{(search || level || group || kpchStatus) ? (
                     <Button type="button" aria-label="ล้างตัวกรอง" appearance="outline" onClick={() => { setSearch(''); setLevel(''); setGroup(''); setKpchStatus(''); setPage(1); }}>
                         ล้างตัวกรองทั้งหมด
                     </Button>
-                ) : undefined}
+                ) : null}</div>}
             >
-                <div className={`mb-5 grid gap-3 ${kind === 'kpch' ? (canFilterGroups ? 'md:grid-cols-2 xl:grid-cols-4' : 'md:grid-cols-3') : (canFilterGroups ? 'md:grid-cols-3' : 'md:grid-cols-2')}`}>
+                <div id={`student-metric-${kind}-filters`} hidden={!filtersOpen} className={`mb-4 gap-3 ${filtersOpen ? 'grid' : 'hidden'} ${kind === 'kpch' ? (canFilterGroups ? 'md:grid-cols-2 xl:grid-cols-4' : 'md:grid-cols-3') : (canFilterGroups ? 'md:grid-cols-3' : 'md:grid-cols-2')}`}>
                     <Field label="ค้นหา"><Input value={search} onChange={(_, data) => setSearch(data.value)} contentBefore={<MagnifyingGlass size={18} aria-hidden="true" />} placeholder="ชื่อ รหัส หรือกลุ่ม" size="large" /></Field>
                     <Field label="ระดับการศึกษา"><Select value={level} onChange={(_, data) => setLevel(data.value)} size="large"><option value="">ทุกระดับ</option><option value="1">ประถมศึกษา</option><option value="2">มัธยมศึกษาตอนต้น</option><option value="3">มัธยมศึกษาตอนปลาย</option></Select></Field>
                     {canFilterGroups && <Field label="กลุ่มเรียน"><Select value={group} onChange={(_, data) => setGroup(data.value)} size="large"><option value="">ทุกกลุ่มเรียน</option>{retainedGroupOptions.map((option) => <option key={option.value} value={option.value}>{option.label}</option>)}</Select></Field>}
@@ -1309,7 +1320,7 @@ function StaffStudentMetricPage({ kind }: { kind: MetricKind }) {
                 </div>
                 {directory.isPending && <QuerySkeleton />}
                 {directory.isError && <QueryError onRetry={() => directory.refetch()} />}
-                {directory.data && <DataTable data={pageRows} columns={columns} pageSize={perPage} showPagination={false} minWidth="wide" responsiveMode="compact-table" emptyTitle="ไม่พบข้อมูลนักศึกษา" emptyDescription="ลองเปลี่ยนคำค้น ระดับ หรือกลุ่มเรียน" />}
+                {directory.data && <DataTable data={pageRows} columns={columns} pageSize={perPage} showPagination={false} minWidth="default" responsiveMode="cards" emptyTitle="ไม่พบข้อมูลนักศึกษา" emptyDescription="ลองเปลี่ยนคำค้น ระดับ หรือกลุ่มเรียน" />}
                 {pagination && <Pagination currentPage={pagination.current_page} totalPages={pagination.last_page} totalItems={pagination.total} pageSize={perPage} itemLabel="คน" disabled={directory.isFetching} onPageChange={setPage} onPageSizeChange={setPerPage} />}
             </Panel>
             {selectedStudent && <StaffAcademicDetailDialog kind={kind} student={selectedStudent} onClose={() => setSelectedStudent(null)} />}

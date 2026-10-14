@@ -277,7 +277,17 @@ export function Badge({
                     ? 'default'
                     : color;
 
-    return <Chip label={children} icon={icon} color={muiColor} size="small" className={className} />;
+    return <Chip label={children} icon={icon} color={muiColor} size="small" className={className} sx={(theme) => {
+        const palette = muiColor === 'default' ? null : theme.palette[muiColor];
+        return {
+            height: 26,
+            fontWeight: 600,
+            bgcolor: palette ? (theme.palette.mode === 'dark' ? `color-mix(in srgb, ${palette.main} 18%, var(--ui-surface))` : palette.light) : 'var(--ui-surface-subtle)',
+            color: palette ? (theme.palette.mode === 'dark' ? `color-mix(in srgb, ${palette.main} 42%, white)` : palette.dark) : 'var(--ui-text-muted)',
+            '& .MuiChip-label': { px: 1.25, fontSize: '0.75rem' },
+            '& .MuiChip-icon': { color: 'inherit' },
+        };
+    }} />;
 }
 
 export function Avatar({
