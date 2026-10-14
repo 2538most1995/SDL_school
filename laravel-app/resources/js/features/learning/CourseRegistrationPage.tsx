@@ -1,10 +1,10 @@
+import { PdfFileIcon } from '../../components/FileTypeIcon';
 import {
     ArrowLeft,
     CaretDown,
     CaretUp,
     Check,
     CheckCircle,
-    FilePdf,
     FloppyDisk,
     FunnelSimpleX,
     GraduationCap,
@@ -12,7 +12,6 @@ import {
     Notebook,
     PencilSimple,
     Plus,
-    Printer,
     Student as StudentIcon,
     Trash,
     Users,
@@ -469,6 +468,7 @@ function StaffCourseRegistrationPage() {
             {
                 accessorKey: 'name',
                 header: 'ชื่อ - นามสกุล',
+                meta: { exportFields: [{ header: 'ชื่อ - สกุล', value: (row: WorkspaceItem) => row.name }] },
                 size: 220,
                 cell: ({ row }: any) => (
                     <button
@@ -501,6 +501,7 @@ function StaffCourseRegistrationPage() {
                 accessorKey: 'group_name',
                 header: 'กลุ่มเรียน',
                 size: 180,
+                meta: { exportFields: [{ header: 'กลุ่มเรียน', value: (row: WorkspaceItem) => row.group_name }, { header: 'รหัสกลุ่มเรียน', value: (row: WorkspaceItem) => row.group_code }] },
                 cell: ({ row }: any) => (
                     <span className="text-xs text-slate-600">
                         {row.original.group_name} ({row.original.group_code})
@@ -539,7 +540,7 @@ function StaffCourseRegistrationPage() {
                         <Button
                             size="small"
                             appearance="subtle"
-                            icon={<Printer size={15} />}
+                            icon={<PdfFileIcon size={15} />}
                             onClick={() => openPrintDocument({ scope: 'student', student: row.original.code })}
                             title="พิมพ์ใบลงทะเบียน (PDF)"
                         >
@@ -575,7 +576,7 @@ function StaffCourseRegistrationPage() {
                     <div className="flex flex-wrap items-center gap-2">
                         <Button
                             appearance="outline"
-                            icon={<Printer size={18} />}
+                            icon={<PdfFileIcon size={18} />}
                             onClick={() => setShowBlankModal(true)}
                         >
                             แบบฟอร์มเปล่า
@@ -583,7 +584,7 @@ function StaffCourseRegistrationPage() {
                         {group && (
                             <Button
                                 appearance="outline"
-                                icon={<FilePdf size={18} />}
+                                icon={<PdfFileIcon size={18} />}
                                 onClick={() => openPrintDocument({ scope: 'group' })}
                             >
                                 พิมพ์ทั้งกลุ่ม (PDF)
@@ -619,7 +620,7 @@ function StaffCourseRegistrationPage() {
                             </Button>
                             <Button
                                 appearance="primary"
-                                icon={<Printer size={16} />}
+                                icon={<PdfFileIcon size={16} />}
                                 onClick={() => {
                                     setShowBlankModal(false);
                                     openPrintDocument({ scope: 'blank', level: blankLevel });
@@ -803,7 +804,7 @@ function StaffCourseRegistrationPage() {
                             </div>
                             <Button
                                 appearance="outline"
-                                icon={<Printer size={18} />}
+                                icon={<PdfFileIcon size={18} />}
                                 onClick={() =>
                                     openPrintDocument({ scope: 'student', student: selectedStudentCode })
                                 }
@@ -1566,7 +1567,7 @@ function StaffCourseRegistrationPage() {
                                                 className="inline-flex h-8.5 items-center justify-center gap-1.5 rounded-lg border border-white/20 bg-white/10 px-3 py-1 text-xs font-bold text-white shadow-sm transition hover:bg-white/20 active:scale-95 cursor-pointer whitespace-nowrap"
                                                 title="พิมพ์ใบลงทะเบียน (PDF)"
                                             >
-                                                <Printer size={15} />
+                                                <PdfFileIcon size={15} />
                                                 <span>พิมพ์ใบลงทะเบียน (PDF)</span>
                                             </button>
                                             <button

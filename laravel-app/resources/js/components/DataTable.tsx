@@ -1,4 +1,4 @@
-import { CaretDown, CaretUp, CaretUpDown, FileXls } from '@phosphor-icons/react';
+import { CaretDown, CaretUp, CaretUpDown } from '@phosphor-icons/react';
 import {
     Box,
     Button,
@@ -27,11 +27,14 @@ import {
 } from '@tanstack/react-table';
 import { useEffect, useRef, useState } from 'react';
 import { downloadExcel } from '../lib/excel';
+import { buildTableExportSheet, type TableExportField } from '../lib/tableExport';
+import { ExcelFileIcon } from './FileTypeIcon';
 import { Pagination } from './Pagination';
 import { EmptyState } from './QueryState';
 
 declare module '@tanstack/react-table' {
     interface ColumnMeta<TData extends RowData, TValue> {
+        exportFields?: TableExportField<TData>[];
         compactSize?: number;
         compactHeader?: string;
         compactTextAlign?: 'left' | 'center' | 'right';
@@ -216,14 +219,18 @@ export function DataTable<T>({
         const headers = Array.from(tableElement.querySelectorAll('thead tr:last-child th'));
         const renderedRows = Array.from(tableElement.querySelectorAll('tbody tr'));
         const displayedText = (element: Element | undefined): string => (element?.textContent ?? '').replace(/\s+/g, ' ').trim();
-        downloadExcel(exportFileName ?? pathLabel, [{
-            name: exportSheetName ?? 'ข้อมูล',
-            columns: includedIndexes.map((index) => displayedText(headers[index])),
-            rows: renderedRows.map((row) => {
-                const cells = Array.from(row.querySelectorAll('td'));
-                return includedIndexes.map((index) => displayedText(cells[index]));
+        const displayedRows = table.getRowModel().rows;
+        downloadExcel(exportFileName ?? pathLabel, [buildTableExportSheet(
+            exportSheetName ?? 'ข้อมูล',
+            includedIndexes.map((index) => ({
+                header: displayedText(headers[index]),
+                fields: table.getVisibleLeafColumns()[index].columnDef.meta?.exportFields,
+            })),
+            displayedRows.map((row, rowIndex) => {
+                const cells = Array.from(renderedRows[rowIndex]?.querySelectorAll('td') ?? []);
+                return { original: row.original, displayed: includedIndexes.map((index) => displayedText(cells[index])) };
             }),
-        }]);
+        )]);
     };
     const compactTotalColumnSize = Math.max(
         table.getVisibleLeafColumns().reduce((sum, column) => sum + getCompactColumnSize(column), 0),
@@ -259,7 +266,7 @@ export function DataTable<T>({
                         เลือกชื่อคอลัมน์เพื่อเรียงข้อมูล
                     </Typography>
                     {!disableExport && exportColumns.length > 0 && (
-                        <Button variant="outlined" size="small" startIcon={<FileXls size={17} weight="bold" />} onClick={exportToExcel}>
+                        <Button variant="outlined" size="small" startIcon={<ExcelFileIcon size={20} />} onClick={exportToExcel}>
                             ส่งออก Excel (ข้อมูลที่แสดง)
                         </Button>
                     )}

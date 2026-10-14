@@ -1,10 +1,10 @@
+import { ExcelFileIcon } from '../../components/FileTypeIcon';
 import {
     ArrowsClockwise,
     BookOpenText,
     ChartBar,
     Calculator,
     Database,
-    FileXls,
     FloppyDisk,
     FunnelSimpleX,
     ListChecks,
@@ -399,7 +399,7 @@ function ImportedScoresPage({ sourceNavigation }: { sourceNavigation: ReactNode 
     };
 
     return <div>
-        <PageHeader category="learning" title="คะแนนจากข้อมูลนำเข้า" description="ดูคะแนนย่อย คะแนนเก็บ คะแนนสอบปลายภาค และเกรดจากไฟล์ผลการเรียนที่นำเข้า (GRADE.DBF)" icon={Database} actions={rows.length > 0 ? <Button type="button" appearance="outline" icon={<FileXls size={18} weight="bold" />} onClick={exportImportedScores}>ส่งออก Excel</Button> : undefined} />
+        <PageHeader category="learning" title="คะแนนจากข้อมูลนำเข้า" description="ดูคะแนนย่อย คะแนนเก็บ คะแนนสอบปลายภาค และเกรดจากไฟล์ผลการเรียนที่นำเข้า (GRADE.DBF)" icon={Database} actions={rows.length > 0 ? <Button type="button" appearance="outline" icon={<ExcelFileIcon size={18} />} onClick={exportImportedScores}>ส่งออก Excel</Button> : undefined} />
         {sourceNavigation}
 
         <p role="status" className="mb-5 rounded-xl border border-sky-200 bg-sky-50 p-4 text-sm leading-6 text-sky-950"><strong>ข้อมูลอ่านอย่างเดียว:</strong> คะแนนในตารางนี้มาจากไฟล์ผลการเรียน ITW51 ที่นำเข้า (GRADE.DBF) แสดงผลคะแนนย่อย 1-9, กลางภาค (คะแนนเก็บ), ปลายภาค และเกรดจริง <span className="font-bold text-rose-700">คะแนนกลางภาคต่ำกว่า 40 แสดงเป็นสีแดง</span></p>
@@ -958,12 +958,14 @@ function TeacherScorebook({ sourceNavigation, onDirtyChange }: { sourceNavigatio
         downloadExcel(`คะแนน-${selectedSubject.code}-${data?.selected_term ?? ''}`, [
             {
                 name: 'คะแนนรายคน',
-                columns: ['ลำดับ', 'รหัสนักศึกษา', 'ชื่อ-นามสกุล', 'กลุ่มเรียน', ...scorebook.components.map((component) => `${component.title} (เต็ม ${formatScore(component.max_score)})`), `คะแนนเก็บ (${courseworkWeight})`, `สอบปลายภาค (${finalExamWeight})`, 'รวม (100)', 'หมายเหตุ'],
+                columns: ['ลำดับ', 'รหัสนักศึกษา', 'ชื่อ-นามสกุล', 'ระดับชั้น', 'กลุ่มเรียน', 'รหัสกลุ่มเรียน', ...scorebook.components.map((component) => `${component.title} (เต็ม ${formatScore(component.max_score)})`), `คะแนนเก็บ (${courseworkWeight})`, `สอบปลายภาค (${finalExamWeight})`, 'รวม (100)', 'หมายเหตุ'],
                 rows: (data?.students ?? []).map((student, index) => [
                     index + 1,
                     student.student_code,
                     student.full_name,
+                    selectedSubject.level_label,
                     student.group_name || student.group_code,
+                    student.group_code,
                     ...scorebook.components.map((component) => {
                         const raw = studentValues[student.student_code]?.scores[component.id] ?? '';
                         return raw === '' ? null : Number(raw);
@@ -989,7 +991,7 @@ function TeacherScorebook({ sourceNavigation, onDirtyChange }: { sourceNavigatio
     }).map((component) => `${student.full_name}: ${component.title}`));
 
     return <div>
-        <PageHeader category="learning" title="สมุดคะแนนในระบบ" description="กำหนดโครงสร้างและบันทึกคะแนนระหว่างเรียนที่จัดเก็บในระบบ" icon={NotePencil} actions={scorebook ? <Button type="button" appearance="outline" icon={<FileXls size={18} weight="bold" />} onClick={exportScores}>ส่งออก Excel</Button> : undefined} />
+        <PageHeader category="learning" title="สมุดคะแนนในระบบ" description="กำหนดโครงสร้างและบันทึกคะแนนระหว่างเรียนที่จัดเก็บในระบบ" icon={NotePencil} actions={scorebook ? <Button type="button" appearance="outline" icon={<ExcelFileIcon size={18} />} onClick={exportScores}>ส่งออก Excel</Button> : undefined} />
         {sourceNavigation}
 
         <section className="mb-5 overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm shadow-slate-200/60">
@@ -1180,7 +1182,7 @@ function StudentScoreSummary() {
     }]);
 
     return <div>
-        <PageHeader category="learning" title="คะแนนของฉัน" description="คะแนนเก็บ คะแนนสอบปลายภาค และคะแนนรวมที่ครูบันทึกในระบบ" icon={ChartBar} actions={scores.data.data.courses.length > 0 ? <Button type="button" appearance="outline" icon={<FileXls size={18} weight="bold" />} onClick={exportStudentScores}>ส่งออก Excel</Button> : undefined} />
+        <PageHeader category="learning" title="คะแนนของฉัน" description="คะแนนเก็บ คะแนนสอบปลายภาค และคะแนนรวมที่ครูบันทึกในระบบ" icon={ChartBar} actions={scores.data.data.courses.length > 0 ? <Button type="button" appearance="outline" icon={<ExcelFileIcon size={18} />} onClick={exportStudentScores}>ส่งออก Excel</Button> : undefined} />
         <Panel title="รายการคะแนน" description={scores.data.data.disclaimer}>
             {scores.data.data.courses.length === 0 ? <div className="grid min-h-48 place-items-center rounded-xl border border-dashed border-slate-300 bg-slate-50 text-center text-sm text-slate-600">ครูยังไม่ได้บันทึกคะแนน</div> : <div className="overflow-x-auto rounded-xl border border-slate-200">
                 <table className="min-w-[900px] w-full text-sm"><thead className="bg-slate-50"><tr><th className="px-4 py-3 text-left">รายวิชา</th><th className="px-4 py-3 text-left">รหัสวิชา</th><th className="px-4 py-3 text-center">สัดส่วน</th><th className="px-4 py-3 text-center">คะแนนเก็บ</th><th className="px-4 py-3 text-center">สอบปลายภาค</th><th className="px-4 py-3 text-center">คะแนนรวม</th><th className="px-4 py-3 text-center">สถานะ</th></tr></thead><tbody>{scores.data.data.courses.map((course) => <tr key={course.id} className="border-t border-slate-200"><td className="px-4 py-3 font-bold text-slate-950">{course.subject_name}</td><td className="px-4 py-3 font-mono text-slate-600">{course.subject_code}</td><td className="px-4 py-3 text-center font-mono text-slate-700">{course.score_ratio ?? 'เดิม'}</td><td className="px-4 py-3 text-center font-mono font-bold text-sky-800">{course.assignment_score == null ? '-' : formatScore(course.assignment_score)}</td><td className="px-4 py-3 text-center font-mono font-bold text-amber-800">{course.exam_score == null ? '-' : formatScore(course.exam_score)}</td><td className="px-4 py-3 text-center font-mono font-black text-brand-800">{course.total_score == null ? '-' : formatScore(course.total_score)}</td><td className="px-4 py-3 text-center text-slate-600">{course.status === 'studying' ? 'กำลังเรียน' : course.status}</td></tr>)}</tbody></table>

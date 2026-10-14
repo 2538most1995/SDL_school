@@ -1,3 +1,4 @@
+import { ExcelFileIcon } from '../../components/FileTypeIcon';
 import { keepPreviousData, useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import {
     Books,
@@ -6,7 +7,6 @@ import {
     ChartBar,
     ChartPieSlice,
     FileText,
-    FileXls,
     FloppyDisk,
     GearSix,
     Info,
@@ -369,7 +369,7 @@ function OverviewStudentListDialog({
                             disabled={isExporting || students.length === 0}
                             className="inline-flex h-10 items-center gap-2 rounded-xl border border-brand-700 bg-white px-3 text-sm font-bold text-brand-800 transition hover:bg-brand-50 disabled:cursor-not-allowed disabled:border-slate-200 disabled:text-slate-400"
                         >
-                            <FileXls size={18} weight="bold" />
+                            <ExcelFileIcon size={18} />
                             {isExporting ? 'กำลังส่งออก...' : 'ส่งออก Excel'}
                         </button>
                         <button
@@ -731,7 +731,7 @@ export function StatisticsOverviewPage() {
                 </div>
                 <div className="flex flex-col justify-between gap-6">
                     <div><h2 className="flex items-center gap-2 text-sm font-black text-slate-800"><ChartBar size={19} className="text-brand-700" weight="duotone" />ระดับการแสดงผล</h2><div className="mt-3 inline-flex items-center gap-2 rounded-full bg-emerald-50 px-3 py-1.5 text-sm font-black text-emerald-800"><span className="size-2 rounded-full bg-emerald-500" />ระดับสถานศึกษา/อำเภอ</div><p className="mt-2 text-xs text-slate-500">ใช้ข้อมูลของอำเภอที่เลือกและขอบเขตกลุ่มของผู้ใช้งาน</p><div className="mt-4 grid gap-2 rounded-xl border border-brand-100 bg-brand-50/70 px-4 py-3 text-sm text-brand-950"><p><strong className="font-black text-indigo-800">แกนตั้ง:</strong> {verticalSummary || 'ยังไม่ได้เลือก'}</p><p><strong className="font-black text-sky-800">แกนนอน:</strong> {horizontalSummary || 'ยังไม่ได้เลือก'}</p></div></div>
-                    <div><div className="grid gap-3 sm:grid-cols-3"><ActionButton tone="primary" onClick={processReport} disabled={workspace.isFetching}><Play size={19} weight="fill" />{workspace.isFetching ? 'กำลังประมวลผล...' : 'ประมวลผล'}</ActionButton><ActionButton disabled={!hasProcessedResult || crossTab.rows.length === 0} onClick={() => setPreviewOpen(true)}><FileText size={19} weight="duotone" />ตัวอย่างก่อนพิมพ์</ActionButton><ActionButton tone="success" disabled={!canExport || !hasProcessedResult || crossTab.rows.length === 0} onClick={() => void exportExcel()}><FileXls size={19} weight="duotone" />บันทึกเป็น Excel</ActionButton><ActionButton onClick={() => setFormatOpen(true)}><GearSix size={19} weight="duotone" />ตั้งค่ารูปแบบ</ActionButton><ActionButton disabled={!hasProcessedResult || crossTab.rows.length === 0} onClick={() => setPreviewOpen(true)}><Printer size={19} weight="duotone" />พิมพ์</ActionButton><ActionButton tone="danger" onClick={() => navigate('/app')}><SignOut size={19} weight="duotone" />ออก</ActionButton></div>{!canExport && <p className="mt-3 text-xs text-slate-500">การส่งออก Excel เปิดให้ครูและผู้ดูแลอำเภอตามนโยบายสิทธิ์เดิม ส่วนการดูและพิมพ์ยังใช้งานได้ตามปกติ</p>}</div>
+                    <div><div className="grid gap-3 sm:grid-cols-3"><ActionButton tone="primary" onClick={processReport} disabled={workspace.isFetching}><Play size={19} weight="fill" />{workspace.isFetching ? 'กำลังประมวลผล...' : 'ประมวลผล'}</ActionButton><ActionButton disabled={!hasProcessedResult || crossTab.rows.length === 0} onClick={() => setPreviewOpen(true)}><FileText size={19} weight="duotone" />ตัวอย่างก่อนพิมพ์</ActionButton><ActionButton tone="success" disabled={!canExport || !hasProcessedResult || crossTab.rows.length === 0} onClick={() => void exportExcel()}><ExcelFileIcon size={19} />บันทึกเป็น Excel</ActionButton><ActionButton onClick={() => setFormatOpen(true)}><GearSix size={19} weight="duotone" />ตั้งค่ารูปแบบ</ActionButton><ActionButton disabled={!hasProcessedResult || crossTab.rows.length === 0} onClick={() => setPreviewOpen(true)}><Printer size={19} weight="duotone" />พิมพ์</ActionButton><ActionButton tone="danger" onClick={() => navigate('/app')}><SignOut size={19} weight="duotone" />ออก</ActionButton></div>{!canExport && <p className="mt-3 text-xs text-slate-500">การส่งออก Excel เปิดให้ครูและผู้ดูแลอำเภอตามนโยบายสิทธิ์เดิม ส่วนการดูและพิมพ์ยังใช้งานได้ตามปกติ</p>}</div>
                 </div>
             </div>
         </section>

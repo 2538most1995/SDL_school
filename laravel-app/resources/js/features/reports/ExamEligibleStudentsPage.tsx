@@ -1,3 +1,4 @@
+import { studentNameExportFields } from '../../lib/tableExport';
 import { CheckCircle, ClipboardText, FunnelSimple, MagnifyingGlass, Prohibit, Student, UsersThree, X } from '@phosphor-icons/react';
 import { keepPreviousData, useQuery } from '@tanstack/react-query';
 import type { ColumnDef } from '@tanstack/react-table';
@@ -119,6 +120,7 @@ export function ExamEligibleStudentsPage() {
             header: 'นักศึกษา',
             accessorFn: (item) => item.student.full_name,
             size: 320,
+            meta: { exportFields: studentNameExportFields<ExamEligibleItem>((row) => row.student.code, (row) => row.student.full_name) },
             cell: ({ row }) => (
                 <div>
                     <p className="font-bold text-slate-950">{row.original.student.full_name}</p>
@@ -131,6 +133,7 @@ export function ExamEligibleStudentsPage() {
             header: 'กลุ่มเรียน',
             accessorFn: (item) => item.student.group.name,
             size: 260,
+            meta: { exportFields: [{ header: 'กลุ่มเรียน', value: (row) => row.student.group.name }, { header: 'รหัสกลุ่มเรียน', value: (row) => row.student.group.code }] },
             cell: ({ row }) => (
                 <div>
                     <p className="font-semibold text-slate-900">{row.original.student.group.name}</p>

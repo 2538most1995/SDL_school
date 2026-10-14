@@ -147,6 +147,8 @@ final class LegacyPortalReadService
                     'title' => (string) $row->title, 'subject' => (string) ($row->subject_code ?? ''),
                     'description' => (string) ($row->description ?? ''), 'resource_type' => (string) $row->resource_type,
                     'url' => (string) ($row->external_url ?? ''), 'level' => (string) ($row->education_level ?? ''),
+                    'file_extension' => in_array(strtolower(pathinfo((string) ($row->storage_path ?? ''), PATHINFO_EXTENSION)), ['pdf', 'xls', 'xlsx'], true)
+                        ? strtolower(pathinfo((string) $row->storage_path, PATHINFO_EXTENSION)) : '',
                     'target_group' => (string) ($row->target_group ?? ''),
                 ],
             ];

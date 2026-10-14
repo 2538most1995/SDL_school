@@ -1,10 +1,10 @@
+import { ExcelFileIcon } from '../../components/FileTypeIcon';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import {
     ArrowsClockwise,
     ArrowSquareOut,
     CheckCircle,
     Eye,
-    FileXls,
     MagnifyingGlass,
     Medal,
     PencilSimple,
@@ -399,7 +399,7 @@ export function NnetReportPage() {
                         </Link>
                         <Button
                             appearance="outline"
-                            icon={<FileXls size={18} weight="bold" />}
+                            icon={<ExcelFileIcon size={18} />}
                             onClick={handleExportExcel}
                             disabled={items.length === 0 || isExporting}
                         >

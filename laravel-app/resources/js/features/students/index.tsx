@@ -1,3 +1,5 @@
+import { studentNameExportFields, studentGroupExportFields } from '../../lib/tableExport';
+import { PdfFileIcon } from '../../components/FileTypeIcon';
 import {
     ArrowLeft,
     ArrowSquareOut,
@@ -13,7 +15,6 @@ import {
     MagnifyingGlass,
     PaintBrush,
     PencilSimple,
-    Printer,
     SignOut,
     Sparkle,
     Student,
@@ -388,7 +389,7 @@ export function StudentsPage() {
             accessorKey: 'name',
             header: 'นักศึกษา',
             size: 240,
-            meta: { compactSize: 120 },
+            meta: { compactSize: 120, exportFields: studentNameExportFields<StudentRow>((row) => row.code, (row) => row.name) },
             cell: ({ row }) => (
                 <div className="min-w-0">
                     <Link to={`/students/${row.original.id}`} className="block min-w-0 text-sm font-black leading-6 text-slate-950 hover:text-brand-700"><EllipsisText title={row.original.name}>{row.original.name}</EllipsisText></Link>
@@ -412,7 +413,7 @@ export function StudentsPage() {
             accessorKey: 'group',
             header: 'กลุ่มเรียน',
             size: 240,
-            meta: { compactSize: 120 },
+            meta: { compactSize: 120, exportFields: studentGroupExportFields<StudentRow>((row) => row.level, (row) => row.group, (row) => row.groupCode) },
             cell: ({ row }) => <div className="min-w-0"><EllipsisText title={row.original.group}><span className="text-[13px] font-semibold leading-5 text-slate-900">{row.original.group}</span></EllipsisText><EllipsisText title={`${row.original.level} · ${row.original.groupCode}`}><span className="mt-0.5 text-[10px] leading-4 text-slate-500">{row.original.level} · {row.original.groupCode}</span></EllipsisText></div>,
         },
         {
@@ -436,7 +437,7 @@ export function StudentsPage() {
                         className="responsive-table-action inline-flex shrink-0 items-center gap-1.5 rounded-lg border border-sky-200 bg-sky-50 px-2.5 py-1.5 text-xs font-bold text-sky-800 hover:bg-sky-100 active:scale-[0.98] transition"
                         aria-label={`สร้างตารางสอบ ${row.original.name}`}
                     >
-                        <Printer size={14} weight="bold" /> <span>ตารางสอบ</span>
+                        <PdfFileIcon size={14} /> <span>ตารางสอบ</span>
                     </Link>
 
                     {row.original.social?.facebook_url && (
@@ -1264,8 +1265,8 @@ function StaffStudentMetricPage({ kind }: { kind: MetricKind }) {
     const title = kind === 'grades' ? 'ผลการเรียนและ GPAX นักศึกษา' : kind === 'kpch' ? 'กิจกรรม กพช. นักศึกษา' : 'ผลประเมินคุณธรรมนักศึกษา';
     const description = kind === 'grades' ? 'ตรวจ GPAX และหน่วยกิตสะสม พร้อมเปิดดูรายวิชาและผลการเรียนรายคน' : kind === 'kpch' ? 'ตรวจชั่วโมงสะสม กพช. และผลตามเกณฑ์ 200 ชั่วโมง' : 'ตรวจผลคุณธรรมล่าสุดจากตัวชี้วัด 11 รายการของแต่ละคน';
     const columns = useMemo<ColumnDef<StaffMetricStudent>[]>(() => [
-        { accessorKey: 'name', header: 'นักศึกษา', size: 255, meta: { compactSize: kind === 'grades' ? 150 : 140 }, cell: ({ row }) => <div className="min-w-0"><Link to={`/students/${row.original.code}`} title={row.original.name} className="thai-table-primary hover:text-brand-700 sm:text-sm">{row.original.name}</Link><p className="thai-table-secondary font-mono sm:text-[10px]">{row.original.code}</p></div> },
-        { accessorKey: 'group', header: 'ระดับ / กลุ่มเรียน', size: 235, meta: { compactSize: kind === 'grades' ? 160 : kind === 'moral' ? 140 : 134, compactHeader: 'ระดับ/กลุ่ม' }, cell: ({ row }) => <div className="min-w-0" title={`${row.original.group}\n${row.original.level} ${row.original.groupCode}`}><p className="thai-table-primary sm:text-[13px]">{row.original.group}</p><p className="thai-table-secondary sm:text-[10px]">{row.original.level} <span aria-hidden="true">•</span> {row.original.groupCode}</p></div> },
+        { accessorKey: 'name', header: 'นักศึกษา', size: 255, meta: { compactSize: kind === 'grades' ? 150 : 140, exportFields: studentNameExportFields<StaffMetricStudent>((row) => row.code, (row) => row.name) }, cell: ({ row }) => <div className="min-w-0"><Link to={`/students/${row.original.code}`} title={row.original.name} className="thai-table-primary hover:text-brand-700 sm:text-sm">{row.original.name}</Link><p className="thai-table-secondary font-mono sm:text-[10px]">{row.original.code}</p></div> },
+        { accessorKey: 'group', header: 'ระดับ / กลุ่มเรียน', size: 235, meta: { compactSize: kind === 'grades' ? 160 : kind === 'moral' ? 140 : 134, compactHeader: 'ระดับ/กลุ่ม', exportFields: studentGroupExportFields<StaffMetricStudent>((row) => row.level, (row) => row.group, (row) => row.groupCode) }, cell: ({ row }) => <div className="min-w-0" title={`${row.original.group}\n${row.original.level} ${row.original.groupCode}`}><p className="thai-table-primary sm:text-[13px]">{row.original.group}</p><p className="thai-table-secondary sm:text-[10px]">{row.original.level} <span aria-hidden="true">•</span> {row.original.groupCode}</p></div> },
         ...(kind === 'grades' ? [
             { accessorKey: 'gpax', header: 'GPAX', size: 115, meta: { compactSize: 56, compactTextAlign: 'center' }, cell: ({ getValue }) => <span className="font-bold tabular-nums text-sky-700 sm:text-sm">{Number(getValue<number>()).toFixed(2)}</span> },
             { accessorKey: 'creditsEarned', header: 'หน่วยกิตสะสม', size: 150, meta: { compactSize: 72, compactHeader: 'หน่วยกิต', compactTextAlign: 'center' }, cell: ({ row }) => <span className="whitespace-nowrap font-semibold tabular-nums">{row.original.creditsEarned} / {row.original.creditsRequired}</span> },

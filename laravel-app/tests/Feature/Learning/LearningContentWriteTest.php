@@ -205,7 +205,8 @@ final class LearningContentWriteTest extends TestCase
         $this->assertArrayNotHasKey('url', json_decode((string) $audit->after, true, flags: JSON_THROW_ON_ERROR));
         $this->getJson('/api/v1/learning/resources')
             ->assertOk()
-            ->assertJsonPath('data.0.file_url', fn (string $url): bool => str_contains($url, "/resources/{$resourceId}/file"));
+            ->assertJsonPath('data.0.file_url', fn (string $url): bool => str_contains($url, "/resources/{$resourceId}/file"))
+            ->assertJsonPath('data.0.raw.file_extension', 'pdf');
         $this->get("/api/v1/learning/resources/{$resourceId}/file")->assertOk();
 
         Sanctum::actingAs(User::factory()->create([
@@ -851,5 +852,31 @@ final class LearningContentWriteTest extends TestCase
                 ->assertOk()
                 ->assertJsonPath('meta.source', 'system_database');
         }
+    }
+
+    public function test_resource_file_icons_receive_only_extension_metadata_in_the_current_district(): void
+    {
+        $admin = User::factory()->create(['role' => 'admin', 'district_id' => $this->district->id]);
+        Sanctum::actingAs($admin);
+        $other = District::create(['name' => 'Other synthetic district', 'code' => 'other', 'is_active' => true]);
+        foreach (['pdf', 'xls', 'xlsx'] as $extension) {
+            DB::table('learning_resources')->insert([
+                'district_id' => $this->district->id, 'uploaded_by' => $admin->id,
+                'title' => 'Synthetic '.$extension, 'resource_type' => 'file',
+                'storage_disk' => 'local', 'storage_path' => 'learning/resources/private/synthetic.'.$extension,
+                'created_at' => now(), 'updated_at' => now(),
+            ]);
+        }
+        DB::table('learning_resources')->insert([
+            'district_id' => $other->id, 'uploaded_by' => $admin->id,
+            'title' => 'Foreign resource', 'resource_type' => 'file',
+            'storage_path' => 'private/foreign.xlsx', 'created_at' => now(), 'updated_at' => now(),
+        ]);
+        $response = $this->getJson('/api/v1/learning/resources')->assertOk()->assertJsonCount(3, 'data');
+        $extensions = array_column(array_column($response->json('data'), 'raw'), 'file_extension');
+        sort($extensions);
+        $this->assertSame(['pdf', 'xls', 'xlsx'], $extensions);
+        $this->assertStringNotContainsString('learning/resources/private/', $response->getContent());
+        $this->assertStringNotContainsString('Foreign resource', $response->getContent());
     }
 }

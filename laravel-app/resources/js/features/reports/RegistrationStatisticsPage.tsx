@@ -1,4 +1,5 @@
-import { Books, CalendarBlank, ChartBar, FileXls, FunnelSimple, MagnifyingGlass, StackSimple, Trophy, UsersThree, X } from '@phosphor-icons/react';
+import { ExcelFileIcon } from '../../components/FileTypeIcon';
+import { Books, CalendarBlank, ChartBar, FunnelSimple, MagnifyingGlass, StackSimple, Trophy, UsersThree, X } from '@phosphor-icons/react';
 import { keepPreviousData, useQuery } from '@tanstack/react-query';
 import type { ColumnDef } from '@tanstack/react-table';
 import { useEffect, useMemo, useRef, useState } from 'react';
@@ -323,7 +324,7 @@ function RegistrationStudentListDialog({
                             disabled={isExporting || rows.length === 0}
                             className="inline-flex h-10 items-center gap-2 rounded-xl border border-brand-700 bg-white px-3 text-sm font-bold text-brand-800 transition hover:bg-brand-50 disabled:cursor-not-allowed disabled:border-slate-200 disabled:text-slate-400"
                         >
-                            <FileXls size={18} weight="bold" />
+                            <ExcelFileIcon size={18} />
                             {isExporting ? 'กำลังส่งออก...' : 'ส่งออก Excel'}
                         </button>
                         <button
@@ -511,7 +512,7 @@ export function RegistrationStatisticsPage() {
                         onClick={() => void exportStatistics()}
                         className="inline-flex h-10 items-center gap-2 rounded-xl border border-brand-700 bg-white px-3 text-sm font-bold text-brand-800 transition hover:bg-brand-50 disabled:cursor-not-allowed disabled:border-slate-200 disabled:text-slate-400"
                     >
-                        <FileXls size={18} weight="bold" />
+                        <ExcelFileIcon size={18} />
                         {isExporting ? 'กำลังส่งออก...' : 'ส่งออก Excel'}
                     </button>}
                 </div>}

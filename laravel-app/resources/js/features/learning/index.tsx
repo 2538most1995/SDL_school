@@ -1,5 +1,5 @@
+import { ExcelFileIcon, PdfFileIcon } from '../../components/FileTypeIcon';
 import {
-    ArrowSquareOut,
     BookOpenText,
     Books,
     CalendarBlank,
@@ -15,7 +15,6 @@ import {
     Planet,
     Plus,
     PencilSimple,
-    Printer,
     Trash,
     X,
     Trophy,
@@ -324,7 +323,14 @@ export function LearningListPage({ kind }: { kind: LearningKind }) {
         { accessorKey: 'status', header: config.actionLabel, size: 145, meta: { compactSize: 78, compactTextAlign: 'center' }, cell: ({ getValue }) => <StatusBadge tone={learningTone(getValue<string>())}>{getValue<string>()}</StatusBadge> },
         ...(kind === 'resources' ? [{ id: 'open-resource', header: 'เปิดสื่อ', size: 118, meta: { compactSize: 46, compactTextAlign: 'center' }, enableSorting: false, cell: ({ row }: { row: { original: LearningRow } }) => {
             const source = row.original.raw?.file_url || row.original.raw?.url;
-            return source ? <a href={source} target="_blank" rel="noopener noreferrer" className="responsive-table-action inline-flex items-center gap-1.5 whitespace-nowrap rounded-lg border border-brand-200 bg-brand-50 px-2.5 py-1.5 text-sm font-bold text-brand-800 hover:bg-brand-100" aria-label={`เปิดสื่อ ${row.original.title}`}><DownloadSimple size={16} /> <span>{row.original.raw?.file_url ? 'ดาวน์โหลด' : 'เปิดสื่อ'}</span></a> : <span className="text-xs text-slate-400" aria-label="ไม่มีสื่อ">-</span>;
+            const resource = row.original.raw;
+            const filename = source || '';
+            const resourceIcon = resource?.resource_type === 'pdf' || resource?.file_extension === 'pdf' || /\.pdf(?:[?#]|$)/i.test(filename)
+                ? <PdfFileIcon size={16} />
+                : ['xls', 'xlsx'].includes(resource?.file_extension ?? '') || /\.xlsx?(?:[?#]|$)/i.test(filename)
+                    ? <ExcelFileIcon size={16} />
+                    : <DownloadSimple size={16} />;
+            return source ? <a href={source} target="_blank" rel="noopener noreferrer" className="responsive-table-action inline-flex items-center gap-1.5 whitespace-nowrap rounded-lg border border-brand-200 bg-brand-50 px-2.5 py-1.5 text-sm font-bold text-brand-800 hover:bg-brand-100" aria-label={`เปิดสื่อ ${row.original.title}`}>{resourceIcon} <span>{row.original.raw?.file_url ? 'ดาวน์โหลด' : 'เปิดสื่อ'}</span></a> : <span className="text-xs text-slate-400" aria-label="ไม่มีสื่อ">-</span>;
         } } as ColumnDef<LearningRow>] : []),
         ...(canManage ? [{ id: 'manage', header: 'จัดการ', size: 118, meta: { compactSize: 76, compactTextAlign: 'center' }, enableSorting: false, cell: ({ row }: { row: { original: LearningRow } }) => row.original.canEdit && row.original.raw ? <div className="flex justify-center gap-1"><button type="button" onClick={() => openEdit(row.original)} className="responsive-table-action rounded-lg border border-slate-200 p-2 text-slate-600 hover:text-brand-700" aria-label={`แก้ไข ${row.original.title}`}><PencilSimple size={16} /></button><button type="button" onClick={() => { if (window.confirm(`ยืนยันลบ ${row.original.title}?`)) remove.mutate(row.original); }} className="responsive-table-action rounded-lg border border-slate-200 p-2 text-slate-600 hover:text-rose-700" aria-label={`ลบ ${row.original.title}`}><Trash size={16} /></button></div> : <span className="text-xs text-slate-400">อ่านอย่างเดียว</span> } as ColumnDef<LearningRow>] : []),
     ], [canManage, config, kind]);
@@ -606,7 +612,7 @@ function ExamSchedulePage() {
         <Panel title={isStudent ? 'ตารางสอบของฉัน' : autoGenerate ? 'ตารางสอบรายบุคคล' : 'ตัวกรองและขอบเขตการพิมพ์'} description={isStudent ? 'ระบบเลือกข้อมูลจากบัญชีนักศึกษาที่เข้าสู่ระบบให้อัตโนมัติ' : autoGenerate ? `รหัสนักศึกษา ${studentCode}` : 'รายชื่อและกลุ่มเรียนถูกจำกัดตามอำเภอและขอบเขตที่บัญชีของคุณรับผิดชอบ'}>
             {!isStudent && (autoGenerate ? (
                 <div className="flex items-center gap-3 rounded-xl border border-sky-200 bg-sky-50 p-4 text-sky-950">
-                    <span className="grid size-10 shrink-0 place-items-center rounded-lg bg-white text-sky-700 shadow-sm"><Printer size={20} weight="bold" aria-hidden="true" /></span>
+                    <span className="grid size-10 shrink-0 place-items-center rounded-lg bg-white text-sky-700 shadow-sm"><PdfFileIcon size={20} /></span>
                     <div className="min-w-0">
                         <p className="font-bold">{selectedStudentName || 'กำลังสร้างตารางสอบรายบุคคล'}</p>
                         <p className="mt-0.5 text-sm text-sky-800">{studentCode}{selectedStudentLevel ? ` • ${selectedStudentLevel}` : ''}{selectedStudentGroup ? ` • ${selectedStudentGroup}` : ''}</p>
@@ -630,7 +636,7 @@ function ExamSchedulePage() {
                 onClick={() => void openStandaloneSchedule()}
                 appearance="primary"
                 size="large"
-                icon={<ArrowSquareOut size={18} weight="bold" />}
+                icon={<PdfFileIcon size={18} />}
                 className="w-full justify-center text-sm font-bold shadow-sm"
                 disabled={!canGenerate || students.isPending || scheduleOpening || signedUrlQuery.isFetching}
             >
@@ -641,10 +647,10 @@ function ExamSchedulePage() {
 
         {/* Desktop Action Buttons */}
         {!isStudent && <div className="mt-5 hidden flex-wrap justify-end gap-2 lg:flex">
-            <Button type="button" appearance="primary" size="large" icon={<DownloadSimple size={18} weight="bold" />} onClick={generatePdf} disabled={!canGenerate || pdfLoading}>{pdfLoading ? 'กำลังสร้าง PDF' : autoGenerate ? 'สร้าง PDF ใหม่' : 'สร้างและแสดงตัวอย่าง PDF'}</Button>
+            <Button type="button" appearance="primary" size="large" icon={<PdfFileIcon size={18} />} onClick={generatePdf} disabled={!canGenerate || pdfLoading}>{pdfLoading ? 'กำลังสร้าง PDF' : autoGenerate ? 'สร้าง PDF ใหม่' : 'สร้างและแสดงตัวอย่าง PDF'}</Button>
             {pdfUrl && <>
-                <Button as="a" href={signedPdfDownloadUrl || pdfUrl} download={pdfName} appearance="outline" size="large" icon={<DownloadSimple size={18} weight="bold" />}>ดาวน์โหลด PDF</Button>
-                <Button as="a" href={standaloneScheduleUrl || pdfUrl} target="_blank" rel="noopener noreferrer" appearance="outline" size="large" icon={<Printer size={18} weight="bold" />}>เปิดเพื่อพิมพ์</Button>
+                <Button as="a" href={signedPdfDownloadUrl || pdfUrl} download={pdfName} appearance="outline" size="large" icon={<PdfFileIcon size={18} />}>ดาวน์โหลด PDF</Button>
+                <Button as="a" href={standaloneScheduleUrl || pdfUrl} target="_blank" rel="noopener noreferrer" appearance="outline" size="large" icon={<PdfFileIcon size={18} />}>เปิดเพื่อพิมพ์</Button>
             </>}
         </div>}
         </Panel>

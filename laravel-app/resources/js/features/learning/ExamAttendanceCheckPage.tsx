@@ -1,3 +1,4 @@
+import { studentNameExportFields } from '../../lib/tableExport';
 import { BookOpenText, CheckCircle, CheckSquare, ClockCountdown, ClipboardText, FloppyDisk, Prohibit, Student, UsersThree } from '@phosphor-icons/react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import type { ColumnDef } from '@tanstack/react-table';
@@ -129,6 +130,7 @@ export function ExamAttendanceCheckPage() {
             header: 'นักศึกษา',
             accessorFn: (item) => item.full_name,
             size: 320,
+            meta: { exportFields: studentNameExportFields<AttendanceItem>((row) => row.student_code, (row) => row.full_name) },
             cell: ({ row }) => <div><p className="font-bold text-slate-950">{row.original.full_name}</p><p className="text-xs text-slate-500">{row.original.student_code}</p></div>,
         },
         { accessorKey: 'group_name', header: 'กลุ่มเรียน', size: 250 },

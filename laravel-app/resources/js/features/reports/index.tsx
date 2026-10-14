@@ -1,3 +1,4 @@
+import { studentNameExportFields, studentGroupExportFields } from '../../lib/tableExport';
 import {
     ArrowsLeftRight,
     Books,
@@ -35,6 +36,9 @@ type ReportRow = {
     secondary: string;
     group: string;
     metric: string;
+    level?: string;
+    group_label?: string;
+    group_code?: string;
     examStatus?: string;
     registeredCount?: number;
     successfulCount?: number;
@@ -82,9 +86,9 @@ function compareAcademicTermsDescending(left: string, right: string): number {
 const academicReportKinds: ReportKind[] = ['registered-subjects', 'grade-threshold', 'exam-attendance'];
 
 const commonStudents: ReportRow[] = [
-    { id: '1', primary: 'ณัฐชา ศรีสวัสดิ์', secondary: 'SENA-670142', group: 'ม.ปลาย กลุ่ม 1', metric: 'ภาคเรียน 1/2569' },
-    { id: '2', primary: 'กิตติภพ พูลผล', secondary: 'SENA-660087', group: 'ม.ต้น กลุ่ม 2', metric: 'ภาคเรียน 1/2569' },
-    { id: '3', primary: 'ธีรภัทร ภู่ทอง', secondary: 'SENA-670099', group: 'ม.ปลาย กลุ่ม 1', metric: 'ภาคเรียน 1/2569' },
+    { id: '1', primary: 'ณัฐชา ศรีสวัสดิ์', secondary: 'SENA-670142', group: 'ม.ปลาย กลุ่ม 1', level: 'มัธยมศึกษาตอนปลาย', group_label: 'กลุ่ม 1', group_code: 'SENA-M3-A', metric: 'ภาคเรียน 1/2569' },
+    { id: '2', primary: 'กิตติภพ พูลผล', secondary: 'SENA-660087', group: 'ม.ต้น กลุ่ม 2', level: 'มัธยมศึกษาตอนต้น', group_label: 'กลุ่ม 2', group_code: 'SENA-M2-B', metric: 'ภาคเรียน 1/2569' },
+    { id: '3', primary: 'ธีรภัทร ภู่ทอง', secondary: 'SENA-670099', group: 'ม.ปลาย กลุ่ม 1', level: 'มัธยมศึกษาตอนปลาย', group_label: 'กลุ่ม 1', group_code: 'SENA-M3-A', metric: 'ภาคเรียน 1/2569' },
 ];
 
 const reportConfig: Record<ReportKind, {
@@ -128,9 +132,9 @@ const reportConfig: Record<ReportKind, {
         endpoint: '/api/v1/reports/transfers',
         activeLabel: 'อนุมัติเทียบโอน', activeDetail: 'รายการที่บันทึกในระบบเดิม',
         demo: { total: 18, active: 16, groups: 9, rows: [
-            { id: '1', primary: 'ภาษาไทย', secondary: 'พท31001', group: 'ณัฐชา ศรีสวัสดิ์', metric: '5 หน่วยกิต' },
-            { id: '2', primary: 'สังคมศึกษา', secondary: 'สค31001', group: 'กิตติภพ พูลผล', metric: '3 หน่วยกิต' },
-            { id: '3', primary: 'วิทยาศาสตร์', secondary: 'พว31001', group: 'ธีรภัทร ภู่ทอง', metric: '5 หน่วยกิต' },
+            { ...commonStudents[0], metric: 'วิชาเทียบโอน: พท31001 ภาษาไทย (5 หน่วยกิต)' },
+            { ...commonStudents[1], metric: 'วิชาเทียบโอน: สค31001 สังคมศึกษา (3 หน่วยกิต)' },
+            { ...commonStudents[2], metric: 'วิชาเทียบโอน: พว31001 วิทยาศาสตร์ (5 หน่วยกิต)' },
         ] },
     },
     'registered-subjects': {
@@ -190,6 +194,9 @@ function normalizeReportPayload(kind: ReportKind, payload: unknown, fallback: Re
                 primary: String(student.full_name ?? 'ไม่พบชื่อนักศึกษา'),
                 secondary: String(student.code ?? ''),
                 group: `${String(studentLevel.label ?? '-')} · ${String(studentGroup.name ?? studentGroup.code ?? '-')}`,
+                level: String(studentLevel.label ?? ''),
+                group_label: String(studentGroup.name ?? studentGroup.code ?? ''),
+                group_code: String(studentGroup.code ?? ''),
                 metric: kind === 'registered-subjects'
                     ? `${registered.toLocaleString('th-TH')} วิชา`
                     : `${successful.toLocaleString('th-TH')} จาก ${registered.toLocaleString('th-TH')} วิชา (${String(item.success_rate ?? 0)}%)`,
@@ -446,8 +453,8 @@ function AcademicSubjectStudentsDialog({ kind, subject, term, level, group, endp
         },
     });
     const columns = useMemo<ColumnDef<ReportRow>[]>(() => [
-        { accessorKey: 'primary', header: 'นักศึกษา', size: 255, meta: { compactSize: 138 }, cell: ({ row }) => <div><p className="font-bold text-slate-950">{row.original.primary}</p><p className="mt-0.5 font-mono text-xs text-slate-500">{row.original.secondary}</p></div> },
-        { accessorKey: 'group', header: 'ระดับ / กลุ่มเรียน', size: 235, meta: { compactSize: 122 } },
+        { accessorKey: 'primary', header: 'นักศึกษา', size: 255, meta: { compactSize: 138, exportFields: studentNameExportFields<ReportRow>((row) => row.secondary, (row) => row.primary) }, cell: ({ row }) => <div><p className="font-bold text-slate-950">{row.original.primary}</p><p className="mt-0.5 font-mono text-xs text-slate-500">{row.original.secondary}</p></div> },
+        { accessorKey: 'group', header: 'ระดับ / กลุ่มเรียน', size: 235, meta: { compactSize: 122, exportFields: studentGroupExportFields<ReportRow>((row) => row.level ?? '', (row) => row.group_label ?? '', (row) => row.group_code ?? '') } },
         ...(kind === 'grade-threshold' ? [
             {
                 accessorKey: 'grade', header: 'เกรด', size: 95, meta: { compactSize: 58, compactTextAlign: 'center' },
@@ -547,10 +554,14 @@ export function ReportPage({ kind }: { kind: ReportKind }) {
         {
             accessorKey: 'primary', header: isAcademicReport && viewMode === 'student' ? 'นักศึกษา' : config.primaryLabel,
             size: 270,
-            meta: { compactSize: isAcademicReport && viewMode === 'student' ? 132 : 150 },
+            meta: { compactSize: isAcademicReport && viewMode === 'student' ? 132 : 150, exportFields: !isAcademicReport || viewMode === 'student'
+                ? studentNameExportFields<ReportRow>((row) => row.secondary, (row) => row.primary)
+                : [{ header: 'รหัสวิชา', value: (row: ReportRow) => row.secondary }, { header: 'รายวิชา', value: (row: ReportRow) => row.primary }] },
             cell: ({ row }) => <div><p className="font-bold text-slate-950">{row.original.primary}</p><p className="mt-0.5 text-xs text-slate-500">{row.original.secondary}</p></div>,
         },
-        { accessorKey: 'group', header: isAcademicReport && viewMode === 'student' ? 'ระดับ / กลุ่มเรียน' : config.groupLabel, size: 230, meta: { compactSize: 116 } },
+        { accessorKey: 'group', header: isAcademicReport && viewMode === 'student' ? 'ระดับ / กลุ่มเรียน' : config.groupLabel, size: 230, meta: { compactSize: 116, exportFields: !isAcademicReport || viewMode === 'student'
+            ? studentGroupExportFields<ReportRow>((row) => row.level ?? '', (row) => row.group_label ?? '', (row) => row.group_code ?? '')
+            : undefined } },
         ...(kind === 'grade-threshold' && viewMode === 'subject' ? [{
             accessorKey: 'subjectType', header: 'ประเภทวิชา', size: 130, meta: { compactSize: 78, compactTextAlign: 'center' },
             cell: ({ getValue }: { getValue: () => unknown }) => {

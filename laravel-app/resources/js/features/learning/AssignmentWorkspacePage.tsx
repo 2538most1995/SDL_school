@@ -1,3 +1,4 @@
+import { PdfFileIcon } from '../../components/FileTypeIcon';
 import {
     ArrowSquareOut,
     ArrowsClockwise,
@@ -9,7 +10,6 @@ import {
     Clock,
     DownloadSimple,
     FileImage,
-    FilePdf,
     LinkSimple,
     MagnifyingGlass,
     PencilSimple,
@@ -182,7 +182,7 @@ function attachmentKind(filename: string, fallback: AttachmentKind = 'pdf'): Att
 }
 
 function attachmentIcon(kind: AttachmentKind, size = 18) {
-    return kind === 'image' ? <FileImage size={size} /> : <FilePdf size={size} />;
+    return kind === 'image' ? <FileImage size={size} /> : <PdfFileIcon size={size} />;
 }
 
 function AuthenticatedAttachment({
@@ -263,7 +263,7 @@ function AuthenticatedAttachment({
                         rel={isInAppBrowser ? 'noopener noreferrer' : undefined}
                         className="inline-flex h-11 items-center gap-2 rounded-xl bg-brand-700 px-4 text-sm font-bold text-white hover:bg-brand-800"
                     >
-                        <DownloadSimple size={18} /> ดาวน์โหลด
+                        {kind === 'pdf' ? <PdfFileIcon size={18} /> : <DownloadSimple size={18} />} ดาวน์โหลด
                     </a>
                 </footer>
             </section>
@@ -637,7 +637,7 @@ function SubmissionEditor({ assignment, onClose, onSaved }: { assignment: Assign
                 <legend className="mb-2 text-sm font-bold text-slate-700">รูปแบบการส่ง *</legend>
                 <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
                     <label className={`cursor-pointer rounded-xl border p-4 ${type === 'link' ? 'border-brand-600 bg-brand-50 text-brand-900' : 'border-slate-200 text-slate-700'}`}><input type="radio" name="submission_type" value="link" checked={type === 'link'} onChange={() => selectType('link')} className="sr-only" /><LinkSimple size={24} /><span className="mt-2 block font-bold">ลิงก์งาน</span><span className="mt-1 block text-xs">Drive, OneDrive หรือเว็บไซต์</span></label>
-                    <label className={`cursor-pointer rounded-xl border p-4 ${type === 'pdf' ? 'border-brand-600 bg-brand-50 text-brand-900' : 'border-slate-200 text-slate-700'}`}><input type="radio" name="submission_type" value="pdf" checked={type === 'pdf'} onChange={() => selectType('pdf')} className="sr-only" /><FilePdf size={24} /><span className="mt-2 block font-bold">ไฟล์ PDF</span><span className="mt-1 block text-xs">เอกสารไม่เกิน 20 MB</span></label>
+                    <label className={`cursor-pointer rounded-xl border p-4 ${type === 'pdf' ? 'border-brand-600 bg-brand-50 text-brand-900' : 'border-slate-200 text-slate-700'}`}><input type="radio" name="submission_type" value="pdf" checked={type === 'pdf'} onChange={() => selectType('pdf')} className="sr-only" /><PdfFileIcon size={24} /><span className="mt-2 block font-bold">ไฟล์ PDF</span><span className="mt-1 block text-xs">เอกสารไม่เกิน 20 MB</span></label>
                     <label className={`cursor-pointer rounded-xl border p-4 ${type === 'image' ? 'border-brand-600 bg-brand-50 text-brand-900' : 'border-slate-200 text-slate-700'}`}><input type="radio" name="submission_type" value="image" checked={type === 'image'} onChange={() => selectType('image')} className="sr-only" /><FileImage size={24} /><span className="mt-2 block font-bold">รูปภาพ</span><span className="mt-1 block text-xs">เลือกพร้อมกันได้สูงสุด 10 รูป</span></label>
                 </div>
             </fieldset>

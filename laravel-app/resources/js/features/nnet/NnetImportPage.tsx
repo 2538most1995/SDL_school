@@ -1,3 +1,4 @@
+import { ExcelFileIcon } from '../../components/FileTypeIcon';
 import { useState, useRef, type ChangeEvent, type DragEvent } from 'react';
 import { useNavigate, Link } from 'react-router-dom';
 import * as XLSX from 'xlsx';
@@ -5,7 +6,6 @@ import Swal from 'sweetalert2';
 import {
     ArrowRight,
     CheckCircle,
-    FileXls,
     UploadSimple,
     Warning,
     Trash,
@@ -419,7 +419,7 @@ export function NnetImportPage() {
                 {parsedRows.length > 0 && (
                     <div className="flex flex-wrap items-center gap-2 pt-1">
                         <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-semibold bg-slate-100 text-slate-700">
-                            <FileXls size={15} /> ไฟล์: {fileName}
+                            <ExcelFileIcon size={15} /> ไฟล์: {fileName}
                         </span>
                         <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-semibold bg-indigo-50 text-indigo-700">
                             ตรวจพบระดับ: {detectedLevel || 'ไม่ระบุ'}

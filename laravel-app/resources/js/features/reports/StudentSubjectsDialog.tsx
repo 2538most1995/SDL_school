@@ -1,3 +1,4 @@
+import { ExcelFileIcon } from '../../components/FileTypeIcon';
 import { useEffect, useMemo, useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import {
@@ -5,7 +6,6 @@ import {
     Books,
     CheckCircle,
     FileText,
-    FileXls,
     GraduationCap,
     MagnifyingGlass,
     Student,
@@ -262,7 +262,7 @@ export function StudentSubjectsDialog({
                             disabled={isExporting || filteredItems.length === 0}
                             className="inline-flex h-10 items-center gap-2 rounded-xl border border-brand-700 bg-white px-3.5 text-sm font-bold text-brand-800 transition hover:bg-brand-50 disabled:cursor-not-allowed disabled:border-slate-200 disabled:text-slate-400"
                         >
-                            <FileXls size={18} weight="bold" />
+                            <ExcelFileIcon size={18} />
                             {isExporting ? 'กำลังส่งออก...' : 'ส่งออก Excel'}
                         </button>
                         <button
