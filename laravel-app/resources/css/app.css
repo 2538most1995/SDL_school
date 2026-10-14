@@ -565,50 +565,70 @@ textarea {
     display: inline-flex;
     align-items: center;
     justify-content: center;
-    width: 32px;
-    height: 32px;
-    min-width: 32px;
-    min-height: 32px;
-    border: 1px solid rgba(203, 213, 225, 0.75);
-    border-radius: 9px;
-    color: #64748b;
-    background: #ffffff;
-    box-shadow: 0 1px 2px 0 rgba(0, 0, 0, 0.03);
-    transition: all 0.18s cubic-bezier(0.4, 0, 0.2, 1);
+    width: 38px;
+    height: 38px;
+    min-width: 38px;
+    max-width: 38px;
+    min-height: 38px;
+    max-height: 38px;
+    border: 1.5px solid #2dd4bf;
+    border-radius: 11px;
+    color: #0f766e;
+    background: #f0fdfa;
+    box-shadow: 0 1px 3px rgba(13, 148, 136, 0.1);
+    transition: all 0.2s cubic-bezier(0.16, 1, 0.3, 1);
     cursor: pointer;
     margin: 0 auto;
+    padding: 0;
+    box-sizing: border-box;
+    flex-shrink: 0;
+    align-self: center;
+}
+
+.metric-detail-button svg {
+    display: block;
+    width: 20px;
+    height: 20px;
+    flex-shrink: 0;
+    transition: transform 0.2s cubic-bezier(0.16, 1, 0.3, 1);
 }
 
 .metric-detail-button:hover {
-    border-color: #5eead4;
-    color: #0d9488;
-    background: #f0fdfa;
-    box-shadow: 0 3px 8px -1px rgba(13, 148, 136, 0.18);
-    transform: translateY(-1px);
+    border-color: #0d9488;
+    color: #ffffff;
+    background: #0d9488;
+    box-shadow: 0 4px 12px rgba(13, 148, 136, 0.35);
+    transform: translateY(-1px) scale(1.05);
+}
+
+.metric-detail-button:hover svg {
+    transform: scale(1.1);
 }
 
 .metric-detail-button:active {
-    transform: scale(0.94);
-    background: #ccfbf1;
+    transform: scale(0.95);
+    background: #0f766e;
+    border-color: #0f766e;
+    box-shadow: none;
 }
 
 .metric-detail-button:focus-visible {
-    outline: 2px solid #14b8a6;
+    outline: 2px solid #0d9488;
     outline-offset: 2px;
 }
 
 [data-ui-mode='dark'] .metric-detail-button {
-    background: rgba(30, 41, 59, 0.6);
-    border-color: rgba(51, 65, 85, 0.8);
-    color: #94a3b8;
-    box-shadow: none;
+    background: rgba(13, 148, 136, 0.18);
+    border-color: rgba(45, 212, 191, 0.45);
+    color: #5eead4;
+    box-shadow: 0 1px 3px rgba(0, 0, 0, 0.2);
 }
 
 [data-ui-mode='dark'] .metric-detail-button:hover {
-    background: rgba(13, 148, 136, 0.15);
+    background: #14b8a6;
     border-color: #14b8a6;
-    color: #5eead4;
-    box-shadow: 0 2px 8px -1px rgba(20, 184, 166, 0.25);
+    color: #ffffff;
+    box-shadow: 0 4px 14px rgba(20, 184, 166, 0.45);
 }
 
 .ui-panel {
@@ -935,15 +955,15 @@ textarea {
     .responsive-data-table--compact .responsive-table-action {
         display: inline-grid;
         box-sizing: border-box;
-        width: 1.65rem !important;
-        min-width: 1.65rem !important;
-        max-width: 1.65rem !important;
-        height: 1.65rem !important;
-        min-height: 1.65rem !important;
-        max-height: 1.65rem !important;
+        width: 2.1rem !important;
+        min-width: 2.1rem !important;
+        max-width: 2.1rem !important;
+        height: 2.1rem !important;
+        min-height: 2.1rem !important;
+        max-height: 2.1rem !important;
         place-items: center;
         gap: 0;
-        border-radius: 8px;
+        border-radius: 9px;
         padding: 0 !important;
         font-size: 0;
         line-height: 1;
@@ -961,8 +981,8 @@ textarea {
     }
 
     .responsive-data-table--compact .responsive-table-action svg {
-        width: 0.82rem;
-        height: 0.82rem;
+        width: 1.15rem;
+        height: 1.15rem;
     }
 
     .responsive-data-table--compact .responsive-table-action-cell {
@@ -979,30 +999,31 @@ textarea {
     }
 
     .responsive-data-table--compact .metric-detail-button {
-        display: grid;
+        display: inline-flex;
         box-sizing: border-box;
-        width: 1.65rem;
-        min-width: 1.65rem;
-        max-width: 1.65rem;
-        height: 1.65rem;
-        min-height: 1.65rem;
-        max-height: 1.65rem;
+        width: 34px !important;
+        min-width: 34px !important;
+        max-width: 34px !important;
+        height: 34px !important;
+        min-height: 34px !important;
+        max-height: 34px !important;
         margin: 0 auto;
-        place-items: center;
-        border: 1px solid rgba(203, 213, 225, 0.75);
-        border-radius: 7px;
-        background: #ffffff;
-        color: #64748b;
-        padding: 0;
+        align-items: center;
+        justify-content: center;
+        border: 1.5px solid #2dd4bf;
+        border-radius: 9px;
+        background: #f0fdfa;
+        color: #0f766e;
+        padding: 0 !important;
         line-height: 1;
-        box-shadow: 0 1px 2px 0 rgba(0, 0, 0, 0.02);
+        box-shadow: 0 1px 2px rgba(13, 148, 136, 0.08);
         transition: all 0.15s ease;
     }
 
     .responsive-data-table--compact .metric-detail-button:hover {
-        border-color: #5eead4;
-        color: #0d9488;
-        background: #f0fdfa;
+        border-color: #0d9488;
+        color: #ffffff;
+        background: #0d9488;
     }
 
     .responsive-data-table--compact .metric-detail-button:active {
@@ -1011,8 +1032,8 @@ textarea {
 
     .responsive-data-table--compact .metric-detail-button svg {
         display: block;
-        width: 0.82rem;
-        height: 0.82rem;
+        width: 18px !important;
+        height: 18px !important;
     }
 
     .responsive-data-table--compact .metric-detail-button__label {
@@ -1023,23 +1044,35 @@ textarea {
 @media (min-width: 1024px) {
     .metric-detail-button {
         display: inline-flex;
-        min-height: 2.75rem;
+        width: 38px;
+        height: 38px;
+        min-width: 38px;
+        max-width: 38px;
+        min-height: 38px;
+        max-height: 38px;
         align-items: center;
         justify-content: center;
-        gap: 0.45rem;
-        border: 1px solid var(--ui-accent-300);
-        border-radius: 10px;
-        background: var(--ui-surface);
-        color: var(--ui-accent-700);
-        padding: 0.45rem 0.75rem;
-        font-size: 0.8rem;
-        font-weight: 700;
+        border: 1.5px solid #2dd4bf;
+        border-radius: 11px;
+        background: #f0fdfa;
+        color: #0f766e;
+        padding: 0;
+        margin: 0 auto;
+        box-sizing: border-box;
         line-height: 1;
         white-space: nowrap;
     }
 
+    .metric-detail-button svg {
+        display: block;
+        width: 20px;
+        height: 20px;
+    }
+
     .metric-detail-button:hover {
-        background: var(--ui-accent-50);
+        border-color: #0d9488;
+        background: #0d9488;
+        color: #ffffff;
     }
 }
 
@@ -1103,12 +1136,15 @@ textarea {
 }
 
 [data-ui-mode='dark'] .portal-shell .metric-detail-button {
-    border-color: var(--ui-accent-500);
-    color: var(--ui-accent-200);
+    background: rgba(13, 148, 136, 0.2);
+    border-color: rgba(45, 212, 191, 0.5);
+    color: #5eead4;
 }
 
 [data-ui-mode='dark'] .portal-shell .metric-detail-button:hover {
-    background: color-mix(in srgb, var(--ui-accent-800) 30%, var(--ui-surface));
+    background: #14b8a6;
+    border-color: #14b8a6;
+    color: #ffffff;
 }
 
 [data-ui-mode='dark'] .portal-shell :where(.text-sky-900, .text-sky-800, .text-sky-700) {

@@ -45,39 +45,8 @@ import { useLogout } from '../../lib/useLogout';
 import { useRetainedFilterOptions } from '../../lib/useRetainedFilterOptions';
 import { summarizeGradeRows, summarizeGradesByTerm } from './gradeSummary';
 
-export function EyeViewIcon({ size = 16, className = '' }: { size?: number; className?: string }) {
-    return (
-        <svg
-            width={size}
-            height={size}
-            viewBox="0 0 20 20"
-            fill="none"
-            xmlns="http://www.w3.org/2000/svg"
-            className={className}
-            aria-hidden="true"
-        >
-            <path
-                d="M2.5 10C3.75 6.2 6.5 4 10 4C13.5 4 16.25 6.2 17.5 10C16.25 13.8 13.5 16 10 16C6.5 16 3.75 13.8 2.5 10Z"
-                stroke="currentColor"
-                strokeWidth="1.5"
-                strokeLinecap="round"
-                strokeLinejoin="round"
-            />
-            <circle
-                cx="10"
-                cy="10"
-                r="3"
-                stroke="currentColor"
-                strokeWidth="1.5"
-            />
-            <circle
-                cx="10"
-                cy="10"
-                r="1.2"
-                fill="currentColor"
-            />
-        </svg>
-    );
+export function EyeViewIcon({ size = 18, className = '' }: { size?: number; className?: string }) {
+    return <Eye size={size} weight="bold" className={className} aria-hidden="true" />;
 }
 
 export function FacebookIcon({ className = 'size-4' }: { className?: string }) {
@@ -476,7 +445,7 @@ export function StudentsPage() {
                         className="responsive-table-action inline-flex shrink-0 items-center gap-1.5 rounded-lg border border-teal-200/90 bg-teal-50/80 px-2.5 py-1.5 text-xs font-bold text-teal-800 shadow-2xs hover:border-teal-300 hover:bg-teal-100/90 active:scale-[0.98] transition"
                         aria-label={`เปิดรายละเอียด ${row.original.name}`}
                     >
-                        <EyeViewIcon size={14} className="text-teal-700" /> <span>เปิดดู</span>
+                        <EyeViewIcon size={17} className="text-teal-700" /> <span>เปิดดู</span>
                     </Link>
 
                     <Link
@@ -890,7 +859,7 @@ function StudentGradesPage() {
         { accessorKey: 'credits', header: 'หน่วยกิต', size: 92, meta: { compactSize: 58, compactTextAlign: 'center' } },
         { accessorKey: 'grade', header: 'ผลการเรียน', size: 124, meta: { compactSize: 70, compactHeader: 'เกรด', compactTextAlign: 'center' }, cell: ({ getValue }) => { const value = getValue<string>(); const numeric = Number(value); const tone: StatusTone = Number.isFinite(numeric) ? (numeric >= 3 ? 'success' : numeric >= 1.5 ? 'warning' : 'danger') : 'neutral'; return <StatusBadge tone={tone}>{value || '-'}</StatusBadge>; } },
         { accessorKey: 'term', header: 'ภาคเรียน', size: 104, meta: { compactSize: 68, compactTextAlign: 'center' } },
-        { id: 'details', header: 'รายละเอียด', size: 116, meta: { compactSize: 36, compactTextAlign: 'center' }, enableSorting: false, cell: ({ row }) => <button type="button" onClick={() => setSelectedGrade(row.original)} className="responsive-table-action inline-flex items-center gap-2 whitespace-nowrap rounded-xl border border-brand-200 bg-brand-50 px-3 py-2 text-sm font-bold text-brand-800 hover:bg-brand-100 active:scale-[0.98]" aria-label={`ดูรายละเอียดวิชา ${row.original.subject}`}><EyeViewIcon size={16} /> <span>เปิดดู</span></button> },
+        { id: 'details', header: 'รายละเอียด', size: 116, meta: { compactSize: 36, compactTextAlign: 'center' }, enableSorting: false, cell: ({ row }) => <button type="button" onClick={() => setSelectedGrade(row.original)} className="responsive-table-action inline-flex items-center gap-2 whitespace-nowrap rounded-xl border border-brand-200 bg-brand-50 px-3 py-2 text-sm font-bold text-brand-800 hover:bg-brand-100 active:scale-[0.98]" aria-label={`ดูรายละเอียดวิชา ${row.original.subject}`}><EyeViewIcon size={18} /> <span>เปิดดู</span></button> },
     ], []);
 
     return (
@@ -1117,7 +1086,7 @@ function StudentAchievementPage({ kind }: { kind: keyof typeof achievementConfig
         { accessorKey: 'item', header: 'รายการ', size: 300, meta: { compactSize: kind === 'moral' ? 148 : 178 }, cell: ({ getValue }) => <span className="font-bold text-slate-950">{getValue<string>()}</span> },
         { accessorKey: 'result', header: kind === 'kpch' ? 'ชั่วโมง' : 'คะแนน', size: 112, meta: { compactSize: 62, compactTextAlign: 'center' } },
         { accessorKey: 'note', header: 'ผลประเมิน', size: 136, meta: { compactSize: 70, compactHeader: 'ผล', compactTextAlign: 'center' }, cell: ({ getValue }) => { const value = getValue<string>(); return <StatusBadge tone={value === 'ปรับปรุง' ? 'danger' : value === 'พอใช้' ? 'warning' : 'success'}>{value}</StatusBadge>; } },
-        { id: 'details', header: 'รายละเอียด', size: 116, meta: { compactSize: 36, compactTextAlign: 'center' }, enableSorting: false, cell: ({ row }) => <button type="button" onClick={() => setSelectedAchievement(row.original)} className="responsive-table-action inline-flex items-center gap-2 whitespace-nowrap rounded-xl border border-brand-200 bg-brand-50 px-3 py-2 text-sm font-bold text-brand-800 hover:bg-brand-100 active:scale-[0.98]" aria-label={`ดูรายละเอียด ${row.original.item}`}><EyeViewIcon size={16} /> <span>เปิดดู</span></button> },
+        { id: 'details', header: 'รายละเอียด', size: 116, meta: { compactSize: 36, compactTextAlign: 'center' }, enableSorting: false, cell: ({ row }) => <button type="button" onClick={() => setSelectedAchievement(row.original)} className="responsive-table-action inline-flex items-center gap-2 whitespace-nowrap rounded-xl border border-brand-200 bg-brand-50 px-3 py-2 text-sm font-bold text-brand-800 hover:bg-brand-100 active:scale-[0.98]" aria-label={`ดูรายละเอียด ${row.original.item}`}><EyeViewIcon size={18} /> <span>เปิดดู</span></button> },
     ], [kind]);
     return (
         <div>
@@ -1327,7 +1296,7 @@ function StaffStudentMetricPage({ kind }: { kind: MetricKind }) {
         ] as ColumnDef<StaffMetricStudent>[] : [
             { accessorKey: 'moralResult', header: 'ผลคุณธรรมล่าสุด', size: 175, meta: { compactSize: 96, compactHeader: 'คุณธรรม', compactTextAlign: 'center' }, cell: ({ getValue }) => { const value = getValue<string>(); return <StatusBadge tone={value === 'ปรับปรุง' ? 'danger' : value === 'พอใช้' ? 'warning' : value === 'ยังไม่มีผลประเมิน' ? 'neutral' : 'success'}>{value}</StatusBadge>; } },
         ] as ColumnDef<StaffMetricStudent>[]),
-        { id: 'details', header: 'รายละเอียด', size: 80, meta: { compactSize: 40, compactTextAlign: 'center' }, enableSorting: false, cell: ({ row }) => <button type="button" className="metric-detail-button" onClick={() => setSelectedStudent(row.original)} aria-label={`เปิดรายละเอียด ${row.original.name}`} title={`เปิดรายละเอียด ${row.original.name}`}><EyeViewIcon size={16} /><span className="sr-only">เปิดดู</span></button> },
+        { id: 'details', header: 'รายละเอียด', size: 80, meta: { compactSize: 44, compactTextAlign: 'center' }, enableSorting: false, cell: ({ row }) => <button type="button" className="metric-detail-button" onClick={() => setSelectedStudent(row.original)} aria-label={`เปิดรายละเอียด ${row.original.name}`} title={`เปิดรายละเอียด ${row.original.name}`}><EyeViewIcon size={20} /><span className="sr-only">เปิดดู</span></button> },
     ], [kind]);
     const pagination = meta?.pagination;
 
