@@ -1,0 +1,1 @@
+import{St as e}from"./IconBase.es-jo_PHetV.js";var t=e();function n({children:e,columns:n,open:r=!0,id:i,className:a=`mb-4`}){return(0,t.jsx)(`div`,{className:`ui-filter-container`,children:(0,t.jsx)(`div`,{id:i,hidden:!r,className:`ui-directory-filters ui-directory-filters--${n} gap-3 ${r?`grid`:`hidden`} ${a}`,children:e})})}export{n as t};

@@ -23,12 +23,14 @@ import {
 import type { Icon } from '@phosphor-icons/react';
 import { type ReactNode } from 'react';
 import { Link } from 'react-router-dom';
+import { EducationIllustration } from '../components/EducationIllustration';
+import { StatTile } from '../components/StatTile';
 import { useDemoRole, type DemoRole } from '../context/DemoRoleContext';
 import { apiGet } from '../lib/api';
 import { publicAssetUrl, publicBrandingPath, type PublicBranding } from '../lib/publicBranding';
 import { withAppBasePath } from '../lib/urls';
 import { queryKeys } from '../query';
-import type { AnalyticsDatum, PortalData } from '../types';
+import type { PortalData } from '../types';
 
 const roleContent: Record<DemoRole, { title: string; subtitle: string }> = {
     student: {
@@ -75,8 +77,8 @@ type SummaryCardSpec = {
     value: string;
     detail: string;
     icon: Icon;
-    tone: DashboardTone;
-    breakdown?: AnalyticsDatum[];
+    tone: 'emerald' | 'sky' | 'rose' | 'amber';
+    unit: string;
 };
 
 type StudentProfile = {
@@ -154,9 +156,9 @@ const shortLevelLabel = (label: string) => ({
 function DashboardSkeleton() {
     return (
         <div className="animate-pulse space-y-5" aria-label="กำลังโหลดข้อมูล">
-            <div className="h-72 rounded-[18px] bg-slate-200" />
+            <div className="h-44 rounded-[18px] bg-slate-200" />
             <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
-                {[1, 2, 3, 4].map((item) => <div key={item} className="h-48 rounded-[18px] bg-slate-200" />)}
+                {[1, 2, 3, 4].map((item) => <div key={item} className="h-36 rounded-[18px] bg-slate-200" />)}
             </div>
             <div className="grid gap-5 md:grid-cols-2">
                 {[1, 2].map((item) => <div key={item} className="h-72 rounded-[18px] bg-slate-200" />)}
@@ -444,32 +446,7 @@ function StudentDashboard({
 }
 
 function SummaryCard({ card }: { card: SummaryCardSpec }) {
-    const CardIcon = card.icon;
-
-    return (
-        <article className={`dashboard-summary-card dashboard-summary-card--${card.tone}`}>
-            <div className="relative z-[1] flex items-start justify-between gap-4">
-                <div className="min-w-0">
-                    <h2 className="text-base font-black leading-6 text-slate-800">{card.label}</h2>
-                    <p className="mt-5 text-[38px] font-black leading-none tracking-[-0.055em] text-slate-950 sm:text-[42px]">{card.value}</p>
-                    <p className="mt-3 text-xs font-bold leading-5 text-slate-600">{card.detail}</p>
-                </div>
-                <span className="dashboard-summary-card__icon">
-                    <CardIcon size={28} weight="duotone" aria-hidden="true" />
-                </span>
-            </div>
-            {card.breakdown && (
-                <dl className="relative z-[1] mt-5 grid grid-cols-3 gap-2 border-t border-current/10 pt-4">
-                    {card.breakdown.map((item) => (
-                        <div key={item.label} className="min-w-0">
-                            <dt className="truncate text-[11px] font-bold text-slate-500">{shortLevelLabel(item.label)}</dt>
-                            <dd className="mt-1 text-base font-black text-slate-900">{formatNumber(item.value)}</dd>
-                        </div>
-                    ))}
-                </dl>
-            )}
-        </article>
-    );
+    return <StatTile {...card} />;
 }
 
 function DashboardPanel({ title, description, icon: PanelIcon, tone, children }: {
@@ -579,15 +556,16 @@ export function DashboardHomePage() {
             value: formatNumber(total),
             detail: scopeDetail,
             icon: UsersThree,
-            tone: 'blue',
+            tone: 'sky',
+            unit: 'คน',
         },
         {
             label: 'นักศึกษาตามระดับชั้น',
             value: formatNumber(analytics.by_level.reduce((sum, item) => sum + item.value, 0)),
-            detail: 'รวม ประถมศึกษา ม.ต้น และ ม.ปลาย',
+            detail: 'รวมทุกระดับการศึกษา',
             icon: GraduationCap,
-            tone: 'teal',
-            breakdown: analytics.by_level,
+            tone: 'emerald',
+            unit: 'คน',
         },
         {
             label: 'นักศึกษาใหม่',
@@ -595,6 +573,7 @@ export function DashboardHomePage() {
             detail: analytics.current_term ? `เข้าเรียนในภาคเรียน ${analytics.current_term}` : 'ยังไม่พบภาคเรียนหลัก',
             icon: Student,
             tone: 'rose',
+            unit: 'คน',
         },
         {
             label: 'กลุ่มเรียนทั้งหมด',
@@ -602,6 +581,7 @@ export function DashboardHomePage() {
             detail: 'กลุ่มเรียนที่อยู่ในขอบเขตข้อมูล',
             icon: Books,
             tone: 'amber',
+            unit: 'กลุ่ม',
         },
     ];
 
@@ -619,37 +599,51 @@ export function DashboardHomePage() {
     }
 
     return (
-        <div className="space-y-6 pb-2">
-            <section className="dashboard-hero relative overflow-hidden border border-brand-200/80 bg-brand-100">
-                <img
-                    src={publicAssetUrl(branding.data?.dashboardHeroImageUrl) ?? withAppBasePath('/images/dashboard-hero-sena-v2.webp')}
-                    alt="ครูผู้ดูแลระบบการศึกษาในพื้นที่อำเภอเสนา"
-                    fetchPriority="high"
-                    className="absolute inset-0 size-full object-cover object-[67%_center] opacity-45 sm:opacity-100"
-                />
-                <div className="dashboard-hero-scrim absolute inset-0" aria-hidden="true" />
-                <div className="relative grid min-h-[300px] gap-6 px-6 py-7 sm:px-8 lg:grid-cols-[minmax(0,1fr)_270px] lg:items-center lg:px-9">
-                    <div className="max-w-[580px] self-center">
-                        <p className="inline-flex items-center gap-2 text-sm font-black text-brand-700"><Sparkle size={19} weight="fill" aria-hidden="true" />สวัสดี {portal.data.viewer.name}</p>
-                        <h1 className="dashboard-hero-title mt-3 max-w-[18ch] text-3xl font-black leading-[1.2] tracking-[-0.035em] sm:text-4xl lg:text-[42px]">{content.title}</h1>
-                        <p className="mt-4 max-w-[48ch] text-sm font-semibold leading-7 text-slate-600 sm:text-base">{content.subtitle}</p>
+        <div className="space-y-5 pb-2">
+            <section className="dashboard-hero" aria-labelledby="dashboard-hero-title">
+                <div className="dashboard-hero__content">
+                    <div className="dashboard-hero__intro">
+                        <span className="dashboard-hero__icon"><ChartBar size={29} weight="duotone" aria-hidden="true" /></span>
+                        <div className="min-w-0">
+                            <p className="dashboard-hero__greeting"><Sparkle size={15} weight="fill" aria-hidden="true" />สวัสดี {portal.data.viewer.name}</p>
+                            <h1 id="dashboard-hero-title" className="dashboard-hero-title">{content.title}</h1>
+                            <p className="dashboard-hero__description">{content.subtitle}</p>
+                        </div>
                     </div>
-                    <dl className="dashboard-scope-panel self-end border border-white/35 bg-[#102c55]/95 p-5 text-white lg:self-center">
-                        <div className="flex items-start gap-3 pb-4"><span className="grid size-9 shrink-0 place-items-center rounded-xl bg-brand-400/20 text-brand-200"><MapPin size={19} weight="fill" /></span><div><dt className="text-xs font-bold text-sky-100/70">พื้นที่ข้อมูล</dt><dd className="mt-1 text-sm font-black">{portal.data.viewer.district}</dd></div></div>
-                        <div className="flex items-start gap-3 border-t border-white/10 py-4"><span className="grid size-9 shrink-0 place-items-center rounded-xl bg-sky-400/20 text-sky-200"><BookOpenText size={19} weight="duotone" /></span><div><dt className="text-xs font-bold text-sky-100/70">ภาคเรียนหลัก</dt><dd className="mt-1 text-sm font-black">{analytics.current_term ?? '-'}</dd></div></div>
-                        <div className="flex items-start gap-3 border-t border-white/10 pt-4"><span className="grid size-9 shrink-0 place-items-center rounded-xl bg-violet-400/20 text-violet-200"><CalendarBlank size={19} weight="duotone" /></span><div><dt className="text-xs font-bold text-sky-100/70">เปิดดูข้อมูลเมื่อ</dt><dd className="mt-1 text-sm font-black">{viewedAt}</dd></div></div>
+                    <dl className="dashboard-scope-panel">
+                        <div><MapPin size={16} weight="duotone" aria-hidden="true" /><dt className="sr-only">พื้นที่ข้อมูล</dt><dd>{portal.data.viewer.district}</dd></div>
+                        <div><BookOpenText size={16} weight="duotone" aria-hidden="true" /><dt>ภาคเรียน</dt><dd>{analytics.current_term ?? '-'}</dd></div>
+                        <div><CalendarBlank size={16} weight="duotone" aria-hidden="true" /><dt>เปิดดู</dt><dd>{viewedAt}</dd></div>
                     </dl>
+                </div>
+                <div className="dashboard-hero__art" aria-hidden="true">
+                    {publicAssetUrl(branding.data?.dashboardHeroImageUrl)
+                        ? <img src={publicAssetUrl(branding.data?.dashboardHeroImageUrl)!} alt="" />
+                        : <EducationIllustration />}
                 </div>
             </section>
 
             <section aria-labelledby="dashboard-summary-title">
-                <div className="mb-4">
-                    <h2 id="dashboard-summary-title" className="text-xl font-black tracking-[-0.02em] text-slate-950">สรุปข้อมูลสำคัญ</h2>
-                    <p className="mt-1 text-sm text-slate-500">ตัวเลขทั้งหมดคำนวณตามอำเภอ กลุ่มเรียน และสิทธิ์ของผู้ใช้งาน</p>
+                <div className="mb-3">
+                    <h2 id="dashboard-summary-title" className="text-base font-bold text-slate-950">สรุปข้อมูลสำคัญ</h2>
+                    <p className="mt-1 text-xs text-slate-500">ตัวเลขตามอำเภอ กลุ่มเรียน และสิทธิ์ของผู้ใช้งาน</p>
                 </div>
-                <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+                <div className="ui-stat-grid grid items-start gap-3" data-columns={4}>
                     {summaryCards.map((card) => <SummaryCard key={card.label} card={card} />)}
                 </div>
+                {analytics.by_level.length > 0 && (
+                    <div className="dashboard-level-breakdown">
+                        <p className="dashboard-level-breakdown__label"><GraduationCap size={18} weight="duotone" aria-hidden="true" />แยกตามระดับชั้น</p>
+                        <dl>
+                            {analytics.by_level.map((item) => (
+                                <div key={item.label}>
+                                    <dt title={item.label}>{shortLevelLabel(item.label)}</dt>
+                                    <dd>{formatNumber(item.value)} <span>คน</span></dd>
+                                </div>
+                            ))}
+                        </dl>
+                    </div>
+                )}
             </section>
 
             {total === 0 ? (

@@ -21,6 +21,7 @@ import { useDeferredValue, useEffect, useMemo, useState } from 'react';
 import { DataTable } from '../../components/DataTable';
 import { PageHeader } from '../../components/PageHeader';
 import { Panel } from '../../components/Panel';
+import { FilterGrid } from '../../components/FilterGrid';
 import { QueryError, QuerySkeleton } from '../../components/QueryState';
 import { StatTile } from '../../components/StatTile';
 import { StatGrid } from '../../components/StatGrid';
@@ -677,7 +678,7 @@ export function ReportPage({ kind }: { kind: ReportKind }) {
                     </div>
                 </div>}
 
-                <div className={`mb-5 grid gap-3 ${kind === 'expected-graduates' || kind === 'grade-threshold' ? (canFilterGroups ? 'md:grid-cols-4' : 'md:grid-cols-3') : (canFilterGroups ? 'md:grid-cols-3' : 'md:grid-cols-2')}`}>
+                <FilterGrid className="mb-5" columns={kind === 'expected-graduates' || kind === 'grade-threshold' ? (canFilterGroups ? 4 : 3) : (canFilterGroups ? 3 : 2)}>
                     <label>
                         <span className="mb-2 block text-sm font-bold text-slate-700">ค้นหาในรายงาน</span>
                         <span className="relative block">
@@ -707,7 +708,7 @@ export function ReportPage({ kind }: { kind: ReportKind }) {
                             </select>
                         </label>
                     )}
-                </div>
+                </FilterGrid>
                 {report.isPending && <QuerySkeleton />}
                 {report.isError && <QueryError onRetry={() => report.refetch()} />}
                 {payload && <DataTable data={rows} columns={columns} minWidth={isAcademicReport ? 'wide' : 'default'} emptyTitle="ไม่พบข้อมูลในรายงาน" emptyDescription="ลองเปลี่ยนภาคเรียน ระดับ กลุ่มเรียน ประเภทวิชา หรือคำค้นหา" />}

@@ -36,6 +36,7 @@ import { QueryError, QuerySkeleton } from '../../components/QueryState';
 import { StatTile } from '../../components/StatTile';
 import { StatGrid } from '../../components/StatGrid';
 import { FilterToggle } from '../../components/FilterToggle';
+import { FilterGrid } from '../../components/FilterGrid';
 import { StatusBadge, type StatusTone } from '../../components/StatusBadge';
 import { getFeatureDataWithDemo, sendFeatureData } from '../api';
 import { useDemoRole } from '../../context/DemoRoleContext';
@@ -524,7 +525,7 @@ export function StudentsPage() {
             </StatGrid>
 
             <Panel title="รายชื่อนักศึกษา" icon={UsersThree} description={pagination ? `แสดง ${pagination.from ?? 0}-${pagination.to ?? 0} จากทั้งหมด ${pagination.total} คน` : 'ข้อมูลส่วนบุคคลละเอียดจะแสดงตามสิทธิ์ของผู้ใช้งาน'} action={<div className="flex flex-wrap items-center gap-2"><FilterToggle expanded={filtersOpen} controls="student-directory-filters" activeCount={[search, level, group].filter(Boolean).length} onToggle={() => setFiltersOpen((open) => !open)} />{(search || level || group) && <Button type="button" appearance="subtle" icon={<X size={15} />} onClick={resetFilters}>ล้างตัวกรองทั้งหมด</Button>}</div>}>
-                <div id="student-directory-filters" hidden={!filtersOpen} className={`mb-4 gap-3 md:grid-cols-2 ${filtersOpen ? 'grid' : 'hidden'} ${canFilterGroups ? 'xl:grid-cols-[minmax(0,1.5fr)_minmax(0,0.8fr)_minmax(0,1fr)]' : 'xl:grid-cols-[minmax(0,1.5fr)_minmax(0,0.8fr)]'}`}>
+                <FilterGrid id="student-directory-filters" open={filtersOpen} columns={canFilterGroups ? 3 : 2}>
                     <Field label="ค้นหา">
                         <Input value={search} onChange={(_, data) => setSearch(data.value)} contentBefore={<MagnifyingGlass size={18} aria-hidden="true" />} placeholder="ชื่อ รหัส หรือกลุ่ม" size="large" />
                     </Field>
@@ -542,7 +543,7 @@ export function StudentsPage() {
                             {retainedGroupOptions.map((option) => <option key={option.value} value={option.value}>{option.label}</option>)}
                         </Select>
                     </Field>}
-                </div>
+                </FilterGrid>
                 {students.isPending && <QuerySkeleton />}
                 {students.isError && <QueryError onRetry={() => students.refetch()} />}
                 {students.data && <DataTable data={rows} columns={columns} pageSize={perPage} showPagination={false} minWidth="wide" responsiveMode="cards" emptyTitle="ไม่พบนักศึกษา" emptyDescription="ลองเปลี่ยนคำค้น ระดับ หรือกลุ่มเรียน" />}
@@ -1312,12 +1313,12 @@ function StaffStudentMetricPage({ kind }: { kind: MetricKind }) {
                     </Button>
                 ) : null}</div>}
             >
-                <div id={`student-metric-${kind}-filters`} hidden={!filtersOpen} className={`mb-4 gap-3 ${filtersOpen ? 'grid' : 'hidden'} ${kind === 'kpch' ? (canFilterGroups ? 'md:grid-cols-2 xl:grid-cols-4' : 'md:grid-cols-3') : (canFilterGroups ? 'md:grid-cols-3' : 'md:grid-cols-2')}`}>
+                <FilterGrid id={`student-metric-${kind}-filters`} open={filtersOpen} columns={kind === 'kpch' ? (canFilterGroups ? 4 : 3) : (canFilterGroups ? 3 : 2)}>
                     <Field label="ค้นหา"><Input value={search} onChange={(_, data) => setSearch(data.value)} contentBefore={<MagnifyingGlass size={18} aria-hidden="true" />} placeholder="ชื่อ รหัส หรือกลุ่ม" size="large" /></Field>
                     <Field label="ระดับการศึกษา"><Select value={level} onChange={(_, data) => setLevel(data.value)} size="large"><option value="">ทุกระดับ</option><option value="1">ประถมศึกษา</option><option value="2">มัธยมศึกษาตอนต้น</option><option value="3">มัธยมศึกษาตอนปลาย</option></Select></Field>
                     {canFilterGroups && <Field label="กลุ่มเรียน"><Select value={group} onChange={(_, data) => setGroup(data.value)} size="large"><option value="">ทุกกลุ่มเรียน</option>{retainedGroupOptions.map((option) => <option key={option.value} value={option.value}>{option.label}</option>)}</Select></Field>}
                     {kind === 'kpch' && <Field label="ผล กพช."><Select value={kpchStatus} onChange={(_, data) => setKpchStatus(data.value)} size="large"><option value="">ทั้งหมด</option><option value="complete">ครบ 200 ชั่วโมง</option><option value="incomplete">ไม่ครบ 200 ชั่วโมง</option></Select></Field>}
-                </div>
+                </FilterGrid>
                 {directory.isPending && <QuerySkeleton />}
                 {directory.isError && <QueryError onRetry={() => directory.refetch()} />}
                 {directory.data && <DataTable data={pageRows} columns={columns} pageSize={perPage} showPagination={false} minWidth="default" responsiveMode="cards" emptyTitle="ไม่พบข้อมูลนักศึกษา" emptyDescription="ลองเปลี่ยนคำค้น ระดับ หรือกลุ่มเรียน" />}

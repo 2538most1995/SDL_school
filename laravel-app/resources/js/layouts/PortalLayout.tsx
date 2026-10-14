@@ -304,7 +304,7 @@ export function PortalLayout() {
                 <nav aria-label="เมนูหลัก" className="mt-2 min-h-0 flex-1 overflow-y-auto px-4 pb-5">
                     {catalog.isPending && <SidebarSkeleton />}
                     {catalog.data?.groups.map((group) => (
-                        <section key={group.key} className="mt-4">
+                        <section key={group.key} className="sidebar-nav-section mt-3">
                             <h2 className="mb-1"><button type="button" className="sidebar-group-heading flex min-h-11 w-full items-center justify-between rounded-xl px-3 py-2 text-left text-xs font-semibold" aria-expanded={!collapsedGroups[group.key]} aria-controls={`navigation-${group.key}`} onClick={() => setCollapsedGroups((previous) => ({ ...previous, [group.key]: !previous[group.key] }))}><span>{group.label}</span><CaretDown size={14} className={`transition-transform ${collapsedGroups[group.key] ? '-rotate-90' : ''}`} aria-hidden="true" /></button></h2>
                             <div id={`navigation-${group.key}`} hidden={Boolean(collapsedGroups[group.key])} className="space-y-1">
                                 {group.items.map((item) => {
@@ -314,11 +314,12 @@ export function PortalLayout() {
                                             key={item.key}
                                             to={item.route}
                                             end={item.route === '/app'}
+                                            title={item.label}
                                             onClick={() => setSidebarOpen(false)}
                                             className={({ isActive }) => `sidebar-nav-link flex min-h-11 items-center gap-3 px-3 py-2.5 text-sm font-medium leading-5 ${isActive ? 'is-active' : ''}`}
                                         >
-                                            <span className="grid size-7 shrink-0 place-items-center">
-                                                <Icon size={21} weight="regular" aria-hidden="true" />
+                                            <span className="sidebar-nav-icon grid size-8 shrink-0 place-items-center" data-icon={item.icon}>
+                                                <Icon size={21} weight="duotone" aria-hidden="true" />
                                             </span>
                                             <span className="truncate">{item.label}</span>
                                         </NavLink>
