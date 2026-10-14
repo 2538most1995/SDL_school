@@ -6,10 +6,12 @@ use App\Domain\Students\Models\Grade;
 use App\Domain\Students\Models\Student;
 use App\Domain\Students\Repositories\DemoStudentRepository;
 use App\Domain\Students\Repositories\StudentRepository;
+use App\Domain\Students\Services\CourseRegistrationService;
 use App\Domain\Students\Support\CurriculumCatalog;
 use App\Models\District;
 use App\Models\User;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 use Laravel\Sanctum\Sanctum;
 use Tests\TestCase;
@@ -811,6 +813,74 @@ final class CourseRegistrationTest extends TestCase
         $this->assertFalse($catalog->has('เลือก201'));
         $this->assertFalse($catalog->has('เลือก301'));
         $this->assertNotContains('เลือก101', array_column($data['elective_subjects'], 'code'));
+    }
+
+    public function test_remembered_electives_query_is_reused_without_reusing_student_status(): void
+    {
+        $viewer = $this->viewer('admin');
+        $service = $this->app->make(CourseRegistrationService::class);
+        DB::enableQueryLog();
+        $first = $service->studentRegistration($viewer, '6650100001', '2/2569');
+        $second = $service->studentRegistration($viewer, '6650100002', '2/2569');
+        $queries = $this->rememberedElectiveQueryCount();
+        $metadataQueries = array_filter(DB::getQueryLog(), static fn (array $query): bool => str_contains($query['query'], '"education_level" = ?')
+            && str_contains($query['query'], 'order by "updated_at" desc')
+        );
+        DB::disableQueryLog();
+
+        $this->assertSame(1, $queries, 'Repeated details in one request should query reusable metadata once.');
+        foreach ($metadataQueries as $query) {
+            $this->assertStringStartsWith('select "elective_subjects"', $query['query']);
+        }
+        $this->app->instance('request', Request::create('/'));
+        $this->assertSame($second, $service->studentRegistration($viewer, '6650100002', '2/2569'));
+        $this->assertNotSame($first['student']['code'], $second['student']['code']);
+    }
+
+    public function test_remembered_electives_refresh_on_a_new_request(): void
+    {
+        $viewer = $this->viewer('admin');
+        $service = $this->app->make(CourseRegistrationService::class);
+        $service->studentRegistration($viewer, '6650100001', '2/2569');
+        DB::table('learning_course_registrations')->insert([
+            'district_id' => $this->district->id, 'education_level' => 1,
+            'student_code' => 'metadata-source', 'academic_term' => '1/2569',
+            'group_code' => 'test', 'compulsory_subjects' => '[]',
+            'elective_subjects' => json_encode([['code' => 'เลือก999', 'name' => 'ใหม่', 'credits' => 2, 'remark' => 'private', 'registered' => true]]),
+            'created_at' => now(), 'updated_at' => now(),
+        ]);
+        $this->app->instance('request', Request::create('/'));
+        $data = $service->studentRegistration($viewer, '6650100002', '2/2569');
+        $subject = collect($data['common_electives'])->firstWhere('code', 'เลือก999');
+        $this->assertSame('ใหม่', $subject['name']);
+        $this->assertArrayNotHasKey('remark', $subject);
+        $this->assertArrayNotHasKey('registered', $subject);
+    }
+
+    public function test_save_invalidates_remembered_metadata_for_every_level_in_the_district(): void
+    {
+        $viewer = $this->viewer('admin');
+        $service = $this->app->make(CourseRegistrationService::class);
+        DB::enableQueryLog();
+        $service->studentRegistration($viewer, '6650100001', '2/2569');
+        $service->studentRegistration($viewer, '6650200003', '2/2569');
+        $service->save($viewer, '6650100001', [
+            'academic_term' => '2/2569', 'compulsory_subjects' => [],
+            'elective_subjects' => [['code' => 'เลือก999', 'name' => 'บันทึกใหม่', 'credits' => 2, 'registered' => true]],
+        ]);
+        $service->studentRegistration($viewer, '6650200003', '2/2569');
+        $this->assertSame(4, $this->rememberedElectiveQueryCount());
+        DB::disableQueryLog();
+        $data = $service->studentRegistration($viewer, '6650100002', '2/2569');
+        $this->assertSame('บันทึกใหม่', collect($data['common_electives'])->firstWhere('code', 'เลือก999')['name']);
+    }
+
+    private function rememberedElectiveQueryCount(): int
+    {
+        return count(array_filter(DB::getQueryLog(), static fn (array $query): bool => str_contains($query['query'], 'from "learning_course_registrations"')
+            && str_contains($query['query'], '"education_level" = ?')
+            && str_contains($query['query'], 'order by "updated_at" desc')
+        ));
     }
 
     public function test_blank_current_results_are_pending_instead_of_absent_even_when_exam_flag_is_false(): void

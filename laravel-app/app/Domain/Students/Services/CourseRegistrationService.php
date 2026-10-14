@@ -16,6 +16,8 @@ use Illuminate\Validation\ValidationException;
 
 final readonly class CourseRegistrationService
 {
+    private const ELECTIVE_METADATA_CACHE = self::class.'.elective_metadata';
+
     public function __construct(
         private StudentDirectoryService $directory,
         private StudentRepository $repository,
@@ -699,12 +701,18 @@ final readonly class CourseRegistrationService
     /** Only course metadata is reused; student details and selection flags stay private. */
     private function rememberedElectives(Student $student): array
     {
+        $request = request();
+        $cache = $request->attributes->get(self::ELECTIVE_METADATA_CACHE, []);
+        if (isset($cache[$student->districtId][$student->level])) {
+            return $cache[$student->districtId][$student->level];
+        }
+
         $subjects = [];
         $rows = DB::table('learning_course_registrations')
             ->where('district_id', $student->districtId)
             ->where('education_level', $student->level)
             ->orderByDesc('updated_at')->orderByDesc('id')
-            ->cursor(['elective_subjects']);
+            ->select('elective_subjects')->cursor();
 
         foreach ($rows as $row) {
             foreach (json_decode((string) $row->elective_subjects, true) ?: [] as $subject) {
@@ -719,7 +727,10 @@ final readonly class CourseRegistrationService
             $subjects[$subject['code']] ??= $subject;
         }
 
-        return array_values($subjects);
+        $cache[$student->districtId][$student->level] = array_values($subjects);
+        $request->attributes->set(self::ELECTIVE_METADATA_CACHE, $cache);
+
+        return $cache[$student->districtId][$student->level];
     }
 
     /** Read-only projection for the authenticated learner, without contact data or staff notes. */
@@ -881,6 +892,11 @@ final readonly class CourseRegistrationService
                 'created_at' => now(),
             ]
         );
+
+        $request = request();
+        $cache = $request->attributes->get(self::ELECTIVE_METADATA_CACHE, []);
+        unset($cache[$student->districtId]);
+        $request->attributes->set(self::ELECTIVE_METADATA_CACHE, $cache);
 
         return $this->studentRegistration($viewer, $studentCode, $term) ?? [];
     }
