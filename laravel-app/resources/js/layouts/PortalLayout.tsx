@@ -155,11 +155,19 @@ export function PortalLayout() {
     const navigate = useNavigate();
     const [collapsedGroups, setCollapsedGroups] = useState<Record<string, boolean>>({});
     const [sidebarOpen, setSidebarOpen] = useState(false);
+    const [desktopSidebar, setDesktopSidebar] = useState(() => window.matchMedia('(min-width: 1024px)').matches);
     const [roleMenuOpen, setRoleMenuOpen] = useState(false);
     const [notificationOpen, setNotificationOpen] = useState(false);
     const [searchOpen, setSearchOpen] = useState(false);
     const [globalSearch, setGlobalSearch] = useState('');
     const [selectedDistrictId, setSelectedDistrictId] = useState(() => window.localStorage.getItem('sena-district-id') ?? '');
+
+    useEffect(() => {
+        const media = window.matchMedia('(min-width: 1024px)');
+        const update = () => setDesktopSidebar(media.matches);
+        media.addEventListener('change', update);
+        return () => media.removeEventListener('change', update);
+    }, []);
 
     const me = useQuery({
         queryKey: ['auth', 'me'],
@@ -265,8 +273,8 @@ export function PortalLayout() {
             {sidebarOpen && <button className={`fixed inset-0 z-30 bg-slate-950/30 ${isStudent ? '' : 'lg:hidden'}`} onClick={() => setSidebarOpen(false)} aria-label="ปิดเมนู" />}
             <aside
                 className={`portal-sidebar fixed inset-y-0 left-0 z-40 flex w-[282px] flex-col overflow-hidden text-white transition-transform lg:w-[266px] ${isStudent ? (sidebarOpen ? 'translate-x-0' : '-translate-x-full') : `${sidebarOpen ? 'translate-x-0' : '-translate-x-full'} lg:translate-x-0`}`}
-                aria-hidden={isStudent && !sidebarOpen}
-                inert={isStudent && !sidebarOpen}
+                aria-hidden={!sidebarOpen && (isStudent || !desktopSidebar)}
+                inert={!sidebarOpen && (isStudent || !desktopSidebar)}
             >
                 <div className="flex h-[78px] items-center justify-between border-b border-white/10 px-4">
                     <Link to="/app" className="flex items-center gap-2.5">
@@ -444,8 +452,8 @@ export function PortalLayout() {
                     </form>
                     <div className="ml-auto flex items-center gap-2">
                         {me.data.role === 'super_admin' && (
-                            <span className="hidden sm:block">
-                                <Select value={selectedDistrictId} onChange={(event) => changeDistrict(String(event.target.value))} aria-label="เลือกอำเภอ" className="max-w-52 font-bold">
+                            <span className="block">
+                                <Select value={selectedDistrictId} onChange={(event) => changeDistrict(String(event.target.value))} aria-label="เลือกอำเภอ" className="w-28 max-w-[32vw] font-bold sm:w-52 sm:max-w-52">
                                     {availableDistricts.map((district) => <option key={district.id} value={district.id}>{district.name}</option>)}
                                 </Select>
                             </span>

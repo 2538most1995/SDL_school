@@ -312,7 +312,7 @@ function StaffCourseRegistrationPage() {
 
     // Sync form state when student data loads
     const loadStudentDataIntoForm = (data: StudentRegistrationData) => {
-        setCompulsoryRows(data.compulsory_subjects ?? []);
+        setCompulsoryRows((data.compulsory_subjects ?? []).map((subject) => ({ ...subject })));
         const existingElectives = data.elective_subjects ?? [];
         const existingCodes = new Set(existingElectives.map((subject) => subject.code.trim()));
         setElectiveRows([
@@ -376,7 +376,9 @@ function StaffCourseRegistrationPage() {
     // Save mutation
     const saveMutation = useMutation({
         mutationFn: async () => {
-            if (!selectedStudentCode || !studentDetail) return;
+            if (!selectedStudentCode || !studentDetail || studentDetailQuery.isPending || studentDetailQuery.isError) {
+                throw new Error('กรุณารอข้อมูลนักศึกษาโหลดครบก่อนบันทึก');
+            }
             if (liveCreditPolicy?.exceeds_limit) {
                 throw new Error(`ลงทะเบียนเกินเพดาน ${liveCreditPolicy.applicable_limit} หน่วยกิต`);
             }
@@ -552,10 +554,10 @@ function StaffCourseRegistrationPage() {
 
     // If studentDetail loads and form is clean, initialize form state
     useEffect(() => {
-        if (studentDetail) {
+        if (studentDetail && !isFormDirty) {
             loadStudentDataIntoForm(studentDetail);
         }
-    }, [studentDetail]);
+    }, [studentDetail, isFormDirty]);
 
     // Count statistics
     const totalCount = workspaceData.items.length;
@@ -812,7 +814,7 @@ function StaffCourseRegistrationPage() {
                                 appearance="primary"
                                 icon={<FloppyDisk size={18} />}
                                 onClick={() => saveMutation.mutate()}
-                                disabled={saveMutation.isPending || liveCreditPolicy?.exceeds_limit === true}
+                                disabled={!studentDetail || studentDetailQuery.isPending || studentDetailQuery.isError || saveMutation.isPending || liveCreditPolicy?.exceeds_limit === true}
                             >
                                 {saveMutation.isPending ? 'กำลังบันทึก...' : 'บันทึกการลงทะเบียน'}
                             </Button>
@@ -1373,9 +1375,7 @@ function StaffCourseRegistrationPage() {
                                                             value={row.remark}
                                                             placeholder="หมายเหตุ..."
                                                             onChange={(e) => {
-                                                                const updated = [...compulsoryRows];
-                                                                updated[idx].remark = e.target.value;
-                                                                setCompulsoryRows(updated);
+                                                                setCompulsoryRows((rows) => rows.map((subject, index) => index === idx ? { ...subject, remark: e.target.value } : subject));
                                                                 setIsFormDirty(true);
                                                             }}
                                                             className="w-full rounded-lg border border-slate-200 px-2 py-1 text-xs"

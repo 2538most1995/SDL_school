@@ -18,7 +18,7 @@ import {
     BookOpen,
     FunnelSimple,
 } from '@phosphor-icons/react';
-import { useState, useMemo } from 'react';
+import { useState, useMemo, useEffect } from 'react';
 import { Link } from 'react-router-dom';
 import Swal from 'sweetalert2';
 import { PageHeader } from '../../components/PageHeader';
@@ -32,6 +32,8 @@ import { useDemoRole } from '../../context/DemoRoleContext';
 import { apiGet } from '../../lib/api';
 import { useRetainedFilterOptions } from '../../lib/useRetainedFilterOptions';
 import { StudentNnetScoreView } from './StudentNnetScoreView';
+import { Pagination } from '../../components/Pagination';
+import { collectRecordPages, subjectCodesForRecord, type RecordPage } from './recordHelpers';
 
 export interface NnetRecord {
     id: number;
@@ -125,6 +127,24 @@ export function NnetReportPage() {
     const [statusFilter, setStatusFilter] = useState<string>('');
     const [group, setGroup] = useState<string>('');
     const [search, setSearch] = useState<string>('');
+    const [page, setPage] = useState(1);
+    const [pageSize, setPageSize] = useState(50);
+    const [isExporting, setIsExporting] = useState(false);
+    const [isSaving, setIsSaving] = useState(false);
+    useEffect(() => { setPage(1); }, [isStudent, level, year, round, statusFilter, group, search, pageSize]);
+
+    const recordsPath = (requestedPage: number, size: number) => {
+        const params = new URLSearchParams({ page: String(requestedPage), page_size: String(size) });
+        if (!isStudent) {
+            if (level > 0) params.set('education_level', String(level));
+            if (year) params.set('academic_year', year);
+            if (round > 0) params.set('round', String(round));
+            if (statusFilter) params.set('status', statusFilter);
+            if (group) params.set('group', group);
+            if (search.trim()) params.set('search', search.trim());
+        }
+        return `/api/v1/nnet/records?${params.toString()}`;
+    };
 
     // Modal States
     const [detailRecord, setDetailRecord] = useState<NnetRecord | null>(null);
@@ -149,26 +169,11 @@ export function NnetReportPage() {
 
     // Queries
     const recordsQuery = useQuery({
-        queryKey: ['nnet', 'records', { isStudent, level, year, round, statusFilter, group, search }],
-        queryFn: ({ signal }) => {
-            const params = new URLSearchParams();
-            if (!isStudent) {
-                if (level > 0) params.set('education_level', String(level));
-                if (year) params.set('academic_year', year);
-                if (round > 0) params.set('round', String(round));
-                if (statusFilter) params.set('status', statusFilter);
-                if (group) params.set('group', group);
-                if (search.trim()) params.set('search', search.trim());
-            }
-            params.set('page_size', '200');
-
-            return getFeatureData<{
-                items: NnetRecord[];
-                total: number;
-                available_years: string[];
-                available_groups: string[];
-            }>(`/api/v1/nnet/records?${params.toString()}`, signal).then((res) => res.data);
-        },
+        queryKey: ['nnet', 'records', { isStudent, level, year, round, statusFilter, group, search, page, pageSize }],
+        queryFn: ({ signal }) => getFeatureData<RecordPage<NnetRecord> & {
+            available_years: string[];
+            available_groups: string[];
+        }>(recordsPath(page, isStudent ? 500 : pageSize), signal).then((response) => response.data),
     });
 
     const summaryQuery = useQuery({
@@ -221,7 +226,7 @@ export function NnetReportPage() {
 
     const handleOpenEditModal = (record: NnetRecord) => {
         setEditingRecord(record);
-        const subCodes = record.subject_codes || ['411', '412', '413', '414', '415'];
+        const subCodes = subjectCodesForRecord(record.education_level, record.subject_codes);
         const subScores = record.subject_scores || {};
 
         setFormDraft({
@@ -241,6 +246,8 @@ export function NnetReportPage() {
     };
 
     const handleSaveForm = async () => {
+        if (isSaving) return;
+        setIsSaving(true);
         try {
             if (!formDraft.citizen_id || formDraft.citizen_id.trim().length !== 13) {
                 Swal.fire('ข้อผิดพลาด', 'กรุณาระบุเลขประจำตัวประชาชน 13 หลัก', 'warning');
@@ -251,7 +258,7 @@ export function NnetReportPage() {
                 return;
             }
 
-            const subjectCodes = ['411', '412', '413', '414', '415'];
+            const subjectCodes = subjectCodesForRecord(formDraft.education_level, editingRecord?.subject_codes);
             const subjectScores: Record<string, number | null> = {};
             subjectCodes.forEach((code, idx) => {
                 const val = formDraft.scores[idx];
@@ -270,6 +277,7 @@ export function NnetReportPage() {
                 has_score: formDraft.has_score,
                 total_score: formDraft.has_score && formDraft.total_score !== '' ? Number(formDraft.total_score) : null,
                 subject_scores: subjectScores,
+                subject_codes: subjectCodes,
                 notes: formDraft.notes.trim() || null,
             };
 
@@ -286,61 +294,79 @@ export function NnetReportPage() {
             queryClient.invalidateQueries({ queryKey: ['nnet'] });
         } catch (err: any) {
             Swal.fire('เกิดข้อผิดพลาด', err.message || 'ไม่สามารถบันทึกข้อมูลได้', 'error');
+        } finally {
+            setIsSaving(false);
         }
     };
 
-    const handleExportExcel = () => {
-        if (items.length === 0) {
-            Swal.fire('ไม่มีข้อมูล', 'ไม่พบข้อมูลที่ตรงกับตัวกรองสำหรับการส่งออก', 'info');
-            return;
-        }
+    const handleExportExcel = async () => {
+        if (isExporting) return;
+        setIsExporting(true);
+        try {
+            const districtId = window.localStorage.getItem('sena-district-id');
+            const exportedItems = await collectRecordPages(async (requestedPage) => {
+                if (districtId !== window.localStorage.getItem('sena-district-id')) throw new Error('อำเภอเปลี่ยนระหว่างส่งออก กรุณาลองใหม่');
+                const response = await getFeatureData<RecordPage<NnetRecord>>(recordsPath(requestedPage, 500));
+                return response.data;
+            });
+            if (districtId !== window.localStorage.getItem('sena-district-id')) throw new Error('อำเภอเปลี่ยนระหว่างส่งออก กรุณาลองใหม่');
+            const items = exportedItems;
+            if (items.length === 0) {
+                Swal.fire('ไม่มีข้อมูล', 'ไม่พบข้อมูลที่ตรงกับตัวกรองสำหรับการส่งออก', 'info');
+                return;
+            }
 
-        const levelLabel = LEVEL_OPTIONS.find((l) => l.value === level)?.label ?? 'ทุกระดับ';
-        const subHeaders = level === 0
-            ? ['สาระที่ 1', 'สาระที่ 2', 'สาระที่ 3', 'สาระที่ 4', 'สาระที่ 5']
-            : (items[0]?.subject_codes || ['411', '412', '413', '414', '415']);
+            const levelLabel = LEVEL_OPTIONS.find((l) => l.value === level)?.label ?? 'ทุกระดับ';
+            const subHeaders = level === 0
+                ? ['สาระที่ 1', 'สาระที่ 2', 'สาระที่ 3', 'สาระที่ 4', 'สาระที่ 5']
+                : (items[0]?.subject_codes || ['411', '412', '413', '414', '415']);
 
-        const columns = [
-            'ลำดับ',
-            'เลขที่นั่งสอบ',
-            'เลขประจำตัวประชาชน',
-            'รหัสนักศึกษา',
-            'ชื่อ - สกุล',
-            'ระดับชั้น',
-            'กลุ่มเรียน',
-            'คะแนนรวม',
-            ...subHeaders.map((c, i) => `${c} (${STANDARD_SUBJECT_NAMES[i] ?? c})`),
-            'สถานะ',
-        ];
-
-        const rows = items.map((r, idx) => {
-            const subScores = r.subject_scores || {};
-            return [
-                idx + 1,
-                r.seat_no || '',
-                r.citizen_id,
-                r.student_code || '',
-                r.student_name,
-                r.education_level_label,
-                r.group_name || '',
-                r.has_score && r.total_score !== null ? r.total_score : '-',
-                ...[0, 1, 2, 3, 4].map((sIdx) => {
-                    const code = r.subject_codes?.[sIdx];
-                    const score = (code ? subScores[code] : undefined) ?? (subScores as any)[sIdx];
-                    return score !== undefined && score !== null ? score : '-';
-                }),
-                r.has_score ? 'มีผลคะแนน' : 'ไม่มีคะแนน',
+            const columns = [
+                'ลำดับ',
+                'เลขที่นั่งสอบ',
+                'เลขประจำตัวประชาชน',
+                'รหัสนักศึกษา',
+                'ชื่อ - สกุล',
+                'ระดับชั้น',
+                'กลุ่มเรียน',
+                'คะแนนรวม',
+                ...subHeaders.map((c, i) => `${c} (${STANDARD_SUBJECT_NAMES[i] ?? c})`),
+                'สถานะ',
             ];
-        });
 
-        const groupSuffix = group ? `_${group}` : '';
-        downloadExcel(`รายงานผล_N-NET_${levelLabel}_${year}_ครั้งที่${round}${groupSuffix}`, [
-            {
-                name: 'ผลการทดสอบ N-NET',
-                columns,
-                rows,
-            },
-        ]);
+            const rows = items.map((r, idx) => {
+                const subScores = r.subject_scores || {};
+                return [
+                    idx + 1,
+                    r.seat_no || '',
+                    r.citizen_id,
+                    r.student_code || '',
+                    r.student_name,
+                    r.education_level_label,
+                    r.group_name || '',
+                    r.has_score && r.total_score !== null ? r.total_score : '-',
+                    ...[0, 1, 2, 3, 4].map((sIdx) => {
+                        const code = r.subject_codes?.[sIdx];
+                        const score = (code ? subScores[code] : undefined) ?? (subScores as any)[sIdx];
+                        return score !== undefined && score !== null ? score : '-';
+                    }),
+                    r.has_score ? 'มีผลคะแนน' : 'ไม่มีคะแนน',
+                ];
+            });
+
+            const groupSuffix = group ? `_${group}` : '';
+            downloadExcel(`รายงานผล_N-NET_${levelLabel}_${year}_ครั้งที่${round}${groupSuffix}`, [
+                {
+                    name: 'ผลการทดสอบ N-NET',
+                    columns,
+                    rows,
+                },
+            ]);
+        } catch (error) {
+            Swal.fire('ส่งออกไม่สำเร็จ', error instanceof Error ? error.message : 'ไม่สามารถส่งออกข้อมูลได้', 'error');
+        } finally {
+            setIsExporting(false);
+        }
     };
 
     if (isStudent) {
@@ -375,9 +401,9 @@ export function NnetReportPage() {
                             appearance="outline"
                             icon={<FileXls size={18} weight="bold" />}
                             onClick={handleExportExcel}
-                            disabled={items.length === 0}
+                            disabled={items.length === 0 || isExporting}
                         >
-                            ส่งออก Excel
+                            {isExporting ? 'กำลังส่งออก...' : 'ส่งออก Excel'}
                         </Button>
                         <Button
                             appearance="primary"
@@ -630,7 +656,7 @@ export function NnetReportPage() {
 
             {/* Individual Results Table Panel */}
             <Panel
-                title={`ผลรายบุคคล (${items.length.toLocaleString('th-TH')} รายการ)`}
+                title={`ผลรายบุคคล (${(recordsQuery.data?.total ?? 0).toLocaleString('th-TH')} รายการ)`}
                 description="ข้อมูล N-NET สามารถเพิ่มและแก้ไขได้ แต่ระบบไม่อนุญาตให้ลบข้อมูลรายบุคคลหรือล้างข้อมูลทั้งชุด"
                 action={(
                     <div className="flex items-center gap-2">
@@ -698,7 +724,7 @@ export function NnetReportPage() {
                                     return (
                                         <tr key={r.id} className="hover:bg-slate-50/70">
                                             <td className="p-3 text-center font-mono text-slate-500">
-                                                {idx + 1}
+                                                {((recordsQuery.data?.current_page ?? 1) - 1) * (recordsQuery.data?.page_size ?? pageSize) + idx + 1}
                                             </td>
                                             <td className="p-3 font-mono text-slate-700">
                                                 {r.seat_no || '-'}
@@ -788,6 +814,8 @@ export function NnetReportPage() {
                     </div>
                 )}
             </Panel>
+
+            {recordsQuery.data && <Pagination currentPage={recordsQuery.data.current_page} totalPages={recordsQuery.data.last_page} totalItems={recordsQuery.data.total} pageSize={recordsQuery.data.page_size} disabled={recordsQuery.isFetching} onPageChange={setPage} onPageSizeChange={setPageSize} pageSizeOptions={[25, 50, 100, 500]} />}
 
             {/* Modal: View Details */}
             {detailRecord && (
@@ -1102,8 +1130,8 @@ export function NnetReportPage() {
                             >
                                 ยกเลิก
                             </Button>
-                            <Button appearance="primary" onClick={handleSaveForm}>
-                                บันทึกข้อมูล
+                            <Button appearance="primary" disabled={isSaving} onClick={handleSaveForm}>
+                                {isSaving ? 'กำลังบันทึก...' : 'บันทึกข้อมูล'}
                             </Button>
                         </div>
                     </div>

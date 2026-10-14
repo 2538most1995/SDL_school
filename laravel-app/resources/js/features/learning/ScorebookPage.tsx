@@ -154,11 +154,17 @@ type StaffScoreView = 'imported' | 'scorebook';
 
 function StaffScoresPage() {
     const [view, setView] = useState<StaffScoreView>('imported');
-    const navigation = <ScoreSourceTabs value={view} onChange={setView} />;
+    const [scorebookDirty, setScorebookDirty] = useState(false);
+    const navigation = <ScoreSourceTabs value={view} onChange={(next) => {
+        if (next === view) return;
+        if (scorebookDirty && !window.confirm('มีคะแนนหรือโครงสร้างที่ยังไม่ได้บันทึก ต้องการละทิ้งการแก้ไขหรือไม่?')) return;
+        setScorebookDirty(false);
+        setView(next);
+    }} />;
 
     return view === 'imported'
         ? <ImportedScoresPage sourceNavigation={navigation} />
-        : <TeacherScorebook sourceNavigation={navigation} />;
+        : <TeacherScorebook sourceNavigation={navigation} onDirtyChange={setScorebookDirty} />;
 }
 
 function ScoreSourceTabs({ value, onChange }: { value: StaffScoreView; onChange: (view: StaffScoreView) => void }) {
@@ -636,7 +642,7 @@ function ImportedScoresPage({ sourceNavigation }: { sourceNavigation: ReactNode 
     </div>;
 }
 
-function TeacherScorebook({ sourceNavigation }: { sourceNavigation: ReactNode }) {
+function TeacherScorebook({ sourceNavigation, onDirtyChange }: { sourceNavigation: ReactNode; onDirtyChange: (dirty: boolean) => void }) {
     const queryClient = useQueryClient();
     const scoreInputRefs = useRef(new Map<string, HTMLInputElement>());
     const [term, setTerm] = useState('');
@@ -647,6 +653,7 @@ function TeacherScorebook({ sourceNavigation }: { sourceNavigation: ReactNode })
     const [components, setComponents] = useState<ComponentDraft[]>(() => defaultComponents('60:40'));
     const [studentValues, setStudentValues] = useState<StudentDraft>({});
     const [scoresDirty, setScoresDirty] = useState(false);
+    const [workspaceReload, setWorkspaceReload] = useState(0);
     const [selectedTemplateId, setSelectedTemplateId] = useState('');
     const [bulkTemplateId, setBulkTemplateId] = useState('');
     const [templateName, setTemplateName] = useState('');
@@ -697,7 +704,7 @@ function TeacherScorebook({ sourceNavigation }: { sourceNavigation: ReactNode })
                 note: student.note ?? '',
             },
         ])));
-    }, [data?.scorebook?.id, data?.scorebook?.components, data?.scorebook?.score_ratio, data?.students, scoresDirty]);
+    }, [data?.scorebook?.id, data?.scorebook?.components, data?.scorebook?.score_ratio, data?.students, workspaceReload]);
 
     const componentTotal = useMemo(() => components.reduce((sum, component) => sum + (Number(component.maxScore) || 0), 0), [components]);
     const [courseworkWeight, finalExamWeight] = ratioWeights(scoreRatio);
@@ -705,6 +712,17 @@ function TeacherScorebook({ sourceNavigation }: { sourceNavigation: ReactNode })
     const finalExamTotal = useMemo(() => components.filter((component) => component.category === 'final_exam').reduce((sum, component) => sum + (Number(component.maxScore) || 0), 0), [components]);
     const selectedSubject = data?.selected_subject;
     const scorebook = data?.scorebook;
+    const persistedComponents = scorebook?.components.map((component) => ({ category: component.category, title: component.title, maxScore: formatScore(component.max_score) }))
+        ?? defaultComponents('60:40').map(({ category, title, maxScore }) => ({ category, title, maxScore }));
+    const structureDirty = Boolean(data) && (JSON.stringify(components.map(({ category, title, maxScore }) => ({ category, title, maxScore }))) !== JSON.stringify(persistedComponents)
+        || scoreRatio !== (scorebook?.score_ratio ?? '60:40'));
+    useEffect(() => { onDirtyChange(scoresDirty || structureDirty); }, [scoresDirty, structureDirty, onDirtyChange]);
+    useEffect(() => {
+        if (!scoresDirty && !structureDirty) return;
+        const warn = (event: BeforeUnloadEvent) => { event.preventDefault(); };
+        window.addEventListener('beforeunload', warn);
+        return () => window.removeEventListener('beforeunload', warn);
+    }, [scoresDirty, structureDirty]);
     const availableSubjects = useMemo(() => Array.from(new Map((data?.subjects ?? []).map((subject) => [subject.code, subject])).values()), [data?.subjects]);
     const applicableTemplates = useMemo(() => templateRows.filter((template) => template.applies_to_all
         || (selectedSubject !== null && selectedSubject !== undefined && template.subject_codes.includes(selectedSubject.code))), [selectedSubject, templateRows]);
@@ -865,6 +883,7 @@ function TeacherScorebook({ sourceNavigation }: { sourceNavigation: ReactNode })
     };
 
     const changeSubject = (value: string) => {
+        if (!confirmDiscardScores()) return;
         setScoresDirty(false);
         setStudentValues({});
         setSelected(value);
@@ -872,11 +891,17 @@ function TeacherScorebook({ sourceNavigation }: { sourceNavigation: ReactNode })
         setTab('scores');
     };
 
-    const reloadWorkspace = () => {
+    const reloadWorkspace = async () => {
+        if (!confirmDiscardScores()) return;
+        const result = await workspace.refetch();
+        if (!result.isSuccess) return;
         setScoresDirty(false);
-        setStudentValues({});
-        void workspace.refetch();
+        // An unchanged response keeps its previous references through query
+        // structural sharing; explicitly hydrate the persisted values again.
+        setWorkspaceReload((generation) => generation + 1);
     };
+
+    const confirmDiscardScores = () => (!scoresDirty && !structureDirty) || window.confirm('มีคะแนนหรือโครงสร้างที่ยังไม่ได้บันทึก ต้องการละทิ้งการแก้ไขหรือไม่?');
 
     const updateScore = (studentCode: string, componentId: string, value: string) => {
         if (value !== '' && !/^\d{0,3}(?:\.\d{0,2})?$/.test(value)) return;
@@ -976,12 +1001,12 @@ function TeacherScorebook({ sourceNavigation }: { sourceNavigation: ReactNode })
                     </Select>
                 </Field>
                 <Field label="ภาคเรียน">
-                    <Select value={term} onChange={(_, option) => { setScoresDirty(false); setStudentValues({}); setTerm(option.value); setSelected(''); setGroup(''); }} size="large">
+                    <Select value={term} onChange={(_, option) => { if (!confirmDiscardScores()) return; setScoresDirty(false); setStudentValues({}); setTerm(option.value); setSelected(''); setGroup(''); }} size="large">
                         {(data?.terms ?? []).map((item) => <option key={item} value={item}>{item}</option>)}
                     </Select>
                 </Field>
                 <Field label="กลุ่มเรียน">
-                    <Select value={group} onChange={(_, option) => { setScoresDirty(false); setStudentValues({}); setGroup(option.value); }} size="large" disabled={!selectedSubject}>
+                    <Select value={group} onChange={(_, option) => { if (!confirmDiscardScores()) return; setScoresDirty(false); setStudentValues({}); setGroup(option.value); }} size="large" disabled={!selectedSubject}>
                         <option value="">ทุกกลุ่มในวิชา</option>
                         {groupOptions.map((item) => <option key={item.code || item.name} value={item.code || item.name}>{item.name || item.code}</option>)}
                     </Select>
@@ -1008,7 +1033,7 @@ function TeacherScorebook({ sourceNavigation }: { sourceNavigation: ReactNode })
                     </Select>
                 </Field>
                 <Button type="button" appearance="primary" size="large" icon={<BookOpenText size={18} weight="bold" />} disabled={!bulkTemplate || readOnly || applyTemplateToAllSubjects.isPending || !data.selected_term} onClick={() => {
-                    if (bulkTemplate && window.confirm(`ใช้ต้นแบบ “${bulkTemplate.name}” สร้างสมุดคะแนนให้ทุกรายวิชาในภาคเรียน ${data.selected_term ?? term}?\n\nวิชาที่มีสมุดคะแนนอยู่แล้วจะไม่ถูกเปลี่ยนแปลง`)) applyTemplateToAllSubjects.mutate();
+                    if (confirmDiscardScores() && bulkTemplate && window.confirm(`ใช้ต้นแบบ “${bulkTemplate.name}” สร้างสมุดคะแนนให้ทุกรายวิชาในภาคเรียน ${data.selected_term ?? term}?\n\nวิชาที่มีสมุดคะแนนอยู่แล้วจะไม่ถูกเปลี่ยนแปลง`)) applyTemplateToAllSubjects.mutate();
                 }}>{applyTemplateToAllSubjects.isPending ? 'กำลังสร้างสมุดคะแนน' : 'ใช้กับทุกรายวิชา'}</Button>
             </div>
         </section>}
@@ -1081,7 +1106,7 @@ function TeacherScorebook({ sourceNavigation }: { sourceNavigation: ReactNode })
                         const newItem: ComponentDraft = { clientKey: `new-${Date.now()}`, category: 'coursework', title: `คะแนนเก็บครั้งที่ ${items.filter((item) => item.category === 'coursework').length + 1}`, maxScore: '10' };
                         return finalIndex < 0 ? [...items, newItem] : [...items.slice(0, finalIndex), newItem, ...items.slice(finalIndex)];
                     })}>เพิ่มช่องคะแนนเก็บ</Button>
-                    <Button type="button" appearance="primary" icon={<FloppyDisk size={18} weight="bold" />} disabled={!canEdit || !canSaveStructure || createScorebook.isPending || saveStructure.isPending} onClick={() => scorebook ? saveStructure.mutate() : createScorebook.mutate()}>{scorebook ? 'บันทึกโครงสร้าง' : 'สร้างสมุดคะแนน'}</Button>
+                    <Button type="button" appearance="primary" icon={<FloppyDisk size={18} weight="bold" />} disabled={!canEdit || !canSaveStructure || createScorebook.isPending || saveStructure.isPending} onClick={() => { if (scoresDirty && !window.confirm('การบันทึกโครงสร้างจะโหลดคะแนนใหม่ ต้องการละทิ้งคะแนนที่ยังไม่ได้บันทึกหรือไม่?')) return; scorebook ? saveStructure.mutate() : createScorebook.mutate(); }}>{scorebook ? 'บันทึกโครงสร้าง' : 'สร้างสมุดคะแนน'}</Button>
                 </div>
             </Panel>}
 

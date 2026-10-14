@@ -77,7 +77,7 @@ export function ExamAttendanceCheckPage() {
 
     const items = data?.items ?? [];
     const attendedCount = isStudent ? data?.summary.attended_students ?? 0 : items.filter((item) => attendance[rowKey(item)]).length;
-    const absentCount = isStudent ? data?.summary.absent_students ?? 0 : items.length - attendedCount;
+    const absentCount = isStudent ? data?.summary.absent_students ?? 0 : items.filter((item) => item.recorded && !attendance[rowKey(item)]).length;
     const pendingCount = data?.summary.pending_records ?? 0;
     const attendanceRate = items.length > 0 ? (attendedCount / items.length) * 100 : 0;
     const groups = useMemo(() => {
@@ -168,7 +168,7 @@ export function ExamAttendanceCheckPage() {
         </StatGrid> : <StatGrid>
             <StatTile label="ผู้มีสิทธิ์สอบ" value={`${items.length.toLocaleString('th-TH')} คน`} detail={view === 'subject' ? 'นักศึกษาในรายวิชาที่เลือก' : 'นักศึกษาตามตัวกรองที่เลือก'} icon={UsersThree} tone="sky" />
             <StatTile label="มาสอบ" value={`${attendedCount.toLocaleString('th-TH')} คน`} detail={`ร้อยละ ${attendanceRate.toFixed(1)}`} icon={CheckCircle} tone="emerald" />
-            <StatTile label="ขาดสอบ" value={`${absentCount.toLocaleString('th-TH')} คน`} detail={`ร้อยละ ${(items.length ? 100 - attendanceRate : 0).toFixed(1)}`} icon={Prohibit} tone="rose" />
+            <StatTile label="ขาดสอบ" value={`${absentCount.toLocaleString('th-TH')} คน`} detail={`ร้อยละ ${(items.length ? (absentCount / items.length) * 100 : 0).toFixed(1)} · ยังไม่บันทึก ${pendingCount} รายการ`} icon={Prohibit} tone="rose" />
             <StatTile label="อัตราการเข้าสอบ" value={`${attendanceRate.toFixed(1)}%`} detail={`${attendedCount.toLocaleString('th-TH')} จาก ${items.length.toLocaleString('th-TH')} คน`} icon={CheckSquare} tone="amber" />
         </StatGrid>}
         <Panel title={isStudent ? 'สถานะการเข้าสอบรายวิชา' : view === 'subject' ? 'เช็คชื่อตามรายวิชา' : 'เช็คชื่อตามรายคน'} description={isStudent ? 'หน้านี้ดูข้อมูลได้อย่างเดียว หากข้อมูลไม่ถูกต้องโปรดติดต่อครูผู้สอน' : 'ติ๊กถูกเมื่อมาสอบ รายการที่ไม่ติ๊กจะบันทึกเป็นขาดสอบ'} action={isStudent ? undefined : <div className="flex flex-wrap gap-2"><Button appearance="outline" onClick={() => setAttendance(Object.fromEntries(items.map((item) => [rowKey(item), false])))} disabled={items.length === 0}>ล้างทั้งหมด</Button><Button appearance="outline" onClick={() => setAttendance(Object.fromEntries(items.map((item) => [rowKey(item), true])))} disabled={items.length === 0}>เลือกทั้งหมด</Button><Button appearance="primary" icon={<FloppyDisk size={18} />} onClick={() => save.mutate()} disabled={items.length === 0 || save.isPending}>{save.isPending ? 'กำลังบันทึก' : 'บันทึกการเข้าสอบ'}</Button></div>}>

@@ -383,6 +383,13 @@ export function CalendarPage() {
     const [month, setMonth] = useState(() => new Date(new Date().getFullYear(), new Date().getMonth(), 1));
     const [type, setType] = useState<'all' | CalendarEvent['type']>('all');
     const [selected, setSelected] = useState<CalendarEvent | null>(null);
+    const [selectedDay, setSelectedDay] = useState<string | null>(null);
+    useEffect(() => {
+        if (!selectedDay) return;
+        const close = (event: KeyboardEvent) => { if (event.key === 'Escape') setSelectedDay(null); };
+        window.addEventListener('keydown', close);
+        return () => window.removeEventListener('keydown', close);
+    }, [selectedDay]);
     const [editor, setEditor] = useState<CalendarEvent | 'new' | null>(null);
     const query = useQuery({
         queryKey: ['learning', 'calendar'],
@@ -459,7 +466,7 @@ export function CalendarPage() {
                                 const key = dateKey(cell.date);
                                 const dayEvents = eventsByDate.get(key) ?? [];
                                 const today = key === dateKey(new Date());
-                                return <div key={key} className={`min-h-32 border-b border-r border-slate-100 p-2 ${cell.current ? 'bg-white' : 'bg-slate-50/70'}`}><div className={`grid size-7 place-items-center rounded-full text-xs font-black ${today ? 'bg-brand-700 text-white' : cell.current ? 'text-slate-700' : 'text-slate-400'}`}>{cell.date.getDate()}</div><div className="mt-1.5 space-y-1">{dayEvents.slice(0, 3).map((event) => <button key={event.id} type="button" onClick={() => setSelected(event)} className={`block w-full truncate rounded-lg border px-2 py-1 text-left text-[11px] font-black ${eventTypeClasses[event.type]}`}>{eventTimeForDate(event, key) && <span className="mr-1 opacity-75">{eventTimeForDate(event, key)}</span>}{event.title}</button>)}{dayEvents.length > 3 && <span className="block px-1 text-[10px] font-bold text-slate-500">อีก {dayEvents.length - 3} รายการ</span>}</div></div>;
+                                return <div key={key} className={`min-h-32 border-b border-r border-slate-100 p-2 ${cell.current ? 'bg-white' : 'bg-slate-50/70'}`}><div className={`grid size-7 place-items-center rounded-full text-xs font-black ${today ? 'bg-brand-700 text-white' : cell.current ? 'text-slate-700' : 'text-slate-400'}`}>{cell.date.getDate()}</div><div className="mt-1.5 space-y-1">{dayEvents.slice(0, 3).map((event) => <button key={event.id} type="button" onClick={() => setSelected(event)} className={`block w-full truncate rounded-lg border px-2 py-1 text-left text-[11px] font-black ${eventTypeClasses[event.type]}`}>{eventTimeForDate(event, key) && <span className="mr-1 opacity-75">{eventTimeForDate(event, key)}</span>}{event.title}</button>)}{dayEvents.length > 3 && <button type="button" onClick={() => setSelectedDay(key)} className="block rounded-lg px-2 py-1 text-[11px] font-bold text-brand-700 hover:bg-brand-50" aria-label={`ดูกิจกรรมทั้งหมดวันที่ ${formatScheduleDate(key)}`}>อีก {dayEvents.length - 3} รายการ · ดูทั้งหมด</button>}</div></div>;
                             })}
                         </div>
                     </div>
@@ -470,6 +477,12 @@ export function CalendarPage() {
                     <div className="mt-4 flex flex-wrap gap-3 text-xs font-bold text-slate-600">{(['activity', 'meeting', 'exam', 'assignment'] as const).map((eventType) => <span key={eventType} className={`rounded-full border px-2.5 py-1 ${eventTypeClasses[eventType]}`}>{eventTypeLabels[eventType]}</span>)}</div>
                 </>}
             </Panel>
+            {selectedDay && <div className="fixed inset-0 z-[70] grid place-items-center bg-slate-950/55 p-3" role="dialog" aria-modal="true" aria-labelledby="calendar-day-title">
+                <section className="max-h-[90dvh] w-full max-w-2xl overflow-y-auto rounded-2xl bg-white p-5 shadow-2xl">
+                    <header className="mb-4 flex items-center justify-between gap-3"><h2 id="calendar-day-title" className="font-black">{formatScheduleDate(selectedDay)}</h2><button type="button" onClick={() => setSelectedDay(null)} aria-label="ปิดรายการกิจกรรม" className="rounded-xl p-2"><X size={20} /></button></header>
+                    <div className="space-y-3">{(eventsByDate.get(selectedDay) ?? []).map((event) => <CalendarEventCard key={event.id} event={event} onSelect={(item) => { setSelectedDay(null); setSelected(item); }} />)}</div>
+                </section>
+            </div>}
             {selected && <CalendarDetail event={selected} canManage={canManage} onClose={() => setSelected(null)} onEdit={() => { save.reset(); setEditor(selected); }} onDelete={deleteSelected} />}
             {editor && <CalendarEditor event={editor} pending={save.isPending} error={save.error} availableGroups={availableGroups} canFeature={canFeature} onClose={() => setEditor(null)} onSubmit={(form) => save.mutate(form)} />}
         </div>

@@ -14,7 +14,7 @@ import {
     UploadSimple,
     X,
 } from '@phosphor-icons/react';
-import { useRef, useState, type FormEvent } from 'react';
+import { useEffect, useMemo, useRef, useState, type FormEvent } from 'react';
 import { PageHeader } from '../../components/PageHeader';
 import { Panel } from '../../components/Panel';
 import { QueryError, QuerySkeleton } from '../../components/QueryState';
@@ -215,7 +215,9 @@ export function AdminAnnouncementsPage() {
         if (imageInputRef.current) imageInputRef.current.value = '';
     }
 
-    const previewImageUrl = draft.image ? URL.createObjectURL(draft.image) : draft.existing_image_url ? withAppBasePath(draft.existing_image_url) : null;
+    const localPreview = useMemo(() => draft.image ? URL.createObjectURL(draft.image) : null, [draft.image]);
+    useEffect(() => () => { if (localPreview) URL.revokeObjectURL(localPreview); }, [localPreview]);
+    const previewImageUrl = localPreview ?? (draft.existing_image_url ? withAppBasePath(draft.existing_image_url) : null);
 
     function submit(event: FormEvent) {
         event.preventDefault();
