@@ -162,7 +162,6 @@ function ImportedScoresPage() {
     const showFinal = !entryActive || scoreColumns !== 'assessments';
     const [editError, setEditError] = useState('');
     const [searchParams] = useSearchParams();
-    const tableScrollRef = useRef<HTMLDivElement>(null);
     const [term, setTerm] = useState('');
     const [level, setLevel] = useState('');
     const [group, setGroup] = useState('');
@@ -232,6 +231,9 @@ function ImportedScoresPage() {
     const hasUnsaved = Object.values(saves).some(row => row.status !== 'saved');
     const errors = Object.values(saves).filter(row => row.status === 'error');
     const savedCount = Object.values(saves).filter(row => row.savedVersion > 0 && row.status === 'saved').length;
+    const availableEntryCount = rows.filter(row => canEnterScore(row) && !row.entry_completed).length;
+    const entryUnavailableReason = !data?.can_bulk_edit ? 'ยังไม่พร้อมกรอกคะแนน กรุณาตรวจสิทธิ์และการอัปเดตฐานข้อมูล'
+        : availableEntryCount === 0 ? 'รายการในหน้านี้บันทึกเสร็จแล้วหรือไม่รองรับการกรอก ให้กดแก้ไขทีละคน' : undefined;
     useEffect(() => {
         if (!hasUnsaved) return;
         const guard = (event: BeforeUnloadEvent) => { event.preventDefault(); event.returnValue = ''; };
@@ -503,13 +505,16 @@ function ImportedScoresPage() {
         </Panel>
 
         </fieldset>}
-        <Panel className="mt-5" title="ตารางคะแนนจากไฟล์นำเข้า" description={importedScores.isPending ? 'กำลังโหลดข้อมูล' : `พบทั้งหมด ${(data?.pagination.total ?? rows.length).toLocaleString('th-TH')} รายการ · หน้านี้ ${studentCount} คน และ ${subjectCount} วิชา`} action={
-            <div className="flex flex-wrap items-center gap-2">
-                {entryActive && <Button type="button" icon={<CheckCircle size={18} />} disabled={finishing} onClick={() => void finishEntry()}>บันทึกเสร็จ</Button>}
-                {!entryActive && data?.can_bulk_edit && <Button type="button" icon={<NotePencil size={18} />} disabled={importedScores.isFetching || !rows.some(row => canEnterScore(row) && !row.entry_completed)} onClick={() => startEntry('bulk', rows)}>กรอกคะแนน</Button>}
+        <Panel className="score-panel mt-5" title="ตารางคะแนนจากไฟล์นำเข้า" description={importedScores.isPending ? 'กำลังโหลดข้อมูล' : `พบทั้งหมด ${(data?.pagination.total ?? rows.length).toLocaleString('th-TH')} รายการ · หน้านี้ ${studentCount} คน และ ${subjectCount} วิชา`} action={
+            <div className="score-panel-actions flex flex-wrap items-center gap-2">
+                {!entryActive && <div className="score-entry-start">
+                    <Button type="button" appearance="primary" size="small" className="score-entry-start-button" icon={<NotePencil size={18} weight="bold" />} disabled={importedScores.isFetching || !!entryUnavailableReason} title={entryUnavailableReason} onClick={() => startEntry('bulk', rows)}>กรอกคะแนน</Button>
+                    {data && entryUnavailableReason && <span className="score-entry-unavailable">{data.can_bulk_edit ? 'เสร็จแล้ว / แก้ไขทีละคน' : 'ยังไม่เปิดให้กรอก'}</span>}
+                </div>}
                 {!entryActive && <>
                 <Button
                     type="button"
+                    size="small"
                     appearance={showIncorrectOnly ? 'primary' : 'outline'}
                     icon={<Calculator size={18} weight="bold" />}
                     onClick={() => {
@@ -527,6 +532,7 @@ function ImportedScoresPage() {
                 </Button>
                 <Button
                     type="button"
+                    size="small"
                     appearance={showLowMidtermOnly ? 'primary' : 'outline'}
                     icon={<WarningCircle size={18} weight="bold" />}
                     onClick={() => {
@@ -542,10 +548,10 @@ function ImportedScoresPage() {
                 >
                     {showLowMidtermOnly ? 'แสดงคะแนนทั้งหมด' : 'ตรวจคะแนนกลางภาค < 40'}
                 </Button>
-                <Button type="button" appearance="outline" icon={<ListChecks size={18} weight="bold" />} onClick={() => setShowScoreLegend((prev) => !prev)}>
+                <Button type="button" size="small" appearance="outline" icon={<ListChecks size={18} weight="bold" />} onClick={() => setShowScoreLegend((prev) => !prev)}>
                     {showScoreLegend ? 'ซ่อนคำอธิบาย 1-9' : 'คำอธิบายคะแนน 1-9'}
                 </Button>
-                <Button type="button" appearance="outline" icon={<ArrowsClockwise size={18} weight="bold" />} onClick={() => importedScores.refetch()} disabled={importedScores.isFetching || entryActive}>
+                <Button type="button" size="small" appearance="outline" icon={<ArrowsClockwise size={18} weight="bold" />} onClick={() => importedScores.refetch()} disabled={importedScores.isFetching || entryActive}>
                     โหลดข้อมูลใหม่
                 </Button>
                 </>}
@@ -625,19 +631,8 @@ function ImportedScoresPage() {
                     </div>
                     <p className="text-xs text-slate-500">เลือกเฉพาะช่องที่ต้องการ เพื่อกรอกได้เร็วขึ้น</p>
                 </div>}
-                <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
-                    <p className="text-xs leading-5 text-slate-500">เลื่อนซ้าย–ขวาเพื่อดูทุกช่อง · หัวตารางและชื่อคงอยู่ขณะเลื่อน</p>
-                    <div className="flex flex-wrap gap-2">
-                        <Button appearance="outline" size="small" onClick={() => tableScrollRef.current?.scrollTo({ left: 0 })}>ข้อมูลนักศึกษา</Button>
-                        <Button appearance="outline" size="small" onClick={() => {
-                            const container = tableScrollRef.current;
-                            const target = container?.querySelector<HTMLElement>('[data-score-column]');
-                            if (container && target) container.scrollTo({ left: Math.max(0, target.offsetLeft - (window.innerWidth >= 768 ? 240 : 160)) });
-                        }}>ไปช่องคะแนน</Button>
-                        <Button appearance="outline" size="small" onClick={() => tableScrollRef.current?.scrollTo({ left: tableScrollRef.current.scrollWidth })}>ผลตรวจการคำนวณ</Button>
-                    </div>
-                </div>
-                <div ref={tableScrollRef} role="region" aria-label="ตารางคะแนนจากข้อมูลนำเข้า เลื่อนแนวนอนเพื่อดูคะแนนทุกช่อง" tabIndex={0} className="imported-score-scroll rounded-xl border border-slate-200 outline-none focus:ring-2 focus:ring-brand-200">
+                <p className="mb-2 text-xs leading-5 text-slate-500">เลื่อนซ้าย–ขวาเพื่อดูทุกช่อง · หัวตารางและชื่อคงอยู่ขณะเลื่อน</p>
+                <div role="region" aria-label="ตารางคะแนนจากข้อมูลนำเข้า เลื่อนแนวนอนเพื่อดูคะแนนทุกช่อง" tabIndex={0} className="imported-score-scroll rounded-xl border border-slate-200 outline-none focus:ring-2 focus:ring-brand-200">
                 <table className={`imported-score-table w-full text-sm ${entryActive ? `score-entry-table ${scoreColumns === 'exams' ? 'min-w-[620px]' : 'min-w-[1480px]'}` : 'min-w-[2080px]'}`}>
                     <caption className="sr-only">คะแนนจากข้อมูลนำเข้า ตามตัวกรองที่เลือก</caption>
                     <thead className="bg-slate-50 text-slate-700">
@@ -648,7 +643,7 @@ function ImportedScoresPage() {
                             {!entryActive && <th scope="col" className="min-w-36 border-b border-r border-slate-200 px-3 py-3 text-left">กลุ่ม</th>}
                             {!entryActive && <th scope="col" className="min-w-64 border-b border-r border-slate-200 px-4 py-3 text-left">วิชา</th>}
                             {!entryActive && <th scope="col" className="min-w-28 border-b border-r border-slate-200 px-3 py-3 text-center">วิธีเรียน</th>}
-                            {showAssessments && scoreLabels.map((label, index) => <th scope="col" data-score-column={index === 0 ? true : undefined} key={`${label}-${index}`} className="w-16 border-b border-r border-slate-200 px-2 py-3 text-center" title={label}><span className="block truncate">{index + 1}</span><span className="sr-only">{label}</span></th>)}
+                            {showAssessments && scoreLabels.map((label, index) => <th scope="col" key={`${label}-${index}`} className="w-16 border-b border-r border-slate-200 px-2 py-3 text-center" title={label}><span className="block truncate">{index + 1}</span><span className="sr-only">{label}</span></th>)}
                             <th scope="col" className="w-24 border-b border-r border-slate-200 bg-sky-50 px-3 py-3 text-center">กลางภาค</th>
                             {showFinal && <th scope="col" className="w-24 border-b border-r border-slate-200 bg-amber-50 px-3 py-3 text-center">ปลายภาค</th>}
                             <th scope="col" className="w-20 border-b border-r border-slate-200 bg-brand-50 px-3 py-3 text-center">รวม</th>
@@ -674,8 +669,10 @@ function ImportedScoresPage() {
                                     <p role="status" className={state.status === 'error' ? 'font-bold text-rose-700' : state.status === 'saved' ? 'font-semibold text-emerald-700' : 'font-semibold text-amber-800'}>{state.status === 'saving' ? 'กำลังบันทึก…' : state.status === 'pending' ? 'รอบันทึก…' : state.status === 'error' ? 'บันทึกไม่สำเร็จ' : state.savedVersion > 0 ? 'บันทึกแล้ว' : 'พร้อมกรอก'}</p>
                                     {state.error && <p id={`score-error-${rowIndex}`} role="alert" className="mt-1 break-words text-rose-700">{state.error}</p>}
                                     {state.status === 'error' && <button type="button" disabled={finishing} onClick={() => state.conflict ? void reloadScore(key) : session?.queue.retry(key)} className="mt-2 rounded border border-rose-300 px-2 py-2 font-bold text-rose-800">{state.conflict ? 'ใช้คะแนนล่าสุด' : 'ลองบันทึกอีกครั้ง'}</button>}
-                                </div> : row.entry_completed ? <p className="mt-2 inline-flex items-center gap-1 text-xs font-semibold text-emerald-700"><LockKey size={14} /> บันทึกเสร็จแล้ว</p> : null}
-                                {data?.can_bulk_edit && !entryActive && canEnterScore(row) && <button type="button" disabled={importedScores.isFetching} onClick={() => startEntry('individual', [row])} className="mt-2 rounded border border-brand-600 bg-white px-3 py-2 text-xs font-bold text-brand-800 disabled:opacity-50">แก้ไขคะแนน</button>}
+                                </div> : (row.entry_completed || data?.can_bulk_edit && !entryActive && canEnterScore(row)) && <div className="score-row-actions">
+                                    {row.entry_completed && <span className="score-row-completed" title="บันทึกเสร็จแล้ว"><LockKey size={12} aria-hidden="true" /> เสร็จแล้ว</span>}
+                                    {data?.can_bulk_edit && !entryActive && canEnterScore(row) && <button type="button" disabled={importedScores.isFetching} onClick={() => startEntry('individual', [row])} className="score-row-edit" aria-label={`แก้ไขคะแนน ${row.full_name} ${row.subject_code}`} title="แก้ไขคะแนนทีละคน"><NotePencil size={13} aria-hidden="true" />แก้ไข</button>}
+                                </div>}
                             </td>
                             {!entryActive && <td className="border-b border-r border-slate-200 px-3 py-3"><p className="font-bold text-slate-800">{row.group_name || row.group_code || '-'}</p>{row.group_name && row.group_code && <p className="mt-1 font-mono text-xs text-slate-500">{row.group_code}</p>}</td>}
                             {!entryActive && <td className="border-b border-r border-slate-200 px-4 py-3"><p className="font-black text-slate-950">{row.subject_name || '-'}</p><p className="mt-1 font-mono text-xs text-slate-500">{row.subject_code}</p></td>}
@@ -704,15 +701,15 @@ function ImportedScoresPage() {
             </div></>}
             {importedScores.data && <Pagination currentPage={data?.pagination.current_page ?? page} totalPages={data?.pagination.last_page ?? 1} totalItems={data?.pagination.total ?? rows.length} pageSize={data?.pagination.per_page ?? perPage} itemLabel="รายการคะแนน" disabled={importedScores.isFetching || entryActive} onPageChange={setPage} onPageSizeChange={(nextPageSize) => { setPerPage(nextPageSize); setPage(1); }} />}
         </Panel>
-        {entryActive && <div className="score-entry-toolbar sticky bottom-3 z-20 mt-4 flex flex-wrap items-center justify-between gap-3 rounded-2xl border border-brand-200 bg-white p-4 shadow-lg">
-            <div role="status" aria-live="polite" className="text-sm">
-                <p className={`inline-flex items-center gap-2 font-bold ${errors.length ? 'text-rose-700' : hasUnsaved ? 'text-amber-800' : 'text-emerald-700'}`}>
-                    {errors.length ? <WarningCircle size={20} /> : hasUnsaved ? <ArrowsClockwise size={20} /> : <CheckCircle size={20} />}
-                    {errors.length ? `${errors.length} รายการยังบันทึกไม่สำเร็จ` : hasUnsaved ? 'กำลังบันทึกคะแนนอัตโนมัติ…' : 'บันทึกการเปลี่ยนแปลงครบแล้ว'}
-                </p>
-                <p className="mt-1 text-xs text-slate-500">แก้ไขและบันทึกแล้ว {savedCount} รายการ · กดบันทึกเสร็จเพื่อปิดช่องกรอกในหน้านี้</p>
+        {entryActive && <div className="score-entry-toolbar" role="region" aria-label="สถานะบันทึกคะแนนและบันทึกเสร็จ">
+            <div role="status" aria-live="polite" className="score-entry-save-state" title={`บันทึกแล้ว ${savedCount} รายการจาก ${Object.keys(session.originals).length} รายการที่เปิดกรอก`}>
+                <span className={`inline-flex items-center gap-1.5 font-semibold ${errors.length ? 'text-rose-700' : hasUnsaved ? 'text-amber-800' : 'text-emerald-700'}`}>
+                    {errors.length ? <WarningCircle size={16} /> : hasUnsaved ? <ArrowsClockwise size={16} /> : <CheckCircle size={16} />}
+                    {errors.length ? `ไม่สำเร็จ ${errors.length} รายการ` : hasUnsaved ? 'กำลังบันทึก…' : 'บันทึกครบแล้ว'}
+                </span>
+                <span className="score-entry-save-count">แก้ไขและบันทึกแล้ว {savedCount} รายการ</span>
             </div>
-            <Button type="button" icon={<CheckCircle size={20} />} disabled={finishing} onClick={() => void finishEntry()}>{finishing ? 'กำลังบันทึกและปิดการกรอก…' : 'บันทึกเสร็จ'}</Button>
+            <Button type="button" appearance="primary" size="small" className="score-entry-finish" icon={<CheckCircle size={16} />} disabled={finishing} onClick={() => void finishEntry()}>{finishing ? 'กำลังปิด…' : 'บันทึกเสร็จ'}</Button>
         </div>}
     </div>;
 }

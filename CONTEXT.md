@@ -216,3 +216,8 @@ The scores page now edits the imported ITW grade rows directly: assessment 1–9
 ### Score entry autosave and completion (2026-10-15)
 
 Staff open the score-entry button to edit every eligible unfinished row on the current filtered page. Changes autosave after 650 ms or cell blur; finishing flushes all saves before recording completion. Completion persists per district/batch/level/student/subject/normalized term/remedial identity and excludes those rows from future bulk entry after reload. Completed rows can still be reopened individually. Transfers/special grades and role/group boundaries remain protected. Keyboard navigation, row save/error indicators, compact column views and a sticky finish action support rapid entry. Untouched scores and grades remain unchanged when finishing. A new import starts its own completion state; completion metadata is not an ITW grade or portable dataset.
+
+
+### Compact score controls (2026-10-15)
+
+The entry action uses an explicit filled primary style and remains visible with an explanation when permissions/schema readiness or completed rows prevent bulk entry. The three horizontal-scroll shortcut buttons have been removed. Completion status and finish action now use a compact fixed toolbar below the app header, following the viewport on desktop/mobile rather than occupying a full-width footer. Individual edit controls use a compact icon/text action alongside a shorter completion badge. Existing completion locks, autosave, keyboard navigation and access scope remain unchanged; no migration or score-data writes are introduced. Verified with frontend tests, TypeScript/build and isolated demo browser mocks including toolbar position after scrolling and compact edit sizes.

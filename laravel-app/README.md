@@ -269,3 +269,6 @@ npm run build
 
 
 Verification for autosave/completion (2026-10-15): PHP suite 445 tests, 444 passed and 1 existing skip; frontend 57 tests passed; TypeScript and production build passed. Browser checks used synthetic API responses on an isolated demo SQLite server for bulk entry, Enter/Tab navigation, mobile width, failure/retry, persistent completion and individual reopening. Changed PHP files pass Pint. Repository-wide Pint still reports pre-existing formatting in `DistrictBranding`, `AnnouncementController`, `StudentAnnouncementController`, `CurriculumCatalog`, `CourseRegistrationExportService`, `routes/web.php` and `CourseRegistrationPdfTest`; these unrelated files were not modified.
+
+
+Score-control UI refinement (2026-10-15): entry is a filled primary button; if all visible rows are complete it stays disabled and explains individual correction. The old student/scores/audit scroll shortcut buttons are removed. A compact status/finish toolbar stays fixed below the app header while entering, and individual edit buttons are smaller. This refinement adds no migrations and does not modify stored scores.
