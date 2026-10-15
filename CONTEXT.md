@@ -28,6 +28,11 @@ District scope is resolved by `ResolveDistrictContext`; role checks are enforced
 
 ## Business rules
 
+### Registration workspace ITW status (2026-10-15)
+
+- The staff registration list marks `ลงทะเบียนแล้ว` when scoped imported Grade records contain a nonempty subject code in the selected normalized academic term, including registrations awaiting grades. It counts distinct subject codes and exposes additive `registration.is_imported` and `registration.imported_count`; `is_saved` retains its web-save meaning. Imported registration status takes display precedence over saved web forms, and summary counts include either source.
+- The status cell also shows `หน่วยกิตครบ` independently when the existing credit policy confirms both compulsory and elective earned-credit requirements. Current-term registrations alone do not award earned credits. No schema or imported-data writes are needed; district and teacher-group scope remain unchanged.
+
 ### Remedial grade labels (2026-10-09)
 
 - Academic grade responses and imported-score rows expose additive `is_remedial`, sourced from `TYP_CODE = 7` on the selected ITW grade record. The staff grade-detail dialog and imported-score grade cell show a small `ซ่อม` label beside the original grade. Grade 1 or a mismatch between total and grade alone does not trigger the label; regular, transferred and unknown registration types are not inferred as remedial.

@@ -102,7 +102,15 @@ final readonly class CourseRegistrationService
         }
 
         $gradesByStudent = $filtered === [] ? [] : $this->repository->gradesForMany($filtered);
-        $items = array_map(function (Student $student) use ($registeredMap, $gradesByStudent): array {
+        $items = array_map(function (Student $student) use ($registeredMap, $gradesByStudent, $selectedTerm): array {
+            $grades = $gradesByStudent[$this->studentKey($student)] ?? [];
+            $importedSubjects = [];
+            foreach ($grades as $grade) {
+                $code = trim($grade->subjectCode);
+                if ($code !== '' && (AcademicTerm::normalize($grade->term) ?? $grade->term) === (AcademicTerm::normalize($selectedTerm) ?? $selectedTerm)) {
+                    $importedSubjects[$code] = true;
+                }
+            }
             $reg = $registeredMap[$student->code] ?? [
                 'is_saved' => false,
                 'compulsory_count' => 0,
@@ -115,7 +123,7 @@ final readonly class CourseRegistrationService
             ];
             $progress = $this->academicProgress(
                 $student,
-                $gradesByStudent[$this->studentKey($student)] ?? [],
+                $grades,
             );
             $policy = $this->registrationPolicy(
                 $student,
@@ -125,6 +133,8 @@ final readonly class CourseRegistrationService
             );
             unset($reg['compulsory_subjects'], $reg['elective_subjects']);
             $reg['credit_policy'] = $policy;
+            $reg['is_imported'] = $importedSubjects !== [];
+            $reg['imported_count'] = count($importedSubjects);
 
             return [
                 'code' => $student->code,

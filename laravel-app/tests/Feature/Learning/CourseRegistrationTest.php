@@ -88,6 +88,59 @@ final class CourseRegistrationTest extends TestCase
         }
     }
 
+    public function test_workspace_recognizes_distinct_itw_registrations_only_in_selected_term(): void
+    {
+        Sanctum::actingAs($this->viewer('admin'));
+        $this->registrationGrades([
+            new Grade('6650100001', 'พท11001', 'ภาษาไทย', 3, 'compulsory', '2/2569', null),
+            new Grade('6650100001', 'พท11001', 'ภาษาไทย', 3, 'compulsory', '2569/2', '0'),
+            new Grade('6650100001', 'พว12010', 'พลังงาน', 2, 'elective', '2/69', ''),
+            new Grade('6650100001', 'สค12021', 'การเงิน', 2, 'elective', '1/2569', '3'),
+            new Grade('6650100001', ' ', 'ไม่มีรหัสวิชา', 2, 'elective', '2/2569', null),
+        ]);
+
+        $this->getJson('/api/v1/learning/registration/workspace?term=2/2569&search=6650100001')
+            ->assertOk()
+            ->assertJsonCount(1, 'data.items')
+            ->assertJsonPath('data.items.0.registration.is_saved', false)
+            ->assertJsonPath('data.items.0.registration.is_imported', true)
+            ->assertJsonPath('data.items.0.registration.imported_count', 2)
+            ->assertJsonPath('data.items.0.is_credit_complete', false);
+
+        $this->getJson('/api/v1/learning/registration/workspace?term=1/2570&search=6650100001')
+            ->assertOk()
+            ->assertJsonPath('data.items.0.registration.is_saved', false)
+            ->assertJsonPath('data.items.0.registration.is_imported', false)
+            ->assertJsonPath('data.items.0.registration.imported_count', 0);
+
+        $this->assertDatabaseCount('learning_course_registrations', 0);
+    }
+
+    public function test_workspace_keeps_saved_and_itw_registration_states_independent(): void
+    {
+        Sanctum::actingAs($this->viewer('admin'));
+        $this->registrationGrades([
+            new Grade('6650100001', 'พท11001', 'ภาษาไทย', 3, 'compulsory', '2/2569', null),
+        ]);
+        DB::table('learning_course_registrations')->insert([
+            'district_id' => $this->district->id,
+            'student_code' => '6650100001',
+            'academic_term' => '2/2569',
+            'education_level' => 1,
+            'compulsory_subjects' => '[]',
+            'elective_subjects' => '[]',
+            'created_at' => now(),
+            'updated_at' => now(),
+        ]);
+
+        $this->getJson('/api/v1/learning/registration/workspace?term=2/2569&search=6650100001')
+            ->assertOk()
+            ->assertJsonPath('data.items.0.registration.is_saved', true)
+            ->assertJsonPath('data.items.0.registration.total_count', 0)
+            ->assertJsonPath('data.items.0.registration.is_imported', true)
+            ->assertJsonPath('data.items.0.registration.imported_count', 1);
+    }
+
     public function test_user_can_get_student_registration_details_with_standard_subjects(): void
     {
         Sanctum::actingAs($this->viewer('admin'));
@@ -932,9 +985,19 @@ final class CourseRegistrationTest extends TestCase
     {
         $demo = $this->app->make(DemoStudentRepository::class);
         $repository = \Mockery::mock(StudentRepository::class);
-        foreach (['students', 'find', 'gradesForMany', 'subjectsFor', 'kpchFor', 'moralFor'] as $method) {
+        foreach (['students', 'find', 'subjectsFor', 'kpchFor', 'moralFor'] as $method) {
             $repository->shouldReceive($method)->andReturnUsing(static fn (...$args) => $demo->{$method}(...$args));
         }
+        $repository->shouldReceive('gradesForMany')->andReturnUsing(static function (array $students) use ($demo, $grades): array {
+            $result = $demo->gradesForMany($students);
+            foreach ($students as $student) {
+                if ($student->code === '6650100001') {
+                    $result["{$student->districtId}|{$student->level}|{$student->code}"] = $grades;
+                }
+            }
+
+            return $result;
+        });
         $repository->shouldReceive('gradesFor')->andReturn($grades);
         $this->app->instance(StudentRepository::class, $repository);
     }

@@ -62,6 +62,8 @@ type WorkspaceItem = {
     is_potential_graduate: boolean;
     registration: {
         is_saved: boolean;
+        is_imported: boolean;
+        imported_count: number;
         compulsory_count: number;
         elective_count: number;
         transferred_count: number;
@@ -514,14 +516,20 @@ function StaffCourseRegistrationPage() {
                 size: 170,
                 cell: ({ row }: any) => {
                     const reg = row.original.registration;
-                    if (reg.is_saved) {
-                        return (
-                            <StatusBadge tone="success">
-                                บันทึกแล้ว ({reg.total_count} วิชา)
-                            </StatusBadge>
-                        );
-                    }
-                    return <StatusBadge tone="neutral">ยังไม่บันทึก</StatusBadge>;
+                    return (
+                        <div className="flex flex-wrap gap-1">
+                            {reg.is_imported ? (
+                                <StatusBadge tone="success">ลงทะเบียนแล้ว (ITW {reg.imported_count} วิชา)</StatusBadge>
+                            ) : reg.is_saved ? (
+                                <StatusBadge tone="success">บันทึกแล้ว ({reg.total_count} วิชา)</StatusBadge>
+                            ) : (
+                                <StatusBadge tone="neutral">ยังไม่บันทึก</StatusBadge>
+                            )}
+                            {row.original.is_credit_complete && (
+                                <StatusBadge tone="success">หน่วยกิตครบ</StatusBadge>
+                            )}
+                        </div>
+                    );
                 },
             },
             {
@@ -562,7 +570,7 @@ function StaffCourseRegistrationPage() {
 
     // Count statistics
     const totalCount = workspaceData.items.length;
-    const registeredCount = workspaceData.items.filter((i) => i.registration.is_saved).length;
+    const registeredCount = workspaceData.items.filter((i) => i.registration.is_saved || i.registration.is_imported).length;
     const pendingCount = totalCount - registeredCount;
 
     return (
@@ -646,7 +654,7 @@ function StaffCourseRegistrationPage() {
                             tone="sky"
                         />
                         <StatTile
-                            label="บันทึกแล้ว"
+                            label="ลงทะเบียนแล้ว / บันทึกแล้ว"
                             value={registeredCount}
                             detail="มีข้อมูลลงทะเบียนในระบบ"
                             icon={CheckCircle}
