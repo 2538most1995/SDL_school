@@ -25,6 +25,11 @@ final class StudentMenuTest extends TestCase
         return array_map(fn (array $item): array => array_intersect_key($item, array_flip(['key', 'label', 'description', 'visible'])), app(StudentDashboardMenu::class)->defaults());
     }
 
+    private function custom(string $key = 'custom-school', string $url = 'https://school.example.org/news?term=2', string $type = 'external'): array
+    {
+        return ['key' => $key, 'label' => 'ข่าวโรงเรียน', 'description' => 'เปิดข้อมูลเพิ่มเติม', 'visible' => true, 'link_type' => $type, 'url' => $url];
+    }
+
     public function test_default_student_menu_preserves_eight_homepage_buttons_and_allows_only_student_modules(): void
     {
         $district = $this->district('menu');
@@ -93,7 +98,7 @@ final class StudentMenuTest extends TestCase
     {
         $district = $this->district('menu');
         Sanctum::actingAs(User::factory()->create(['role' => 'admin', 'district_id' => $district->id]));
-        foreach (['unknown', 'duplicate', 'missing', 'route', 'icon', 'roles', 'tone', 'blank', 'label-long', 'description-long', 'visible-string', 'missing-visible'] as $invalid) {
+        foreach (['unknown', 'duplicate', 'missing', 'route', 'icon', 'roles', 'tone', 'custom', 'external', 'url', 'link_type', 'blank', 'label-long', 'description-long', 'visible-string', 'missing-visible'] as $invalid) {
             $items = $this->items();
             switch ($invalid) {
                 case 'unknown': $items[0]['key'] = 'users';
@@ -181,5 +186,128 @@ final class StudentMenuTest extends TestCase
         $migration->up();
         $migration->up();
         $this->assertSame($this->items(), $district->fresh()->student_menu_preferences);
+    }
+
+    public function test_admin_can_add_mixed_internal_external_links_reorder_hide_and_delete_them_with_district_isolation(): void
+    {
+        $district = $this->district('custom');
+        $other = $this->district('other-custom');
+        Sanctum::actingAs(User::factory()->create(['role' => 'admin', 'district_id' => $district->id]));
+        $defaults = $this->items();
+        $hidden = [...$this->custom('custom-hidden'), 'visible' => false];
+        $items = [$this->custom('custom-home', '/app', 'internal'), $defaults[0], $this->custom(), ...array_slice($defaults, 1), $hidden];
+        $response = $this->patchJson('/api/v1/admin/student-menu', ['items' => $items])->assertOk()
+            ->assertJsonPath('data.items.0.key', 'custom-home')->assertJsonPath('data.items.0.route', '/app')
+            ->assertJsonPath('data.items.0.custom', true)->assertJsonPath('data.items.0.external', false)
+            ->assertJsonPath('data.items.1.custom', false)->assertJsonPath('data.items.1.external', false)
+            ->assertJsonPath('data.items.2.key', 'custom-school')->assertJsonPath('data.items.2.external', true)
+            ->assertJsonPath('data.items.2.icon', 'link')->assertJsonPath('data.items.2.tone', 'blue');
+        $routes = collect($response->json('data.internal_routes'));
+        $this->assertTrue($routes->contains('route', '/app'));
+        $this->assertFalse($routes->contains('route', '/admin/users'));
+        $this->getJson('/api/v1/admin/student-menu')->assertOk()->assertJsonPath('data.items.2.url', $items[2]['url']);
+        $this->assertNull($other->fresh()->student_menu_preferences);
+        Sanctum::actingAs(User::factory()->create(['role' => 'student', 'district_id' => $district->id]));
+        $student = $this->getJson('/api/v1/system/catalog')->assertOk()->assertJsonPath('data.student_menu.0.key', 'custom-home')
+            ->assertJsonPath('data.student_menu.2.key', 'custom-school')->assertJsonPath('data.student_menu.2.external', true);
+        $this->assertFalse(collect($student->json('data.student_menu'))->contains('key', 'custom-hidden'));
+        Sanctum::actingAs(User::factory()->create(['role' => 'student', 'district_id' => $other->id]));
+        $this->getJson('/api/v1/system/catalog')->assertOk()->assertJsonCount(8, 'data.student_menu');
+        Sanctum::actingAs(User::factory()->create(['role' => 'admin', 'district_id' => $district->id]));
+        $this->patchJson('/api/v1/admin/student-menu', ['items' => [$defaults[0], $this->custom(), ...array_slice($defaults, 1)]])->assertOk()
+            ->assertJsonPath('data.items.1.key', 'custom-school');
+        $this->assertFalse(collect($district->fresh()->student_menu_preferences)->contains('key', 'custom-home'));
+        $this->patchJson('/api/v1/admin/student-menu', ['items' => $defaults])->assertOk()->assertJsonCount(count($defaults), 'data.items');
+    }
+
+    public function test_custom_internal_links_reject_staff_routes_and_non_catalog_destinations(): void
+    {
+        $district = $this->district('custom');
+        Sanctum::actingAs(User::factory()->create(['role' => 'admin', 'district_id' => $district->id]));
+        foreach (['/admin/users', '/super-admin/districts', '/reports/registered-subjects', '/learning/lesson-plans', '//school.example.org', '/app?role=admin', '/app#section', '/settings/../admin/users', 'https://school.example.org'] as $url) {
+            $this->patchJson('/api/v1/admin/student-menu', ['items' => [...$this->items(), $this->custom(url: $url, type: 'internal')]])->assertUnprocessable();
+        }
+        $this->assertNull($district->fresh()->student_menu_preferences);
+    }
+
+    public function test_custom_external_links_reject_unsafe_schemes_credentials_whitespace_and_malformed_urls(): void
+    {
+        $district = $this->district('custom');
+        Sanctum::actingAs(User::factory()->create(['role' => 'admin', 'district_id' => $district->id]));
+        foreach ([
+            'javascript:alert(1)', 'data:text/html,test', 'ftp://school.example.org', '//school.example.org',
+            '/learning', 'https:school.example.org', 'https:///school.example.org', 'https://',
+            'https://user:pass@school.example.org', 'https://user@school.example.org', 'https://@school.example.org',
+            'https://school.example.org\\@evil.example.org', "https://school.example.org/a\nb", "https://school.example.org/a\tb",
+            'https://school.example.org/a b', "https://school.example.org/a\u{00A0}b", 'https://school.example.org:99999',
+            'https://school.example.org/%0a', 'https://school.example.org/%00',
+            'https://school.example.org/%GG', 'https://school.example.org/'.str_repeat('a', 2048),
+        ] as $url) {
+            $this->patchJson('/api/v1/admin/student-menu', ['items' => [...$this->items(), $this->custom(url: $url)]])->assertUnprocessable();
+        }
+        $this->assertNull($district->fresh()->student_menu_preferences);
+        foreach (['http://school.example.org/path', 'https://school.example.org/path?q=school%20news#latest'] as $url) {
+            $this->patchJson('/api/v1/admin/student-menu', ['items' => [...$this->items(), $this->custom(url: $url)]])->assertOk();
+        }
+    }
+
+    public function test_custom_links_require_complete_fields_unique_keys_and_at_most_fifty_entries(): void
+    {
+        $district = $this->district('custom');
+        Sanctum::actingAs(User::factory()->create(['role' => 'admin', 'district_id' => $district->id]));
+        foreach (['url', 'link_type', 'description', 'visible'] as $field) {
+            $custom = $this->custom();
+            unset($custom[$field]);
+            $this->patchJson('/api/v1/admin/student-menu', ['items' => [...$this->items(), $custom]])->assertUnprocessable();
+        }
+        foreach (['custom-', 'custom-UPPER', 'custom-'.str_repeat('a', 65), 'my-own-key'] as $key) {
+            $this->patchJson('/api/v1/admin/student-menu', ['items' => [...$this->items(), $this->custom(key: $key)]])->assertUnprocessable();
+        }
+        $this->patchJson('/api/v1/admin/student-menu', ['items' => [...$this->items(), $this->custom(), $this->custom()]])->assertUnprocessable();
+        $this->patchJson('/api/v1/admin/student-menu', ['items' => [...array_slice($this->items(), 1), $this->custom()]])->assertUnprocessable();
+        foreach (['route', 'icon', 'roles', 'tone', 'custom', 'external'] as $field) {
+            $this->patchJson('/api/v1/admin/student-menu', ['items' => [...$this->items(), [...$this->custom(), $field => 'unsafe']]])->assertUnprocessable();
+        }
+        $customs = array_map(fn (int $index): array => $this->custom('custom-'.$index), range(1, 50));
+        $this->patchJson('/api/v1/admin/student-menu', ['items' => [...$this->items(), ...$customs, $this->custom('custom-51')]])->assertUnprocessable();
+        $this->patchJson('/api/v1/admin/student-menu', ['items' => [...$this->items(), ...$customs]])->assertOk();
+        $this->assertCount(count($this->items()) + 50, $district->fresh()->student_menu_preferences);
+    }
+
+    public function test_stored_custom_links_are_revalidated_before_student_display_and_admin_reads(): void
+    {
+        $district = $this->district('custom');
+        $district->student_menu_preferences = [
+            $this->custom('custom-good'),
+            $this->custom('custom-bad-scheme', 'javascript:alert(1)'),
+            $this->custom('custom-admin', '/admin/users', 'internal'),
+            [...$this->custom('custom-hidden'), 'visible' => false],
+            [...$this->custom('custom-invalid-label'), 'label' => ''],
+            [...$this->custom('custom-invalid-visible'), 'visible' => 'true'],
+            [...$this->custom('custom-tampered'), 'route' => 'javascript:alert(1)', 'icon' => 'evil', 'tone' => 'evil', 'external' => false],
+            $this->custom('custom-good', 'https://duplicate.example.org'),
+        ];
+        $district->save();
+        Sanctum::actingAs(User::factory()->create(['role' => 'student', 'district_id' => $district->id]));
+        $response = $this->getJson('/api/v1/system/catalog')->assertOk()->assertJsonCount(10, 'data.student_menu')
+            ->assertJsonPath('data.student_menu.0.key', 'custom-good')
+            ->assertJsonPath('data.student_menu.1.key', 'custom-tampered')->assertJsonPath('data.student_menu.1.external', true)
+            ->assertJsonPath('data.student_menu.1.route', $this->custom()['url'])->assertJsonPath('data.student_menu.1.icon', 'link');
+        $this->assertSame(1, collect($response->json('data.student_menu'))->where('key', 'custom-good')->count());
+        $this->withHeader('X-District-Id', (string) $this->district('other')->id)->getJson('/api/v1/system/catalog')->assertForbidden();
+    }
+
+    public function test_custom_link_write_requires_admin_role_in_own_district(): void
+    {
+        $district = $this->district('custom');
+        $other = $this->district('custom-other');
+        foreach (['teacher', 'student'] as $role) {
+            Sanctum::actingAs(User::factory()->create(['role' => $role, 'district_id' => $district->id]));
+            $this->patchJson('/api/v1/admin/student-menu', ['items' => [...$this->items(), $this->custom()]])->assertForbidden();
+        }
+        Sanctum::actingAs(User::factory()->create(['role' => 'admin', 'district_id' => $district->id]));
+        $this->withHeader('X-District-Id', (string) $other->id)->patchJson('/api/v1/admin/student-menu', ['items' => [...$this->items(), $this->custom()]])->assertForbidden();
+        $this->assertNull($district->fresh()->student_menu_preferences);
+        $this->assertNull($other->fresh()->student_menu_preferences);
     }
 }

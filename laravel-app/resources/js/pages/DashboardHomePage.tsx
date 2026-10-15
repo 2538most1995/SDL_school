@@ -1,6 +1,7 @@
 import { useQuery } from '@tanstack/react-query';
 import {
     ArrowRight,
+    ArrowSquareOut,
     Bell,
     BookOpenText,
     Books,
@@ -416,16 +417,18 @@ function StudentDashboard({
                     <div className="student-menu-grid">
                         {menuItems.map((item) => {
                             const MenuIcon = studentMenuIcon(item.icon);
-                            return (
-                                <Link key={item.route} to={item.route} className={`student-menu-link student-menu-link--${item.tone}`}>
+                            const content = <>
                                     <span className="student-menu-link__icon"><MenuIcon size={24} weight="duotone" aria-hidden="true" /></span>
                                     <span className="student-menu-link__copy">
                                         <strong>{item.label}</strong>
                                         <small>{item.description}</small>
                                     </span>
-                                    <CaretRight className="student-menu-link__arrow" size={17} weight="bold" aria-hidden="true" />
-                                </Link>
-                            );
+                                    {item.external ? <ArrowSquareOut className="student-menu-link__arrow" size={17} weight="bold" aria-hidden="true" /> : <CaretRight className="student-menu-link__arrow" size={17} weight="bold" aria-hidden="true" />}
+                                </>;
+                            const className = `student-menu-link student-menu-link--${item.tone}`;
+                            return item.external
+                                ? <a key={item.key} href={item.route} target="_blank" rel="noopener noreferrer" className={className} aria-label={`${item.label} (เปิดเว็บไซต์ภายนอกในแท็บใหม่)`}>{content}</a>
+                                : <Link key={item.key} to={item.route} className={className}>{content}</Link>;
                         })}
                     </div>
                     {!menuPending && !menuError && menuItems.length === 0 && <p className="mt-4 text-sm text-slate-500">ยังไม่มีเมนูที่เปิดแสดง</p>}

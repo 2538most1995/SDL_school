@@ -1,6 +1,6 @@
 import {
     BookOpenText, Books, CalendarBlank, ChartBar, CheckSquare, Clock, GraduationCap,
-    Heart, Newspaper, Notebook, PaintBrush, Sparkle, Student, Trophy, User,
+    Heart, LinkSimple, Newspaper, Notebook, PaintBrush, Sparkle, Student, Trophy, User,
 } from '@phosphor-icons/react';
 
 export type StudentMenuItem = {
@@ -11,6 +11,10 @@ export type StudentMenuItem = {
     icon: string;
     tone: 'blue' | 'violet' | 'rose' | 'teal' | 'amber' | 'sky' | 'emerald' | 'indigo';
     visible: boolean;
+    custom?: boolean;
+    external?: boolean;
+    link_type?: 'internal' | 'external';
+    url?: string;
 };
 
 const icons = {
@@ -18,6 +22,7 @@ const icons = {
     newspaper: Newspaper, clock: Clock, clipboard: CheckSquare, medal: Trophy,
     chart: ChartBar, sparkle: Sparkle, heart: Heart, calendar: CalendarBlank,
     notebook: Notebook, trophy: Trophy, user: User, 'paint-brush': PaintBrush,
+    link: LinkSimple,
 };
 
 export function studentMenuIcon(name: string) {

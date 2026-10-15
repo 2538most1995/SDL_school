@@ -842,7 +842,6 @@ export function GradesPage() {
 
 function StudentGradesPage() {
     const [term, setTerm] = useState('');
-    const [selectedGrade, setSelectedGrade] = useState<GradeRow | null>(null);
     const grades = useQuery({
         queryKey: ['grades', 'all'],
         queryFn: ({ signal }) => getFeatureDataWithDemo<GradeRow[]>('/api/v1/grades', demoGrades, signal),
@@ -859,7 +858,6 @@ function StudentGradesPage() {
         { accessorKey: 'credits', header: 'หน่วยกิต', size: 92, meta: { compactSize: 58, compactTextAlign: 'center' } },
         { accessorKey: 'grade', header: 'ผลการเรียน', size: 124, meta: { compactSize: 70, compactHeader: 'เกรด', compactTextAlign: 'center' }, cell: ({ getValue }) => { const value = getValue<string>(); const numeric = Number(value); const tone: StatusTone = Number.isFinite(numeric) ? (numeric >= 3 ? 'success' : numeric >= 1.5 ? 'warning' : 'danger') : 'neutral'; return <StatusBadge tone={tone}>{value || '-'}</StatusBadge>; } },
         { accessorKey: 'term', header: 'ภาคเรียน', size: 104, meta: { compactSize: 68, compactTextAlign: 'center' } },
-        { id: 'details', header: 'รายละเอียด', size: 116, meta: { compactSize: 36, compactTextAlign: 'center' }, enableSorting: false, cell: ({ row }) => <button type="button" onClick={() => setSelectedGrade(row.original)} className="responsive-table-action inline-flex items-center gap-2 whitespace-nowrap rounded-xl border border-brand-200 bg-brand-50 px-3 py-2 text-sm font-bold text-brand-800 hover:bg-brand-100 active:scale-[0.98]" aria-label={`ดูรายละเอียดวิชา ${row.original.subject}`}><EyeViewIcon size={18} /> <span>เปิดดู</span></button> },
     ], []);
 
     return (
@@ -894,9 +892,6 @@ function StudentGradesPage() {
                 {grades.isError && <QueryError onRetry={() => grades.refetch()} />}
                 {grades.data && <DataTable data={filteredRows} columns={columns} responsiveMode="compact-table" emptyTitle="ไม่พบข้อมูลผลการเรียน" emptyDescription="ยังไม่มีข้อมูลเกรดในภาคเรียนที่เลือก" />}
             </Panel>
-            {selectedGrade && <DetailDialog title={selectedGrade.subject} description="รายละเอียดผลการเรียนรายวิชา" onClose={() => setSelectedGrade(null)} items={[
-                { label: 'รหัสวิชา', value: selectedGrade.code }, { label: 'ภาคเรียน', value: selectedGrade.term }, { label: 'หน่วยกิต', value: selectedGrade.credits }, { label: 'ผลการเรียน', value: selectedGrade.grade || '-' }, { label: `GPA ภาคเรียน ${selectedGrade.term}`, value: termSummaries.find((item) => item.term === selectedGrade.term)?.gpa?.toFixed(2) ?? '-' }, { label: 'เกรดเฉลี่ยสะสม (GPAX)', value: cumulativeSummary.gpa?.toFixed(2) ?? '-' },
-            ]} />}
         </div>
     );
 }
