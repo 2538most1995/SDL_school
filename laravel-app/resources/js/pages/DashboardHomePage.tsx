@@ -8,7 +8,6 @@ import {
     Camera,
     CaretRight,
     ChartBar,
-    CheckSquare,
     Clock,
     Database,
     GraduationCap,
@@ -17,7 +16,6 @@ import {
     Newspaper,
     Sparkle,
     Student,
-    Trophy,
     UsersThree,
     WarningCircle,
 } from '@phosphor-icons/react';
@@ -28,6 +26,7 @@ import { EducationIllustration } from '../components/EducationIllustration';
 import { StatTile } from '../components/StatTile';
 import { useDemoRole, type DemoRole } from '../context/DemoRoleContext';
 import { apiGet } from '../lib/api';
+import { studentMenuIcon, type StudentMenuItem } from '../lib/studentMenu';
 import { publicAssetUrl, publicBrandingPath, type PublicBranding } from '../lib/publicBranding';
 import { withAppBasePath } from '../lib/urls';
 import { queryKeys } from '../query';
@@ -104,14 +103,6 @@ type StudentMetricSpec = {
     tone: 'blue' | 'rose' | 'amber';
 };
 
-type StudentMenuSpec = {
-    label: string;
-    description: string;
-    route: string;
-    icon: Icon;
-    tone: 'blue' | 'violet' | 'rose' | 'teal' | 'amber' | 'sky' | 'emerald' | 'indigo';
-};
-
 type PublicRelationsPost = {
     id: number;
     title: string;
@@ -124,17 +115,6 @@ type PublicRelationsPost = {
 const quickMenu: Array<{ label: string; description: string; route: string; icon: Icon; tone: DashboardTone }> = [
     { label: 'ตารางสอบ', description: 'วัน เวลา และห้องสอบ', route: '/learning/schedule', icon: Clock, tone: 'amber' },
     { label: 'วิชาที่ลงทะเบียน', description: 'รายวิชาตามภาคเรียน', route: '/reports/registered-subjects', icon: Books, tone: 'violet' },
-];
-
-const studentMenu: StudentMenuSpec[] = [
-    { label: 'ข้อมูลส่วนตัว', description: 'โปรไฟล์และสถานะการศึกษา', route: '/my-learning', icon: Student, tone: 'blue' },
-    { label: 'พื้นที่การเรียนรู้', description: 'ภาพรวมงานและบทเรียน', route: '/learning', icon: GraduationCap, tone: 'violet' },
-    { label: 'งานและการส่งงาน', description: 'ติดตามกำหนดและส่งงาน', route: '/learning/assignments', icon: BookOpenText, tone: 'rose' },
-    { label: 'คลังสื่อ', description: 'เอกสารและสื่อการเรียน', route: '/learning/resources', icon: Books, tone: 'teal' },
-    { label: 'ข่าวประชาสัมพันธ์', description: 'ข่าวและข้อมูลสำคัญ', route: '/public-relations', icon: Newspaper, tone: 'amber' },
-    { label: 'ตารางสอบ', description: 'วัน เวลา และห้องสอบ', route: '/learning/schedule', icon: Clock, tone: 'sky' },
-    { label: 'เช็คชื่อเข้าสอบ', description: 'ตรวจสอบสถานะการเข้าสอบ', route: '/learning/exam-attendance-check', icon: CheckSquare, tone: 'emerald' },
-    { label: 'รายงานผล N-NET', description: 'ดูผลสอบรายสาระ', route: '/n-net/report', icon: Trophy, tone: 'indigo' },
 ];
 
 const formatNumber = (value: number | null, digits = 0) => value === null
@@ -345,6 +325,10 @@ function StudentDashboard({
     news,
     newsPending,
     branding,
+    menuItems,
+    menuPending,
+    menuError,
+    retryMenu,
 }: {
     portal: PortalData;
     profile?: StudentProfile;
@@ -352,6 +336,10 @@ function StudentDashboard({
     news: PublicRelationsPost[];
     newsPending: boolean;
     branding?: PublicBranding;
+    menuItems: StudentMenuItem[];
+    menuPending: boolean;
+    menuError: boolean;
+    retryMenu: () => void;
 }) {
     const analytics = portal.analytics;
     const moralResult = analytics.moral.find((item) => item.value > 0)?.label ?? 'ยังไม่มีผล';
@@ -423,9 +411,11 @@ function StudentDashboard({
                         </div>
                         <Link to="/public-relations" className="student-text-link">ดูข่าว <CaretRight size={15} weight="bold" aria-hidden="true" /></Link>
                     </div>
+                    {menuPending && <p role="status" className="mt-4 text-sm text-slate-500">กำลังโหลดเมนู</p>}
+                    {menuError && <p role="alert" className="mt-4 text-sm text-rose-700">โหลดเมนูไม่สำเร็จ <button type="button" className="font-bold underline" onClick={retryMenu}>ลองใหม่</button></p>}
                     <div className="student-menu-grid">
-                        {studentMenu.map((item) => {
-                            const MenuIcon = item.icon;
+                        {menuItems.map((item) => {
+                            const MenuIcon = studentMenuIcon(item.icon);
                             return (
                                 <Link key={item.route} to={item.route} className={`student-menu-link student-menu-link--${item.tone}`}>
                                     <span className="student-menu-link__icon"><MenuIcon size={24} weight="duotone" aria-hidden="true" /></span>
@@ -438,6 +428,7 @@ function StudentDashboard({
                             );
                         })}
                     </div>
+                    {!menuPending && !menuError && menuItems.length === 0 && <p className="mt-4 text-sm text-slate-500">ยังไม่มีเมนูที่เปิดแสดง</p>}
                 </section>
 
                 <StudentCalendar events={events} />
@@ -501,6 +492,12 @@ export function DashboardHomePage() {
     const content = roleContent[role];
     const districtId = window.localStorage.getItem('sena-district-id');
     const [heroImageError, setHeroImageError] = useState(false);
+    const studentMenu = useQuery({
+        queryKey: ['system', 'catalog', role, districtId ?? ''],
+        queryFn: ({ signal }) => apiGet<{ student_menu?: StudentMenuItem[] }>('/api/v1/system/catalog', signal).then((response) => response.data),
+        enabled: role === 'student',
+        staleTime: 5 * 60_000,
+    });
     const portal = useQuery({
         queryKey: [...queryKeys.portal, role, districtId],
         queryFn: ({ signal }) => apiGet<PortalData>('/api/v1/portal', signal).then((response) => response.data),
@@ -596,6 +593,10 @@ export function DashboardHomePage() {
                 news={publicRelations.data ?? []}
                 newsPending={publicRelations.isPending}
                 branding={branding.data}
+                menuItems={studentMenu.data?.student_menu ?? []}
+                menuPending={studentMenu.isPending}
+                menuError={studentMenu.isError}
+                retryMenu={() => { void studentMenu.refetch(); }}
             />
         );
     }

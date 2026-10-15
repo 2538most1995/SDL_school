@@ -5,6 +5,7 @@ namespace App\Http\Controllers\Api;
 use App\Http\Controllers\Controller;
 use App\Http\Middleware\ResolveDistrictContext;
 use App\Support\DistrictNavigation;
+use App\Support\StudentDashboardMenu;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 
@@ -42,6 +43,9 @@ final class SystemCatalogController extends Controller
             'data' => [
                 'role' => $role,
                 'groups' => $groups,
+                'student_menu' => $role === 'student'
+                    ? array_values(array_filter(app(StudentDashboardMenu::class)->items($request->attributes->get('district_id')), fn (array $item): bool => $item['visible']))
+                    : [],
                 'capabilities' => match ($role) {
                     'super_admin' => ['districts:all', 'users:manage', 'imports:manage', 'reports:all', 'learning:manage'],
                     'admin' => ['district:own', 'users:manage', 'imports:manage', 'reports:view', 'learning:manage'],

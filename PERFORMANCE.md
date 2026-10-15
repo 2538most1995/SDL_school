@@ -1,5 +1,11 @@
 # Performance Audit
 
+## Student homepage menu settings (2026-10-15)
+
+- Student system catalog adds a column-availability check and one scoped district read for menu preferences; settings resolve in memory against the allowed module catalog. The homepage shares the existing React Query catalog key with the portal layout and uses its five-minute stale time. No query per menu item or student; saving invalidates the system catalog cache.
+- No indexes are added: district preference lookup uses its primary key. Saving updates one district JSON field and inserts one audit record in a transaction. Live MySQL timing/DDL locking: `Not verified`.
+- Verification uses an isolated temporary SQLite demo database: admin renamed/reordered/hid a button, reloaded persisted settings, and the student homepage showed the matching seven buttons. Desktop 1440px and mobile 390px were inspected with no page overflow at 390px. Super-admin district switching discarded an unsaved draft and loaded the other district's settings with saving disabled until edited. Initial person view was verified for registration/exam-attendance reports. PHPUnit: 399 passed, 1 skipped; frontend: 50 passed; typecheck and production build pass. No real student data was changed.
+
 ## Registration workspace ITW status (2026-10-15)
 
 - The `/ นว. ครบ` projection merges scoped selected-term ITW and saved courses in memory, deduplicates by code and reuses the existing registration credit policy. This introduces no additional database reads or writes. Regression fixtures cover pending grades, insufficient electives despite potential graduation, historical passed-course repeats, duplicates across ITW/web, and a term with no registrations.

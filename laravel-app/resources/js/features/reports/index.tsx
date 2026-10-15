@@ -511,7 +511,7 @@ export function ReportPage({ kind }: { kind: ReportKind }) {
     const [group, setGroup] = useState('');
     const [examStatus, setExamStatus] = useState('');
     const [subjectType, setSubjectType] = useState<SubjectTypeFilter>('');
-    const [viewMode, setViewMode] = useState<ViewMode>('subject');
+    const [viewMode, setViewMode] = useState<ViewMode>('student');
     const [selectedStudent, setSelectedStudent] = useState<ReportRow | null>(null);
     const [selectedSubject, setSelectedSubject] = useState<ReportRow | null>(null);
     const deferredSearch = useDeferredValue(search);

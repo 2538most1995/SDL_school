@@ -28,6 +28,12 @@ District scope is resolved by `ResolveDistrictContext`; role checks are enforced
 
 ## Business rules
 
+### Student homepage menus and report defaults (2026-10-15)
+
+- Academic reports with subject/person toggles open in person view. Users can switch to subject view; API filters and permissions are unchanged.
+- Admin/super-admin can manage student homepage menu buttons at `/admin/student-menu`: visibility, order, labels and descriptions are stored per district. The eight original buttons remain the default, with additional student modules available to enable. The student homepage reads visible buttons from the scoped system catalog; sidebar and top/bottom navigation remain independent.
+- Menu destinations/icons and allowed roles come only from the application catalog. A hidden homepage button does not revoke access to its feature. Teachers/students cannot edit settings and administrators cannot edit other districts. Existing deployments read default menus before migration; saving requires `districts.student_menu_preferences`.
+
 ### Registration workspace ITW status (2026-10-15)
 
 - Registered/saved status appends `/ นว. ครบ` when earned credits plus actual selected-term ITW/web registrations cover both compulsory and elective requirements (`registration.is_credit_complete_after_registration`). The workspace credit projection merges both sources by subject code, excludes already-earned courses from additional credits, and classifies compulsory courses by the curriculum catalog. Potential graduation from an unselected future course plan alone does not trigger this suffix; it is a credit projection conditional on passing registered courses, not a confirmation of all graduation requirements.

@@ -41,6 +41,7 @@ import {
 } from '@phosphor-icons/react';
 import { Link, Navigate, NavLink, Outlet, useLocation, useNavigate } from 'react-router-dom';
 import { ApiError, apiGet, apiPost } from '../lib/api';
+import { selectDistrict } from '../lib/districtSelection';
 import { applyAppearance, DEFAULT_APPEARANCE, type AppearanceSettings } from '../lib/appearance';
 import { showSuccessAlert } from '../lib/feedback';
 import { publicAssetUrl, publicBrandingPath, type PublicBranding } from '../lib/publicBranding';
@@ -191,11 +192,7 @@ export function PortalLayout() {
             ? (allowedDistricts.includes(selectedDistrictId) ? selectedDistrictId : allowedDistricts[0] ?? '')
             : (me.data.district_id ? String(me.data.district_id) : '');
 
-        if (nextDistrict) {
-            window.localStorage.setItem('sena-district-id', nextDistrict);
-        } else {
-            window.localStorage.removeItem('sena-district-id');
-        }
+        selectDistrict(nextDistrict);
         setSelectedDistrictId(nextDistrict);
     }, [me.data]);
 
@@ -248,7 +245,7 @@ export function PortalLayout() {
     };
 
     const changeDistrict = (districtId: string) => {
-        window.localStorage.setItem('sena-district-id', districtId);
+        selectDistrict(districtId);
         setSelectedDistrictId(districtId);
         const isDistrictScoped = (query: { queryKey: readonly unknown[] }) => !['auth', 'system'].includes(String(query.queryKey[0]));
         void queryClient.invalidateQueries({ predicate: isDistrictScoped });

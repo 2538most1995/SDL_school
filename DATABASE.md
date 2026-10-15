@@ -16,6 +16,8 @@
 
 `id` BIGINT PK, `name` string NOT NULL, `code` string(40) UNIQUE NOT NULL, `school_code` string(20) nullable สำหรับรหัสสถานศึกษาบนเอกสาร, login/branding fields nullable, `is_active` boolean DEFAULT true indexed, NNET schedule fields nullable, timestamps. มี `District::users()` → `users.district_id`. `code` เป็นรหัสระบบที่คงที่ ส่วนผู้ดูแลสูงสุดแก้ `name` และ `school_code` ได้พร้อม audit โดยไม่เปลี่ยน district/import scope.
 
+`student_menu_preferences` JSON nullable เก็บลำดับ ชื่อ คำอธิบาย และการแสดงปุ่มเมนูหน้าแรกนักศึกษาแยกตามอำเภอ เพิ่มแบบ additive ด้วย `2026_10_15_000033_add_student_menu_preferences_to_districts.php`. Route/icon/สิทธิ์มาจาก module catalog เท่านั้น ผู้ดูแลส่งค่าเหล่านี้เองไม่ได้; การบันทึกตั้งค่าและ audit อยู่ใน transaction เดียวกัน ไม่เปลี่ยน `navigation_preferences` ของ sidebar หรือตารางนักศึกษา/นำเข้า. ก่อน migration ยังอ่านค่าปุ่มเริ่มต้นได้ แต่บันทึกจะตอบ 503 ให้รัน migration.
+
 ### `users`
 
 Laravel users table มี `username`, `first_name`, `last_name`, `student_code`, `auth_source` (`local` สำหรับบัญชีที่ผู้ดูแลสร้าง และ `system_import` สำหรับ session account นักศึกษา), role/district/group, display/contact/appearance fields, avatar fields และ timestamps. การเข้าสู่ระบบนักศึกษาตรวจเลขบัตรประชาชนเพียงอย่างเดียวจากตาราง import ในฐานเดียวกัน โดยต้องตรงกับนักศึกษาปัจจุบันเพียงหนึ่งรายการ และไม่เก็บเลขบัตรซ้ำใน `users`; `student_code` ยังคงใช้ภายในเพื่อเชื่อมข้อมูลการเรียน. คอลัมน์ compatibility จาก migration เก่าอาจยังอยู่แต่ไม่ได้ใช้เชื่อมฐานภายนอก. `password`, `remember_token` ถูกซ่อนจาก model output; `contact_email` ถูก encrypt/cast ใน `User` model.
