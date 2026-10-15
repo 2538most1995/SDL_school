@@ -141,6 +141,58 @@ final class CourseRegistrationTest extends TestCase
             ->assertJsonPath('data.items.0.registration.imported_count', 1);
     }
 
+    public function test_workspace_marks_credit_completion_only_when_actual_selected_term_registrations_cover_both_groups(): void
+    {
+        Sanctum::actingAs($this->viewer('admin'));
+        $grades = [];
+        foreach (CurriculumCatalog::compulsorySubjects(1) as $subject) {
+            if ($subject['code'] !== 'พท11001') {
+                $grades[] = new Grade('6650100001', $subject['code'], $subject['name'], $subject['credits'], 'compulsory', '1/2568', '3');
+            }
+        }
+        $grades[] = new Grade('6650100001', 'เลือกเดิม', 'วิชาเลือกที่ผ่านแล้ว', 10, 'elective', '1/2568', '3');
+        $grades[] = new Grade('6650100001', 'พท11001', 'ภาษาไทย', 3, 'compulsory', '2/2569', null);
+        $grades[] = new Grade('6650100001', 'พท11001', 'ภาษาไทย', 3, 'compulsory', '1/2570', null);
+        $grades[] = new Grade('6650100001', 'เลือกใหม่', 'วิชาเลือกใหม่', 2, 'elective', '2570/1', null);
+        $grades[] = new Grade('6650100001', 'เลือกใหม่', 'วิชาเลือกใหม่', 2, 'elective', '1/2570', null);
+        // Repeating an already-passed elective must not add earned credits again.
+        $grades[] = new Grade('6650100001', 'เลือกเดิม', 'วิชาเลือกที่ผ่านแล้ว', 10, 'elective', '1/2570', null);
+        $this->registrationGrades($grades);
+
+        $this->getJson('/api/v1/learning/registration/workspace?term=2/2569&search=6650100001')
+            ->assertOk()
+            ->assertJsonPath('data.items.0.is_potential_graduate', true)
+            ->assertJsonPath('data.items.0.registration.is_credit_complete_after_registration', false);
+
+        $assertComplete = function (): void {
+            $this->getJson('/api/v1/learning/registration/workspace?term=1/2570&search=6650100001')
+                ->assertOk()
+                ->assertJsonPath('data.items.0.is_credit_complete', false)
+                ->assertJsonPath('data.items.0.registration.is_credit_complete_after_registration', true)
+                ->assertJsonPath('data.items.0.registration.credit_policy.projected_compulsory', 36)
+                ->assertJsonPath('data.items.0.registration.credit_policy.projected_elective', 12);
+        };
+        $assertComplete();
+
+        DB::table('learning_course_registrations')->insert([
+            'district_id' => $this->district->id,
+            'student_code' => '6650100001',
+            'academic_term' => '1/2570',
+            'education_level' => 1,
+            'compulsory_subjects' => '[]',
+            'elective_subjects' => json_encode([['code' => 'เลือกใหม่', 'credits' => 2, 'registered' => true]]),
+            'created_at' => now(),
+            'updated_at' => now(),
+        ]);
+        // Saving the same imported elective must not double-count its credits.
+        $assertComplete();
+
+        $this->getJson('/api/v1/learning/registration/workspace?term=2/2570&search=6650100001')
+            ->assertOk()
+            ->assertJsonPath('data.items.0.registration.is_imported', false)
+            ->assertJsonPath('data.items.0.registration.is_credit_complete_after_registration', false);
+    }
+
     public function test_user_can_get_student_registration_details_with_standard_subjects(): void
     {
         Sanctum::actingAs($this->viewer('admin'));
@@ -314,6 +366,7 @@ final class CourseRegistrationTest extends TestCase
             ->assertJsonPath('data.items.0.code', '6650100001')
             ->assertJsonPath('data.items.0.is_credit_complete', false)
             ->assertJsonPath('data.items.0.is_potential_graduate', true)
+            ->assertJsonPath('data.items.0.registration.is_credit_complete_after_registration', true)
             ->assertJsonPath('data.items.0.registration.credit_policy.applicable_limit', 17)
             ->assertJsonPath('data.items.0.registration.credit_policy.exceeds_limit', true);
     }

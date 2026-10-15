@@ -64,6 +64,7 @@ type WorkspaceItem = {
         is_saved: boolean;
         is_imported: boolean;
         imported_count: number;
+        is_credit_complete_after_registration: boolean;
         compulsory_count: number;
         elective_count: number;
         transferred_count: number;
@@ -519,9 +520,9 @@ function StaffCourseRegistrationPage() {
                     return (
                         <div className="flex flex-wrap gap-1">
                             {reg.is_imported ? (
-                                <StatusBadge tone="success">ลงทะเบียนแล้ว (ITW {reg.imported_count} วิชา)</StatusBadge>
+                                <StatusBadge tone="success">ลงทะเบียนแล้ว (ITW {reg.imported_count} วิชา){reg.is_credit_complete_after_registration && ' / นว. ครบ'}</StatusBadge>
                             ) : reg.is_saved ? (
-                                <StatusBadge tone="success">บันทึกแล้ว ({reg.total_count} วิชา)</StatusBadge>
+                                <StatusBadge tone="success">บันทึกแล้ว ({reg.total_count} วิชา){reg.is_credit_complete_after_registration && ' / นว. ครบ'}</StatusBadge>
                             ) : (
                                 <StatusBadge tone="neutral">ยังไม่บันทึก</StatusBadge>
                             )}

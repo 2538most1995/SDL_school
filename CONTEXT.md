@@ -30,6 +30,7 @@ District scope is resolved by `ResolveDistrictContext`; role checks are enforced
 
 ### Registration workspace ITW status (2026-10-15)
 
+- Registered/saved status appends `/ นว. ครบ` when earned credits plus actual selected-term ITW/web registrations cover both compulsory and elective requirements (`registration.is_credit_complete_after_registration`). The workspace credit projection merges both sources by subject code, excludes already-earned courses from additional credits, and classifies compulsory courses by the curriculum catalog. Potential graduation from an unselected future course plan alone does not trigger this suffix; it is a credit projection conditional on passing registered courses, not a confirmation of all graduation requirements.
 - The staff registration list marks `ลงทะเบียนแล้ว` when scoped imported Grade records contain a nonempty subject code in the selected normalized academic term, including registrations awaiting grades. It counts distinct subject codes and exposes additive `registration.is_imported` and `registration.imported_count`; `is_saved` retains its web-save meaning. Imported registration status takes display precedence over saved web forms, and summary counts include either source.
 - The status cell also shows `หน่วยกิตครบ` independently when the existing credit policy confirms both compulsory and elective earned-credit requirements. Current-term registrations alone do not award earned credits. No schema or imported-data writes are needed; district and teacher-group scope remain unchanged.
 

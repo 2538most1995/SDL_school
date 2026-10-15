@@ -2,6 +2,7 @@
 
 ## Registration workspace ITW status (2026-10-15)
 
+- The `/ นว. ครบ` projection merges scoped selected-term ITW and saved courses in memory, deduplicates by code and reuses the existing registration credit policy. This introduces no additional database reads or writes. Regression fixtures cover pending grades, insufficient electives despite potential graduation, historical passed-course repeats, duplicates across ITW/web, and a term with no registrations.
 - ITW registration status reuses the existing scoped `gradesForMany()` result, normalizes terms and deduplicates nonempty subject codes per student in memory. No additional queries, indexes, schema changes or imported-table writes. Existing earned-credit policy supplies the independent completion badge. Live MySQL performance and real-data browser behavior: `Not verified`.
 
 ตรวจจาก source, migrations, static query scan และ automated tests วันที่ 2026-08-08. ไม่มี live legacy dataset ใน test run จึงไม่มีการสร้างตัวเลข benchmark สมมติ

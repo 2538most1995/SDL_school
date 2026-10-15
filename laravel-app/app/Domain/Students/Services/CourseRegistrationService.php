@@ -108,7 +108,7 @@ final readonly class CourseRegistrationService
             foreach ($grades as $grade) {
                 $code = trim($grade->subjectCode);
                 if ($code !== '' && (AcademicTerm::normalize($grade->term) ?? $grade->term) === (AcademicTerm::normalize($selectedTerm) ?? $selectedTerm)) {
-                    $importedSubjects[$code] = true;
+                    $importedSubjects[$code] = $grade;
                 }
             }
             $reg = $registeredMap[$student->code] ?? [
@@ -125,16 +125,34 @@ final readonly class CourseRegistrationService
                 $student,
                 $grades,
             );
+            $compulsoryCatalog = array_column(CurriculumCatalog::compulsorySubjects($student->level), null, 'code');
+            $plannedSubjects = [];
+            foreach (array_merge($reg['compulsory_subjects'], $reg['elective_subjects']) as $subject) {
+                if (! empty($subject['registered']) || ! empty($subject['transferred'])) {
+                    $plannedSubjects[trim($subject['code'])] = $subject;
+                }
+            }
+            foreach ($importedSubjects as $code => $grade) {
+                $plannedSubjects[$code] = [
+                    'code' => $code,
+                    'credits' => $compulsoryCatalog[$code]['credits'] ?? $grade->credits,
+                    'registered' => ! $grade->transferred,
+                    'transferred' => $grade->transferred,
+                ];
+            }
             $policy = $this->registrationPolicy(
                 $student,
                 $progress,
-                $reg['compulsory_subjects'],
-                $reg['elective_subjects'],
+                array_values(array_filter($plannedSubjects, static fn (array $subject): bool => isset($compulsoryCatalog[$subject['code']]))),
+                array_values(array_filter($plannedSubjects, static fn (array $subject): bool => ! isset($compulsoryCatalog[$subject['code']]))),
             );
             unset($reg['compulsory_subjects'], $reg['elective_subjects']);
             $reg['credit_policy'] = $policy;
             $reg['is_imported'] = $importedSubjects !== [];
             $reg['imported_count'] = count($importedSubjects);
+            $reg['is_credit_complete_after_registration'] = ($reg['is_saved'] || $reg['is_imported'])
+                && $policy['projected_compulsory'] >= $policy['compulsory_required']
+                && $policy['projected_elective'] >= $policy['elective_required'];
 
             return [
                 'code' => $student->code,
