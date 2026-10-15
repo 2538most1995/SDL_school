@@ -60,6 +60,8 @@ final class LegacyZipImportService
             $candidates = $this->dbfCandidates($extractPath);
             $this->assertRequiredDataset($candidates);
             $this->assertStudentMemoCompanions($candidates);
+            $transfer = app(LearningTransferService::class);
+            $transferManifest = $transfer->validate($extractPath);
             $this->reportProgress($progress, 'ตรวจสอบชุดข้อมูลผ่านแล้ว กำลังเตรียมฐานข้อมูล', 20);
             $lockName = $this->acquireDistrictImportLock($districtId);
 
@@ -106,14 +108,18 @@ final class LegacyZipImportService
             $rowCount = array_sum(array_column($tableReport, 'row_count'));
             $this->reportProgress($progress, 'กำลังลงทะเบียนและเปิดใช้ชุดข้อมูลใหม่', 92);
             $districtName = (string) $this->read()->table('districts')->where('id', $districtId)->value('name');
-            $historyId = $this->registerBatch(
-                $archive->getClientOriginalName(),
-                basename($zipPath),
-                $batchKey,
-                (int) ceil((int) $archive->getSize() / 1024),
-                $zipFiles,
-                $districtId,
-            );
+            // Registry preparation may perform additive DDL on older deployments;
+            // keep it outside the transaction that restores learning data.
+            $this->ensureImportRegistryTables();
+            [$historyId, $learningCounts] = $this->write()->transaction(function () use ($transfer, $transferManifest, $extractPath, $districtId, $userId, $archive, $zipPath, $batchKey, $zipFiles): array {
+                $counts = $transfer->restore($extractPath, $districtId, $userId, $transferManifest);
+                $id = $this->registerBatch(
+                    $archive->getClientOriginalName(), basename($zipPath), $batchKey,
+                    (int) ceil((int) $archive->getSize() / 1024), $zipFiles, $districtId,
+                );
+
+                return [$id, $counts];
+            });
             $replacement = ['removed_count' => 0, 'removed_batch_keys' => [], 'warnings' => []];
             try {
                 $this->reportProgress($progress, 'กำลังลบชุดข้อมูลเดิมของอำเภอ', 96);
@@ -134,6 +140,7 @@ final class LegacyZipImportService
                 'uncompressed_bytes' => $uncompressedBytes,
                 'tables' => $tableReport,
                 'replacement' => $replacement,
+                'learning_transfer' => $learningCounts,
             ];
             try {
                 $this->audit($userId, $districtId, $historyId, $ipAddress, $summary);
@@ -229,7 +236,11 @@ final class LegacyZipImportService
                     continue;
                 }
                 $extension = strtolower(pathinfo($name, PATHINFO_EXTENSION));
-                if (! in_array($extension, ['dbf', 'fpt'], true)) {
+                $isTransfer = LearningTransferService::isTransferEntry($name);
+                if (str_starts_with(strtolower($name), 'sdl-transfer/') && ! $isTransfer) {
+                    throw new RuntimeException('พบไฟล์เพิ่มเติมที่ไม่รองรับในชุดทะเบียนและคะแนน');
+                }
+                if (! $isTransfer && ! in_array($extension, ['dbf', 'fpt'], true)) {
                     continue;
                 }
 
@@ -716,8 +727,6 @@ final class LegacyZipImportService
 
     private function registerBatch(string $original, string $saved, string $batchKey, int $sizeKb, int $fileCount, int $districtId): int
     {
-        $this->ensureImportRegistryTables();
-
         return $this->write()->transaction(function () use ($original, $saved, $batchKey, $sizeKb, $fileCount, $districtId): int {
             $historyId = $this->write()->table('import_history')->insertGetId([
                 'file_name' => Str::limit(basename($original), 255, ''),

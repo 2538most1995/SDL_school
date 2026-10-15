@@ -117,6 +117,13 @@
 
 ## Benchmark
 
+### ZIP transfer including registrations and scores (2026-10-15)
+
+- Export verifies batch/history ownership and copies the retained ZIP to a private temporary directory without rebuilding DBFs. Five scoped learning datasets are read in ID chunks of 500 within a transaction, then encoded as JSONL. Child datasets join the district's scorebooks. Validation streams files and keeps source-ID maps, with limits of 1 MB per row and 1,000,000 rows per dataset. JSONL is stored without compression to stay within the importer's ZIP-ratio guard. Final ZIP limits remain 90 MB/2,000 entries. Temporary files are deleted after streaming, with shutdown cleanup as fallback. Browser download buffers one ZIP as a Blob.
+- Restore validates before any DBF tables are created, then inserts registrations/entries/notes in batches of 500. Books/components require insertGetId per record to remap relationships. The restore and batch-registration transaction rolls back completely on unique-scope conflicts before prior-batch cleanup. There are no per-student source queries or scans of imported tables for export; no schema/index changes. Live MySQL throughput, snapshot isolation behavior under concurrent edits, maximum-size browser memory and large-district restore time remain Not verified.
+- Synthetic in-memory SQLite tests verify unchanged original DBF/FPT content, all-term registration/score restoration, zero/NULL values, midterm component titles, weights, ID/actor remapping, district isolation, checksums, forged fields, relationship validation, re-export freshness, conflict rollback and ordinary ITW compatibility. Real student data was not used or modified.
+- Final verification: 17 transfer feature tests pass, including actual upload/deferred-queue restoration. Full PHPUnit: 422 passed, 1 skipped; frontend: 50 passed; TypeScript, production build, changed-file Pint, PHP syntax and diff whitespace checks pass. Playwright with an isolated demo database and mocked import-list response verified the revised instructions/button at 1440px/390px with no page overflow; screenshots are under `output/playwright/transfer-scores-*.png`. Maximum-volume and real MySQL timing remain Not verified.
+
 ### Visual FoxPro NULL import correction (2026-10-09)
 
 - The reader now resolves `_NullFlags` in each streamed record before decoding nullable columns. Field-to-bit positions and the bitmap offset are calculated once from the header; import still uses the existing batch INSERTs and indexes, without queries per record.

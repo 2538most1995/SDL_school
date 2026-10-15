@@ -231,6 +231,8 @@ Route::prefix('v1')->group(function (): void {
             Route::get('/admin/imports', [ImportController::class, 'index']);
             Route::get('/admin/imports/jobs/{job}', [ImportController::class, 'status'])->whereUuid('job');
             Route::post('/admin/imports', [ImportController::class, 'store']);
+            Route::get('/admin/imports/{batch}/export', [ImportController::class, 'export'])
+                ->where('batch', 'import_\d{10}_[A-Za-z0-9]+');
             Route::delete('/admin/imports/{batch}', [ImportController::class, 'destroy'])
                 ->where('batch', 'import_\\d{10}_[A-Za-z0-9]+');
             Route::get('/admin/imports/safety', ImportSafetyController::class);

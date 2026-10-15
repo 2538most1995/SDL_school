@@ -8,6 +8,7 @@ use App\Domain\Learning\DemoResponseMeta;
 use App\Http\Controllers\Controller;
 use App\Jobs\ProcessLegacyZipImport;
 use App\Jobs\RunLegacyImportQueueOnce;
+use App\Services\Legacy\LearningTransferService;
 use App\Services\Legacy\LegacyPortalReadService;
 use App\Services\Legacy\LegacyZipImportService;
 use Illuminate\Database\Schema\Blueprint;
@@ -21,6 +22,7 @@ use Illuminate\Support\Str;
 use Illuminate\Validation\Rule;
 use Illuminate\Validation\ValidationException;
 use InvalidArgumentException;
+use Symfony\Component\HttpFoundation\StreamedResponse;
 use Throwable;
 
 final class ImportController extends Controller
@@ -152,6 +154,78 @@ final class ImportController extends Controller
             'source' => 'system_database',
             'read_only' => false,
         ]]);
+    }
+
+    public function export(Request $request, string $batch, LearningTransferService $transfer): StreamedResponse
+    {
+        abort_unless((bool) config('system_data.enabled'), 503, 'ระบบส่งออกข้อมูลจริงยังไม่เปิดใช้งาน');
+        abort_unless(preg_match('/^import_\d{10}_[A-Za-z0-9]+$/D', $batch) === 1, 404);
+        $districtId = (int) $request->attributes->get('district_id');
+        $registered = DB::table('import_batches as batches')
+            ->join('import_history as history', function ($join): void {
+                $join->on('history.id', '=', 'batches.import_history_id')
+                    ->on('history.district_id', '=', 'batches.district_id')
+                    ->on('history.batch_key', '=', 'batches.batch_key');
+            })
+            ->where('batches.district_id', $districtId)
+            ->where('batches.batch_key', $batch)
+            ->where('history.status', 'success')
+            ->exists();
+        abort_unless($registered, 404, 'ไม่พบชุดข้อมูลที่นำเข้าสำเร็จในอำเภอที่เลือก');
+
+        $root = realpath((string) config('system_data.zip_root'));
+        $path = $root === false ? false : $root.DIRECTORY_SEPARATOR.$batch.'.zip';
+        abort_unless($path !== false && ! is_link($path) && realpath($path) === $path && is_file($path) && is_readable($path), 404,
+            'ไม่พบไฟล์ ZIP ต้นฉบับของชุดนี้ กรุณาใช้ไฟล์ต้นฉบับจาก ITW เพื่อนำเข้าบนเครื่องใหม่');
+
+        // Open before streaming so replacement/deletion cannot remove the file
+        // between authorization and the response callback on Unix hosts.
+        $stream = @fopen($path, 'rb');
+        abort_if($stream === false, 404, 'ไม่สามารถเปิดไฟล์ ZIP ต้นฉบับได้ กรุณาลองใหม่');
+
+        try {
+            $exportPath = $transfer->create($stream, $districtId, $batch);
+        } catch (Throwable $exception) {
+            report($exception);
+            abort(503, 'ไม่สามารถเตรียม ZIP รวมทะเบียนและคะแนนได้ กรุณาตรวจโครงสร้างฐานข้อมูลและพื้นที่ว่าง หรือติดต่อผู้ดูแลระบบ');
+        } finally {
+            fclose($stream);
+        }
+        $stream = @fopen($exportPath, 'rb');
+        if ($stream === false) {
+            @unlink($exportPath);
+            @rmdir(dirname($exportPath));
+            abort(503, 'ไม่สามารถเปิดไฟล์ส่งออกได้ กรุณาลองใหม่');
+        }
+
+        try {
+            DB::table('audit_logs')->insert([
+                'user_id' => (int) $request->user()->id,
+                'district_id' => $districtId,
+                'event' => 'admin.import.exported',
+                'auditable_type' => 'system_import_batch',
+                'auditable_id' => null,
+                'ip_address' => $request->ip(),
+                'after' => json_encode(['batch_key' => $batch], JSON_THROW_ON_ERROR),
+                'created_at' => now(),
+            ]);
+        } catch (Throwable $exception) {
+            report($exception);
+        }
+
+        return response()->streamDownload(static function () use ($stream, $exportPath): void {
+            try {
+                fpassthru($stream);
+            } finally {
+                fclose($stream);
+                @unlink($exportPath);
+                @rmdir(dirname($exportPath));
+            }
+        }, 'district-'.$districtId.'-'.$batch.'.zip', [
+            'Content-Type' => 'application/zip',
+            'Cache-Control' => 'private, no-store',
+            'X-Content-Type-Options' => 'nosniff',
+        ]);
     }
 
     public function destroy(Request $request, string $batch, LegacyZipImportService $importer): JsonResponse

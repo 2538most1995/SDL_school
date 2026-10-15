@@ -28,6 +28,13 @@ District scope is resolved by `ResolveDistrictContext`; role checks are enforced
 
 ## Business rules
 
+### ZIP transfer of ITW data, web registrations and scores (2026-10-15)
+
+- Admin/super-admin can download a transfer ZIP at `GET /api/v1/admin/imports/{batch}/export`, restricted to the middleware-selected district and a successful registered batch. Teachers/students cannot export. Export remains available when import writes are disabled; demo mode cannot download real archives.
+- **ส่งออก ZIP** preserves the original DBF/FPT bytes (including ITW course registrations and coursework/midterm/final fields), and adds versioned `sdl-transfer/manifest.json` plus five JSONL datasets: all web registrations, scorebooks, components, entries and score notes for every term in that district. Scores, zero/NULL values, component names/order/categories, weights, subject selections, transfer flags, student snapshots and notes are preserved. Existing transfer files are replaced on re-export with current web values. Web scores are not written into ITW DBFs and restoring them requires the updated SDL School importer on the destination machine.
+- The destination administrator selects an authorized district and the ITW batch's academic term. The importer checks fixed filenames, version, checksums, row counts, types and relationships before creating DBF tables. Restoring learning records and registering the new batch share one transaction; IDs are remapped and actor references use the importing user. Existing registration/scorebook scope collisions reject the entire import without overwriting records or replacing the old batch. Plain ITW ZIPs continue to work without restoring web data. No new schema is required; existing migrations must be current.
+- The endpoint validates batch/history ownership, ZIP paths and symlinks, uses private/no-store headers and records `admin.import.exported` without student data in the audit payload. Temporary exports are removed after streaming with shutdown cleanup as fallback. Missing originals return an actionable 404. ZIPs remain limited to 90 MB/2,000 entries. Accounts/settings, manually configured exam rooms, assignments/submissions and score templates are outside this transfer format.
+
 ### Student homepage menus and report defaults (2026-10-15)
 
 - Academic reports with subject/person toggles open in person view. Users can switch to subject view; API filters and permissions are unchanged.

@@ -134,7 +134,7 @@ export async function getFeatureBlob(path: string): Promise<Blob> {
             method: 'GET',
             credentials: 'same-origin',
             headers: {
-                Accept: 'application/pdf,image/jpeg,image/png,image/webp',
+                Accept: 'application/pdf,image/jpeg,image/png,image/webp,application/zip,application/json',
                 ...(districtId ? { 'X-District-Id': districtId } : {}),
             },
         });

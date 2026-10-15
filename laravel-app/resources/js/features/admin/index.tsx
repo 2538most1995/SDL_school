@@ -5,6 +5,7 @@ import {
     CircleNotch,
     Database,
     DoorOpen,
+    DownloadSimple,
     FileZip,
     FloppyDisk,
     GraduationCap,
@@ -33,7 +34,7 @@ import { QueryError, QuerySkeleton } from '../../components/QueryState';
 import { StatTile } from '../../components/StatTile';
 import { StatusBadge, type StatusTone } from '../../components/StatusBadge';
 import { showErrorAlert, showSuccessAlert } from '../../lib/feedback';
-import { getFeatureData, getFeatureDataWithDemo, sendFeatureData, uploadFeatureData } from '../api';
+import { getFeatureBlob, getFeatureData, getFeatureDataWithDemo, sendFeatureData, uploadFeatureData } from '../api';
 
 const primaryButton = 'inline-flex items-center justify-center gap-2 whitespace-nowrap rounded-full bg-brand-700 px-4 py-2.5 text-sm font-bold text-white transition hover:bg-brand-800 disabled:cursor-not-allowed disabled:bg-slate-300 active:scale-[0.98]';
 const secondaryButton = 'inline-flex items-center justify-center gap-2 whitespace-nowrap rounded-full border border-slate-200 bg-white px-4 py-2.5 text-sm font-bold text-slate-700 transition hover:border-brand-300 hover:text-brand-800 disabled:opacity-50 active:scale-[0.98]';
@@ -273,7 +274,7 @@ export function AdminUsersPage() {
     );
 }
 
-type ImportBatch = { id: number; batch_key: string; district_name: string; academic_term: string; status: string; row_count: number; table_count: number; warning_count: number; replaced_batch_count?: number; is_active: boolean; exam_schedule_ready?: boolean; missing_exam_data?: string[] };
+type ImportBatch = { id: number; batch_key: string; district_name: string; academic_term: string; status: string; row_count: number; table_count: number; warning_count: number; replaced_batch_count?: number; is_active: boolean; exam_schedule_ready?: boolean; missing_exam_data?: string[]; validation_summary?: { learning_transfer?: { registrations?: number; scorebooks?: number; entries?: number } } };
 type ImportStart = { job_id: string; status: 'queued'; message: string };
 type ImportJob = { job_id: string; status: 'queued' | 'processing' | 'completed' | 'failed'; message: string; progress?: number; processed_rows?: number; total_rows?: number; current_table?: string; result?: ImportBatch };
 type ImportDeleteResult = { deleted: boolean; batch_key: string; removed_table_count: number; removed_zip: boolean; removed_extract_directory: boolean };
@@ -322,6 +323,20 @@ export function AdminImportsPage() {
     const jobRunning = jobId !== null && jobStatus !== 'completed' && jobStatus !== 'failed';
     const loading = upload.isPending || jobRunning;
     const currentProgress = upload.isPending ? uploadProgress : Math.max(0, Math.min(100, importJob.data?.data.progress ?? 0));
+    const exportZip = useMutation({
+        meta: { notification: { success: false } },
+        mutationFn: async (batch: ImportBatch) => {
+            const blob = await getFeatureBlob(`/api/v1/admin/imports/${encodeURIComponent(batch.batch_key)}/export`);
+            const url = URL.createObjectURL(blob);
+            const link = document.createElement('a');
+            link.href = url;
+            link.download = `${batch.batch_key}.zip`;
+            document.body.appendChild(link);
+            link.click();
+            link.remove();
+            window.setTimeout(() => URL.revokeObjectURL(url), 60_000);
+        },
+    });
     const remove = useMutation({
         meta: { notification: { success: 'ลบชุดข้อมูลและไฟล์เดิมเรียบร้อยแล้ว' } },
         mutationFn: (batch: ImportBatch) => sendFeatureData<ImportDeleteResult>(`/api/v1/admin/imports/${encodeURIComponent(batch.batch_key)}`, 'DELETE'),
@@ -367,9 +382,13 @@ export function AdminImportsPage() {
         { id: 'exam_data', header: 'ข้อมูลตารางสอบ', size: 205, meta: { compactSize: 112 }, cell: ({ row }) => row.original.exam_schedule_ready ? <StatusBadge tone="success">ครบ</StatusBadge> : <div><StatusBadge tone="warning">ไม่ครบ</StatusBadge><p className="mt-1 text-xs leading-5 text-amber-800">ขาด {(row.original.missing_exam_data ?? []).join(', ') || 'schedule / field'}</p></div> },
         { accessorKey: 'warning_count', header: 'คำเตือน', size: 105, meta: { compactSize: 62, compactTextAlign: 'center' }, cell: ({ getValue }) => <StatusBadge tone={Number(getValue()) > 0 ? 'warning' : 'success'}>{getValue<number>()}</StatusBadge> },
         { accessorKey: 'status', header: 'สถานะ', size: 135, meta: { compactSize: 76, compactTextAlign: 'center' }, cell: ({ getValue }) => <StatusBadge tone={importTone(getValue<string>())}>{getValue<string>()}</StatusBadge> },
-        { id: 'actions', header: 'จัดการ', size: 112, meta: { compactSize: 72, compactTextAlign: 'center' }, enableSorting: false, cell: ({ row }) => <button type="button" onClick={() => confirmDelete(row.original)} disabled={loading || remove.isPending} className="responsive-table-action inline-flex items-center justify-center gap-1.5 rounded-full border border-rose-200 bg-white px-3 py-2 text-xs font-bold text-rose-700 transition hover:bg-rose-50 disabled:cursor-not-allowed disabled:opacity-50" aria-label={`ลบชุดข้อมูล ${row.original.batch_key}`}>{remove.isPending ? <CircleNotch size={16} className="animate-spin" /> : <Trash size={16} weight="bold" />}<span>ลบข้อมูล</span></button> },
-    ], [loading, remove.isPending]);
+        { id: 'actions', header: 'จัดการ', size: 230, meta: { compactSize: 148, compactTextAlign: 'center' }, enableSorting: false, cell: ({ row }) => <div className="flex flex-wrap justify-center gap-2">
+            <button type="button" onClick={() => exportZip.mutate(row.original)} disabled={loading || remove.isPending || exportZip.isPending || imports.data?.meta.system_database_connected !== true || row.original.status === 'ไม่สำเร็จ'} className={`${secondaryButton} responsive-table-action min-h-11 px-3 text-xs`} aria-label={`ส่งออก ZIP ชุดข้อมูล ${row.original.batch_key}`}>{exportZip.isPending && exportZip.variables?.batch_key === row.original.batch_key ? <CircleNotch size={16} className="animate-spin" /> : <DownloadSimple size={16} weight="bold" />}<span>ส่งออก ZIP</span></button>
+            <button type="button" onClick={() => confirmDelete(row.original)} disabled={loading || remove.isPending || exportZip.isPending} className="responsive-table-action inline-flex min-h-11 items-center justify-center gap-1.5 rounded-full border border-rose-200 bg-white px-3 py-2 text-xs font-bold text-rose-700 transition hover:bg-rose-50 disabled:cursor-not-allowed disabled:opacity-50" aria-label={`ลบชุดข้อมูล ${row.original.batch_key}`}>{remove.isPending ? <CircleNotch size={16} className="animate-spin" /> : <Trash size={16} weight="bold" />}<span>ลบข้อมูล</span></button>
+        </div> },
+    ], [loading, remove.isPending, exportZip.isPending, exportZip.variables, imports.data?.meta.system_database_connected]);
     const readOnly = imports.data ? imports.data.meta.read_only === true : true;
+    const activeBatch = imports.data?.data.find((batch) => batch.is_active);
     function submit(event: FormEvent) { event.preventDefault(); upload.mutate(); }
     return (
         <div>
@@ -379,16 +398,20 @@ export function AdminImportsPage() {
                     <form onSubmit={submit} className="space-y-4">
                         <label className="block"><span className="mb-2 block text-sm font-bold text-slate-700">ไฟล์ข้อมูล</span><span className="grid min-h-32 place-items-center rounded-2xl border border-dashed border-brand-300 bg-brand-50 px-4 py-6 text-center"><FileZip size={32} weight="duotone" className="text-brand-700" /><span className="mt-2 max-w-full truncate text-sm font-bold text-slate-800">{file?.name ?? 'เลือกไฟล์ ZIP'}</span><input key={jobId ?? 'ready'} type="file" accept=".zip,application/zip" disabled={readOnly || upload.isPending || jobRunning} onChange={(event) => { setFile(event.target.files?.[0] ?? null); setJobId(null); setHandledJobId(null); setUploadProgress(0); upload.reset(); }} className="mt-3 block max-w-full text-xs text-slate-600 file:mr-3 file:rounded-full file:border-0 file:bg-brand-700 file:px-4 file:py-2 file:font-bold file:text-white" /></span></label>
                         <Field label="ภาคเรียน"><input required pattern="(?:[12]/25[0-9]{2}|25[0-9]{2}/[12])" value={term} onChange={(event) => setTerm(event.target.value)} disabled={readOnly} className={inputClass} placeholder="1/2569" /></Field>
-                        <MutationError error={upload.error ?? remove.error} />
+                        <MutationError error={upload.error ?? remove.error ?? exportZip.error} />
                         {importJob.isError && <p role="alert" className="rounded-xl border border-rose-200 bg-rose-50 p-3 text-sm font-bold text-rose-800">อ่านสถานะการนำเข้าไม่สำเร็จ ระบบอาจยังทำงานอยู่ กรุณารอสักครู่แล้วรีเฟรชหน้า</p>}
                         {loading && <div role="status" aria-live="polite" className="overflow-hidden rounded-2xl border border-brand-200 bg-gradient-to-br from-brand-50 to-sky-50 p-4 shadow-sm"><div className="flex items-start gap-3"><span className="grid size-11 shrink-0 place-items-center rounded-full bg-white text-brand-700 shadow-sm"><CircleNotch size={25} weight="bold" className="animate-spin" /></span><div className="min-w-0 flex-1"><div className="flex items-center justify-between gap-3"><p className="font-bold text-slate-950">{upload.isPending ? 'กำลังอัปโหลดไฟล์ ZIP' : jobStatus === 'queued' ? 'ไฟล์อยู่ในคิวนำเข้า' : 'กำลังตรวจสอบและนำเข้าข้อมูล'}</p><strong className="text-sm text-brand-800">{currentProgress}%</strong></div><p className="mt-1 text-sm leading-6 text-slate-600">{upload.isPending ? `กำลังส่ง ${file?.name ?? 'ไฟล์ข้อมูล'} ไปยังเซิร์ฟเวอร์ กรุณาอย่าปิดหน้านี้` : importJob.data?.data.message ?? 'กำลังเริ่มงานเบื้องหลังอัตโนมัติ กรุณารอสักครู่'}</p>{!upload.isPending && (importJob.data?.data.total_rows ?? 0) > 0 && <p className="mt-1 text-xs font-semibold text-slate-500">ประมวลผล {Number(importJob.data?.data.processed_rows ?? 0).toLocaleString('th-TH')} / {Number(importJob.data?.data.total_rows ?? 0).toLocaleString('th-TH')} แถว{importJob.data?.data.current_table ? ` · ${importJob.data.data.current_table}` : ''}</p>}</div></div><div className="mt-3 h-2 overflow-hidden rounded-full bg-white"><div className="h-full rounded-full bg-brand-600 transition-[width] duration-500" style={{ width: `${currentProgress}%` }} /></div></div>}
                         {jobStatus === 'failed' && <p role="alert" className="rounded-xl border border-rose-200 bg-rose-50 p-3 text-sm font-bold text-rose-800">{importJob.data?.data.message}</p>}
-                        {jobStatus === 'completed' && importJob.data?.data.result && <p role="status" className="rounded-xl border border-brand-200 bg-brand-50 p-3 text-sm font-bold text-brand-800">นำเข้าสำเร็จ {importJob.data.data.result.table_count.toLocaleString('th-TH')} ตาราง รวม {importJob.data.data.result.row_count.toLocaleString('th-TH')} แถว เปิดใช้งานแล้ว และลบชุดเก่า {importJob.data.data.result.replaced_batch_count ?? 0} ชุด</p>}
+                        {jobStatus === 'completed' && importJob.data?.data.result && <div role="status" className="rounded-xl border border-brand-200 bg-brand-50 p-3 text-sm font-bold text-brand-800"><p>นำเข้าสำเร็จ {importJob.data.data.result.table_count.toLocaleString('th-TH')} ตาราง รวม {importJob.data.data.result.row_count.toLocaleString('th-TH')} แถว เปิดใช้งานแล้ว และลบชุดเก่า {importJob.data.data.result.replaced_batch_count ?? 0} ชุด</p>{importJob.data.data.result.validation_summary?.learning_transfer?.registrations !== undefined && <p className="mt-1">กู้คืนทะเบียน {importJob.data.data.result.validation_summary.learning_transfer.registrations.toLocaleString('th-TH')} รายการ สมุดคะแนน {importJob.data.data.result.validation_summary.learning_transfer.scorebooks ?? 0} ชุด และคะแนน {Number(importJob.data.data.result.validation_summary.learning_transfer.entries ?? 0).toLocaleString('th-TH')} ช่องแล้ว</p>}</div>}
                         <button type="submit" disabled={readOnly || !file || loading || remove.isPending} className={`${primaryButton} w-full py-3`}>{loading ? <CircleNotch size={18} weight="bold" className="animate-spin" /> : <UploadSimple size={18} weight="bold" />}{upload.isPending ? 'กำลังอัปโหลด กรุณารอ' : jobRunning ? 'กำลังนำเข้า กรุณารอ' : 'ตรวจสอบและเริ่มนำเข้า'}</button>
                         <p className="text-xs leading-5 text-slate-500">รองรับ ZIP ไม่เกิน 90 MB ระบบปฏิเสธ path อันตราย, symbolic link และ ZIP bomb เมื่อชุดใหม่ผ่านครบทุกขั้น ระบบจะเปิดใช้ชุดใหม่และลบตาราง ZIP และไฟล์ DBF/FPT ชุดเดิมโดยอัตโนมัติ หากชุดใหม่ไม่สมบูรณ์ ชุดเดิมจะยังใช้งานต่อ</p>
                     </form>
                 </Panel>
                 <Panel title="ชุดข้อมูลปัจจุบัน" description="แต่ละอำเภอมีชุดข้อมูลใช้งานหนึ่งชุด ชุดก่อนหน้าจะถูกลบเมื่อชุดใหม่ผ่านการนำเข้า">
+                    <div className="mb-4 rounded-xl border border-slate-200 bg-slate-50 p-4 text-sm leading-6 text-slate-700">
+                        <div className="mb-2 flex flex-wrap items-center justify-between gap-3"><p className="font-bold text-slate-950">ย้ายชุดข้อมูลไปเครื่องใหม่</p>{activeBatch && <button type="button" onClick={() => exportZip.mutate(activeBatch)} disabled={loading || remove.isPending || exportZip.isPending || imports.data?.meta.system_database_connected !== true} className={`${primaryButton} min-h-11`} aria-label="ส่งออก ZIP ชุดปัจจุบัน">{exportZip.isPending ? <CircleNotch size={18} className="animate-spin" /> : <DownloadSimple size={18} weight="bold" />}{exportZip.isPending ? 'กำลังดาวน์โหลด' : 'ส่งออก ZIP'}</button>}</div>
+                        <p>ZIP รวมข้อมูล ITW เดิม วิชาลงทะเบียน และสมุดคะแนนทุกภาคเรียนของอำเภอนี้ ทั้งคะแนนเก็บ กลางภาค และปลายภาค พร้อมโครงสร้างคะแนนและหมายเหตุ</p><p className="mt-2">บนเครื่องใหม่ให้อัปเดตระบบเป็นรุ่นที่รองรับ ZIP นี้ เลือกอำเภอปลายทาง อัปโหลดไฟล์ และระบุภาคเรียนเดียวกับชุดข้อมูล ITW ระบบจะกู้คืนทะเบียนและคะแนนให้อัตโนมัติ หากพบทะเบียนหรือสมุดคะแนนซ้ำจะยกเลิกโดยไม่ทับข้อมูลเดิม</p><p className="mt-1 text-xs text-slate-500">ข้อมูลจากเว็บอยู่ในไฟล์เพิ่มเติมสำหรับนำเข้าระบบ SDL School ไม่ได้เขียนทับ DBF ของ ITW และไม่รวมบัญชีผู้ใช้ การตั้งค่า ห้องสอบที่จัดบนเว็บ หรืองานที่มอบหมาย</p>
+                    </div>
                     {imports.data?.data.some((batch) => batch.is_active && batch.exam_schedule_ready === false) && <div role="alert" className="mb-4 rounded-xl border border-amber-200 bg-amber-50 p-4 text-sm leading-6 text-amber-950"><p className="font-black">ข้อมูลนักศึกษาพร้อมใช้ แต่ข้อมูลตารางสอบยังไม่ครบ</p><p className="mt-1">นำเข้า ZIP จาก ITW51 ที่มี SCHEDULE.DBF ในโฟลเดอร์ระดับ 1, 2, 3 และ FIELD.DBF ระบบจะเก็บเป็นตารางในฐานข้อมูลของระบบเอง</p></div>}
                     {imports.isPending && <QuerySkeleton />}{imports.isError && <QueryError onRetry={() => imports.refetch()} />}{imports.data && <DataTable data={imports.data.data} columns={columns} minWidth="wide" />}
                 </Panel>
