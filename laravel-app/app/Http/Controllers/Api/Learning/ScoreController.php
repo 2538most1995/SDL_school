@@ -12,6 +12,7 @@ use App\Services\Legacy\LegacyPortalReadService;
 use App\Support\DbfWriteException;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Schema;
 use Illuminate\Validation\Rule;
 use Symfony\Component\HttpKernel\Exception\HttpExceptionInterface;
@@ -97,7 +98,12 @@ final class ScoreController extends Controller
         $batch = config('system_data.enabled') ? ImportedScoreEditService::currentBatch($this->districtId($request)) : null;
         $data['batch_key'] = $batch;
         $data['can_edit'] = $batch !== null && (bool) config('system_data.student_enabled') && (bool) config('system_data.write_enabled') && Schema::hasTable('imported_score_edits');
+        $data['can_bulk_edit'] = $data['can_edit'] && Schema::hasTable('imported_score_completions');
+        $completed = $batch !== null && Schema::hasTable('imported_score_completions')
+            ? DB::table('imported_score_completions')->where('district_id', $this->districtId($request))->where('batch_key', $batch)
+                ->whereIn('score_key', array_map([ImportedScoreEditService::class, 'scoreKey'], $data['rows']))->pluck('score_key')->flip()->all() : [];
         foreach ($data['rows'] as &$row) {
+            $row['entry_completed'] = isset($completed[ImportedScoreEditService::scoreKey($row)]);
             $row['edit_token'] = $batch === null ? null : ImportedScoreEditService::token($row, $batch);
         }
         unset($row);
@@ -114,6 +120,7 @@ final class ScoreController extends Controller
             'level' => ['required', 'integer', Rule::in([1, 2, 3])],
             'academic_term' => ['required', 'regex:/^[12]\/25\d{2}$/'],
             'edit_token' => ['required', 'string', 'size:64', 'regex:/^[a-f0-9]+$/D'],
+            'entry_mode' => ['sometimes', Rule::in(['bulk', 'individual'])],
             'assessment_scores' => ['required', 'array', 'size:9', 'list'],
             'assessment_scores.*' => ['nullable', 'numeric', 'min:0', 'max:100'],
             'midterm_score' => ['present', 'nullable', 'numeric', 'min:0', 'max:100'],
@@ -131,6 +138,21 @@ final class ScoreController extends Controller
 
             return response()->json(['message' => 'บันทึกคะแนนไม่สำเร็จ กรุณาโหลดข้อมูลใหม่หรือติดต่อผู้ดูแลระบบ'], 503);
         }
+    }
+
+    public function completeImported(Request $request, ImportedScoreEditService $scores): JsonResponse
+    {
+        $input = $request->validate([
+            'batch_key' => ['required', 'string', 'max:64', 'regex:/^import_\d{10}_[A-Za-z0-9]+$/D'],
+            'rows' => ['required', 'array', 'list', 'min:1', 'max:1000'],
+            'rows.*.student_code' => ['required', 'string', 'max:20'],
+            'rows.*.subject_code' => ['required', 'string', 'max:32'],
+            'rows.*.level' => ['required', 'integer', Rule::in([1, 2, 3])],
+            'rows.*.academic_term' => ['required', 'regex:/^[12]\/25\d{2}$/'],
+            'rows.*.edit_token' => ['required', 'string', 'size:64', 'regex:/^[a-f0-9]+$/D'],
+        ]);
+
+        return response()->json(['data' => $scores->complete($request->user(), $this->districtId($request), $input, $request->ip())]);
     }
 
     public function store(Request $request, LearningScorebookService $scorebooks): JsonResponse

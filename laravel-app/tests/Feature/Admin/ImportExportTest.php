@@ -566,6 +566,67 @@ final class ImportExportTest extends TestCase
         $this->assertSame('1/2569', $data['term']);
     }
 
+    public function test_autosave_returns_next_token_and_finishing_persists_bulk_lock_but_allows_individual_edits(): void
+    {
+        $input = $this->prepareDirectScores();
+        $this->getJson('/api/v1/learning/scores/imported')->assertOk()->assertJsonPath('data.can_bulk_edit', true);
+        $saved = $this->putJson('/api/v1/learning/scores/imported', [...$input, 'midterm_score' => 40, 'entry_mode' => 'bulk'])
+            ->assertOk()->json('data');
+        $this->assertNotSame($input['edit_token'], $saved['edit_token']);
+        $input = [...$input, 'midterm_score' => 40, 'edit_token' => $saved['edit_token']];
+        $finish = ['batch_key' => $this->batch, 'rows' => [$input]];
+        $this->postJson('/api/v1/learning/scores/imported/complete', $finish)->assertOk()->assertJsonPath('data.completed', 1);
+        $this->assertDatabaseCount('imported_score_completions', 1);
+        $this->assertDatabaseHas('audit_logs', ['event' => 'learning.imported_score.completed', 'user_id' => $this->admin->id]);
+        $row = collect($this->getJson('/api/v1/learning/scores/imported')->assertOk()->json('data.rows'))->firstWhere('subject_code', 'TEST01');
+        $this->assertTrue($row['entry_completed']);
+        $this->putJson('/api/v1/learning/scores/imported', [...$input, 'final_exam_score' => 20, 'entry_mode' => 'bulk'])->assertConflict();
+        $this->putJson('/api/v1/learning/scores/imported', [...$input, 'final_exam_score' => 20, 'entry_mode' => 'individual'])->assertOk();
+        $this->assertDatabaseHas('db_'.$this->batch.'_1_grade', ['_id' => 1, 'total' => 60]);
+        $this->assertDatabaseCount('imported_score_completions', 1);
+    }
+
+    public function test_finishing_untouched_rows_keeps_original_marks_and_grade_and_rejects_stale_tokens(): void
+    {
+        $input = $this->prepareDirectScores();
+        $request = ['batch_key' => $this->batch, 'rows' => [$input]];
+        $this->postJson('/api/v1/learning/scores/imported/complete', [...$request, 'rows' => [[...$input, 'edit_token' => str_repeat('a', 64)]]])->assertConflict();
+        $this->assertDatabaseCount('imported_score_completions', 0);
+        $this->postJson('/api/v1/learning/scores/imported/complete', $request)->assertOk();
+        $this->postJson('/api/v1/learning/scores/imported/complete', $request)->assertOk(); // Idempotent retry.
+        $this->assertDatabaseCount('imported_score_completions', 1);
+        $this->assertDatabaseCount('imported_score_edits', 0);
+        $this->assertDatabaseHas('db_'.$this->batch.'_1_grade', ['_id' => 1, 'total' => 82, 'grade' => '4']);
+    }
+
+    public function test_finish_validates_all_rows_atomically_and_enforces_teacher_student_and_district_scope(): void
+    {
+        $input = $this->prepareDirectScores();
+        $request = ['batch_key' => $this->batch, 'rows' => [$input, [...$input, 'student_code' => '0000000002']]];
+        $this->postJson('/api/v1/learning/scores/imported/complete', $request)->assertNotFound();
+        $this->assertDatabaseCount('imported_score_completions', 0);
+        $request['rows'] = [$input];
+        Sanctum::actingAs(User::factory()->create(['role' => 'teacher', 'district_id' => $this->district->id, 'assigned_groups' => ['OTHER']]));
+        $this->postJson('/api/v1/learning/scores/imported/complete', $request)->assertNotFound();
+        Sanctum::actingAs(User::factory()->create(['role' => 'student', 'district_id' => $this->district->id, 'student_code' => $input['student_code']]));
+        $this->postJson('/api/v1/learning/scores/imported/complete', $request)->assertForbidden();
+        $other = District::create(['name' => 'ข้ามอำเภอ', 'code' => 'completion-other']);
+        Sanctum::actingAs(User::factory()->create(['role' => 'admin', 'district_id' => $other->id]));
+        $this->postJson('/api/v1/learning/scores/imported/complete', $request)->assertNotFound();
+        Sanctum::actingAs(User::factory()->create(['role' => 'teacher', 'district_id' => $this->district->id, 'assigned_groups' => ['G1']]));
+        $this->postJson('/api/v1/learning/scores/imported/complete', $request)->assertOk();
+    }
+
+    public function test_autosave_of_unchanged_marks_keeps_original_grade_and_does_not_create_export_edits(): void
+    {
+        $input = $this->prepareDirectScores();
+        $this->putJson('/api/v1/learning/scores/imported', [...$input, 'entry_mode' => 'bulk'])->assertOk()
+            ->assertJsonPath('data.edit_token', $input['edit_token'])->assertJsonPath('data.grade', '4')
+            ->assertJsonPath('data.grade_recalculation_required', false);
+        $this->assertDatabaseCount('imported_score_edits', 0);
+        $this->assertDatabaseHas('db_'.$this->batch.'_1_grade', ['_id' => 1, 'grade' => '4', 'total' => 82]);
+    }
+
     private function prepareDirectScores(bool $deletedFirst = false): array
     {
         $this->useItwArchive();

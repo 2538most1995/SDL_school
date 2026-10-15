@@ -9,9 +9,12 @@ import {
     Users,
     ListChecks,
     WarningCircle,
+    NotePencil,
+    CheckCircle,
+    LockKey,
 } from '@phosphor-icons/react';
-import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { useDeferredValue, useEffect, useMemo, useRef, useState } from 'react';
+import { useQuery, useQueryClient } from '@tanstack/react-query';
+import { useDeferredValue, useEffect, useMemo, useRef, useState, useSyncExternalStore, type KeyboardEvent } from 'react';
 import { useSearchParams } from 'react-router-dom';
 import { Button, Field, Input, Select } from '../../components/MaterialUI';
 import { SearchableSelect } from '../../components/SearchableSelect';
@@ -20,10 +23,12 @@ import { Pagination } from '../../components/Pagination';
 import { Panel } from '../../components/Panel';
 import { QueryError, QuerySkeleton } from '../../components/QueryState';
 import { useDemoRole } from '../../context/DemoRoleContext';
+import { ApiError } from '../../lib/api';
 import { showSuccessAlert } from '../../lib/feedback';
 import { downloadExcel } from '../../lib/excel';
 import { retainSelectedFilterOption } from '../../lib/filterOptions';
 import { getFeatureDataWithDemo, sendFeatureData } from '../api';
+import { ImportedScoreAutosave, scoreFields, scoreValues, type ScoreSaveResult, type ScoreSaveState } from './importedScoreAutosave';
 import { auditIssueColorClass, buildImportedScoresPath, formatAuditIssueText, formatAuditStatusText, importedAssessmentLabels, isLowImportedMidtermScore, normalizeAssessmentScores } from './importedScores';
 
 function formatScore(value: number | string): string {
@@ -55,6 +60,7 @@ type ImportedScoreOption = string | number | {
 };
 
 type ImportedScoreRow = {
+    entry_completed?: boolean;
     academic_term: string;
     edit_token?: string;
     is_transferred?: boolean;
@@ -82,6 +88,7 @@ type ImportedScoreRow = {
 
 type ImportedScorePayload = {
     can_edit?: boolean;
+    can_bulk_edit?: boolean;
     batch_key?: string;
     terms: string[];
     selected_term: string | null;
@@ -131,9 +138,28 @@ function importedScoreAuditText(row: ImportedScoreRow): string {
     return formatAuditStatusText(row);
 }
 
+type ScoreEntrySession = {
+    mode: 'bulk' | 'individual';
+    batch: string;
+    originals: Record<string, ImportedScoreRow>;
+    queue: ImportedScoreAutosave;
+};
+const emptyScoreSaves: Record<string, ScoreSaveState> = {};
+const subscribeNoScoreSaves = () => () => {};
+const getNoScoreSaves = () => emptyScoreSaves;
+const scoreRowKey = (row: ImportedScoreRow) => JSON.stringify([row.level, row.student_code, row.subject_code, row.academic_term, !!row.is_remedial]);
+const canEnterScore = (row: ImportedScoreRow) => !!row.edit_token && !row.is_transferred && !['ม', 'มส', 'ผ', 'มผ', 'ร'].includes(row.grade ?? '');
+
 function ImportedScoresPage() {
     const queryClient = useQueryClient();
-    const [draft, setDraft] = useState<ImportedScoreRow | null>(null);
+    const [session, setSession] = useState<ScoreEntrySession | null>(null);
+    const [finishing, setFinishing] = useState(false);
+    const [scoreColumns, setScoreColumns] = useState<'all' | 'assessments' | 'exams'>('all');
+    const inputs = useRef(new Map<string, HTMLInputElement>());
+    const saves = useSyncExternalStore(session?.queue.subscribe ?? subscribeNoScoreSaves, session?.queue.getSnapshot ?? getNoScoreSaves);
+    const entryActive = session !== null;
+    const showAssessments = !entryActive || scoreColumns !== 'exams';
+    const showFinal = !entryActive || scoreColumns !== 'assessments';
     const [editError, setEditError] = useState('');
     const [searchParams] = useSearchParams();
     const tableScrollRef = useRef<HTMLDivElement>(null);
@@ -157,8 +183,9 @@ function ImportedScoresPage() {
     const groupLabels = useRef(new Map<string, string>());
     const subjectLabels = useRef(new Map<string, string>());
     const deferredSearch = useDeferredValue(search);
+    const scoreQueryKey = ['learning', 'scores', 'imported', term, level, group, subjectCode, deferredSearch, showIncorrectOnly, showLowMidtermOnly, page, perPage];
     const importedScores = useQuery({
-        queryKey: ['learning', 'scores', 'imported', term, level, group, subjectCode, deferredSearch, showIncorrectOnly, showLowMidtermOnly, page, perPage],
+        queryKey: scoreQueryKey,
         queryFn: ({ signal }) => getFeatureDataWithDemo<ImportedScorePayload>(
             buildImportedScoresPath({
                 term,
@@ -174,53 +201,133 @@ function ImportedScoresPage() {
             emptyImportedScores,
             signal,
         ),
-        enabled: draft === null,
+        enabled: !entryActive,
         refetchOnWindowFocus: false,
     });
     const data = importedScores.data?.data;
     const rows = data?.rows ?? [];
     const scoreLabels = useMemo(() => importedAssessmentLabels(data?.score_labels), [data?.score_labels]);
-    const saveImported = useMutation({
-        mutationFn: () => {
-            if (!draft || !data?.batch_key) throw new Error('กรุณาโหลดข้อมูลใหม่');
-            return sendFeatureData('/api/v1/learning/scores/imported', 'PUT', {
-                    batch_key: data.batch_key, student_code: draft.student_code, level: draft.level,
-                    subject_code: draft.subject_code, academic_term: draft.academic_term, edit_token: draft.edit_token,
-                    assessment_scores: draft.assessment_scores, midterm_score: draft.midterm_score, final_exam_score: draft.final_exam_score,
+    const startEntry = (mode: 'bulk' | 'individual', candidates: ImportedScoreRow[]) => {
+        if (!data?.batch_key) return;
+        const eligible = candidates.filter(row => canEnterScore(row) && (mode === 'individual' || !row.entry_completed));
+        if (!eligible.length) return;
+        const originals = Object.fromEntries(eligible.map(row => [scoreRowKey(row), row]));
+        const batch = data.batch_key;
+        const queue = new ImportedScoreAutosave(Object.fromEntries(eligible.map(row => [scoreRowKey(row), { fields: scoreFields(row), token: row.edit_token! }])),
+            async (key, fields, token) => {
+                const row = originals[key];
+                const response = await sendFeatureData<ScoreSaveResult>('/api/v1/learning/scores/imported', 'PUT', {
+                    batch_key: batch, student_code: row.student_code, level: row.level, subject_code: row.subject_code,
+                    academic_term: row.academic_term, edit_token: token, entry_mode: mode, ...scoreValues(fields),
+                });
+                return response.data;
             });
-        },
-        onSuccess: async () => {
-            setDraft(null); setEditError('');
-            await queryClient.invalidateQueries();
-            void showSuccessAlert('บันทึกคะแนนแล้ว กรุณาส่งออก ZIP (ITW) และคำนวณเกรดใน ITW ใหม่');
-        },
-        onError: (error: Error) => setEditError(error.message),
-    });
-    useEffect(() => {
-        if (!draft) return;
-        const guard = (event: BeforeUnloadEvent) => { event.preventDefault(); event.returnValue = ''; };
-        window.addEventListener('beforeunload', guard);
-        return () => window.removeEventListener('beforeunload', guard);
-    }, [draft]);
-    const setScore = (field: 'midterm_score' | 'final_exam_score' | number, raw: string) => {
-        setDraft((current) => {
-            if (!current) return current;
-            const next = { ...current, assessment_scores: [...current.assessment_scores] };
-            const value = raw === '' ? null : Number(raw);
-            if (typeof field === 'number') {
-                next.assessment_scores[field] = value;
-                const filled = next.assessment_scores.filter((score): score is number => score !== null);
-                next.midterm_score = filled.length ? filled.reduce((sum, score) => sum + score, 0) : null;
-            } else next[field] = value;
-            next.total_score = next.midterm_score === null || next.final_exam_score === null ? null : next.midterm_score + next.final_exam_score;
-            next.grade = null;
-            return next;
-        });
+        setEditError('');
+        setSession({ mode, originals, queue, batch });
     };
-    const scoreInput = (value: number | null, field: 'midterm_score' | 'final_exam_score' | number, label: string) => (
-        <input type="number" min={0} max={100} step="any" aria-label={label} value={value ?? ''} disabled={saveImported.isPending}
-            onChange={(event) => setScore(field, event.target.value)} className="w-20 rounded border border-brand-500 bg-white px-2 py-2 text-center text-slate-950 focus:ring-2 focus:ring-brand-300" />
-    );
+    useEffect(() => {
+        if (session) inputs.current.values().next().value?.focus();
+        return () => session?.queue.stop();
+    }, [session]);
+    const hasUnsaved = Object.values(saves).some(row => row.status !== 'saved');
+    const errors = Object.values(saves).filter(row => row.status === 'error');
+    const savedCount = Object.values(saves).filter(row => row.savedVersion > 0 && row.status === 'saved').length;
+    useEffect(() => {
+        if (!hasUnsaved) return;
+        const guard = (event: BeforeUnloadEvent) => { event.preventDefault(); event.returnValue = ''; };
+        const navigateAfterSave = (event: MouseEvent) => {
+            if (!session || event.button !== 0 || event.ctrlKey || event.metaKey || event.shiftKey || event.altKey) return;
+            const anchor = event.target instanceof Element ? event.target.closest<HTMLAnchorElement>('a[href]') : null;
+            if (!anchor || anchor.target === '_blank' || anchor.hasAttribute('download')) return;
+            const url = new URL(anchor.href, window.location.href);
+            if (url.origin !== window.location.origin || url.pathname === window.location.pathname && url.search === window.location.search) return;
+            event.preventDefault(); event.stopPropagation();
+            void session.queue.flush().then(saved => {
+                if (saved) window.location.assign(url.href);
+                else setEditError('ยังมีคะแนนบันทึกไม่สำเร็จ กรุณาตรวจแถวที่แจ้งเตือนก่อนออกจากหน้านี้');
+            });
+        };
+        window.addEventListener('beforeunload', guard);
+        document.addEventListener('click', navigateAfterSave, true);
+        return () => { window.removeEventListener('beforeunload', guard); document.removeEventListener('click', navigateAfterSave, true); };
+    }, [hasUnsaved, session]);
+    const finishEntry = async () => {
+        if (!session || finishing) return;
+        setFinishing(true); setEditError('');
+        try {
+            if (!await session.queue.flush()) {
+                setEditError('ยังมีคะแนนบันทึกไม่สำเร็จ กรุณาแก้ไขแถวที่แจ้งเตือนแล้วกดบันทึกเสร็จอีกครั้ง');
+                return;
+            }
+            const latest = session.queue.getSnapshot();
+            await sendFeatureData('/api/v1/learning/scores/imported/complete', 'POST', {
+                batch_key: session.batch,
+                rows: Object.entries(session.originals).map(([key, row]) => ({ student_code: row.student_code, level: row.level,
+                    subject_code: row.subject_code, academic_term: row.academic_term, edit_token: latest[key].token })),
+            });
+            const completedKeys = new Set(Object.keys(session.originals));
+            queryClient.setQueryData<typeof importedScores.data>(scoreQueryKey, old => old ? { ...old, data: { ...old.data,
+                rows: old.data.rows.map(row => completedKeys.has(scoreRowKey(row)) ? { ...row, entry_completed: true } : row) } } : old);
+            session.queue.stop(); setSession(null);
+            await queryClient.invalidateQueries();
+            showSuccessAlert('บันทึกเสร็จแล้ว หากต้องการเปลี่ยนคะแนนให้กดแก้ไขทีละคน');
+        } catch (error) {
+            if (error instanceof ApiError) {
+                const keys = Object.keys(session.originals);
+                for (const [field, messages] of Object.entries(error.errors)) {
+                    const match = /^rows\.(\d+)\.edit_token$/.exec(field);
+                    if (match && keys[Number(match[1])]) session.queue.markConflict(keys[Number(match[1])], messages[0]);
+                }
+            }
+            setEditError(error instanceof Error ? error.message : 'บันทึกเสร็จไม่สำเร็จ กรุณาลองใหม่');
+        }
+        finally { setFinishing(false); }
+    };
+    const reloadScore = async (key: string) => {
+        if (!session || !window.confirm('ใช้คะแนนล่าสุดจากระบบแทนค่าที่ยังไม่บันทึกของแถวนี้หรือไม่?')) return;
+        const original = session.originals[key];
+        try {
+            const result = await getFeatureDataWithDemo<ImportedScorePayload>(buildImportedScoresPath({ term: original.academic_term,
+                level: String(original.level), group: '', subjectCode: original.subject_code, search: original.student_code, page: 1, perPage: 1000 }), emptyImportedScores);
+            if (result.data.batch_key !== session.batch) throw new Error('มีการนำเข้าชุดข้อมูลใหม่ กรุณาออกจากหน้านี้แล้วเปิดอีกครั้ง');
+            const latest = result.data.rows.find(row => scoreRowKey(row) === key);
+            if (!latest?.edit_token) throw new Error('ไม่พบรายการคะแนนล่าสุด');
+            queryClient.setQueryData<typeof importedScores.data>(scoreQueryKey, old => old ? { ...old, data: { ...old.data,
+                rows: old.data.rows.map(row => scoreRowKey(row) === key ? latest : row) } } : old);
+            if (session.mode === 'bulk' && latest.entry_completed) {
+                delete session.originals[key]; session.queue.remove(key);
+                if (!Object.keys(session.originals).length) { session.queue.stop(); setSession(null); }
+            } else {
+                session.originals[key] = latest;
+                session.queue.replace(key, scoreFields(latest), latest.edit_token);
+            }
+            setEditError('');
+        } catch (error) { setEditError(error instanceof Error ? error.message : 'โหลดคะแนนล่าสุดไม่สำเร็จ'); }
+    };
+    const onScoreKey = (event: KeyboardEvent<HTMLInputElement>, key: string, column: number) => {
+        if (!session || event.nativeEvent.isComposing || event.altKey || event.ctrlKey || event.metaKey) return;
+        const keys = rows.map(scoreRowKey).filter(key => session.originals[key]);
+        const columns = [...(showAssessments ? [0, 1, 2, 3, 4, 5, 6, 7, 8] : []), 9, ...(showFinal ? [10] : [])];
+        let r = keys.indexOf(key), position = columns.indexOf(column);
+        if (event.key === 'Enter' || event.key === 'ArrowDown') r += event.shiftKey ? -1 : 1;
+        else if (event.key === 'ArrowUp') r--;
+        else if (event.key === 'ArrowLeft') position--;
+        else if (event.key === 'ArrowRight') position++;
+        else if (event.key === 'Tab') { position += event.shiftKey ? -1 : 1; if (position >= columns.length) { position = 0; r++; } if (position < 0) { position = columns.length - 1; r--; } }
+        else return;
+        if (event.key !== 'Tab' || (r >= 0 && r < keys.length)) event.preventDefault();
+        if (r >= 0 && r < keys.length && position >= 0 && position < columns.length) inputs.current.get(`${keys[r]}:${columns[position]}`)?.focus();
+    };
+    const scoreInput = (key: string, column: number, label: string) => {
+        const state = saves[key];
+        return <input ref={element => { if (element) inputs.current.set(`${key}:${column}`, element); else inputs.current.delete(`${key}:${column}`); }}
+            type="text" inputMode="decimal" autoComplete="off" aria-label={`${session?.originals[key].full_name} ${session?.originals[key].subject_code} ${label}`}
+            aria-invalid={state.status === 'error' || undefined} aria-describedby={state.status === 'error' ? `score-error-${rows.findIndex(row => scoreRowKey(row) === key)}` : undefined}
+            value={state.fields[column]} disabled={finishing}
+            onChange={event => session?.queue.set(key, column, event.target.value)} onBlur={() => session?.queue.blur(key)}
+            onFocus={event => { event.currentTarget.select(); event.currentTarget.scrollIntoView({ block: 'nearest', inline: 'nearest' }); }}
+            onKeyDown={event => onScoreKey(event, key, column)} className="score-entry-input" />;
+    };
 
 
     useEffect(() => {
@@ -324,10 +431,17 @@ function ImportedScoresPage() {
 
     return <div>
         <PageHeader category="learning" title="คะแนนจากข้อมูลนำเข้า" description="กรอกและแก้ไขคะแนนย่อย คะแนนเก็บ และคะแนนสอบปลายภาคจากข้อมูล ITW ที่นำเข้า" icon={Database} actions={rows.length > 0 ? <Button type="button" appearance="outline" icon={<ExcelFileIcon size={18} />} onClick={exportImportedScores}>ส่งออก Excel</Button> : undefined} />
-        <p role="status" className="mb-5 rounded-xl border border-sky-200 bg-sky-50 p-4 text-sm leading-6 text-sky-950"><strong>{data?.can_edit ? 'กรอกและแก้ไขคะแนนได้:' : 'คะแนนจากข้อมูลนำเข้า:'}</strong> กดแก้ไขคะแนนในแถวนักศึกษา กรอกคะแนนย่อย 1–9 กลางภาค (คะแนนเก็บ) และปลายภาค แล้วบันทึก จากนั้นส่งออก ZIP (ITW) เพื่อนำ GRADE.DBF ไปแทนไฟล์ใน ITW ให้ ITW จัดดัชนีและคำนวณเกรดใหม่ ช่องว่างหมายถึงยังไม่มีคะแนน ค่า 0 คือศูนย์จริง ระบบจะปฏิเสธทศนิยมถ้า DBF เดิมไม่รองรับ <span className="font-bold text-rose-700">คะแนนกลางภาคต่ำกว่า 40 แสดงเป็นสีแดง</span></p>
+        <p className="mb-5 text-sm leading-6 text-slate-600">เลือกกลุ่มเรียนหรือรายวิชา แล้วกด <strong className="text-slate-900">กรอกคะแนน</strong> เพื่อกรอกทุกแถวในหน้านี้ ระบบบันทึกอัตโนมัติ เมื่อเสร็จให้กด <strong className="text-slate-900">บันทึกเสร็จ</strong> เพื่อปิดช่องกรอก รายการที่เสร็จแล้วแก้ไขได้ทีละคน</p>
+        {!data?.can_edit && data && <p role="status" className="mb-4 rounded-xl bg-sky-50 p-4 text-sm text-sky-950">ขณะนี้เปิดดูคะแนนได้ การกรอกคะแนนต้องเปิดสิทธิ์เขียนข้อมูลและติดตั้งตารางบันทึกคะแนนก่อน</p>}
+        {data?.can_edit && !data.can_bulk_edit && <p role="status" className="mb-4 rounded-xl bg-amber-50 p-4 text-sm text-amber-950">กรุณาอัปเดตฐานข้อมูลเพื่อเปิดปุ่มกรอกคะแนนและบันทึกเสร็จ</p>}
+        {entryActive && <div className="mb-4 rounded-xl border border-brand-200 bg-brand-50 p-4 text-sm text-brand-950">
+            <p className="font-bold">{session.mode === 'bulk' ? 'กำลังกรอกคะแนนทั้งตาราง' : 'กำลังแก้ไขคะแนนรายคน'} · {Object.keys(session.originals).length} รายการ</p>
+            <p className="mt-1">Enter / ↑ ↓ เปลี่ยนคน · Tab / ← → เปลี่ยนช่อง · เว้นว่าง = ยังไม่มีคะแนน · 0 = ศูนย์จริง</p>
+            <p className="mt-1">คะแนนย่อยจะรวมเป็นกลางภาคให้อัตโนมัติ และสามารถปรับกลางภาคเองได้</p>
+        </div>}
 
         {editError && <p role="alert" className="mb-4 rounded-xl bg-rose-50 p-4 text-sm text-rose-800">{editError}</p>}
-        <fieldset disabled={draft !== null} className="contents">
+        {!entryActive && <fieldset className="contents">
         <Panel
             title="ตัวกรองคะแนนนำเข้า"
             description="จำกัดผลลัพธ์ตามภาคเรียน ระดับ กลุ่มเรียน รายวิชา หรือค้นหาชื่อและรหัสนักศึกษา"
@@ -388,9 +502,12 @@ function ImportedScoresPage() {
             </div>
         </Panel>
 
-        </fieldset>
+        </fieldset>}
         <Panel className="mt-5" title="ตารางคะแนนจากไฟล์นำเข้า" description={importedScores.isPending ? 'กำลังโหลดข้อมูล' : `พบทั้งหมด ${(data?.pagination.total ?? rows.length).toLocaleString('th-TH')} รายการ · หน้านี้ ${studentCount} คน และ ${subjectCount} วิชา`} action={
             <div className="flex flex-wrap items-center gap-2">
+                {entryActive && <Button type="button" icon={<CheckCircle size={18} />} disabled={finishing} onClick={() => void finishEntry()}>บันทึกเสร็จ</Button>}
+                {!entryActive && data?.can_bulk_edit && <Button type="button" icon={<NotePencil size={18} />} disabled={importedScores.isFetching || !rows.some(row => canEnterScore(row) && !row.entry_completed)} onClick={() => startEntry('bulk', rows)}>กรอกคะแนน</Button>}
+                {!entryActive && <>
                 <Button
                     type="button"
                     appearance={showIncorrectOnly ? 'primary' : 'outline'}
@@ -404,7 +521,7 @@ function ImportedScoresPage() {
                         }
                         setPage(1);
                     }}
-                    disabled={importedScores.isFetching || draft !== null}
+                    disabled={importedScores.isFetching || entryActive}
                 >
                     {showIncorrectOnly ? 'แสดงคะแนนทั้งหมด' : 'เช็คการคำนวณจาก ITW'}
                 </Button>
@@ -421,16 +538,17 @@ function ImportedScoresPage() {
                         }
                         setPage(1);
                     }}
-                    disabled={importedScores.isFetching || draft !== null}
+                    disabled={importedScores.isFetching || entryActive}
                 >
                     {showLowMidtermOnly ? 'แสดงคะแนนทั้งหมด' : 'ตรวจคะแนนกลางภาค < 40'}
                 </Button>
                 <Button type="button" appearance="outline" icon={<ListChecks size={18} weight="bold" />} onClick={() => setShowScoreLegend((prev) => !prev)}>
                     {showScoreLegend ? 'ซ่อนคำอธิบาย 1-9' : 'คำอธิบายคะแนน 1-9'}
                 </Button>
-                <Button type="button" appearance="outline" icon={<ArrowsClockwise size={18} weight="bold" />} onClick={() => importedScores.refetch()} disabled={importedScores.isFetching || draft !== null}>
+                <Button type="button" appearance="outline" icon={<ArrowsClockwise size={18} weight="bold" />} onClick={() => importedScores.refetch()} disabled={importedScores.isFetching || entryActive}>
                     โหลดข้อมูลใหม่
                 </Button>
+                </>}
             </div>
         }>
             {showIncorrectOnly && !showLowMidtermOnly && importedScores.data && (
@@ -451,7 +569,7 @@ function ImportedScoresPage() {
                     <p className="mt-1">แสดงเฉพาะรายการที่เข้าทั้งสองเงื่อนไขพร้อมกัน</p>
                 </div>
             )}
-            <details className="mb-4 rounded-xl border border-slate-200 bg-slate-50 p-4 text-sm leading-6 text-slate-800">
+            {!entryActive &&             <details className="mb-4 rounded-xl border border-slate-200 bg-slate-50 p-4 text-sm leading-6 text-slate-800">
                 <summary className="cursor-pointer font-bold">วิธีพิจารณาการคำนวณและเกรดจาก ITW</summary>
                 <ol className="mt-3 list-decimal space-y-1 pl-5">
                     <li>วิชาเทียบโอนและเกรดพิเศษ ม, มส, ผ, มผ, ร: ไม่เทียบเกรดจากคะแนนรวม</li>
@@ -461,8 +579,8 @@ function ImportedScoresPage() {
                     <li>ตัวอย่าง: กลางภาค 52 + ปลายภาค 34 = 86 แต่เกรด ข ต้องตรวจใน ITW เพราะมีคะแนนปลายภาคแล้ว; หากปลายภาคว่างและเกรด ข จะไม่แจ้งว่าเกรดผิด</li>
                     <li>ถ้าข้อมูลไม่ครบ ตรวจได้เฉพาะคู่ที่มีข้อมูล; คะแนนกลางภาคต่ำกว่า 40 เป็นตัวกรองติดตามผู้เรียนแยกจากการตรวจคำนวณ</li>
                 </ol>
-            </details>
-            {showScoreLegend && (
+            </details>}
+            {!entryActive && showScoreLegend && (
                 <div className="mb-4 rounded-2xl border border-brand-200 bg-brand-50/70 p-4 text-sm text-slate-800 shadow-xs">
                     <div className="flex items-center justify-between pb-2 mb-3 border-b border-brand-200/60">
                         <p className="font-black text-brand-950 flex items-center gap-2">
@@ -501,6 +619,12 @@ function ImportedScoresPage() {
                             : 'ไม่พบคะแนนจากข้อมูลนำเข้าตามตัวกรองที่เลือก'}
             </div>}
             {importedScores.data && rows.length > 0 && <>
+                {entryActive && <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
+                    <div role="group" aria-label="เลือกช่องคะแนนที่ต้องการกรอก" className="flex flex-wrap gap-1 rounded-xl bg-slate-100 p-1">
+                        {([['all', 'ทุกช่อง'], ['assessments', 'คะแนนย่อย 1–9'], ['exams', 'กลางภาค / ปลายภาค']] as const).map(([value, label]) => <button type="button" key={value} aria-pressed={scoreColumns === value} onClick={() => setScoreColumns(value)} className={`min-h-11 rounded-lg px-3 text-xs font-bold ${scoreColumns === value ? 'bg-white text-brand-800 shadow-sm' : 'text-slate-600'}`}>{label}</button>)}
+                    </div>
+                    <p className="text-xs text-slate-500">เลือกเฉพาะช่องที่ต้องการ เพื่อกรอกได้เร็วขึ้น</p>
+                </div>}
                 <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
                     <p className="text-xs leading-5 text-slate-500">เลื่อนซ้าย–ขวาเพื่อดูทุกช่อง · หัวตารางและชื่อคงอยู่ขณะเลื่อน</p>
                     <div className="flex flex-wrap gap-2">
@@ -514,43 +638,54 @@ function ImportedScoresPage() {
                     </div>
                 </div>
                 <div ref={tableScrollRef} role="region" aria-label="ตารางคะแนนจากข้อมูลนำเข้า เลื่อนแนวนอนเพื่อดูคะแนนทุกช่อง" tabIndex={0} className="imported-score-scroll rounded-xl border border-slate-200 outline-none focus:ring-2 focus:ring-brand-200">
-                <table className="imported-score-table w-full min-w-[2080px] text-sm">
+                <table className={`imported-score-table w-full text-sm ${entryActive ? `score-entry-table ${scoreColumns === 'exams' ? 'min-w-[620px]' : 'min-w-[1480px]'}` : 'min-w-[2080px]'}`}>
                     <caption className="sr-only">คะแนนจากข้อมูลนำเข้า ตามตัวกรองที่เลือก</caption>
                     <thead className="bg-slate-50 text-slate-700">
                         <tr>
-                            <th scope="col" className="w-14 border-b border-r border-slate-200 bg-slate-50 px-2 py-3 text-center">ลำดับ</th>
-                            <th scope="col" className="min-w-36 border-b border-r border-slate-200 bg-slate-50 px-3 py-3 text-left">รหัสนักศึกษา</th>
+                            {!entryActive && <th scope="col" className="w-14 border-b border-r border-slate-200 bg-slate-50 px-2 py-3 text-center">ลำดับ</th>}
+                            {!entryActive && <th scope="col" className="min-w-36 border-b border-r border-slate-200 bg-slate-50 px-3 py-3 text-left">รหัสนักศึกษา</th>}
                             <th scope="col" className="score-student-column min-w-40 border-b border-r border-slate-200 bg-slate-50 px-4 py-3 text-left">ชื่อ-นามสกุล</th>
-                            <th scope="col" className="min-w-36 border-b border-r border-slate-200 px-3 py-3 text-left">กลุ่ม</th>
-                            <th scope="col" className="min-w-64 border-b border-r border-slate-200 px-4 py-3 text-left">วิชา</th>
-                            <th scope="col" className="min-w-28 border-b border-r border-slate-200 px-3 py-3 text-center">วิธีเรียน</th>
-                            {scoreLabels.map((label, index) => <th scope="col" data-score-column={index === 0 ? true : undefined} key={`${label}-${index}`} className="w-16 border-b border-r border-slate-200 px-2 py-3 text-center" title={label}><span className="block truncate">{index + 1}</span><span className="sr-only">{label}</span></th>)}
+                            {!entryActive && <th scope="col" className="min-w-36 border-b border-r border-slate-200 px-3 py-3 text-left">กลุ่ม</th>}
+                            {!entryActive && <th scope="col" className="min-w-64 border-b border-r border-slate-200 px-4 py-3 text-left">วิชา</th>}
+                            {!entryActive && <th scope="col" className="min-w-28 border-b border-r border-slate-200 px-3 py-3 text-center">วิธีเรียน</th>}
+                            {showAssessments && scoreLabels.map((label, index) => <th scope="col" data-score-column={index === 0 ? true : undefined} key={`${label}-${index}`} className="w-16 border-b border-r border-slate-200 px-2 py-3 text-center" title={label}><span className="block truncate">{index + 1}</span><span className="sr-only">{label}</span></th>)}
                             <th scope="col" className="w-24 border-b border-r border-slate-200 bg-sky-50 px-3 py-3 text-center">กลางภาค</th>
-                            <th scope="col" className="w-24 border-b border-r border-slate-200 bg-amber-50 px-3 py-3 text-center">ปลายภาค</th>
+                            {showFinal && <th scope="col" className="w-24 border-b border-r border-slate-200 bg-amber-50 px-3 py-3 text-center">ปลายภาค</th>}
                             <th scope="col" className="w-20 border-b border-r border-slate-200 bg-brand-50 px-3 py-3 text-center">รวม</th>
                             <th scope="col" className="w-20 border-b border-slate-200 px-3 py-3 text-center">เกรด</th>
-                            <th scope="col" className="min-w-72 border-b border-slate-200 px-4 py-3 text-left">ผลตรวจการคำนวณ</th>
+                            {!entryActive && <th scope="col" className="min-w-72 border-b border-slate-200 px-4 py-3 text-left">ผลตรวจการคำนวณ</th>}
                         </tr>
                     </thead>
                     <tbody>
                         {rows.map((original, rowIndex) => {
-                            const editing = draft !== null && draft.edit_token === original.edit_token;
-                            const row = editing ? draft : original;
-                            return <tr key={`${row.level}|${row.student_code}|${row.subject_code}|${rowIndex}`} className="score-data-row">
-                            <td className="border-b border-r border-slate-200 bg-inherit px-2 py-3 text-center font-mono text-xs text-slate-500">{(((data?.pagination.current_page ?? page) - 1) * (data?.pagination.per_page ?? perPage)) + rowIndex + 1}</td>
-                            <td className="border-b border-r border-slate-200 bg-inherit px-3 py-3 font-mono font-bold text-slate-700">{row.student_code}</td>
+                            const key = scoreRowKey(original);
+                            const state = saves[key];
+                            const editing = !!state;
+                            let row = session?.originals[key] ?? original;
+                            if (state) {
+                                try { row = { ...row, ...scoreValues(state.fields), grade: state.status === 'saved' && 'grade' in state ? state.grade ?? null : state.version > 0 ? null : row.grade }; } catch { /* Keep last valid totals while typing. */ }
+                            }
+                            return <tr key={`${row.level}|${row.student_code}|${row.subject_code}|${rowIndex}`} className={`score-data-row ${editing ? 'score-entry-row' : ''}`}>
+                            {!entryActive && <td className="border-b border-r border-slate-200 bg-inherit px-2 py-3 text-center font-mono text-xs text-slate-500">{(((data?.pagination.current_page ?? page) - 1) * (data?.pagination.per_page ?? perPage)) + rowIndex + 1}</td>}
+                            {!entryActive && <td className="border-b border-r border-slate-200 bg-inherit px-3 py-3 font-mono font-bold text-slate-700">{row.student_code}</td>}
                             <td className="score-student-column border-b border-r border-slate-200 bg-inherit px-4 py-3"><p className="font-black text-slate-950">{row.full_name}</p><p className="mt-1 text-xs text-slate-500">{levelLabel(row.level)} · {row.academic_term}</p>
-                                {data?.can_edit && (editing ? <div className="mt-2 flex flex-wrap gap-2"><button type="button" onClick={() => saveImported.mutate()} disabled={saveImported.isPending} className="rounded bg-brand-700 px-3 py-2 text-xs font-bold text-white">{saveImported.isPending ? 'กำลังบันทึก…' : 'บันทึกคะแนน'}</button><button type="button" disabled={saveImported.isPending} onClick={() => { setDraft(null); setEditError(''); }} className="rounded border border-slate-300 px-3 py-2 text-xs">ยกเลิก</button></div> : !row.is_transferred && !['ม', 'มส', 'ผ', 'มผ', 'ร'].includes(row.grade ?? '') && <button type="button" disabled={draft !== null || importedScores.isFetching} onClick={() => { setEditError(''); setDraft({ ...row, assessment_scores: normalizeAssessmentScores(row.assessment_scores) }); }} className="mt-2 rounded border border-brand-600 bg-white px-3 py-2 text-xs font-bold text-brand-800 disabled:cursor-not-allowed disabled:opacity-50">แก้ไขคะแนน</button>)}
+                                {entryActive && <p className="mt-1 text-xs font-semibold text-slate-600">{row.subject_name} <span className="font-mono">{row.subject_code}</span></p>}
+                                {editing ? <div className="mt-2 text-xs">
+                                    <p role="status" className={state.status === 'error' ? 'font-bold text-rose-700' : state.status === 'saved' ? 'font-semibold text-emerald-700' : 'font-semibold text-amber-800'}>{state.status === 'saving' ? 'กำลังบันทึก…' : state.status === 'pending' ? 'รอบันทึก…' : state.status === 'error' ? 'บันทึกไม่สำเร็จ' : state.savedVersion > 0 ? 'บันทึกแล้ว' : 'พร้อมกรอก'}</p>
+                                    {state.error && <p id={`score-error-${rowIndex}`} role="alert" className="mt-1 break-words text-rose-700">{state.error}</p>}
+                                    {state.status === 'error' && <button type="button" disabled={finishing} onClick={() => state.conflict ? void reloadScore(key) : session?.queue.retry(key)} className="mt-2 rounded border border-rose-300 px-2 py-2 font-bold text-rose-800">{state.conflict ? 'ใช้คะแนนล่าสุด' : 'ลองบันทึกอีกครั้ง'}</button>}
+                                </div> : row.entry_completed ? <p className="mt-2 inline-flex items-center gap-1 text-xs font-semibold text-emerald-700"><LockKey size={14} /> บันทึกเสร็จแล้ว</p> : null}
+                                {data?.can_bulk_edit && !entryActive && canEnterScore(row) && <button type="button" disabled={importedScores.isFetching} onClick={() => startEntry('individual', [row])} className="mt-2 rounded border border-brand-600 bg-white px-3 py-2 text-xs font-bold text-brand-800 disabled:opacity-50">แก้ไขคะแนน</button>}
                             </td>
-                            <td className="border-b border-r border-slate-200 px-3 py-3"><p className="font-bold text-slate-800">{row.group_name || row.group_code || '-'}</p>{row.group_name && row.group_code && <p className="mt-1 font-mono text-xs text-slate-500">{row.group_code}</p>}</td>
-                            <td className="border-b border-r border-slate-200 px-4 py-3"><p className="font-black text-slate-950">{row.subject_name || '-'}</p><p className="mt-1 font-mono text-xs text-slate-500">{row.subject_code}</p></td>
-                            <td className="border-b border-r border-slate-200 px-3 py-3 text-center text-slate-700">{row.learning_method || '-'}</td>
-                            {normalizeAssessmentScores(row.assessment_scores).map((score, scoreIndex) => <td key={scoreIndex} className="border-b border-r border-slate-200 px-2 py-3 text-center font-mono tabular-nums text-slate-700">{editing ? scoreInput(score, scoreIndex, `คะแนนย่อย ${scoreIndex + 1}`) : nullableScore(score)}</td>)}
-                            <td className={`border-b border-r border-slate-200 bg-sky-50/60 px-3 py-3 text-center font-mono font-black tabular-nums ${isLowImportedMidtermScore(row.midterm_score) ? 'text-rose-700' : 'text-sky-900'}`}>{editing ? scoreInput(row.midterm_score, 'midterm_score', 'คะแนนกลางภาค') : nullableScore(row.midterm_score)}{isLowImportedMidtermScore(row.midterm_score) && <span className="sr-only"> คะแนนกลางภาคต่ำกว่า 40</span>}</td>
-                            <td className="border-b border-r border-slate-200 bg-amber-50/60 px-3 py-3 text-center font-mono font-black tabular-nums text-amber-900">{editing ? scoreInput(row.final_exam_score, 'final_exam_score', 'คะแนนปลายภาค') : nullableScore(row.final_exam_score)}</td>
+                            {!entryActive && <td className="border-b border-r border-slate-200 px-3 py-3"><p className="font-bold text-slate-800">{row.group_name || row.group_code || '-'}</p>{row.group_name && row.group_code && <p className="mt-1 font-mono text-xs text-slate-500">{row.group_code}</p>}</td>}
+                            {!entryActive && <td className="border-b border-r border-slate-200 px-4 py-3"><p className="font-black text-slate-950">{row.subject_name || '-'}</p><p className="mt-1 font-mono text-xs text-slate-500">{row.subject_code}</p></td>}
+                            {!entryActive && <td className="border-b border-r border-slate-200 px-3 py-3 text-center text-slate-700">{row.learning_method || '-'}</td>}
+                            {showAssessments && normalizeAssessmentScores(row.assessment_scores).map((score, scoreIndex) => <td key={scoreIndex} className="border-b border-r border-slate-200 px-2 py-3 text-center font-mono tabular-nums text-slate-700">{editing ? scoreInput(key, scoreIndex, `คะแนนย่อย ${scoreIndex + 1}`) : nullableScore(score)}</td>)}
+                            <td className={`border-b border-r border-slate-200 bg-sky-50/60 px-3 py-3 text-center font-mono font-black tabular-nums ${isLowImportedMidtermScore(row.midterm_score) ? 'text-rose-700' : 'text-sky-900'}`}>{editing ? scoreInput(key, 9, 'คะแนนกลางภาค') : nullableScore(row.midterm_score)}{isLowImportedMidtermScore(row.midterm_score) && <span className="sr-only"> คะแนนกลางภาคต่ำกว่า 40</span>}</td>
+                            {showFinal && <td className="border-b border-r border-slate-200 bg-amber-50/60 px-3 py-3 text-center font-mono font-black tabular-nums text-amber-900">{editing ? scoreInput(key, 10, 'คะแนนปลายภาค') : nullableScore(row.final_exam_score)}</td>}
                             <td className="border-b border-r border-slate-200 bg-brand-50/60 px-3 py-3 text-center font-mono font-black tabular-nums text-brand-900">{nullableScore(row.total_score)}</td>
-                            <td className="border-b border-slate-200 px-3 py-3 text-center"><span className="inline-flex flex-wrap items-center justify-center gap-1"><span className="inline-flex min-w-10 justify-center rounded-lg bg-slate-100 px-2 py-1 font-mono font-black text-slate-900">{editing ? 'รอ ITW' : row.grade || '-'}</span>{row.is_remedial && <span className="rounded bg-amber-50 px-1 py-0.5 text-[10px] font-semibold leading-none text-amber-800" title="ผลการเรียนจากรายการสอบซ่อมใน ITW">ซ่อม</span>}</span></td>
-                            <td className="border-b border-slate-200 px-4 py-3">
+                            <td className="border-b border-slate-200 px-3 py-3 text-center"><span className="inline-flex flex-wrap items-center justify-center gap-1"><span className="inline-flex min-w-10 justify-center rounded-lg bg-slate-100 px-2 py-1 font-mono font-black text-slate-900">{row.grade || '-'}</span>{row.is_remedial && <span className="rounded bg-amber-50 px-1 py-0.5 text-[10px] font-semibold leading-none text-amber-800" title="ผลการเรียนจากรายการสอบซ่อมใน ITW">ซ่อม</span>}</span></td>
+                            {!entryActive && <td className="border-b border-slate-200 px-4 py-3">
                                 {row.calculation_audit.status === 'incorrect' ? (
                                     <ul className="space-y-1 text-xs font-semibold leading-5">
                                         {row.calculation_audit.issues.map((issue) => <li key={issue.code} className={auditIssueColorClass(issue.code)}>{auditIssueText(issue)}</li>)}
@@ -562,13 +697,23 @@ function ImportedScoresPage() {
                                         {formatAuditStatusText(row)}
                                     </span>
                                 )}
-                            </td>
+                            </td>}
                         </tr>; })}
                     </tbody>
                 </table>
             </div></>}
-            {importedScores.data && <Pagination currentPage={data?.pagination.current_page ?? page} totalPages={data?.pagination.last_page ?? 1} totalItems={data?.pagination.total ?? rows.length} pageSize={data?.pagination.per_page ?? perPage} itemLabel="รายการคะแนน" disabled={importedScores.isFetching || draft !== null} onPageChange={setPage} onPageSizeChange={(nextPageSize) => { setPerPage(nextPageSize); setPage(1); }} />}
+            {importedScores.data && <Pagination currentPage={data?.pagination.current_page ?? page} totalPages={data?.pagination.last_page ?? 1} totalItems={data?.pagination.total ?? rows.length} pageSize={data?.pagination.per_page ?? perPage} itemLabel="รายการคะแนน" disabled={importedScores.isFetching || entryActive} onPageChange={setPage} onPageSizeChange={(nextPageSize) => { setPerPage(nextPageSize); setPage(1); }} />}
         </Panel>
+        {entryActive && <div className="score-entry-toolbar sticky bottom-3 z-20 mt-4 flex flex-wrap items-center justify-between gap-3 rounded-2xl border border-brand-200 bg-white p-4 shadow-lg">
+            <div role="status" aria-live="polite" className="text-sm">
+                <p className={`inline-flex items-center gap-2 font-bold ${errors.length ? 'text-rose-700' : hasUnsaved ? 'text-amber-800' : 'text-emerald-700'}`}>
+                    {errors.length ? <WarningCircle size={20} /> : hasUnsaved ? <ArrowsClockwise size={20} /> : <CheckCircle size={20} />}
+                    {errors.length ? `${errors.length} รายการยังบันทึกไม่สำเร็จ` : hasUnsaved ? 'กำลังบันทึกคะแนนอัตโนมัติ…' : 'บันทึกการเปลี่ยนแปลงครบแล้ว'}
+                </p>
+                <p className="mt-1 text-xs text-slate-500">แก้ไขและบันทึกแล้ว {savedCount} รายการ · กดบันทึกเสร็จเพื่อปิดช่องกรอกในหน้านี้</p>
+            </div>
+            <Button type="button" icon={<CheckCircle size={20} />} disabled={finishing} onClick={() => void finishEntry()}>{finishing ? 'กำลังบันทึกและปิดการกรอก…' : 'บันทึกเสร็จ'}</Button>
+        </div>}
     </div>;
 }
 

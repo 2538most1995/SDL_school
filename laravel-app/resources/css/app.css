@@ -3119,3 +3119,31 @@ textarea {
 [data-ui-mode='dark'] .imported-score-table .score-data-row:nth-child(even) { background-color: #1d2c40; }
 [data-ui-mode='dark'] .imported-score-table .score-data-row:hover { background-color: #293c56; }
 [data-ui-mode='dark'] .imported-score-table thead .score-student-column { background-color: #243449; }
+
+/* High-frequency score entry: clear focus, stable cells, no motion between keystrokes. */
+.score-entry-input {
+    width: 76px;
+    min-height: 44px;
+    border: 1px solid #b8c9d9;
+    border-radius: 8px;
+    background: #fff;
+    color: #172435;
+    padding: 8px 6px;
+    text-align: center;
+    font-size: 16px;
+    font-variant-numeric: tabular-nums;
+    scroll-margin-inline-start: 176px;
+    scroll-margin-block: 60px 20px;
+}
+.score-entry-input:focus { outline: 3px solid var(--color-brand-600, #0f766e); outline-offset: 1px; border-color: transparent; background: #f0fdfa; }
+.score-entry-input[aria-invalid='true'] { border-color: #be123c; background: #fff1f2; }
+.score-entry-row:focus-within > td { background-color: #effaf8; }
+.score-entry-table tbody td { padding-block: 10px; }
+.score-entry-toolbar button { min-height: 44px; }
+@media (min-width: 768px) { .score-entry-input { scroll-margin-inline-start: 256px; font-size: 14px; } }
+@media (max-width: 767px) { .score-entry-toolbar > button { width: 100%; } }
+[data-ui-mode='dark'] .score-entry-input { background-color: #172435; color: #e2e8f0; border-color: #64748b; }
+[data-ui-mode='dark'] .score-entry-input:focus { background-color: #164e48; }
+[data-ui-mode='dark'] .score-entry-input[aria-invalid='true'] { background-color: #4c1830; border-color: #fb7185; }
+[data-ui-mode='dark'] .score-entry-row:focus-within > td { background-color: #183b3a; }
+[data-ui-mode='dark'] .score-entry-toolbar { background-color: #172435; border-color: #436562; }

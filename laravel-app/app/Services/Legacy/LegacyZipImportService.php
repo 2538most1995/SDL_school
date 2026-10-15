@@ -926,6 +926,9 @@ final class LegacyZipImportService
     private function deleteBatchRegistry(int $districtId, string $batchKey, ?int $historyId): void
     {
         $this->write()->transaction(function () use ($districtId, $batchKey, $historyId): void {
+            if ($this->write()->getSchemaBuilder()->hasTable('imported_score_completions')) {
+                $this->write()->table('imported_score_completions')->where('district_id', $districtId)->where('batch_key', $batchKey)->delete();
+            }
             if ($this->write()->getSchemaBuilder()->hasTable('imported_score_edits')) {
                 $this->write()->table('imported_score_edits')->where('district_id', $districtId)->where('batch_key', $batchKey)->delete();
             }

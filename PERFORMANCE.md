@@ -191,3 +191,8 @@
 ## Imported scores are editable (2026-10-15)
 
 The former immutable-batch academic-cache assumption no longer holds for grade values. `LegacyStudentRepository` includes scoped `SUM(imported_score_edits.version)` in academic aggregate cache keys (v3); the revision is memoized per repository/request. Saving a mark makes subsequent report requests use a new key without flushing other districts. Existing batch replacement invalidation still applies. Edits use indexed district/batch/level/row scope; export captures edit rows in 500-row chunks in the portable export transaction and validates source DBF identity before patching output. Browser edits one row at a time, suspending refetch/filter/pagination until save/cancel. Native MySQL EXPLAIN/large production benchmark: Not verified; automated tests use isolated SQLite and synthetic DBFs.
+
+
+## Score-entry autosave requests (2026-10-15)
+
+A 650 ms debounce coalesces typing, blur flushes the current row, and one queue serializes writes to avoid district-lock contention. Edits during an in-flight save retain the latest draft and chain the returned token. Errors stop retries until correction/user action; stale tokens require explicit row reload. Finishing drains saves before one completion request. GET loads completion flags in one scoped visible-page query; finishing reads grade candidates once per level (at most three queries) and bulk-upserts metadata. Entry suspends refetch/filter/pagination; compact column views reduce rendering and horizontal scrolling. Reports are invalidated after completion. Synthetic concurrency/queue tests pass. Production throughput/EXPLAIN and physical mobile-device entry: Not verified.
