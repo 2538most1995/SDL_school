@@ -520,9 +520,9 @@ function StaffCourseRegistrationPage() {
                     return (
                         <div className="flex flex-wrap gap-1">
                             {reg.is_imported ? (
-                                <StatusBadge tone="success">ลงทะเบียนแล้ว (ITW {reg.imported_count} วิชา){reg.is_credit_complete_after_registration && ' / นว. ครบ'}</StatusBadge>
+                                <StatusBadge tone="success">ลงทะเบียนแล้ว (ITW {reg.imported_count} วิชา){reg.is_credit_complete_after_registration && <span className="text-red-600 dark:text-red-400"> / นว. ครบ</span>}</StatusBadge>
                             ) : reg.is_saved ? (
-                                <StatusBadge tone="success">บันทึกแล้ว ({reg.total_count} วิชา){reg.is_credit_complete_after_registration && ' / นว. ครบ'}</StatusBadge>
+                                <StatusBadge tone="success">บันทึกแล้ว ({reg.total_count} วิชา){reg.is_credit_complete_after_registration && <span className="text-red-600 dark:text-red-400"> / นว. ครบ</span>}</StatusBadge>
                             ) : (
                                 <StatusBadge tone="neutral">ยังไม่บันทึก</StatusBadge>
                             )}
