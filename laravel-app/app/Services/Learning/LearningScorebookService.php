@@ -612,16 +612,17 @@ final readonly class LearningScorebookService
                     ->where('scorebook_id', $scorebookId)
                     ->where('student_code', $studentCode)
                     ->delete();
-                if ($note !== '') {
-                    $connection->table('learning_score_notes')->insert([
-                        'scorebook_id' => $scorebookId,
-                        'student_code' => $studentCode,
-                        'note' => $note,
-                        'updated_by' => (int) $viewer->id,
-                        'created_at' => now(),
-                        'updated_at' => now(),
-                    ]);
-                }
+                // Keep a nullable note row as an explicit save marker. Without
+                // it, clearing every score is indistinguishable from never
+                // editing this learner when exporting back into ITW DBFs.
+                $connection->table('learning_score_notes')->insert([
+                    'scorebook_id' => $scorebookId,
+                    'student_code' => $studentCode,
+                    'note' => $note === '' ? null : $note,
+                    'updated_by' => (int) $viewer->id,
+                    'created_at' => now(),
+                    'updated_at' => now(),
+                ]);
             }
             $this->audit($viewer, $districtId, 'learning.scorebook.entries_saved', $scorebookId, $ipAddress, [
                 'student_count' => count($studentValues),

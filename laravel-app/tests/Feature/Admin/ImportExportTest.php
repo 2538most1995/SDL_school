@@ -5,6 +5,7 @@ namespace Tests\Feature\Admin;
 use App\Models\District;
 use App\Models\User;
 use App\Services\Legacy\LegacyZipImportService;
+use App\Support\VisualFoxProDbfReader;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Http\UploadedFile;
 use Illuminate\Support\Facades\DB;
@@ -232,6 +233,140 @@ final class ImportExportTest extends TestCase
         $this->getJson($this->endpoint())->assertOk();
     }
 
+    public function test_itw_export_overwrites_dbf_scores_and_adds_selected_registration_and_subject(): void
+    {
+        $this->seedLearning($this->district->id);
+        DB::table('learning_score_entries')->where('score', 17.5)->update(['score' => 18]);
+        $this->useItwArchive();
+        $sourceHash = hash_file('sha256', $this->archivePath());
+        Sanctum::actingAs($this->admin);
+        $response = $this->getJson($this->endpoint().'?format=itw')->assertOk()
+            ->assertDownload('itw-district-'.$this->district->id.'-'.$this->batch.'.zip');
+        $zip = $this->openDownload($response->streamedContent());
+        $rows = $this->dbfRows($zip, '1/GRADE.DBF');
+        $first = collect($rows)->firstWhere('std_code', '12141200000000000001');
+        $this->assertSame('0', $first['midterm1']);
+        $this->assertSame('18', $first['midterm2']);
+        $this->assertSame('18', $first['midterm']);
+        $this->assertSame('30', $first['final']);
+        $this->assertSame('48', $first['total']);
+        $this->assertNull($first['grade'], 'Changed grades must be recalculated by ITW.');
+        $this->assertSame('008', $first['roomno']);
+        $this->assertSame('19', $first['final1']);
+        $this->assertSame('32', $first['final2']);
+        $this->assertSame('G1', $first['grp_code']);
+        $transfer = collect($rows)->firstWhere('sub_code', 'TEST02');
+        $this->assertSame('1', $transfer['typ_code']);
+        $this->assertSame('69/1', $transfer['semestry']);
+        $this->assertNull($transfer['final']);
+        $empty = collect($rows)->firstWhere('std_code', '12141200000000000002');
+        $this->assertNull($empty['midterm']);
+        $this->assertNull($empty['final']);
+        $this->assertNull($empty['total']);
+        $this->assertNull($empty['grade']);
+        $untouched = collect($rows)->firstWhere('sub_code', 'OLD01');
+        $this->assertSame('75', $untouched['total']);
+        $this->assertSame('3.5', $untouched['grade']);
+        $subjects = collect($this->dbfRows($zip, '1/SUBJECT.DBF'))->keyBy('sub_code');
+        $this->assertSame('ทดสอบวิชาเลือก', $subjects['TEST02']['sub_name']);
+        $this->assertSame('1.0', $subjects['TEST02']['sub_credit']);
+        $this->assertSame('60', $subjects['TEST01']['midterm']);
+        $this->assertSame('40', $subjects['TEST01']['final']);
+        $this->assertSame('F', $subjects['TEST01']['defmidfin']);
+        $this->assertSame('original-index-definitions', $zip->getFromName('1/GRADE.CDX'));
+        $this->assertStringContainsString('REINDEX', $zip->getFromName('SDL_ITW_README.txt'));
+        $this->assertSame('original memo bytes', $zip->getFromName('1/STUDENT.FPT'));
+        $zip->close();
+        $this->assertSame($sourceHash, hash_file('sha256', $this->archivePath()));
+        $this->assertDatabaseHas('learning_score_entries', ['score' => 18]);
+        $this->assertDatabaseHas('audit_logs', ['event' => 'admin.import.exported']);
+    }
+
+    public function test_itw_export_rejects_fractional_scores_with_context_without_changing_source(): void
+    {
+        $this->seedLearning($this->district->id);
+        $this->useItwArchive();
+        $hash = hash_file('sha256', $this->archivePath());
+        Sanctum::actingAs($this->admin);
+        $response = $this->getJson($this->endpoint().'?format=itw')->assertUnprocessable();
+        $this->assertStringContainsString('0000000001', $response->json('message'));
+        $this->assertStringContainsString('MIDTERM2', $response->json('message'));
+        $this->assertStringContainsString('ระบบไม่ปัดค่า', $response->json('message'));
+        $this->assertSame($hash, hash_file('sha256', $this->archivePath()));
+        $this->assertDatabaseMissing('audit_logs', ['event' => 'admin.import.exported']);
+    }
+
+    public function test_itw_export_rejects_ambiguous_grade_rows_and_overlong_subject_codes(): void
+    {
+        $this->seedLearning($this->district->id);
+        DB::table('learning_score_entries')->where('score', 17.5)->update(['score' => 18]);
+        $this->useItwArchive(true);
+        Sanctum::actingAs($this->admin);
+        $this->assertStringContainsString('หลายระเบียน', $this->getJson($this->endpoint().'?format=itw')->assertUnprocessable()->json('message'));
+        $this->useItwArchive();
+        $registration = DB::table('learning_course_registrations')->first();
+        $subjects = json_decode($registration->elective_subjects, true);
+        $subjects[0]['code'] = 'TOO-LONG-CODE';
+        DB::table('learning_course_registrations')->update(['elective_subjects' => json_encode($subjects)]);
+        $this->assertStringContainsString('SUB_CODE', $this->getJson($this->endpoint().'?format=itw')->assertUnprocessable()->json('message'));
+    }
+
+    public function test_itw_export_uses_the_same_admin_and_district_boundaries(): void
+    {
+        Sanctum::actingAs(User::factory()->create(['role' => 'teacher', 'district_id' => $this->district->id]));
+        $this->getJson($this->endpoint().'?format=itw')->assertForbidden();
+        $other = District::create(['name' => 'อีกอำเภอ', 'code' => 'itw-other']);
+        Sanctum::actingAs(User::factory()->create(['role' => 'admin', 'district_id' => $other->id]));
+        $this->getJson($this->endpoint().'?format=itw')->assertNotFound();
+        Sanctum::actingAs($this->admin);
+        $this->getJson($this->endpoint().'?format=sql')->assertUnprocessable();
+    }
+
+    public function test_itw_export_clears_all_scores_for_an_explicit_blank_save_marker(): void
+    {
+        $this->seedLearning($this->district->id);
+        $this->useItwArchive();
+        DB::table('learning_score_entries')->where('student_code', '0000000001')->delete();
+        DB::table('learning_score_notes')->where('student_code', '0000000001')->update(['note' => null]);
+        Sanctum::actingAs($this->admin);
+        $zip = $this->openDownload($this->getJson($this->endpoint().'?format=itw')->assertOk()->streamedContent());
+        $row = collect($this->dbfRows($zip, '1/GRADE.DBF'))->firstWhere('std_code', '12141200000000000001');
+        foreach (['midterm1', 'midterm2', 'midterm', 'final', 'total', 'grade'] as $field) {
+            $this->assertNull($row[$field], $field.' must be cleared rather than retain the original score.');
+        }
+        $zip->close();
+    }
+
+    public function test_itw_export_rejects_wrong_groups_and_more_than_nine_coursework_slots(): void
+    {
+        $this->seedLearning($this->district->id);
+        $this->useItwArchive();
+        DB::table('learning_scorebooks')->update(['group_code' => 'OTHER']);
+        Sanctum::actingAs($this->admin);
+        $this->assertStringContainsString('ไม่ตรงกับกลุ่ม', $this->getJson($this->endpoint().'?format=itw')->assertUnprocessable()->json('message'));
+        DB::table('learning_scorebooks')->update(['group_code' => 'G1']);
+        $book = DB::table('learning_scorebooks')->first();
+        for ($i = 3; $i <= 11; $i++) {
+            DB::table('learning_score_components')->insert(['scorebook_id' => $book->id, 'category' => 'coursework', 'title' => 'เก็บเพิ่ม', 'max_score' => 1, 'position' => $i]);
+        }
+        $this->assertStringContainsString('1–9', $this->getJson($this->endpoint().'?format=itw')->assertUnprocessable()->json('message'));
+    }
+
+    public function test_itw_export_resolves_a_group_name_from_the_shared_itw_group_dbf(): void
+    {
+        $this->seedLearning($this->district->id);
+        $this->useItwArchive();
+        DB::table('learning_score_entries')->where('score', 17.5)->update(['score' => 18]);
+        DB::table('learning_scorebooks')->update(['group_code' => 'กลุ่มทดสอบ']);
+        $zip = new ZipArchive;
+        $zip->open($this->archivePath());
+        $zip->addFromString('1214120000/GROUP.DBF', $this->itwDbf([['GRP_CODE', 'C', 8], ['GRP_NAME', 'C', 80]], [['GRP_CODE' => 'G1', 'GRP_NAME' => 'กลุ่มทดสอบ']]));
+        $zip->close();
+        Sanctum::actingAs($this->admin);
+        $response = $this->getJson($this->endpoint().'?format=itw')->assertOk();
+        $this->assertNotEmpty($response->streamedContent());
+    }
+
     public function test_export_requires_authentication_and_an_admin_role(): void
     {
         $this->getJson($this->endpoint())->assertUnauthorized();
@@ -300,6 +435,80 @@ final class ImportExportTest extends TestCase
         Sanctum::actingAs($this->admin);
         $response = $this->getJson($this->endpoint())->assertStatus(503);
         $this->assertStringNotContainsString($this->workspace, $response->getContent());
+    }
+
+    private function useItwArchive(bool $duplicateGrade = false): void
+    {
+        $zip = new ZipArchive;
+        $zip->open($this->archivePath(), ZipArchive::OVERWRITE);
+        $studentFields = [['ID', 'C', 10], ['STD_CODE', 'C', 20], ['SCHOOL', 'C', 10], ['GRP_CODE', 'C', 8], ['METHOD', 'C', 1], ['LEARNING', 'C', 1]];
+        $zip->addFromString('1/STUDENT.DBF', $this->itwDbf($studentFields, [
+            ['ID' => '0000000001', 'STD_CODE' => '12141200000000000001', 'SCHOOL' => '1214120000', 'GRP_CODE' => 'G1', 'METHOD' => '1', 'LEARNING' => '1'],
+            ['ID' => '0000000002', 'STD_CODE' => '12141200000000000002', 'SCHOOL' => '1214120000', 'GRP_CODE' => 'G1', 'METHOD' => '1', 'LEARNING' => '1'],
+        ]));
+        $fields = [['STD_CODE', 'C', 20], ['SEMESTRY', 'C', 4], ['SUB_CODE', 'C', 9], ['TYP_CODE', 'N', 1],
+            ['MIDTERM', 'N', 3, 0, 2], ['FINAL', 'N', 3, 0, 2], ['TOTAL', 'N', 3], ['GRADE', 'C', 3],
+            ['ROOMNO', 'C', 3], ['GRP_CODE', 'C', 8], ['METHOD', 'C', 1], ['LEARNING', 'C', 1]];
+        for ($i = 1; $i <= 9; $i++) {
+            $fields[] = ['MIDTERM'.$i, 'N', 2];
+        }
+        $fields = [...$fields, ['FINAL1', 'N', 3, 0, 2], ['FINAL2', 'N', 3, 0, 2], ['DT_UPDMID', 'T', 8], ['_NullFlags', '0', 1]];
+        $base = ['STD_CODE' => '12141200000000000001', 'SEMESTRY' => '69/1', 'SUB_CODE' => 'TEST01', 'TYP_CODE' => '0',
+            'MIDTERM' => '50', 'FINAL' => '32', 'TOTAL' => '82', 'GRADE' => '4', 'ROOMNO' => '008', 'GRP_CODE' => 'G1',
+            'METHOD' => '1', 'LEARNING' => '1', 'MIDTERM1' => '20', 'MIDTERM2' => '30', 'FINAL1' => '19', 'FINAL2' => '32', '_NullFlags' => "\0"];
+        $rows = [$base, [...$base, 'STD_CODE' => '12141200000000000002'], [...$base, 'SUB_CODE' => 'OLD01', 'TOTAL' => '75', 'GRADE' => '3.5']];
+        if ($duplicateGrade) {
+            $rows[] = $base;
+        }
+        $zip->addFromString('1/GRADE.DBF', $this->itwDbf($fields, $rows));
+        $zip->addFromString('1/SUBJECT.DBF', $this->itwDbf([
+            ['SUB_CODE', 'C', 9], ['SUB_NAME', 'C', 80], ['SUB_CREDIT', 'N', 3, 1], ['SUB_TYPE', 'N', 1],
+            ['MIDTERM', 'N', 3], ['FINAL', 'N', 3], ['DEFMIDFIN', 'L', 1], ['DEFMINFIN', 'L', 1], ['SUB_ID', 'N', 3],
+        ], [['SUB_CODE' => 'TEST01', 'SUB_NAME' => 'ทดสอบวิชาบังคับ', 'SUB_CREDIT' => '2.0', 'SUB_TYPE' => '1', 'MIDTERM' => '60', 'FINAL' => '40', 'DEFMIDFIN' => 'T', 'DEFMINFIN' => 'T', 'SUB_ID' => '1']]));
+        $zip->addFromString('1/GRADE.CDX', 'original-index-definitions');
+        $zip->addFromString('1/STUDENT.FPT', 'original memo bytes');
+        $zip->close();
+    }
+
+    private function itwDbf(array $fields, array $records): string
+    {
+        $headerLength = 32 + count($fields) * 32 + 1 + 263;
+        $recordLength = 1 + array_sum(array_column($fields, 2));
+        $bytes = chr(0x30).str_repeat("\0", 3).pack('Vvv', count($records), $headerLength, $recordLength).str_repeat("\0", 16).chr(1).chr(0x7C)."\0\0";
+        foreach ($fields as $field) {
+            [$name, $type, $length] = $field;
+            $bytes .= str_pad($name, 11, "\0").$type.str_repeat("\0", 4).chr($length).chr($field[3] ?? 0).chr($field[4] ?? 0).str_repeat("\0", 13);
+        }
+        $bytes .= chr(0x0D).str_repeat("\0", 263);
+        foreach ($records as $row) {
+            $bytes .= ' ';
+            foreach ($fields as [$name, $type, $length]) {
+                $raw = (string) ($row[$name] ?? (in_array($type, ['T', '0'], true) ? str_repeat("\0", $length) : ''));
+                if ($type === 'C') {
+                    $raw = iconv('UTF-8', 'Windows-874', $raw);
+                }
+                $bytes .= str_pad($raw, $length, ' ', in_array($type, ['N', 'F'], true) ? STR_PAD_LEFT : STR_PAD_RIGHT);
+            }
+        }
+
+        return $bytes.chr(0x1A);
+    }
+
+    private function openDownload(string $bytes): ZipArchive
+    {
+        File::put($this->workspace.'/itw-download.zip', $bytes);
+        $zip = new ZipArchive;
+        $this->assertTrue($zip->open($this->workspace.'/itw-download.zip') === true);
+
+        return $zip;
+    }
+
+    private function dbfRows(ZipArchive $zip, string $name): array
+    {
+        $path = $this->workspace.'/verify-'.basename($name);
+        File::put($path, $zip->getFromName($name));
+
+        return iterator_to_array((new VisualFoxProDbfReader($path))->records());
     }
 
     private function seedLearning(int $districtId, string $term = '1/2569'): void

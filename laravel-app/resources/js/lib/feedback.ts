@@ -16,7 +16,7 @@ export function showSuccessAlert(message = 'บันทึกข้อมูล
     void import('sweetalert2').then(({ default: Swal }) => Swal.fire({
         ...commonOptions,
         icon: 'success',
-        title: message,
+        titleText: message,
     }));
 }
 
@@ -24,7 +24,7 @@ export function showErrorAlert(message = 'ไม่สามารถบัน�
     void import('sweetalert2').then(({ default: Swal }) => Swal.fire({
         ...commonOptions,
         icon: 'error',
-        title: message,
+        titleText: message,
         customClass: {
             ...commonOptions.customClass,
             timerProgressBar: '!bg-rose-600',

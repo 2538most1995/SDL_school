@@ -54,7 +54,7 @@ final class VisualFoxProDbfReader
     }
 
     /** @return Generator<int, array<string, string|null>> */
-    public function records(): Generator
+    public function records(bool $physicalIndexes = false): Generator
     {
         if (fseek($this->handle, $this->headerLength) !== 0) {
             throw new RuntimeException('ตำแหน่งข้อมูลในไฟล์ DBF ไม่ถูกต้อง');
@@ -81,7 +81,11 @@ final class VisualFoxProDbfReader
                 $record[$field['name']] = $isNull ? null : $this->decode($raw, $field['type']);
                 $offset += $field['length'];
             }
-            yield $record;
+            if ($physicalIndexes) {
+                yield $index => $record;
+            } else {
+                yield $record;
+            }
         }
     }
 

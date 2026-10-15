@@ -35,7 +35,7 @@ final class LearningTransferService
     }
 
     /** @param resource $source Original ITW ZIP, opened after authorization. */
-    public function create($source, int $districtId, string $batch): string
+    public function create($source, int $districtId, string $batch, bool $itw = false): string
     {
         @set_time_limit(0);
         $this->assertSchema();
@@ -105,8 +105,11 @@ final class LearningTransferService
                     $retainedFiles--;
                 }
             }
-            if ($retainedFiles + count(self::TABLES) + 1 > 2000) {
+            if ($retainedFiles + count(self::TABLES) + 1 + ($itw && $zip->locateName('SDL_ITW_README.txt') === false ? 1 : 0) > 2000) {
                 throw new RuntimeException('จำนวนไฟล์รวมเกินขีดจำกัด 2,000 ไฟล์ของระบบนำเข้า');
+            }
+            if ($itw) {
+                $manifest['itw_dbf_export'] = app(ItwDbfExportService::class)->apply($zip, $directory, $dataDirectory);
             }
             foreach (array_keys(self::TABLES) as $type) {
                 $name = self::DIRECTORY.'/'.$type.'.jsonl';
@@ -125,6 +128,7 @@ final class LearningTransferService
                 throw new RuntimeException('ZIP รวมข้อมูลเว็บเกิน 90 MB ซึ่งเป็นขนาดสูงสุดที่ระบบนำเข้าได้');
             }
             File::deleteDirectory($dataDirectory);
+            File::delete(glob($directory.'/itw-*') ?: []);
 
             return $archive;
         } catch (Throwable $exception) {

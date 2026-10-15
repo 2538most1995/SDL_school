@@ -11,6 +11,7 @@ use App\Jobs\RunLegacyImportQueueOnce;
 use App\Services\Legacy\LearningTransferService;
 use App\Services\Legacy\LegacyPortalReadService;
 use App\Services\Legacy\LegacyZipImportService;
+use App\Support\DbfWriteException;
 use Illuminate\Database\Schema\Blueprint;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
@@ -158,6 +159,8 @@ final class ImportController extends Controller
 
     public function export(Request $request, string $batch, LearningTransferService $transfer): StreamedResponse
     {
+        $options = $request->validate(['format' => ['sometimes', Rule::in(['sdl', 'itw'])]]);
+        $itw = ($options['format'] ?? 'sdl') === 'itw';
         abort_unless((bool) config('system_data.enabled'), 503, 'ระบบส่งออกข้อมูลจริงยังไม่เปิดใช้งาน');
         abort_unless(preg_match('/^import_\d{10}_[A-Za-z0-9]+$/D', $batch) === 1, 404);
         $districtId = (int) $request->attributes->get('district_id');
@@ -184,7 +187,9 @@ final class ImportController extends Controller
         abort_if($stream === false, 404, 'ไม่สามารถเปิดไฟล์ ZIP ต้นฉบับได้ กรุณาลองใหม่');
 
         try {
-            $exportPath = $transfer->create($stream, $districtId, $batch);
+            $exportPath = $transfer->create($stream, $districtId, $batch, $itw);
+        } catch (DbfWriteException $exception) {
+            abort(422, $exception->getMessage());
         } catch (Throwable $exception) {
             report($exception);
             abort(503, 'ไม่สามารถเตรียม ZIP รวมทะเบียนและคะแนนได้ กรุณาตรวจโครงสร้างฐานข้อมูลและพื้นที่ว่าง หรือติดต่อผู้ดูแลระบบ');
@@ -206,7 +211,7 @@ final class ImportController extends Controller
                 'auditable_type' => 'system_import_batch',
                 'auditable_id' => null,
                 'ip_address' => $request->ip(),
-                'after' => json_encode(['batch_key' => $batch], JSON_THROW_ON_ERROR),
+                'after' => json_encode(['batch_key' => $batch, 'format' => $itw ? 'itw' : 'sdl'], JSON_THROW_ON_ERROR),
                 'created_at' => now(),
             ]);
         } catch (Throwable $exception) {
@@ -221,7 +226,7 @@ final class ImportController extends Controller
                 @unlink($exportPath);
                 @rmdir(dirname($exportPath));
             }
-        }, 'district-'.$districtId.'-'.$batch.'.zip', [
+        }, ($itw ? 'itw-' : '').'district-'.$districtId.'-'.$batch.'.zip', [
             'Content-Type' => 'application/zip',
             'Cache-Control' => 'private, no-store',
             'X-Content-Type-Options' => 'nosniff',

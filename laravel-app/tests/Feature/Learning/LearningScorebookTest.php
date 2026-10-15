@@ -244,9 +244,10 @@ final class LearningScorebookTest extends TestCase
             'component_id' => $components[1]->id,
             'student_code' => '6650300005',
         ]);
-        $this->assertDatabaseMissing('learning_score_notes', [
+        $this->assertDatabaseHas('learning_score_notes', [
             'scorebook_id' => $scorebookId,
             'student_code' => '6650300005',
+            'note' => null,
         ]);
 
         $this->putJson("/api/v1/learning/scores/scorebooks/{$scorebookId}/entries", [

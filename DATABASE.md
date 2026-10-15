@@ -60,7 +60,7 @@ Domain classes under `app/Domain/Students/Models/` (`Student`, `Grade`, `Registe
 - `learning_scorebooks`: สมุดคะแนนหนึ่งชุดต่อ district/term/subject/level/group พร้อมผู้สร้างและน้ำหนัก `coursework_weight`/`final_exam_weight` สำหรับ 60:40, 70:30 หรือ 80:20; ค่า nullable รักษาสมุดคะแนนเดิมโดยไม่เดาสัดส่วน; UNIQUE (`district_id`, `academic_term`, `subject_code`, `education_level`, `group_code`)
 - `learning_score_components`: ช่องคะแนนและคะแนนเต็มเรียงตามลำดับ พร้อม `category` (`coursework` หรือ `final_exam`); UNIQUE (`scorebook_id`, `position`)
 - `learning_score_entries`: คะแนนรายนักศึกษาและช่องคะแนน โดยใช้ `student_code` snapshot แทน foreign key ไปตาราง DBF แบบ dynamic; UNIQUE (`scorebook_id`, `component_id`, `student_code`); เก็บเฉพาะช่องที่มีคะแนน การบันทึกใหม่ของนักศึกษาแทนค่าทั้งชุดและลบแถวของช่องว่าง/ช่องที่ไม่ส่งมาเพื่อไม่ให้คะแนนเก่าค้าง
-- `learning_score_notes`: หมายเหตุรายนักศึกษาในสมุดคะแนน; UNIQUE (`scorebook_id`, `student_code`); หมายเหตุว่างจะลบแถวเดิม
+- `learning_score_notes`: หมายเหตุรายนักศึกษาในสมุดคะแนน; UNIQUE (`scorebook_id`, `student_code`); การบันทึกคะแนนเก็บแถวนี้ไว้เสมอ โดยหมายเหตุว่างเป็น NULL เพื่อเป็นตัวระบุว่าเคยบันทึก/ล้างคะแนนทั้งแถวแล้ว ไม่เปลี่ยนข้อความหมายเหตุที่ API แสดง และไม่ต้องเพิ่ม migration เนื่องจาก note nullable อยู่แล้ว ตัวส่งออก DBF ใช้ marker นี้เพื่อแยกการล้างคะแนนจากนักศึกษาที่ยังไม่เคยกรอกคะแนน
 - `learning_score_templates`: ต้นแบบโครงสร้างคะแนนใช้ร่วมกันภายใน district เก็บชื่อ ผู้สร้าง สัดส่วน `score_ratio`, flag `applies_to_all`, JSON `subject_codes` และ JSON `components`; UNIQUE (`district_id`, `name`) ป้องกันชื่อซ้ำในอำเภอ โดยครูลบได้เฉพาะต้นแบบของตนและผู้ดูแลลบได้ทุกต้นแบบใน district
 - `exam_rooms`: latest repair migration uses `term`, `subject_code`, `assignment_type`, `start_val`, `end_val`, `room_name`, district/import batch and timestamps; index (`district_id`, `term`, `subject_code`)
 
@@ -78,6 +78,8 @@ Column names from older migration definitions (`academic_term`, `room_code`, `st
 - `jobs`, `job_batches`, `failed_jobs`, `cache`, `cache_locks`, `sessions`, `password_reset_tokens`: Laravel infrastructure tables
 
 ## Dynamic import tables
+
+ตัวส่งออก `format=itw` แก้เฉพาะสำเนา GRADE.DBF/SUBJECT.DBF ใน ZIP ไม่เขียนกลับ dynamic SQL tables หรือไฟล์ต้นฉบับ ใช้ header/descriptor เดิมเพื่อคงชนิด ขนาด ทศนิยม code page, VFP NULL bitmap และตำแหน่งระเบียน เพิ่มจำนวน record ใน header เมื่อเพิ่มทะเบียน/วิชา ไม่สร้าง schema ใหม่และไม่ใช้ SQL จากไฟล์ คะแนนรายช่องตามลำดับเว็บ → MIDTERM1–9, คะแนนเก็บรวม → MIDTERM, ปลายภาค → FINAL, รวมครบ → TOTAL; GRADE ของคะแนนที่เปลี่ยนเป็นว่างให้ ITW คำนวณเอง ไม่แตะ FINAL1/FINAL2 หรือ binary/memo fields ที่ไม่ได้จับคู่ การบีบอัด ZIP คง CDX เดิมไว้เพื่อรักษา tag definitions แต่ต้อง REINDEX ที่ปลายทางก่อนอ่านผ่านดัชนี ไม่ปัดหรือตัดข้อมูลที่ขนาดไม่พอ.
 
 การย้ายข้อมูลผ่าน ZIP รองรับส่วน `sdl-transfer/` แบบ version 1 โดยไม่มี migration ใหม่: ส่งออก `learning_course_registrations`, `learning_scorebooks`, `learning_score_components`, `learning_score_entries` และ `learning_score_notes` ของอำเภอที่ตรวจสิทธิ์แล้วทุกภาคเรียน นำเข้าด้วย fixed schema/allowlist หลังตรวจ checksum และความสัมพันธ์ แปลง source ID เป็น ID ใหม่ภายในปลายทาง และใช้ `district_id` จาก middleware กับ actor จากผู้ดูแลที่นำเข้าเท่านั้น ไม่รับ district/user ID จากไฟล์ การกู้คืนทั้งหมดอยู่ใน transaction เดียวกับการสร้างทะเบียน batch; unique scope เดิมป้องกันการทับทะเบียนหรือสมุดคะแนน หากชน scope จะ rollback และคง batch เดิมไว้ ทะเบียน/คะแนนต้นทางไม่ถูกแก้ไข การกู้คืนกำหนด timestamps ใหม่ตามเวลานำเข้า คะแนนศูนย์/NULL, JSON วิชา, โครงสร้างคะแนนและหมายเหตุคงค่าต้นทาง.
 
