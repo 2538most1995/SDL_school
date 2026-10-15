@@ -35,6 +35,8 @@ final class LegacyStudentRepository implements StudentRepository
     /** @var array<string, array<string, true>> */
     private array $columnsByTable = [];
 
+    private array $scoreRevisions = [];
+
     public function __construct(
         private readonly ConnectionInterface $connection,
         private readonly ?ThaiAdministrativeAreaLookup $areaLookup = null,
@@ -1039,7 +1041,13 @@ final class LegacyStudentRepository implements StudentRepository
     /** @param list<string> $studentCodes */
     private function aggregateCacheKey(string $kind, LegacyTableSet $set, string $term, array $studentCodes): string
     {
-        return 'legacy-student-aggregate:v2:'.$kind.':'.$set->districtId.':'.$set->batchKey.':'.$set->level.':'
+        $revisionKey = $set->districtId.':'.$set->batchKey;
+        if ($kind === 'academic' && $this->connection instanceof Connection && ! isset($this->scoreRevisions[$revisionKey])) {
+            $this->scoreRevisions[$revisionKey] = $this->connection->getSchemaBuilder()->hasTable('imported_score_edits')
+                ? (int) $this->connection->table('imported_score_edits')->where('district_id', $set->districtId)->where('batch_key', $set->batchKey)->sum('version') : 0;
+        }
+
+        return 'legacy-student-aggregate:v3:'.($this->scoreRevisions[$revisionKey] ?? 0).':'.$kind.':'.$set->districtId.':'.$set->batchKey.':'.$set->level.':'
             .hash('sha256', $term."\0".implode("\0", $studentCodes));
     }
 

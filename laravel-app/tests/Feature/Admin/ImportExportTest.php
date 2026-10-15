@@ -2,14 +2,19 @@
 
 namespace Tests\Feature\Admin;
 
+use App\Domain\Students\Models\Grade;
+use App\Domain\Students\Models\Student;
+use App\Domain\Students\Repositories\StudentRepository;
 use App\Models\District;
 use App\Models\User;
+use App\Services\Learning\ImportedScoreEditService;
 use App\Services\Legacy\LegacyZipImportService;
 use App\Support\VisualFoxProDbfReader;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Http\UploadedFile;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\File;
+use Illuminate\Support\Facades\Schema;
 use Laravel\Sanctum\Sanctum;
 use RuntimeException;
 use Tests\TestCase;
@@ -240,7 +245,7 @@ final class ImportExportTest extends TestCase
         $this->useItwArchive();
         $sourceHash = hash_file('sha256', $this->archivePath());
         Sanctum::actingAs($this->admin);
-        $response = $this->getJson($this->endpoint().'?format=itw')->assertOk()
+        $response = $this->getJson($this->endpoint().'?format=itw&scores=scorebooks')->assertOk()
             ->assertDownload('itw-district-'.$this->district->id.'-'.$this->batch.'.zip');
         $zip = $this->openDownload($response->streamedContent());
         $rows = $this->dbfRows($zip, '1/GRADE.DBF');
@@ -288,7 +293,7 @@ final class ImportExportTest extends TestCase
         $this->useItwArchive();
         $hash = hash_file('sha256', $this->archivePath());
         Sanctum::actingAs($this->admin);
-        $response = $this->getJson($this->endpoint().'?format=itw')->assertUnprocessable();
+        $response = $this->getJson($this->endpoint().'?format=itw&scores=scorebooks')->assertUnprocessable();
         $this->assertStringContainsString('0000000001', $response->json('message'));
         $this->assertStringContainsString('MIDTERM2', $response->json('message'));
         $this->assertStringContainsString('ระบบไม่ปัดค่า', $response->json('message'));
@@ -302,22 +307,22 @@ final class ImportExportTest extends TestCase
         DB::table('learning_score_entries')->where('score', 17.5)->update(['score' => 18]);
         $this->useItwArchive(true);
         Sanctum::actingAs($this->admin);
-        $this->assertStringContainsString('หลายระเบียน', $this->getJson($this->endpoint().'?format=itw')->assertUnprocessable()->json('message'));
+        $this->assertStringContainsString('หลายระเบียน', $this->getJson($this->endpoint().'?format=itw&scores=scorebooks')->assertUnprocessable()->json('message'));
         $this->useItwArchive();
         $registration = DB::table('learning_course_registrations')->first();
         $subjects = json_decode($registration->elective_subjects, true);
         $subjects[0]['code'] = 'TOO-LONG-CODE';
         DB::table('learning_course_registrations')->update(['elective_subjects' => json_encode($subjects)]);
-        $this->assertStringContainsString('SUB_CODE', $this->getJson($this->endpoint().'?format=itw')->assertUnprocessable()->json('message'));
+        $this->assertStringContainsString('SUB_CODE', $this->getJson($this->endpoint().'?format=itw&scores=scorebooks')->assertUnprocessable()->json('message'));
     }
 
     public function test_itw_export_uses_the_same_admin_and_district_boundaries(): void
     {
         Sanctum::actingAs(User::factory()->create(['role' => 'teacher', 'district_id' => $this->district->id]));
-        $this->getJson($this->endpoint().'?format=itw')->assertForbidden();
+        $this->getJson($this->endpoint().'?format=itw&scores=scorebooks')->assertForbidden();
         $other = District::create(['name' => 'อีกอำเภอ', 'code' => 'itw-other']);
         Sanctum::actingAs(User::factory()->create(['role' => 'admin', 'district_id' => $other->id]));
-        $this->getJson($this->endpoint().'?format=itw')->assertNotFound();
+        $this->getJson($this->endpoint().'?format=itw&scores=scorebooks')->assertNotFound();
         Sanctum::actingAs($this->admin);
         $this->getJson($this->endpoint().'?format=sql')->assertUnprocessable();
     }
@@ -329,7 +334,7 @@ final class ImportExportTest extends TestCase
         DB::table('learning_score_entries')->where('student_code', '0000000001')->delete();
         DB::table('learning_score_notes')->where('student_code', '0000000001')->update(['note' => null]);
         Sanctum::actingAs($this->admin);
-        $zip = $this->openDownload($this->getJson($this->endpoint().'?format=itw')->assertOk()->streamedContent());
+        $zip = $this->openDownload($this->getJson($this->endpoint().'?format=itw&scores=scorebooks')->assertOk()->streamedContent());
         $row = collect($this->dbfRows($zip, '1/GRADE.DBF'))->firstWhere('std_code', '12141200000000000001');
         foreach (['midterm1', 'midterm2', 'midterm', 'final', 'total', 'grade'] as $field) {
             $this->assertNull($row[$field], $field.' must be cleared rather than retain the original score.');
@@ -343,13 +348,13 @@ final class ImportExportTest extends TestCase
         $this->useItwArchive();
         DB::table('learning_scorebooks')->update(['group_code' => 'OTHER']);
         Sanctum::actingAs($this->admin);
-        $this->assertStringContainsString('ไม่ตรงกับกลุ่ม', $this->getJson($this->endpoint().'?format=itw')->assertUnprocessable()->json('message'));
+        $this->assertStringContainsString('ไม่ตรงกับกลุ่ม', $this->getJson($this->endpoint().'?format=itw&scores=scorebooks')->assertUnprocessable()->json('message'));
         DB::table('learning_scorebooks')->update(['group_code' => 'G1']);
         $book = DB::table('learning_scorebooks')->first();
         for ($i = 3; $i <= 11; $i++) {
             DB::table('learning_score_components')->insert(['scorebook_id' => $book->id, 'category' => 'coursework', 'title' => 'เก็บเพิ่ม', 'max_score' => 1, 'position' => $i]);
         }
-        $this->assertStringContainsString('1–9', $this->getJson($this->endpoint().'?format=itw')->assertUnprocessable()->json('message'));
+        $this->assertStringContainsString('1–9', $this->getJson($this->endpoint().'?format=itw&scores=scorebooks')->assertUnprocessable()->json('message'));
     }
 
     public function test_itw_export_resolves_a_group_name_from_the_shared_itw_group_dbf(): void
@@ -363,7 +368,7 @@ final class ImportExportTest extends TestCase
         $zip->addFromString('1214120000/GROUP.DBF', $this->itwDbf([['GRP_CODE', 'C', 8], ['GRP_NAME', 'C', 80]], [['GRP_CODE' => 'G1', 'GRP_NAME' => 'กลุ่มทดสอบ']]));
         $zip->close();
         Sanctum::actingAs($this->admin);
-        $response = $this->getJson($this->endpoint().'?format=itw')->assertOk();
+        $response = $this->getJson($this->endpoint().'?format=itw&scores=scorebooks')->assertOk();
         $this->assertNotEmpty($response->streamedContent());
     }
 
@@ -435,6 +440,193 @@ final class ImportExportTest extends TestCase
         Sanctum::actingAs($this->admin);
         $response = $this->getJson($this->endpoint())->assertStatus(503);
         $this->assertStringNotContainsString($this->workspace, $response->getContent());
+    }
+
+    public function test_direct_imported_score_edit_updates_sql_and_both_zip_formats_without_archived_scorebook_override(): void
+    {
+        $input = $this->prepareDirectScores();
+        $this->seedLearning($this->district->id); // Archived book has fractional marks: default export must ignore it.
+        $sourceHash = hash_file('sha256', $this->archivePath());
+        $input['assessment_scores'] = [0, 18, null, null, null, null, null, null, null];
+        $input['midterm_score'] = 18;
+        $input['final_exam_score'] = 30;
+        $this->putJson('/api/v1/learning/scores/imported', $input)->assertOk()->assertJsonPath('data.saved', true);
+        $this->assertDatabaseHas('db_'.$this->batch.'_1_grade', ['_id' => 1, 'midterm1' => 0, 'midterm' => 18, 'final' => 30, 'total' => 48, 'grade' => null]);
+        $this->assertDatabaseHas('imported_score_edits', ['district_id' => $this->district->id, 'version' => 1, 'record_index' => 0]);
+        $this->assertDatabaseHas('audit_logs', ['event' => 'learning.imported_score.updated', 'user_id' => $this->admin->id]);
+        foreach (['sdl', 'itw'] as $format) {
+            $zip = $this->openDownload($this->getJson($this->endpoint().'?format='.$format)->assertOk()->streamedContent());
+            File::put($this->workspace.'/readback.dbf', $zip->getFromName('1/GRADE.DBF'));
+            $zip->close();
+            $rows = iterator_to_array((new VisualFoxProDbfReader($this->workspace.'/readback.dbf'))->records());
+            $this->assertEquals(0, $rows[0]['midterm1']);
+            $this->assertEquals(18, $rows[0]['midterm']);
+            $this->assertEquals(30, $rows[0]['final']);
+            $this->assertEquals(48, $rows[0]['total']);
+            $this->assertNull($rows[0]['grade']);
+            $this->assertEquals(82, $rows[1]['total']);
+        }
+        $this->assertSame($sourceHash, hash_file('sha256', $this->archivePath()));
+        $this->putJson('/api/v1/learning/scores/imported', $input)->assertConflict();
+        $this->assertDatabaseCount('imported_score_edits', 1);
+    }
+
+    public function test_direct_scores_reject_decimal_overflow_invalid_payload_and_protect_other_groups(): void
+    {
+        $input = $this->prepareDirectScores();
+        $input['assessment_scores'][0] = 17.5;
+        $this->putJson('/api/v1/learning/scores/imported', $input)->assertUnprocessable();
+        $this->assertDatabaseCount('imported_score_edits', 0);
+        $this->assertDatabaseHas('db_'.$this->batch.'_1_grade', ['_id' => 1, 'midterm' => 50]);
+        $input['assessment_scores'][0] = 100; // MIDTERM1 N(2) cannot hold 100.
+        $this->putJson('/api/v1/learning/scores/imported', $input)->assertUnprocessable();
+        $input['assessment_scores'] = [1];
+        $this->putJson('/api/v1/learning/scores/imported', $input)->assertUnprocessable();
+        Sanctum::actingAs(User::factory()->create(['role' => 'teacher', 'district_id' => $this->district->id, 'assigned_groups' => ['OTHER']]));
+        $input['assessment_scores'] = array_fill(0, 9, null);
+        $this->putJson('/api/v1/learning/scores/imported', $input)->assertNotFound();
+        Sanctum::actingAs(User::factory()->create(['role' => 'student', 'district_id' => $this->district->id, 'student_code' => $input['student_code']]));
+        $this->putJson('/api/v1/learning/scores/imported', $input)->assertForbidden();
+    }
+
+    public function test_direct_scores_can_clear_marks_and_teacher_can_edit_only_assigned_group(): void
+    {
+        $input = $this->prepareDirectScores();
+        Sanctum::actingAs(User::factory()->create(['role' => 'teacher', 'district_id' => $this->district->id, 'assigned_groups' => ['G1']]));
+        $input['assessment_scores'] = array_fill(0, 9, null);
+        $input['midterm_score'] = null;
+        $input['final_exam_score'] = null;
+        $this->putJson('/api/v1/learning/scores/imported', $input)->assertOk();
+        $this->assertDatabaseHas('db_'.$this->batch.'_1_grade', ['_id' => 1, 'midterm1' => null, 'midterm' => null, 'final' => null, 'total' => null, 'grade' => null]);
+        Sanctum::actingAs($this->admin);
+        $zip = $this->openDownload($this->getJson($this->endpoint().'?format=itw')->assertOk()->streamedContent());
+        File::put($this->workspace.'/readback.dbf', $zip->getFromName('1/GRADE.DBF'));
+        $zip->close();
+        $rows = iterator_to_array((new VisualFoxProDbfReader($this->workspace.'/readback.dbf'))->records());
+        $this->assertNull($rows[0]['midterm']);
+        $this->assertNull($rows[0]['final']);
+        $this->assertNull($rows[0]['midterm1']);
+        $this->assertNull($rows[0]['total']);
+    }
+
+    public function test_direct_scores_reject_changed_batch_and_disabled_writes(): void
+    {
+        $input = $this->prepareDirectScores();
+        config()->set('system_data.write_enabled', false);
+        $this->putJson('/api/v1/learning/scores/imported', $input)->assertStatus(503);
+        config()->set('system_data.write_enabled', true);
+        $history = DB::table('import_history')->insertGetId(['district_id' => $this->district->id, 'batch_key' => 'import_1800000000_new', 'file_name' => 'new.zip', 'saved_file_name' => 'new.zip', 'status' => 'success', 'created_at' => now()->addDay()]);
+        DB::table('import_batches')->insert(['district_id' => $this->district->id, 'batch_key' => 'import_1800000000_new', 'import_history_id' => $history, 'created_at' => now()->addDay()]);
+        $this->putJson('/api/v1/learning/scores/imported', $input)->assertConflict();
+        $this->assertDatabaseCount('imported_score_edits', 0);
+    }
+
+    public function test_imported_grid_token_roundtrip_handles_deleted_dbf_records_and_second_edit(): void
+    {
+        $this->prepareDirectScores(true);
+        $data = $this->getJson('/api/v1/learning/scores/imported')->assertOk()->assertJsonPath('data.can_edit', true)->json('data');
+        $row = collect($data['rows'])->firstWhere('subject_code', 'TEST01');
+        $input = [...$row, 'batch_key' => $data['batch_key'], 'midterm_score' => 40, 'final_exam_score' => 0];
+        $this->putJson('/api/v1/learning/scores/imported', $input)->assertOk();
+        $this->assertDatabaseHas('imported_score_edits', ['record_index' => 1, 'version' => 1]);
+        $data = $this->getJson('/api/v1/learning/scores/imported')->assertOk()->json('data');
+        $row = collect($data['rows'])->firstWhere('subject_code', 'TEST01');
+        $this->assertEquals(40, $row['total_score']);
+        $this->assertNull($row['grade']);
+        $this->assertNotSame($input['edit_token'], $row['edit_token']);
+        $this->putJson('/api/v1/learning/scores/imported', [...$row, 'batch_key' => $data['batch_key'], 'final_exam_score' => 20])->assertOk();
+        $this->assertDatabaseHas('imported_score_edits', ['record_index' => 1, 'version' => 2]);
+        $zip = $this->openDownload($this->getJson($this->endpoint().'?format=itw')->assertOk()->streamedContent());
+        File::put($this->workspace.'/readback.dbf', $zip->getFromName('1/GRADE.DBF'));
+        $zip->close();
+        $rows = iterator_to_array((new VisualFoxProDbfReader($this->workspace.'/readback.dbf'))->records(true));
+        $this->assertArrayNotHasKey(0, $rows);
+        $this->assertEquals(60, $rows[1]['total']);
+        $this->assertEquals(82, $rows[2]['total']);
+        $destination = District::create(['name' => 'ปลายทางคะแนนตรง', 'code' => 'direct-destination']);
+        $result = app(LegacyZipImportService::class)->import(
+            UploadedFile::fake()->createWithContent('direct.zip', File::get($this->workspace.'/itw-download.zip')),
+            '1/2569', $destination->id, $this->admin->id, '127.0.0.1',
+        );
+        $this->assertDatabaseHas('db_'.$result['batch_key'].'_1_grade', ['std_code' => '12141200000000000001', 'sub_code' => 'TEST01', 'total' => 60, 'grade' => null]);
+    }
+
+    public function test_student_reads_updated_imported_marks_instead_of_archived_books(): void
+    {
+        $input = $this->prepareDirectScores();
+        $this->seedLearning($this->district->id);
+        $this->putJson('/api/v1/learning/scores/imported', [...$input, 'midterm_score' => 40, 'final_exam_score' => 20])->assertOk();
+        Sanctum::actingAs(User::factory()->create(['role' => 'student', 'district_id' => $this->district->id, 'student_code' => '0000000001']));
+        $data = $this->getJson('/api/v1/learning/scores')->assertOk()->json('data');
+        $course = collect($data['courses'])->firstWhere('subject_code', 'TEST01');
+        $this->assertEquals(40, $course['assignment_score']);
+        $this->assertEquals(20, $course['exam_score']);
+        $this->assertEquals(60, $course['total_score']);
+        $this->assertNull($course['grade']);
+        $this->assertSame('1/2569', $data['term']);
+    }
+
+    private function prepareDirectScores(bool $deletedFirst = false): array
+    {
+        $this->useItwArchive();
+        config()->set('system_data.write_enabled', true);
+        config()->set('system_data.student_enabled', true);
+        $zip = new ZipArchive;
+        $zip->open($this->archivePath());
+        $bytes = $zip->getFromName('1/GRADE.DBF');
+        if ($deletedFirst) {
+            $layout = unpack('Vcount/vheader/vrecord', substr($bytes, 4, 8));
+            $deleted = '*'.substr($bytes, $layout['header'] + 1, $layout['record'] - 1);
+            $bytes = substr($bytes, 0, $layout['header']).$deleted.substr($bytes, $layout['header']);
+            $bytes = substr_replace($bytes, pack('V', $layout['count'] + 1), 4, 4);
+            $zip->close();
+            $zip->open($this->archivePath());
+            $zip->addFromString('1/GRADE.DBF', $bytes);
+        }
+        File::put($this->workspace.'/initial.dbf', $bytes);
+        $zip->close();
+        $reader = new VisualFoxProDbfReader($this->workspace.'/initial.dbf');
+        $table = 'db_'.$this->batch.'_1_grade';
+        Schema::create($table, function ($table) use ($reader): void {
+            $table->increments('_id');
+            foreach ($reader->fields() as $field) {
+                $table->text($field['name'])->nullable();
+            }
+            foreach (['_perf_std10', '_perf_sub', '_perf_semestry'] as $field) {
+                $table->string($field);
+            }
+        });
+        foreach ($reader->records() as $row) {
+            DB::table($table)->insert([...$row, '_perf_std10' => substr($row['std_code'], -10), '_perf_sub' => $row['sub_code'], '_perf_semestry' => $row['semestry']]);
+        }
+        $student = new Student(
+            code: '0000000001', districtId: $this->district->id, districtName: 'ทดสอบ', prefix: 'นาย', firstName: 'ทดสอบ', lastName: 'คะแนน',
+            level: 1, levelLabel: 'ประถมศึกษา', groupCode: 'G1', groupName: 'ทดสอบ', enrollmentTerm: '1/2569', currentTerm: '1/2569',
+            status: 'active', statusLabel: 'กำลังศึกษา', gpax: 0, creditsEarned: 0, creditsRequired: 48, kpchHours: 0, moralResult: '',
+        );
+        $repository = \Mockery::mock(StudentRepository::class);
+        $repository->shouldReceive('students')->andReturn([$student]);
+        $repository->shouldReceive('find')->andReturn($student);
+        $readGrades = function () use ($student, $table): array {
+            $grades = [];
+            foreach (DB::table($table)->where('_perf_std10', $student->code)->get() as $row) {
+                $grades[] = new Grade(studentCode: $student->code, subjectCode: $row->sub_code, subjectName: 'ทดสอบ', credits: 2, subjectType: 'compulsory', term: '1/2569', grade: $row->grade,
+                    assessmentScores: array_map(fn ($n) => $row->{'midterm'.$n} === null ? null : (float) $row->{'midterm'.$n}, range(1, 9)),
+                    courseworkScore: $row->midterm === null ? null : (float) $row->midterm, finalExamScore: $row->final === null ? null : (float) $row->final,
+                    totalScore: $row->total === null ? null : (float) $row->total);
+            }
+
+            return ["{$student->districtId}|1|{$student->code}" => $grades];
+        };
+        $repository->shouldReceive('gradesForMany')->andReturnUsing($readGrades);
+        $repository->shouldReceive('gradesFor')->andReturnUsing(fn () => array_values($readGrades())[0]);
+
+        $this->app->instance(StudentRepository::class, $repository);
+        $state = ['level' => 1, 'student_code' => '0000000001', 'subject_code' => 'TEST01', 'academic_term' => '1/2569',
+            'assessment_scores' => [20, 30, null, null, null, null, null, null, null], 'midterm_score' => 50, 'final_exam_score' => 32, 'total_score' => 82, 'grade' => '4'];
+        Sanctum::actingAs($this->admin);
+
+        return [...$state, 'batch_key' => $this->batch, 'edit_token' => ImportedScoreEditService::token($state, $this->batch)];
     }
 
     private function useItwArchive(bool $duplicateGrade = false): void

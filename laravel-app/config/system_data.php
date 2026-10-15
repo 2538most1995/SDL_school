@@ -11,8 +11,8 @@ return [
     // Unlike the background driver this works when shared hosting disables
     // proc_open / detached processes.
     'import_autostart_connection' => 'deferred',
-    // Import tables are immutable and every replacement receives a new batch
-    // key, so computed aggregates can be reused safely for several minutes.
+    // Replacements receive a new batch key. Academic cache keys also include
+    // the scoped imported-score edit revision, so saved marks are visible immediately.
     'cache_seconds' => (int) env('SYSTEM_DATA_CACHE_SECONDS', 900),
     'student_api_auth_rate_limit_per_minute' => max(1, (int) env('STUDENT_DATA_API_AUTH_RATE_LIMIT_PER_MINUTE', 20)),
     'student_api_rate_limit_per_minute' => max(1, (int) env('STUDENT_DATA_API_RATE_LIMIT_PER_MINUTE', 60)),

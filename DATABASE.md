@@ -123,3 +123,10 @@ The canonical student and learning migrations inspect the actual parent-key type
 ## District navigation (2026-10-10)
 
 `districts.navigation_preferences` is nullable JSON added by `2026_10_10_000001_add_district_navigation_preferences.php`. It stores ordered category keys/labels and existing module keys only. Routes, icons and role permissions always come from `config/sena.php`; clients cannot submit arbitrary routes or roles. Admin writes use validated district middleware and an audit event in the same transaction. Missing preferences retain the default catalog; newly deployed modules are appended automatically. No import tables or student records are changed.
+
+
+## Direct imported score edits (2026-10-15)
+
+Migration `2026_10_15_000034_create_imported_score_edits_table.php` adds `imported_score_edits`: unique `(district_id, batch_key, education_level, grade_row_id)`, physical DBF record index/entry, immutable source identity JSON, latest score values JSON, monotonic version and actor/timestamps. Editing uses the deployment default connection to update the latest successful batch grade row, the durable edit and `audit_logs` atomically. MySQL district advisory lock is shared with imports; batch and grade rows are locked, and a score-state token rejects stale/ambiguous writes. Grade is cleared for native ITW recalculation. Deleted DBF records are excluded from SQL ordinal mapping but physical indices are retained for export. Binary NULL flags are updated alongside nullable marks.
+
+Original source ZIPs remain unchanged. Both export formats snapshot scoped edits in the same read transaction as portable datasets and patch only private output copies; direct edits win over explicitly requested legacy book export and mismatching identities abort export. On reimport the edited DBF becomes the new source; old batch cleanup deletes only that batch/district edit records. Old learning scorebook tables/APIs remain for historical backup compatibility; their UI is removed and their scores no longer override imported marks by default. No real database was migrated or modified for development tests.

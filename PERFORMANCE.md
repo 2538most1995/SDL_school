@@ -186,3 +186,8 @@
 - Elective metadata display correction: known/saved course metadata is shown as text by default, with explicit per-course editing. Browser checks on isolated demo data confirm no metadata inputs for saved/quick-added courses, inputs when editing or adding a new course, and no mobile overflow at 390px. No API/schema/query changes; typecheck and production build pass.
 
 - Unified elective table merges existing API data in the browser without new queries. Verification: 43 frontend tests, typecheck and production build pass; isolated demo browser checks registration/transfer exclusivity and saving only the two selected courses rather than all six displayed suggestions. Real student data was not modified.
+
+
+## Imported scores are editable (2026-10-15)
+
+The former immutable-batch academic-cache assumption no longer holds for grade values. `LegacyStudentRepository` includes scoped `SUM(imported_score_edits.version)` in academic aggregate cache keys (v3); the revision is memoized per repository/request. Saving a mark makes subsequent report requests use a new key without flushing other districts. Existing batch replacement invalidation still applies. Edits use indexed district/batch/level/row scope; export captures edit rows in 500-row chunks in the portable export transaction and validates source DBF identity before patching output. Browser edits one row at a time, suspending refetch/filter/pagination until save/cancel. Native MySQL EXPLAIN/large production benchmark: Not verified; automated tests use isolated SQLite and synthetic DBFs.

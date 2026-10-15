@@ -159,7 +159,7 @@ final class ImportController extends Controller
 
     public function export(Request $request, string $batch, LearningTransferService $transfer): StreamedResponse
     {
-        $options = $request->validate(['format' => ['sometimes', Rule::in(['sdl', 'itw'])]]);
+        $options = $request->validate(['format' => ['sometimes', Rule::in(['sdl', 'itw'])], 'scores' => ['sometimes', Rule::in(['imported', 'scorebooks'])]]);
         $itw = ($options['format'] ?? 'sdl') === 'itw';
         abort_unless((bool) config('system_data.enabled'), 503, 'ระบบส่งออกข้อมูลจริงยังไม่เปิดใช้งาน');
         abort_unless(preg_match('/^import_\d{10}_[A-Za-z0-9]+$/D', $batch) === 1, 404);
@@ -187,7 +187,7 @@ final class ImportController extends Controller
         abort_if($stream === false, 404, 'ไม่สามารถเปิดไฟล์ ZIP ต้นฉบับได้ กรุณาลองใหม่');
 
         try {
-            $exportPath = $transfer->create($stream, $districtId, $batch, $itw);
+            $exportPath = $transfer->create($stream, $districtId, $batch, $itw, ($options['scores'] ?? 'imported') === 'scorebooks');
         } catch (DbfWriteException $exception) {
             abort(422, $exception->getMessage());
         } catch (Throwable $exception) {

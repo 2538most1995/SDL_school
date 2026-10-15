@@ -64,6 +64,16 @@ final class VisualFoxProDbfEditor
         return $this->fields;
     }
 
+    public function nullFlags(int $index): ?string
+    {
+        if ($this->bitmap === null) {
+            return null;
+        }
+        fseek($this->handle, $this->headerLength + $index * $this->recordLength + $this->bitmap['offset']);
+
+        return bin2hex(fread($this->handle, $this->bitmap['length']));
+    }
+
     public function records(): Generator
     {
         // Keep physical record indices, including gaps for deleted records.

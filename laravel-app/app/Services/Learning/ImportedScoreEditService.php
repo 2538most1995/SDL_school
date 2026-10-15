@@ -1,0 +1,189 @@
+<?php
+
+namespace App\Services\Learning;
+
+use App\Domain\Students\Services\StudentDirectoryService;
+use App\Domain\Students\Support\AcademicTerm;
+use App\Models\User;
+use App\Support\DbfWriteException;
+use App\Support\VisualFoxProDbfEditor;
+use App\Support\VisualFoxProDbfReader;
+use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\File;
+use Illuminate\Support\Facades\Schema;
+use ZipArchive;
+
+final class ImportedScoreEditService
+{
+    public function __construct(private readonly StudentDirectoryService $directory) {}
+
+    public static function currentBatch(int $districtId): ?string
+    {
+        if (! Schema::hasTable('import_batches') || ! Schema::hasTable('import_history')) {
+            return null;
+        }
+
+        return DB::table('import_batches as b')->join('import_history as h', function ($join): void {
+            $join->on('h.id', '=', 'b.import_history_id')->on('h.district_id', '=', 'b.district_id')->on('h.batch_key', '=', 'b.batch_key');
+        })->where('b.district_id', $districtId)->where('h.status', 'success')
+            ->orderByRaw('COALESCE(b.created_at, h.created_at) DESC')->orderByDesc('b.batch_key')->value('b.batch_key');
+    }
+
+    public static function token(array $row, string $batch): string
+    {
+        return hash('sha256', json_encode([
+            $batch, (int) $row['level'], (string) $row['student_code'], (string) $row['subject_code'],
+            AcademicTerm::normalize($row['academic_term']),
+            array_map(static fn ($value) => $value === null ? null : (float) $value, $row['assessment_scores']),
+            $row['midterm_score'] === null ? null : (float) $row['midterm_score'],
+            $row['final_exam_score'] === null ? null : (float) $row['final_exam_score'],
+            $row['total_score'] === null ? null : (float) $row['total_score'],
+            in_array(trim((string) $row['grade']), ['', '-'], true) ? null : trim((string) $row['grade']),
+            (bool) ($row['is_remedial'] ?? false),
+        ], JSON_UNESCAPED_UNICODE | JSON_THROW_ON_ERROR));
+    }
+
+    public function save(User $user, int $districtId, array $input, ?string $ip): array
+    {
+        abort_unless(in_array($user->role, ['teacher', 'admin', 'super_admin'], true), 403);
+        abort_unless((bool) config('system_data.enabled') && (bool) config('system_data.student_enabled') && (bool) config('system_data.write_enabled'), 503, 'ระบบบันทึกคะแนนนำเข้ายังไม่เปิดใช้งาน');
+        abort_unless(Schema::hasTable('imported_score_edits'), 503, 'กรุณารัน migration ก่อนเปิดแก้ไขคะแนนนำเข้า');
+        $student = $this->directory->findAccessible($user, $input['student_code'], $input['level']);
+        abort_unless($student !== null && $student->districtId === $districtId, 404, 'ไม่พบนักศึกษาที่มีสิทธิ์แก้ไข');
+        $batch = $input['batch_key'];
+        abort_unless(preg_match('/^import_\d{10}_[A-Za-z0-9]+$/D', $batch) === 1, 422);
+        $lock = null;
+        if (DB::getDriverName() === 'mysql') {
+            $lock = 'sena_import_district_'.$districtId;
+            abort_unless((int) (DB::selectOne('SELECT GET_LOCK(?, 5) AS acquired', [$lock])->acquired ?? 0) === 1, 409, 'มีการนำเข้าหรือแก้คะแนนอยู่ กรุณาลองใหม่');
+        }
+        $temporary = sys_get_temp_dir().'/sdl-score-edit-'.bin2hex(random_bytes(12));
+        try {
+            File::makeDirectory($temporary, 0700);
+
+            return DB::transaction(function () use ($user, $districtId, $input, $ip, $student, $batch, $temporary): array {
+                abort_unless(DB::table('import_batches')->where('district_id', $districtId)->where('batch_key', $batch)->lockForUpdate()->first() !== null, 409, 'ชุดข้อมูลเปลี่ยนแล้ว กรุณาโหลดใหม่');
+                abort_unless(self::currentBatch($districtId) === $batch, 409, 'ชุดข้อมูลเปลี่ยนแล้ว กรุณาโหลดตารางใหม่ก่อนแก้คะแนน');
+                $table = 'db_'.$batch.'_'.$input['level'].'_grade';
+                abort_unless(Schema::hasTable($table), 404, 'ไม่พบตารางคะแนนของระดับนี้');
+                $candidates = DB::table($table)->where('_perf_std10', $student->code)->where('_perf_sub', $input['subject_code'])
+                    ->whereIn('_perf_semestry', AcademicTerm::variants($input['academic_term']))->lockForUpdate()->get();
+                $matching = $candidates->filter(function ($row) use ($input, $batch): bool {
+                    $row = (array) $row;
+                    $state = ['level' => $input['level'], 'student_code' => $input['student_code'], 'subject_code' => $input['subject_code'],
+                        'academic_term' => $input['academic_term'], 'assessment_scores' => array_map(fn ($slot) => $row['midterm'.$slot] ?? null, range(1, 9)),
+                        'midterm_score' => $row['midterm'] ?? null, 'final_exam_score' => $row['final'] ?? null, 'total_score' => $row['total'] ?? null,
+                        'grade' => $row['grade'] ?? null, 'is_remedial' => trim((string) ($row['typ_code'] ?? '')) === '7'];
+
+                    return hash_equals(self::token($state, $batch), $input['edit_token']);
+                });
+                abort_unless($matching->count() === 1, 409, 'คะแนนเปลี่ยนแล้วหรือมีรายการซ้ำ กรุณาโหลดใหม่และตรวจรายการปกติ/ซ่อมก่อนบันทึก');
+                $row = (array) $matching->first();
+                abort_if(trim((string) ($row['typ_code'] ?? '')) === '1'
+                    || in_array(trim((string) ($row['grade'] ?? '')), ['ม', 'มส', 'ผ', 'มผ', 'ร'], true), 422, 'ไม่แก้คะแนนทับรายการเทียบโอนหรือเกรดพิเศษ');
+                [$entry, $path] = self::copyGrade($batch, (int) $input['level'], $temporary);
+                $physical = null;
+                $identity = null;
+                $ordinal = 0;
+                foreach ((new VisualFoxProDbfReader($path))->records(true) as $index => $source) {
+                    if (++$ordinal === (int) $row['_id']) {
+                        $identity = array_intersect_key($source, array_flip(['std_code', 'sub_code', 'semestry', 'typ_code']));
+                        $physical = $index;
+                        break;
+                    }
+                }
+                abort_unless($physical !== null && $identity !== null
+                    && trim((string) $identity['std_code']) === trim((string) $row['std_code'])
+                    && trim((string) $identity['sub_code']) === trim((string) $row['sub_code'])
+                    && trim((string) $identity['semestry']) === trim((string) $row['semestry'])
+                    && trim((string) $identity['typ_code']) === trim((string) $row['typ_code']), 409, 'ตำแหน่งคะแนนไม่ตรงกับ DBF ต้นฉบับ กรุณานำเข้าชุดข้อมูลใหม่ก่อนแก้ไข');
+                $values = [];
+                foreach ($input['assessment_scores'] as $index => $value) {
+                    $values['midterm'.($index + 1)] = $value;
+                }
+                $values['midterm'] = $input['midterm_score'];
+                $values['final'] = $input['final_exam_score'];
+                $values['total'] = $values['midterm'] !== null && $values['final'] !== null ? $values['midterm'] + $values['final'] : null;
+                abort_if($values['total'] !== null && $values['total'] > 100, 422, 'คะแนนกลางภาคและปลายภาครวมกันต้องไม่เกิน 100');
+                $values['grade'] = null;
+                $editor = new VisualFoxProDbfEditor($path);
+                $editor->update($physical, $values); // Validate widths/precision/NULL handling before SQL writes.
+                $sqlValues = $values;
+                if (array_key_exists('_nullflags', $row)) {
+                    $sqlValues['_nullflags'] = $editor->nullFlags($physical);
+                }
+                DB::table($table)->where('_id', $row['_id'])->update($sqlValues);
+                $scope = ['district_id' => $districtId, 'batch_key' => $batch, 'education_level' => (int) $input['level'], 'grade_row_id' => (int) $row['_id']];
+                $previous = DB::table('imported_score_edits')->where($scope)->first();
+                DB::table('imported_score_edits')->updateOrInsert($scope, [
+                    'record_index' => $physical, 'zip_entry' => $entry, 'identity' => json_encode($identity, JSON_THROW_ON_ERROR),
+                    'values' => json_encode($values, JSON_THROW_ON_ERROR), 'version' => (int) ($previous->version ?? 0) + 1,
+                    'updated_by' => $user->id, 'created_at' => $previous->created_at ?? now(), 'updated_at' => now(),
+                ]);
+                DB::table('audit_logs')->insert([
+                    'user_id' => $user->id, 'district_id' => $districtId, 'event' => 'learning.imported_score.updated',
+                    'auditable_type' => $table, 'auditable_id' => $row['_id'], 'ip_address' => $ip,
+                    'before' => json_encode(array_intersect_key($row, $values), JSON_THROW_ON_ERROR),
+                    'after' => json_encode($values, JSON_THROW_ON_ERROR), 'created_at' => now(),
+                ]);
+
+                return ['saved' => true, 'grade_recalculation_required' => true];
+            });
+        } finally {
+            File::deleteDirectory($temporary);
+            if ($lock !== null) {
+                DB::selectOne('SELECT RELEASE_LOCK(?) AS released', [$lock]);
+            }
+        }
+    }
+
+    public static function copyGrade(string $batch, int $level, string $directory): array
+    {
+        $root = realpath((string) config('system_data.zip_root'));
+        $source = $root === false ? false : $root.'/'.$batch.'.zip';
+        if ($source === false || is_link($source) || realpath($source) !== $source || ! is_file($source)) {
+            throw new DbfWriteException('ไม่พบ ZIP ต้นฉบับเพื่อยืนยันโครงสร้าง DBF');
+        }
+        $zip = new ZipArchive;
+        if ($zip->open($source) !== true) {
+            throw new DbfWriteException('เปิด ZIP ต้นฉบับไม่สำเร็จ');
+        }
+        try {
+            $names = [];
+            for ($i = 0; $i < $zip->numFiles; $i++) {
+                $name = $zip->getNameIndex($i);
+                if (preg_match('~(?:^|/)'.$level.'/grade\.dbf$~i', str_replace('\\', '/', $name)) === 1) {
+                    $names[] = $name;
+                }
+            }
+            if (count($names) !== 1) {
+                throw new DbfWriteException('ต้องมี GRADE.DBF ของระดับนี้เพียงไฟล์เดียวใน ZIP');
+            }
+            $path = $directory.'/grade.dbf';
+            $in = $zip->getStream($names[0]);
+            $out = fopen($path, 'xb');
+            if ($in === false || $out === false) {
+                if (is_resource($in)) {
+                    fclose($in);
+                }
+                if (is_resource($out)) {
+                    fclose($out);
+                }
+                throw new DbfWriteException('คัดลอก DBF เพื่อยืนยันคะแนนไม่สำเร็จ');
+            }
+            try {
+                $bytes = stream_copy_to_stream($in, $out, 268_435_457);
+                if ($bytes === false || $bytes > 268_435_456 || $bytes !== $zip->statName($names[0])['size']) {
+                    throw new DbfWriteException('ขนาด DBF ไม่ถูกต้องหรือเกินกำหนด');
+                }
+            } finally {
+                fclose($in);
+                fclose($out);
+            }
+
+            return [$names[0], $path];
+        } finally {
+            $zip->close();
+        }
+    }
+}

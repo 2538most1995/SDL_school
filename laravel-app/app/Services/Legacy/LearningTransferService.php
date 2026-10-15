@@ -2,6 +2,8 @@
 
 namespace App\Services\Legacy;
 
+use App\Support\DbfWriteException;
+use App\Support\VisualFoxProDbfEditor;
 use Generator;
 use Illuminate\Database\Query\Builder;
 use Illuminate\Database\UniqueConstraintViolationException;
@@ -35,7 +37,7 @@ final class LearningTransferService
     }
 
     /** @param resource $source Original ITW ZIP, opened after authorization. */
-    public function create($source, int $districtId, string $batch, bool $itw = false): string
+    public function create($source, int $districtId, string $batch, bool $itw = false, bool $includeScorebooks = false): string
     {
         @set_time_limit(0);
         $this->assertSchema();
@@ -58,7 +60,7 @@ final class LearningTransferService
             if ($zip->open($archive) !== true) {
                 throw new RuntimeException('เปิด ZIP ต้นฉบับไม่สำเร็จ');
             }
-            $manifest = DB::transaction(function () use ($districtId, $batch, $dataDirectory): array {
+            $manifest = DB::transaction(function () use ($districtId, $batch, $dataDirectory, $directory): array {
                 $files = [];
                 foreach (self::TABLES as $type => [$table, $columns]) {
                     $path = $dataDirectory.'/'.$type.'.jsonl';
@@ -92,6 +94,23 @@ final class LearningTransferService
                     $files[$type] = ['rows' => $count, 'sha256' => hash_file('sha256', $path)];
                 }
 
+                $edits = fopen($directory.'/direct-edits.jsonl', 'xb');
+                try {
+                    if (Schema::hasTable('imported_score_edits')) {
+                        DB::table('imported_score_edits')->where('district_id', $districtId)->where('batch_key', $batch)
+                            ->orderBy('id')->chunkById(500, function ($rows) use ($edits): void {
+                                foreach ($rows as $row) {
+                                    $line = json_encode((array) $row, JSON_THROW_ON_ERROR)."\n";
+                                    if (fwrite($edits, $line) !== strlen($line)) {
+                                        throw new RuntimeException('บันทึกคะแนนส่งออกไม่สำเร็จ');
+                                    }
+                                }
+                            });
+                    }
+                } finally {
+                    fclose($edits);
+                }
+
                 return ['format' => 'sdl-school-learning', 'version' => 1, 'source_batch' => $batch,
                     'exported_at' => now()->toIso8601String(), 'files' => $files];
             });
@@ -109,7 +128,11 @@ final class LearningTransferService
                 throw new RuntimeException('จำนวนไฟล์รวมเกินขีดจำกัด 2,000 ไฟล์ของระบบนำเข้า');
             }
             if ($itw) {
-                $manifest['itw_dbf_export'] = app(ItwDbfExportService::class)->apply($zip, $directory, $dataDirectory);
+                $manifest['itw_dbf_export'] = app(ItwDbfExportService::class)->apply($zip, $directory, $dataDirectory, $includeScorebooks);
+            }
+            $manifest['imported_score_edits'] = $this->applyDirectEdits($zip, $directory);
+            if ($itw) {
+                $manifest['itw_dbf_export']['scores'] += $manifest['imported_score_edits'];
             }
             foreach (array_keys(self::TABLES) as $type) {
                 $name = self::DIRECTORY.'/'.$type.'.jsonl';
@@ -128,6 +151,7 @@ final class LearningTransferService
                 throw new RuntimeException('ZIP รวมข้อมูลเว็บเกิน 90 MB ซึ่งเป็นขนาดสูงสุดที่ระบบนำเข้าได้');
             }
             File::deleteDirectory($dataDirectory);
+            File::delete($directory.'/direct-edits.jsonl');
             File::delete(glob($directory.'/itw-*') ?: []);
 
             return $archive;
@@ -142,6 +166,78 @@ final class LearningTransferService
             File::deleteDirectory($directory);
             throw $exception;
         }
+    }
+
+    private function applyDirectEdits(ZipArchive $zip, string $directory): int
+    {
+        $handle = fopen($directory.'/direct-edits.jsonl', 'rb');
+        $paths = [];
+        $count = 0;
+        try {
+            while (($line = fgets($handle)) !== false) {
+                $edit = json_decode($line, true, 32, JSON_THROW_ON_ERROR);
+                $level = (int) $edit['education_level'];
+                $name = $edit['zip_entry'];
+                if (! in_array($level, [1, 2, 3], true) || preg_match('~(?:^|/)'.$level.'/grade\.dbf$~i', str_replace('\\', '/', $name)) !== 1) {
+                    throw new DbfWriteException('ตำแหน่ง DBF ของคะแนนไม่ถูกต้อง');
+                }
+                $path = $directory.'/itw-'.$level.'-grade.dbf';
+                if (! isset($paths[$level])) {
+                    if (! is_file($path)) {
+                        $source = $zip->getStream($name);
+                        if ($source === false) {
+                            throw new DbfWriteException('ไม่พบ GRADE.DBF สำหรับคะแนนที่แก้ไข');
+                        }
+                        $target = fopen($path, 'xb');
+                        try {
+                            $bytes = stream_copy_to_stream($source, $target, 268_435_457);
+                            if ($bytes === false || $bytes > 268_435_456 || $bytes !== $zip->statName($name)['size']) {
+                                throw new DbfWriteException('คัดลอก GRADE.DBF ไม่ครบหรือเกินขนาด');
+                            }
+                        } finally {
+                            fclose($source);
+                            fclose($target);
+                        }
+                    }
+                    $paths[$level] = ['path' => $path, 'name' => $name, 'edits' => []];
+                }
+                if ($paths[$level]['name'] !== $name) {
+                    throw new DbfWriteException('พบไฟล์คะแนนซ้ำในระดับเดียวกัน');
+                }
+                $paths[$level]['edits'][(int) $edit['record_index']] = $edit;
+            }
+        } finally {
+            fclose($handle);
+        }
+        foreach ($paths as $data) {
+            $editor = new VisualFoxProDbfEditor($data['path']);
+            $pending = $data['edits'];
+            foreach ($editor->records() as $index => $row) {
+                if (! isset($pending[$index])) {
+                    continue;
+                }
+                $edit = $pending[$index];
+                $identity = json_decode($edit['identity'], true, 16, JSON_THROW_ON_ERROR);
+                foreach (['std_code', 'sub_code', 'semestry', 'typ_code'] as $field) {
+                    if (trim((string) ($identity[$field] ?? '')) !== trim((string) ($row[$field] ?? ''))) {
+                        throw new DbfWriteException('รายการคะแนนไม่ตรงกับ DBF ต้นฉบับ กรุณาตรวจทะเบียนก่อนส่งออก');
+                    }
+                }
+                $values = json_decode($edit['values'], true, 16, JSON_THROW_ON_ERROR);
+                $allowed = array_merge(array_map(fn ($n) => 'midterm'.$n, range(1, 9)), ['midterm', 'final', 'total', 'grade']);
+                if (array_diff(array_keys($values), $allowed) !== [] || count($values) !== count($allowed)) {
+                    throw new DbfWriteException('ช่องคะแนนส่งออกไม่ครบหรือไม่รองรับ');
+                }
+                $editor->update($index, $values);
+                $count++;
+                unset($pending[$index]);
+            }
+            if ($pending !== [] || ! $zip->addFile($data['path'], $data['name'])) {
+                throw new DbfWriteException('บันทึกคะแนนลง DBF ไม่ครบ');
+            }
+        }
+
+        return $count;
     }
 
     /** Validate everything before the importer creates tables or activates a batch. */

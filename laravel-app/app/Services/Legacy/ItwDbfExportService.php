@@ -12,14 +12,14 @@ use ZipArchive;
 /** Applies the validated district snapshot to DBF entries in an exported ZIP. */
 final class ItwDbfExportService
 {
-    public function apply(ZipArchive $zip, string $directory, string $snapshot): array
+    public function apply(ZipArchive $zip, string $directory, string $snapshot, bool $includeScorebooks = true): array
     {
         $files = $this->files($zip);
         $counts = ['registrations' => 0, 'scores' => 0, 'subjects' => 0];
         $changed = [];
         foreach ([1, 2, 3] as $level) {
             $registrations = array_values(iterator_to_array($this->rows($snapshot, 'registrations', $level)));
-            $books = iterator_to_array($this->rows($snapshot, 'scorebooks', $level));
+            $books = $includeScorebooks ? iterator_to_array($this->rows($snapshot, 'scorebooks', $level)) : [];
             if ($registrations === [] && $books === []) {
                 continue;
             }

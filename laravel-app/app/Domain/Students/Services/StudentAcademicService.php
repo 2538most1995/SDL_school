@@ -224,6 +224,8 @@ final readonly class StudentAcademicService
                     'subject_code' => $grade->subjectCode,
                     'subject_name' => $grade->subjectName,
                     'learning_method' => $grade->learningMethod ?? '-',
+                    'academic_term' => $grade->term,
+                    'is_transferred' => $grade->transferred,
                     'assessment_scores' => $assessmentScores,
                     'midterm_score' => $grade->courseworkScore,
                     'coursework_score' => $grade->courseworkScore,
