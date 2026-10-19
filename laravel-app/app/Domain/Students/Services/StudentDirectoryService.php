@@ -11,6 +11,7 @@ use App\Domain\Students\Support\ItwStudentProfileLabels;
 use App\Domain\Students\Support\StudentAccessScope;
 use App\Domain\Students\Support\StudentIdentityGuard;
 use App\Models\User;
+use App\Support\ThaiAdministrativeAreaLookup;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Schema;
 
@@ -175,7 +176,15 @@ final readonly class StudentDirectoryService
             ? $this->repository->profileFor($student)
             : [];
 
-        return ItwStudentProfileLabels::apply($profile);
+        $profile = ItwStudentProfileLabels::apply($profile);
+        $province = trim((string) ($profile['prior_education']['province'] ?? ''));
+        if ($province !== '') {
+            $profile['prior_education']['province_label'] = ctype_digit($province)
+                ? (app(ThaiAdministrativeAreaLookup::class)->provinceForCode($province) ?? 'ยังไม่พบคำอธิบายข้อมูล')
+                : $province;
+        }
+
+        return $profile;
     }
 
     /** @return list<Student> */

@@ -4,6 +4,7 @@ namespace Tests\Feature\Students;
 
 use App\Domain\Students\Models\Student;
 use App\Domain\Students\Repositories\DemoStudentRepository;
+use App\Domain\Students\Repositories\StudentProfileRepository;
 use App\Domain\Students\Repositories\StudentRepository;
 use App\Domain\Students\Repositories\TermStudentRepository;
 use App\Http\Controllers\Api\Students\StudentDirectoryController;
@@ -135,6 +136,24 @@ final class StudentApiTest extends TestCase
         $request = Request::create('/api/v1/students/'.$record->code);
         $resource = new StudentDetailResource($record, ['family' => ['private' => 'ห้ามเปิดเผย']]);
         $this->assertArrayNotHasKey('profile', $resource->resolve($request));
+    }
+
+    public function test_prior_school_province_is_descriptive_and_unknown_codes_are_not_echoed(): void
+    {
+        $student = (new DemoStudentRepository)->students([1])[0];
+        $repository = \Mockery::mock(StudentRepository::class, StudentProfileRepository::class);
+        $repository->shouldReceive('students')->with([$this->sena->id])->andReturn([$student]);
+        $repository->shouldReceive('profileFor')->andReturn(
+            ['prior_education' => ['province' => '14']],
+            ['prior_education' => ['province' => '99']],
+            ['prior_education' => ['province' => 'พระนครศรีอยุธยา']],
+        );
+        $this->app->instance(StudentRepository::class, $repository);
+        Sanctum::actingAs($this->viewer('admin'));
+        foreach (['พระนครศรีอยุธยา', 'ยังไม่พบคำอธิบายข้อมูล', 'พระนครศรีอยุธยา'] as $label) {
+            $this->getJson('/api/v1/students/'.$student->code)->assertOk()
+                ->assertJsonPath('data.profile.prior_education.province_label', $label);
+        }
     }
 
     public function test_student_endpoints_reject_guests(): void

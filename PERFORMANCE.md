@@ -208,3 +208,5 @@ The detail view adds one bounded single-student SELECT (LIMIT 2 to reject ambigu
 ### Profile dictionary resolution (2026-10-19)
 
 No added SQL queries. One scoped scan resolves the source school/level directory and reference dictionaries are memoized for the repository request lifetime. Only allowlisted ID/NAME character dictionaries are read (maximum 8 MiB/10,000 rows each); missing, corrupt and conflicting labels fail closed. Qualification dictionaries never cross levels or batches. No persistent cache or import replay is introduced. Representative local dictionary reads succeeded; production request latency remains Not verified.
+
+Province labels (2026-10-19): single-student details reuse the existing cached local administrative snapshot to resolve two-digit prior-school province codes. No HTTP or added SQL query; directory queries and pagination are unchanged. Production latency: Not verified.

@@ -38,7 +38,7 @@ import { StatGrid } from '../../components/StatGrid';
 import { FilterToggle } from '../../components/FilterToggle';
 import { FilterGrid } from '../../components/FilterGrid';
 import { StatusBadge, type StatusTone } from '../../components/StatusBadge';
-import { getFeatureDataWithDemo, sendFeatureData } from '../api';
+import { getFeatureData, getFeatureDataWithDemo, sendFeatureData } from '../api';
 import { useDemoRole } from '../../context/DemoRoleContext';
 import { showErrorAlert, showSuccessAlert } from '../../lib/feedback';
 import { useLogout } from '../../lib/useLogout';
@@ -91,32 +91,6 @@ type StudentRow = {
     creditsRequired: number;
     social?: StudentSocial;
 };
-
-const demoStudents: StudentRow[] = [
-    {
-        id: 'SENA-670142',
-        code: 'SENA-670142',
-        name: 'ณัฐชา ศรีสวัสดิ์',
-        level: 'มัธยมศึกษาตอนปลาย',
-        groupCode: 'G-01',
-        group: 'กลุ่มวันอาทิตย์ 1',
-        district: 'อำเภอเสนา',
-        currentTerm: '1/2569',
-        citizenIdMasked: '1-xxxx-xxxxx-xx-1',
-        birthDate: '01/01/2548',
-        gender: 'หญิง',
-        gpax: 3.24,
-        creditsEarned: 68,
-        creditsCurrent: 73,
-        creditsRequired: 76,
-        social: {
-            facebook_url: 'https://facebook.com/nattacha.srisawat',
-            facebook_raw: 'https://facebook.com/nattacha.srisawat',
-            line_id: 'nattacha_sena',
-            line_url: 'https://line.me/ti/p/~nattacha_sena',
-        },
-    },
-];
 
 function sortAcademicTermsDescending(left: string, right: string): number {
     const key = (value: string) => {
@@ -367,7 +341,7 @@ export function StudentsPage() {
                 academic: { gpax: number; credits_earned: number; credits_current: number; credits_required: number };
                 social?: StudentSocial;
             };
-            const response = await getFeatureDataWithDemo<StudentRow[] | StudentApi[]>(`/api/v1/students?${queryString}`, demoStudents, signal);
+            const response = await getFeatureData<StudentRow[] | StudentApi[]>(`/api/v1/students?${queryString}`, signal);
             const data = response.data.map((student): StudentRow => 'full_name' in student ? {
                 id: student.code,
                 code: student.code,
@@ -610,42 +584,6 @@ type StudentDetail = {
     guardian?: { name?: string; phone_masked?: string };
 };
 
-const demoStudent: StudentDetail = {
-    id: 1,
-    code: 'SENA-670142',
-    name: 'ณัฐชา ศรีสวัสดิ์',
-    level: 'มัธยมศึกษาตอนปลาย',
-    groupCode: 'G-01',
-    group: 'กลุ่มวันอาทิตย์ 1',
-    district: 'อำเภอเสนา',
-    currentTerm: '1/2569',
-    enrollmentTerm: '1/2567',
-    citizenIdMasked: '1-xxxx-xxxxx-xx-1',
-    birthDate: '01/01/2548',
-    gender: 'หญิง',
-    age: '21',
-    phone: '0812342841',
-    email: 'n***@example.test',
-    registeredAddress: '-',
-    currentAddress: '-',
-    applicationDate: '-',
-    lastUpdated: '-',
-    creditsEarned: 68,
-    creditsCurrent: 73,
-    creditsRequired: 76,
-    compulsory: { earned: 41, required: 44, remaining: 3 },
-    elective: { earned: 27, required: 32, remaining: 5 },
-    gpax: 3.24,
-    activityHours: 76,
-    moralResult: 'ดี',
-    social: {
-        facebook_url: 'https://facebook.com/nattacha.srisawat',
-        facebook_raw: 'https://facebook.com/nattacha.srisawat',
-        line_id: 'nattacha_sena',
-        line_url: 'https://line.me/ti/p/~nattacha_sena',
-    },
-};
-
 type KpchDetailRow = {
     id: string;
     name: string;
@@ -733,7 +671,7 @@ export function StudentDetailPage() {
                     elective: { earned: number; required: number; remaining: number };
                 };
             };
-            const response = await getFeatureDataWithDemo<StudentDetail | StudentDetailApi>(`/api/v1/students/${encodeURIComponent(studentId)}`, demoStudent, signal);
+            const response = await getFeatureData<StudentDetail | StudentDetailApi>(`/api/v1/students/${encodeURIComponent(studentId)}`, signal);
             if ('academic' in response.data) {
                 const api = response.data;
                 const data: StudentDetail = {

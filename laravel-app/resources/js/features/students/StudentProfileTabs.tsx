@@ -9,7 +9,7 @@ type FamilyMember = { name?: ProfileValue; occupation_code?: ProfileValue; occup
 export type StudentProfileDetails = {
     personal?: Partial<Record<'nationality_code' | 'nationality_label' | 'religion_code' | 'religion_label' | 'occupation_code' | 'occupation_label' | 'target_group_code' | 'target_group_label' | 'height_cm' | 'weight_kg' | 'marital_status_code', ProfileValue>>;
     family?: { marital_status_label?: ProfileValue; father?: FamilyMember; mother?: FamilyMember; guardian?: FamilyMember; siblings?: ProfileValue; studying_siblings?: ProfileValue };
-    prior_education?: Partial<Record<'qualification_code' | 'qualification_label' | 'graduation_year' | 'school' | 'province', ProfileValue>>;
+    prior_education?: Partial<Record<'qualification_code' | 'qualification_label' | 'graduation_year' | 'school' | 'province' | 'province_label', ProfileValue>>;
 };
 
 type ProfileStudent = {
@@ -106,7 +106,7 @@ export function StudentProfileTabs({ student, addressContent }: { student: Profi
             {value === 'education' && <Panel title={label} icon={GraduationCap} description="ประวัติการศึกษาก่อนเข้าศึกษาในระดับปัจจุบัน">
                 <ProfileFields fields={[
                     ['วุฒิการศึกษาเดิม', education?.qualification_label], ['ปีที่จบการศึกษา', education?.graduation_year],
-                    ['สถานศึกษาเดิม', education?.school], ['จังหวัดของสถานศึกษาเดิม', education?.province],
+                    ['สถานศึกษาเดิม', education?.school], ['จังหวัดของสถานศึกษาเดิม', education?.province_label],
                 ]} />
             </Panel>}
         </div>)}

@@ -26,6 +26,22 @@ final class ThaiAdministrativeAreaLookup
         return $this->areas()[$digits] ?? null;
     }
 
+    /** Resolve a province code using the same local reference as addresses. */
+    public function provinceForCode(?string $code): ?string
+    {
+        $code = trim((string) $code);
+        if (preg_match('/^\d{2}$/', $code) !== 1) {
+            return null;
+        }
+        foreach ($this->areas() as $areaCode => $area) {
+            if (str_starts_with((string) $areaCode, $code) && $area['province'] !== '') {
+                return $area['province'];
+            }
+        }
+
+        return null;
+    }
+
     /** @return list<string> */
     public function subdistrictsForDistrict(?string $district): array
     {

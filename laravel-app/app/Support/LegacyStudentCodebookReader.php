@@ -98,7 +98,7 @@ final class LegacyStudentCodebookReader
             foreach ($reader->records() as $row) {
                 $code = trim((string) ($row['id'] ?? ''));
                 $name = trim((string) ($row['name'] ?? ''));
-                if ($code === '' || $name === '') {
+                if ($code === '' || $name === '' || ctype_digit($name)) {
                     continue;
                 }
                 $key = ctype_digit($code) ? (ltrim($code, '0') ?: '0') : $code;

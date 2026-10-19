@@ -22,6 +22,11 @@ final class ThaiAdministrativeAreaLookupTest extends TestCase
             'province' => 'พระนครศรีอยุธยา',
         ], $lookup->resolve('140405'));
         $this->assertNull($lookup->resolve('invalid'));
+        $this->assertSame('พระนครศรีอยุธยา', $lookup->provinceForCode('14'));
+        $this->assertSame('กรุงเทพมหานคร', $lookup->provinceForCode('10'));
+        $this->assertNull($lookup->provinceForCode('99'));
+        $this->assertNull($lookup->provinceForCode('140405'));
+        $this->assertNull($lookup->provinceForCode('../14'));
         Http::assertNothingSent();
 
         Cache::forget('thai-administrative-areas-local-v1');

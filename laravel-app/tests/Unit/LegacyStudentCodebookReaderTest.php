@@ -46,7 +46,7 @@ final class LegacyStudentCodebookReaderTest extends TestCase
 
     public function test_conflicting_reference_rows_corrupt_files_and_external_symlinks_fail_closed(): void
     {
-        $this->dbf('/school/3/s_grade.dbf', [['01', 'ชื่อแรก'], ['1', 'ชื่ออื่น'], ['02', 'ป.6']]);
+        $this->dbf('/school/3/s_grade.dbf', [['01', 'ชื่อแรก'], ['1', 'ชื่ออื่น'], ['02', 'ป.6'], ['03', '03']]);
         file_put_contents($this->root.'/'.$this->batch.'/school/3/religion.dbf', 'corrupt');
         $reader = new LegacyStudentCodebookReader($this->root);
         $this->assertSame(['2' => 'ป.6'], $reader->dictionary($this->set(3), 's_grade'));

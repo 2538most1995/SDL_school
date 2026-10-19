@@ -246,3 +246,9 @@ Verification: PHP suite 450 tests, 449 passed and one existing skip; frontend 57
 - Evidence, source pages and limitations: `laravel-app/docs/itw-profile-codebooks.md`.
 
 Verification: PHP 456 tests (455 passed, one existing skip), frontend 57/57, TypeScript, production build and changed-file Pint passed. Tests cover manual mappings, leading-zero normalization, supplied dictionary overrides, different qualification meanings by level, ambiguous sources, conflicting rows, corrupt files, symlink boundaries and unknown-code text. Browser checks with synthetic API responses confirmed religion/family/qualification descriptions and removal of code-only category labels. Existing local reference DBFs were read without touching student records. Production SQL data and schema were not changed.
+
+### Descriptive student data follow-up (2026-10-19)
+
+The directory and student-detail frontend now use the direct API helper and remove their unused embedded student examples (the old helper already forwarded to the API, so no server data-source setting changes). Profile categories continue to render descriptions rather than raw category codes. Prior-school province adds `province_label`: a two-digit code resolves through the bundled administrative reference, human-readable source names are preserved, and unknown numeric values use the unresolved-description message. Source dictionary NAME values containing only digits are rejected as non-descriptions. Student and group identifiers remain identifiers. No migration or production-data change.
+
+Follow-up verification: PHP 457 tests (456 passed, one existing skip), frontend 57/57, TypeScript, production build and changed-file Pint passed. Province tests cover valid codes, invalid codes, source text preservation and API output; codebook tests reject numeric-only descriptions. No live student data or schema was modified.

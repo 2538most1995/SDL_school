@@ -143,3 +143,5 @@ No schema change. Single-student profile reads use the active district/level tab
 ### ITW reference dictionaries for profiles (2026-10-19)
 
 No database writes or new tables. The existing extracted archive supplies ID/NAME character fields from religion.dbf, nation.dbf, occupat.dbf, occtyp.dbf, and s_grade.dbf. Resolution is constrained to the registered active batch and source school/level; qualification codes are level-specific and customizable. The original MARRYSTAT field represents parents marital status and is displayed in Family. The private profile adds *_label values; raw code fields remain backward compatible, while list and external integration resources remain unchanged. The codebook reader never reads source STUDENT.DBF record data.
+
+Prior-school province display follow-up (2026-10-19): the read-only private profile adds `prior_education.province_label`, preserving the original `province` value for compatibility. Two-digit province references use the existing local administrative CSV. No SQL, table, index or schema change.
