@@ -117,6 +117,8 @@ final class StudentApiTest extends TestCase
             ->assertJsonPath('data.profile.family.father.name', 'นายบิดา ตัวอย่าง')
             ->assertJsonPath('data.profile.family.father.occupation_label', 'รับราชการ')
             ->assertJsonPath('data.profile.personal.nationality_label', 'ไทย')
+            ->assertJsonPath('data.profile.personal.religion_label', 'พุทธ')
+            ->assertJsonPath('data.profile.family.marital_status_label', 'อยู่ด้วยกัน')
             ->assertJsonPath('data.profile.prior_education.school', 'โรงเรียนตัวอย่าง');
         $this->getJson('/api/v1/students')->assertOk()->assertJsonMissingPath('data.0.profile');
 

@@ -5,11 +5,11 @@ import { Tab } from '../../components/MaterialUI';
 import { Panel } from '../../components/Panel';
 
 type ProfileValue = string | number | null;
-type FamilyMember = { name?: ProfileValue; occupation_code?: ProfileValue; occupation_label?: ProfileValue; income?: ProfileValue; status_code?: ProfileValue };
+type FamilyMember = { name?: ProfileValue; occupation_code?: ProfileValue; occupation_label?: ProfileValue; income?: ProfileValue; status_code?: ProfileValue; status_label?: ProfileValue };
 export type StudentProfileDetails = {
-    personal?: Partial<Record<'nationality_code' | 'nationality_label' | 'religion_code' | 'occupation_code' | 'occupation_label' | 'target_group_code' | 'target_group_label' | 'height_cm' | 'weight_kg' | 'marital_status_code', ProfileValue>>;
-    family?: { father?: FamilyMember; mother?: FamilyMember; guardian?: FamilyMember; siblings?: ProfileValue; studying_siblings?: ProfileValue };
-    prior_education?: Partial<Record<'qualification_code' | 'graduation_year' | 'school' | 'province', ProfileValue>>;
+    personal?: Partial<Record<'nationality_code' | 'nationality_label' | 'religion_code' | 'religion_label' | 'occupation_code' | 'occupation_label' | 'target_group_code' | 'target_group_label' | 'height_cm' | 'weight_kg' | 'marital_status_code', ProfileValue>>;
+    family?: { marital_status_label?: ProfileValue; father?: FamilyMember; mother?: FamilyMember; guardian?: FamilyMember; siblings?: ProfileValue; studying_siblings?: ProfileValue };
+    prior_education?: Partial<Record<'qualification_code' | 'qualification_label' | 'graduation_year' | 'school' | 'province', ProfileValue>>;
 };
 
 type ProfileStudent = {
@@ -64,8 +64,8 @@ export function StudentProfileTabs({ student, addressContent }: { student: Profi
                     <ProfileFields fields={[
                         ['รหัสนักศึกษา', student.code], ['ชื่อ - สกุล', student.name], ['เลขบัตรประชาชน', student.citizenIdMasked],
                         ['วันเกิด', student.birthDate], ['เพศ', student.gender], ['อายุ', student.age, 'ปี'],
-                        ['สัญชาติ', personal?.nationality_label ?? personal?.nationality_code], ['รหัสศาสนา', personal?.religion_code], ['รหัสสถานภาพสมรส', personal?.marital_status_code],
-                        ['อาชีพ', personal?.occupation_label ?? personal?.occupation_code], ['กลุ่มเป้าหมาย', personal?.target_group_label ?? personal?.target_group_code],
+                        ['สัญชาติ', personal?.nationality_label], ['ศาสนา', personal?.religion_label],
+                        ['อาชีพ', personal?.occupation_label], ['กลุ่มเป้าหมาย', personal?.target_group_label],
                         ['ส่วนสูง', personal?.height_cm, 'ซม.'], ['น้ำหนัก', personal?.weight_kg, 'กก.'],
                     ]} />
                 </Panel>
@@ -82,14 +82,15 @@ export function StudentProfileTabs({ student, addressContent }: { student: Profi
             {value === 'address' && addressContent}
             {value === 'family' && <Panel title={label} icon={UsersThree} description="ข้อมูลบิดา มารดา และผู้ปกครองที่มีในทะเบียนนักศึกษา">
                 <div className="space-y-6">
+                    <ProfileFields fields={[['สถานภาพสมรสของบิดา–มารดา', family?.marital_status_label]]} />
                     {(['father', 'mother', 'guardian'] as const).map((key) => {
                         const member = family?.[key];
                         return <section key={key} aria-label={{ father: 'บิดา', mother: 'มารดา', guardian: 'ผู้ปกครอง' }[key]}>
                             <h3 className="mb-3 text-sm font-bold" style={{ color: 'var(--ui-text)' }}>{{ father: 'บิดา', mother: 'มารดา', guardian: 'ผู้ปกครอง' }[key]}</h3>
                             <ProfileFields fields={[
                                 ['ชื่อ - สกุล', member?.name ?? (key === 'guardian' ? student.guardian?.name : null)],
-                                ['อาชีพ', member?.occupation_label ?? member?.occupation_code], ['รายได้ตามทะเบียน', member?.income, 'บาท'],
-                                ...(key !== 'guardian' ? [['รหัสสถานะ', member?.status_code] as DetailField] : []),
+                                ['อาชีพ', member?.occupation_label], ['รายได้ตามทะเบียน', member?.income, 'บาท'],
+                                ...(key !== 'guardian' ? [['สถานภาพ', member?.status_label] as DetailField] : []),
                                 ...(key === 'guardian' && student.guardian?.phone_masked ? [['โทรศัพท์', student.guardian.phone_masked] as DetailField] : []),
                             ]} />
                         </section>;
@@ -104,7 +105,7 @@ export function StudentProfileTabs({ student, addressContent }: { student: Profi
             </Panel>}
             {value === 'education' && <Panel title={label} icon={GraduationCap} description="ประวัติการศึกษาก่อนเข้าศึกษาในระดับปัจจุบัน">
                 <ProfileFields fields={[
-                    ['รหัสวุฒิการศึกษาเดิม', education?.qualification_code], ['ปีที่จบการศึกษา', education?.graduation_year],
+                    ['วุฒิการศึกษาเดิม', education?.qualification_label], ['ปีที่จบการศึกษา', education?.graduation_year],
                     ['สถานศึกษาเดิม', education?.school], ['จังหวัดของสถานศึกษาเดิม', education?.province],
                 ]} />
             </Panel>}

@@ -8,9 +8,11 @@ use App\Domain\Students\Models\MoralAssessment;
 use App\Domain\Students\Models\RegisteredSubject;
 use App\Domain\Students\Models\Student;
 use App\Domain\Students\Support\AcademicTerm;
+use App\Domain\Students\Support\ItwStudentProfileLabels;
 use App\Domain\Students\Support\LegacyStudentStatus;
 use App\Domain\Students\Support\LegacyTableSet;
 use App\Support\LegacyFptMemoReader;
+use App\Support\LegacyStudentCodebookReader;
 use App\Support\ThaiAdministrativeAreaLookup;
 use Illuminate\Database\Connection;
 use Illuminate\Database\ConnectionInterface;
@@ -44,6 +46,7 @@ final class LegacyStudentRepository implements StudentProfileRepository, Student
         private readonly ConnectionInterface $connection,
         private readonly ?ThaiAdministrativeAreaLookup $areaLookup = null,
         private readonly ?LegacyFptMemoReader $memoReader = null,
+        private readonly ?LegacyStudentCodebookReader $codebookReader = null,
     ) {}
 
     /** @param list<int>|null $districtIds
@@ -398,7 +401,7 @@ final class LegacyStudentRepository implements StudentProfileRepository, Student
             ];
         };
 
-        return [
+        $profile = [
             'personal' => [
                 'nationality_code' => $text('nation'), 'religion_code' => $text('religion'),
                 'occupation_code' => $text('occp'), 'target_group_code' => $text('occtyp'),
@@ -414,6 +417,14 @@ final class LegacyStudentRepository implements StudentProfileRepository, Student
                 'school' => $text('s_school'), 'province' => $text('s_province'),
             ],
         ];
+        $dictionaries = [];
+        if ($this->codebookReader !== null) {
+            foreach (['religion', 'nation', 'occupat', 'occtyp', 's_grade'] as $name) {
+                $dictionaries[$name] = $this->codebookReader->dictionary($set, $name);
+            }
+        }
+
+        return ItwStudentProfileLabels::apply($profile, $dictionaries);
     }
 
     /** @return list<Grade> */

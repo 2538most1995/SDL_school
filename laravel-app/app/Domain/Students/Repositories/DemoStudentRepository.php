@@ -50,7 +50,7 @@ final class DemoStudentRepository implements StudentProfileRepository, StudentRe
     public function profileFor(Student $student): array
     {
         return [
-            'personal' => ['nationality_code' => '099', 'occupation_code' => '01'],
+            'personal' => ['nationality_code' => '099', 'occupation_code' => '01', 'religion_code' => '01', 'marital_status_code' => '1'],
             'family' => [
                 'father' => ['name' => 'นายบิดา ตัวอย่าง', 'occupation_code' => '01', 'income' => '15000'],
                 'mother' => ['name' => 'นางมารดา ตัวอย่าง', 'occupation_code' => '02', 'income' => '12000'],

@@ -204,3 +204,7 @@ Term discovery reads DISTINCT `_perf_semestry` from grade tables of the active s
 ### Student profile tabs (2026-10-19)
 
 The detail view adds one bounded single-student SELECT (LIMIT 2 to reject ambiguous identities) against its already-resolved district/level active table set. Only allowlisted existing columns are projected; missing columns use NULL. It reuses cached column metadata and bound identity predicates. Roster/API integration paths make no added profile query, and switching tabs causes no network request. No persistent profile cache, index or migration added. SQLite fixture verified the partial-schema query and unchanged rows; live MySQL EXPLAIN and production-scale latency: Not verified.
+
+### Profile dictionary resolution (2026-10-19)
+
+No added SQL queries. One scoped scan resolves the source school/level directory and reference dictionaries are memoized for the repository request lifetime. Only allowlisted ID/NAME character dictionaries are read (maximum 8 MiB/10,000 rows each); missing, corrupt and conflicting labels fail closed. Qualification dictionaries never cross levels or batches. No persistent cache or import replay is introduced. Representative local dictionary reads succeeded; production request latency remains Not verified.

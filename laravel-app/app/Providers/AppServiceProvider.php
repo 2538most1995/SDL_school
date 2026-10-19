@@ -7,6 +7,7 @@ use App\Domain\Students\Repositories\LegacyStudentRepository;
 use App\Domain\Students\Repositories\StudentRepository;
 use App\Support\ApplicationBasePath;
 use App\Support\LegacyFptMemoReader;
+use App\Support\LegacyStudentCodebookReader;
 use App\Support\ThaiAdministrativeAreaLookup;
 use Illuminate\Cache\RateLimiting\Limit;
 use Illuminate\Contracts\Foundation\Application;
@@ -39,6 +40,7 @@ class AppServiceProvider extends ServiceProvider
                 DB::connection(),
                 $app->make(ThaiAdministrativeAreaLookup::class),
                 $app->make(LegacyFptMemoReader::class),
+                new LegacyStudentCodebookReader((string) config('system_data.fpt_memo_root')),
             );
         });
     }
