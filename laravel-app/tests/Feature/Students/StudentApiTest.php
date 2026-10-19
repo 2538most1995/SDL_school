@@ -13,9 +13,11 @@ use App\Http\Controllers\Api\Students\StudentMoralController;
 use App\Http\Controllers\Api\Students\StudentReportController;
 use App\Http\Controllers\Api\Students\StudentSocialProfileController;
 use App\Http\Controllers\Api\Students\StudentSubjectsController;
+use App\Http\Resources\Students\StudentDetailResource;
 use App\Models\District;
 use App\Models\User;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Route;
 use Laravel\Sanctum\Sanctum;
 use Tests\TestCase;
@@ -106,6 +108,31 @@ final class StudentApiTest extends TestCase
             ->assertJsonCount(0, 'data')->assertJsonCount(3, 'meta.filter_options.terms');
         $this->getJson('/api/v1/students?term=invalid')->assertUnprocessable()->assertJsonValidationErrors('term');
         $this->getJson('/api/v1/students')->assertOk()->assertJsonPath('data.0.code', 'CURRENT');
+    }
+
+    public function test_student_detail_exposes_profile_only_within_district_and_teacher_scope(): void
+    {
+        Sanctum::actingAs($this->viewer('admin'));
+        $this->getJson('/api/v1/students/6650100001')->assertOk()
+            ->assertJsonPath('data.profile.family.father.name', 'นายบิดา ตัวอย่าง')
+            ->assertJsonPath('data.profile.family.father.occupation_label', 'รับราชการ')
+            ->assertJsonPath('data.profile.personal.nationality_label', 'ไทย')
+            ->assertJsonPath('data.profile.prior_education.school', 'โรงเรียนตัวอย่าง');
+        $this->getJson('/api/v1/students')->assertOk()->assertJsonMissingPath('data.0.profile');
+
+        Sanctum::actingAs($this->viewer('teacher', groups: ['SENA-P1-A']));
+        $this->getJson('/api/v1/students/6650100001')->assertOk()
+            ->assertJsonPath('data.profile.family.mother.name', 'นางมารดา ตัวอย่าง');
+        Sanctum::actingAs($this->viewer('teacher', groups: ['SENA-M2-A']));
+        $this->getJson('/api/v1/students/6650100001')->assertNotFound()->assertJsonMissingPath('data.profile');
+        $otherDistrict = District::query()->create(['name' => 'อำเภออื่น', 'code' => 'profile-other', 'is_active' => true]);
+        Sanctum::actingAs($this->viewer('admin', districtId: $otherDistrict->id));
+        $this->getJson('/api/v1/students/6650100001')->assertNotFound();
+
+        $record = (new DemoStudentRepository)->students([1])[0];
+        $request = Request::create('/api/v1/students/'.$record->code);
+        $resource = new StudentDetailResource($record, ['family' => ['private' => 'ห้ามเปิดเผย']]);
+        $this->assertArrayNotHasKey('profile', $resource->resolve($request));
     }
 
     public function test_student_endpoints_reject_guests(): void

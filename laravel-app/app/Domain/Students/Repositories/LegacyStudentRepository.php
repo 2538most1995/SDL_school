@@ -24,7 +24,7 @@ use InvalidArgumentException;
  * physical table identifier. The configured `legacy` database user must also have
  * SELECT-only grants as defence in depth.
  */
-final class LegacyStudentRepository implements StudentRepository, TermStudentRepository
+final class LegacyStudentRepository implements StudentProfileRepository, StudentRepository, TermStudentRepository
 {
     /** @var array<int, list<LegacyTableSet>> */
     private array $setsByDistrict = [];
@@ -350,6 +350,70 @@ final class LegacyStudentRepository implements StudentRepository, TermStudentRep
         }
 
         return count($historicalMatches) === 1 ? $historicalMatches[0] : null;
+    }
+
+    public function profileFor(Student $student): array
+    {
+        $set = $this->tableSetFor($student);
+        if ($set === null) {
+            return [];
+        }
+
+        // These are character/numeric fields verified against STUDENT.DBF's
+        // descriptors. Memo pointers and arbitrary imported columns are excluded.
+        $fields = [
+            'nation', 'religion', 'occp', 'occtyp', 'tall', 'weight', 'marrystat',
+            'brother', 'studybro',
+            'fa_prename', 'fa_name', 'fa_surname', 'fa_occp', 'fa_salary', 'fa_status',
+            'mo_prename', 'mo_name', 'mo_surname', 'mo_occp', 'mo_salary', 'mo_status',
+            'pa_prename', 'pa_name', 'pa_surname', 'pa_occp', 'pa_salary',
+            's_grad', 's_year', 's_school', 's_province',
+        ];
+        $projection = [];
+        foreach ($fields as $field) {
+            $column = $this->firstExistingColumn($set->student, [$field]);
+            $projection[] = $column === null
+                ? "NULL AS {$this->identifier($field)}"
+                : "s.{$this->identifier($column)} AS {$this->identifier($field)}";
+        }
+        [$where, $bindings] = $this->studentCodeWhereClause($set, $student->code);
+        $table = $this->identifier($set->student);
+        $rows = $this->rows('SELECT '.implode(', ', $projection)." FROM {$table} s WHERE {$where} LIMIT 2", $bindings);
+        if (count($rows) !== 1) {
+            return [];
+        }
+        $row = $rows[0];
+        $text = fn (string $key): ?string => $this->cleanSensitiveText((string) ($row[$key] ?? ''));
+        $member = static function (string $prefix) use ($text): array {
+            $name = trim(implode(' ', array_filter([
+                trim(($text($prefix.'_prename') ?? '').($text($prefix.'_name') ?? '')),
+                $text($prefix.'_surname'),
+            ], static fn (?string $value): bool => $value !== null && $value !== '')));
+
+            return [
+                'name' => $name === '' ? null : $name,
+                'occupation_code' => $text($prefix.'_occp'),
+                'income' => $text($prefix.'_salary'),
+                'status_code' => $text($prefix.'_status'),
+            ];
+        };
+
+        return [
+            'personal' => [
+                'nationality_code' => $text('nation'), 'religion_code' => $text('religion'),
+                'occupation_code' => $text('occp'), 'target_group_code' => $text('occtyp'),
+                'height_cm' => $text('tall'), 'weight_kg' => $text('weight'),
+                'marital_status_code' => $text('marrystat'),
+            ],
+            'family' => [
+                'father' => $member('fa'), 'mother' => $member('mo'), 'guardian' => $member('pa'),
+                'siblings' => $text('brother'), 'studying_siblings' => $text('studybro'),
+            ],
+            'prior_education' => [
+                'qualification_code' => $text('s_grad'), 'graduation_year' => $text('s_year'),
+                'school' => $text('s_school'), 'province' => $text('s_province'),
+            ],
+        ];
     }
 
     /** @return list<Grade> */

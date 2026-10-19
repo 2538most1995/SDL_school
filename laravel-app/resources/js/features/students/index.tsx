@@ -44,6 +44,7 @@ import { showErrorAlert, showSuccessAlert } from '../../lib/feedback';
 import { useLogout } from '../../lib/useLogout';
 import { useRetainedFilterOptions } from '../../lib/useRetainedFilterOptions';
 import { summarizeGradeRows, summarizeGradesByTerm } from './gradeSummary';
+import { StudentProfileTabs, type StudentProfileDetails } from './StudentProfileTabs';
 
 export function EyeViewIcon({ size = 18, className = '' }: { size?: number; className?: string }) {
     return <Eye size={size} weight="bold" className={className} aria-hidden="true" />;
@@ -605,6 +606,8 @@ type StudentDetail = {
     activityHours: number;
     moralResult: string;
     social?: StudentSocial;
+    profile?: StudentProfileDetails;
+    guardian?: { name?: string; phone_masked?: string };
 };
 
 const demoStudent: StudentDetail = {
@@ -721,6 +724,8 @@ export function StudentDetailPage() {
                     facebook_url?: string; facebook_raw?: string; line_id?: string; line_url?: string;
                 };
                 social?: StudentSocial;
+                profile?: StudentProfileDetails;
+                guardian?: { name?: string; phone_masked?: string };
                 demographics?: { citizen_id?: string; citizen_id_masked?: string; birth_date?: string; gender?: string; age?: number; application_date?: string; last_updated?: string };
                 academic: {
                     credits_earned: number; credits_current: number; credits_required: number; gpax: number; kpch_hours: number; moral_result: string;
@@ -736,10 +741,12 @@ export function StudentDetailPage() {
                     district: api.district.name, currentTerm: api.current_term, enrollmentTerm: api.enrollment_term,
                     citizenIdMasked: api.demographics?.citizen_id ?? api.demographics?.citizen_id_masked ?? '-', birthDate: api.demographics?.birth_date ?? '-', gender: api.demographics?.gender ?? '-', age: api.demographics?.age ? String(api.demographics.age) : '-',
                     phone: api.contact?.phone ?? api.contact?.phone_masked ?? '-', email: api.contact?.email ?? api.contact?.email_masked ?? '-',
-                    registeredAddress: api.contact?.registered_address ?? '-', currentAddress: api.contact?.current_address ?? api.contact?.registered_address ?? '-',
+                    registeredAddress: api.contact?.registered_address ?? '-', currentAddress: api.contact?.current_address ?? '-',
                     applicationDate: api.demographics?.application_date ?? '-', lastUpdated: api.demographics?.last_updated ?? '-',
                     creditsEarned: api.academic.credits_earned, creditsCurrent: api.academic.credits_current, creditsRequired: api.academic.credits_required,
                     compulsory: api.academic.compulsory, elective: api.academic.elective, gpax: api.academic.gpax, activityHours: api.academic.kpch_hours, moralResult: api.academic.moral_result,
+                    profile: api.profile,
+                    guardian: api.guardian,
                     social: api.social ?? {
                         facebook_url: api.contact?.facebook_url,
                         facebook_raw: api.contact?.facebook_raw,
@@ -763,72 +770,58 @@ export function StudentDetailPage() {
                 <ArrowLeft size={17} weight="bold" /> กลับไปรายชื่อนักศึกษา
             </Link>
             <PageHeader category={data.code} title={data.name} description={`${data.level} · ${data.group}`} icon={IdentificationCard} />
-            <div className="space-y-5">
-                <Panel title="ข้อมูลประจำตัวและการศึกษา" description="จัดวางข้อมูลเป็นช่องแยกเพื่อให้อ่านง่าย และแสดงข้อมูลส่วนบุคคลเฉพาะผู้ใช้ที่มีสิทธิ์">
-                    <dl className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
-                        {[
-                            ['เลขบัตรประชาชน', data.citizenIdMasked], ['วันเกิด', data.birthDate], ['เพศ', data.gender], ['อายุ', data.age === '-' ? '-' : `${data.age} ปี`],
-                            ['ระดับการศึกษา', data.level], ['กลุ่มเรียน', `${data.group} (${data.groupCode})`], ['ภาคเรียนปัจจุบัน', data.currentTerm], ['ภาคเรียนที่เข้าเรียน', data.enrollmentTerm],
-                            ['พื้นที่', data.district], ['วันที่สมัคร', data.applicationDate], ['ปรับปรุงข้อมูลล่าสุด', data.lastUpdated],
-                        ].map(([label, value]) => (
-                            <div key={label} className="min-w-0 rounded-xl bg-slate-50 p-4">
-                                <dt className="text-xs font-bold leading-5 text-slate-500">{label}</dt><dd className="mt-1 break-words text-base font-bold leading-7 text-slate-950">{value}</dd>
-                            </div>
-                        ))}
-                    </dl>
-                    <div className="mt-6 border-t border-slate-100 pt-5">
-                        <div className="flex flex-wrap items-center justify-between gap-3 mb-3">
-                            <h3 className="text-base font-black text-slate-950">ที่อยู่และข้อมูลติดต่อ</h3>
-                            {canEditSocial && (
-                                <button
-                                    type="button"
-                                    onClick={() => setEditingSocial(true)}
-                                    className="inline-flex items-center gap-1.5 rounded-xl border border-brand-200 bg-brand-50 px-3 py-1.5 text-xs font-bold text-brand-800 hover:bg-brand-100 active:scale-[0.98]"
-                                >
-                                    <PencilSimple size={15} weight="bold" />
-                                    <span>จัดการ Facebook & LINE</span>
-                                </button>
-                            )}
-                        </div>
-                        <dl className="grid gap-3 sm:grid-cols-2">
-                            <div className="min-w-0 rounded-xl bg-brand-50 p-4"><dt className="text-xs font-bold text-brand-800">โทรศัพท์</dt><dd className="mt-1 break-words font-bold leading-7 text-slate-950">{data.phone}</dd></div>
-                            <div className="min-w-0 rounded-xl bg-brand-50 p-4"><dt className="text-xs font-bold text-brand-800">อีเมล</dt><dd className="mt-1 break-all font-bold leading-7 text-slate-950">{data.email}</dd></div>
-                            <div className="min-w-0 rounded-xl border border-blue-100 bg-blue-50/70 p-4">
-                                <dt className="flex items-center justify-between text-xs font-bold text-[#1877F2]">
-                                    <span className="flex items-center gap-1.5"><FacebookIcon className="size-4" /> Facebook</span>
-                                    {data.social?.facebook_url && (
-                                        <a href={data.social.facebook_url} target="_blank" rel="noopener noreferrer" className="inline-flex items-center gap-1 text-xs font-bold text-[#1877F2] hover:underline">
-                                            <span>เปิดโปรไฟล์</span> <ArrowSquareOut size={13} weight="bold" />
-                                        </a>
-                                    )}
-                                </dt>
-                                <dd className="mt-1 break-words font-bold leading-7 text-slate-950">
-                                    {data.social?.facebook_raw || data.social?.facebook_url || <span className="font-normal text-slate-400">ยังไม่ได้ระบุ</span>}
-                                </dd>
-                            </div>
-                            <div className="min-w-0 rounded-xl border border-emerald-100 bg-emerald-50/70 p-4">
-                                <dt className="flex items-center justify-between text-xs font-bold text-[#059639]">
-                                    <span className="flex items-center gap-1.5"><LineIcon className="size-4" /> LINE</span>
-                                    {(data.social?.line_url || data.social?.line_id) && (
-                                        <a href={data.social.line_url ?? `https://line.me/ti/p/~${data.social.line_id}`} target="_blank" rel="noopener noreferrer" className="inline-flex items-center gap-1 text-xs font-bold text-[#059639] hover:underline">
-                                            <span>เปิด LINE</span> <ArrowSquareOut size={13} weight="bold" />
-                                        </a>
-                                    )}
-                                </dt>
-                                <dd className="mt-1 break-words font-bold leading-7 text-slate-950">
-                                    {data.social?.line_id ? (
-                                        <span className="font-mono">{data.social.line_id}</span>
-                                    ) : (
-                                        <span className="font-normal text-slate-400">ยังไม่ได้ระบุ</span>
-                                    )}
-                                </dd>
-                            </div>
-                            <div className="min-w-0 rounded-xl bg-slate-50 p-4"><dt className="text-xs font-bold text-slate-500">ที่อยู่ตามทะเบียน</dt><dd className="mt-1 whitespace-pre-wrap break-words font-bold leading-7 text-slate-950">{data.registeredAddress}</dd></div>
-                            <div className="min-w-0 rounded-xl bg-slate-50 p-4"><dt className="text-xs font-bold text-slate-500">ที่อยู่ปัจจุบัน</dt><dd className="mt-1 whitespace-pre-wrap break-words font-bold leading-7 text-slate-950">{data.currentAddress}</dd></div>
-                        </dl>
+            <StudentProfileTabs key={studentId} student={data} addressContent={
+                <Panel title="ที่อยู่และข้อมูลติดต่อ" description="ที่อยู่ตามทะเบียน ที่อยู่ปัจจุบัน และช่องทางติดต่อ">
+                    <div className="mb-4 flex justify-end">
+                        {canEditSocial && (
+                            <button
+                                type="button"
+                                onClick={() => setEditingSocial(true)}
+                                className="inline-flex items-center gap-1.5 rounded-xl border border-brand-200 bg-brand-50 px-3 py-1.5 text-xs font-bold text-brand-800 hover:bg-brand-100 active:scale-[0.98]"
+                            >
+                                <PencilSimple size={15} weight="bold" />
+                                <span>จัดการ Facebook & LINE</span>
+                            </button>
+                        )}
                     </div>
+                    <dl className="grid gap-3 sm:grid-cols-2">
+                        <div className="min-w-0 rounded-xl bg-brand-50 p-4"><dt className="text-xs font-bold text-brand-800">โทรศัพท์</dt><dd className="mt-1 break-words font-bold leading-7 text-slate-950">{data.phone}</dd></div>
+                        <div className="min-w-0 rounded-xl bg-brand-50 p-4"><dt className="text-xs font-bold text-brand-800">อีเมล</dt><dd className="mt-1 break-all font-bold leading-7 text-slate-950">{data.email}</dd></div>
+                        <div className="min-w-0 rounded-xl border p-4" style={{ borderColor: 'var(--ui-border)', background: 'var(--ui-surface-muted)' }}>
+                            <dt className="flex items-center justify-between text-xs font-bold text-[#1877F2]">
+                                <span className="flex items-center gap-1.5"><FacebookIcon className="size-4" /> Facebook</span>
+                                {data.social?.facebook_url && (
+                                    <a href={data.social.facebook_url} target="_blank" rel="noopener noreferrer" className="inline-flex items-center gap-1 text-xs font-bold text-[#1877F2] hover:underline">
+                                        <span>เปิดโปรไฟล์</span> <ArrowSquareOut size={13} weight="bold" />
+                                    </a>
+                                )}
+                            </dt>
+                            <dd className="mt-1 break-words font-bold leading-7 text-slate-950">
+                                {data.social?.facebook_raw || data.social?.facebook_url || <span className="font-normal text-slate-400">ยังไม่ได้ระบุ</span>}
+                            </dd>
+                        </div>
+                        <div className="min-w-0 rounded-xl border p-4" style={{ borderColor: 'var(--ui-border)', background: 'var(--ui-surface-muted)' }}>
+                            <dt className="flex items-center justify-between text-xs font-bold text-[#059639]">
+                                <span className="flex items-center gap-1.5"><LineIcon className="size-4" /> LINE</span>
+                                {(data.social?.line_url || data.social?.line_id) && (
+                                    <a href={data.social.line_url ?? `https://line.me/ti/p/~${data.social.line_id}`} target="_blank" rel="noopener noreferrer" className="inline-flex items-center gap-1 text-xs font-bold text-[#059639] hover:underline">
+                                        <span>เปิด LINE</span> <ArrowSquareOut size={13} weight="bold" />
+                                    </a>
+                                )}
+                            </dt>
+                            <dd className="mt-1 break-words font-bold leading-7 text-slate-950">
+                                {data.social?.line_id ? (
+                                    <span className="font-mono">{data.social.line_id}</span>
+                                ) : (
+                                    <span className="font-normal text-slate-400">ยังไม่ได้ระบุ</span>
+                                )}
+                            </dd>
+                        </div>
+                        <div className="min-w-0 rounded-xl bg-slate-50 p-4"><dt className="text-xs font-bold text-slate-500">ที่อยู่ตามทะเบียน</dt><dd className="mt-1 whitespace-pre-wrap break-words font-bold leading-7 text-slate-950">{data.registeredAddress}</dd></div>
+                        <div className="min-w-0 rounded-xl bg-slate-50 p-4"><dt className="text-xs font-bold text-slate-500">ที่อยู่ปัจจุบัน</dt><dd className="mt-1 whitespace-pre-wrap break-words font-bold leading-7 text-slate-950">{data.currentAddress}</dd></div>
+                    </dl>
                 </Panel>
-            </div>
+            } />
             {editingSocial && (
                 <StudentSocialModal
                     student={{ code: data.code, name: data.name, social: data.social }}

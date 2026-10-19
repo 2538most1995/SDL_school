@@ -10,6 +10,12 @@ use Illuminate\Http\Resources\Json\JsonResource;
 /** @mixin Student */
 final class StudentDetailResource extends JsonResource
 {
+    /** @param array<string, mixed> $profileDetails */
+    public function __construct($resource, private readonly array $profileDetails = [])
+    {
+        parent::__construct($resource);
+    }
+
     /** @return array<string, mixed> */
     public function toArray(Request $request): array
     {
@@ -17,6 +23,7 @@ final class StudentDetailResource extends JsonResource
         $viewer = $request->user();
 
         if ($viewer !== null && StudentAccessScope::forUser($viewer)->allows($this->resource)) {
+            $data['profile'] = $this->profileDetails;
             if ($this->resource->citizenId !== null) {
                 $data['demographics']['citizen_id'] = $this->resource->citizenId;
             }

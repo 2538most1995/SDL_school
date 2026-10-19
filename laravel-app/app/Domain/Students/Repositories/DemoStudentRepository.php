@@ -12,7 +12,7 @@ use App\Domain\Students\Models\Student;
  * Canonical synthetic dataset used while legacy DBF imports are being migrated.
  * No query in this repository connects to the production or import databases.
  */
-final class DemoStudentRepository implements StudentRepository
+final class DemoStudentRepository implements StudentProfileRepository, StudentRepository
 {
     /** @param list<int>|null $districtIds
      * @return list<Student>
@@ -45,6 +45,23 @@ final class DemoStudentRepository implements StudentRepository
         }
 
         return null;
+    }
+
+    public function profileFor(Student $student): array
+    {
+        return [
+            'personal' => ['nationality_code' => '099', 'occupation_code' => '01'],
+            'family' => [
+                'father' => ['name' => 'นายบิดา ตัวอย่าง', 'occupation_code' => '01', 'income' => '15000'],
+                'mother' => ['name' => 'นางมารดา ตัวอย่าง', 'occupation_code' => '02', 'income' => '12000'],
+                'guardian' => ['name' => $student->guardian['name'] ?? null],
+                'siblings' => '2', 'studying_siblings' => '1',
+            ],
+            'prior_education' => [
+                'qualification_code' => '02', 'graduation_year' => '2566',
+                'school' => 'โรงเรียนตัวอย่าง', 'province' => 'พระนครศรีอยุธยา',
+            ],
+        ];
     }
 
     /** @return list<Grade> */

@@ -278,3 +278,9 @@ Score-control UI refinement (2026-10-15): entry is a filled primary button; if a
 หน้า **ข้อมูลนักศึกษา** มีตัวเลือกภาคเรียน เริ่มต้นที่เทอมล่าสุดจากชุดนำเข้าปัจจุบันของอำเภอเสมอ เช่น 1/2569 และเลือกดูรายชื่อที่ลงทะเบียนในเทอมเก่า เช่น 2/2568 ได้ ปุ่มล้างตัวกรองจะกลับสู่เทอมปัจจุบัน การค้นหา สถิติ การแบ่งหน้า และส่งออก Excel ของหน้าปัจจุบันอิงรายชื่อในเทอมที่เลือก สิทธิ์อำเภอและกลุ่มครูยังคงเดิม
 
 เลือกได้เฉพาะเทอมที่มีในชุดนำเข้าล่าสุด ข้อมูลส่วนตัว กลุ่มเรียน และ GPAX สะสมยังเป็นค่าจากชุดนำเข้าปัจจุบัน ไม่ใช่ snapshot ย้อนหลัง ไม่มี migration ใหม่และไม่ต้องนำเข้าซ้ำ หลังดึง Git ให้รัน `php artisan optimize:clear`; production assets ที่ build แล้วรวมอยู่ใน Git
+
+## Student detail tabs (2026-10-19)
+
+Open a student's details from the student directory to view Personal, Addresses/contact, Family, and Prior education tabs. Personal is selected initially. Keyboard arrows/Home/End navigate the tabs, and mobile tabs scroll within their own strip. Family includes father, mother, guardian and sibling information; prior education shows the qualification code, graduation year, school and province available in ITW data. Facebook/LINE editing remains under Addresses/contact.
+
+Missing source values display an empty-data label while zero remains zero. Current address is not silently replaced with the registered address. Nationality, occupation and target-group labels reuse existing system dictionaries. Religion/status/prior-qualification values retain explicit code labels where no dictionary exists. District/teacher-group permissions remain enforced. No migration, import replay or source-data change is required. After pulling Git, run `php artisan optimize:clear`; the production build is included.

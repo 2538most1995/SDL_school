@@ -3,9 +3,11 @@
 namespace App\Domain\Students\Services;
 
 use App\Domain\Students\Models\Student;
+use App\Domain\Students\Repositories\StudentProfileRepository;
 use App\Domain\Students\Repositories\StudentRepository;
 use App\Domain\Students\Repositories\TermStudentRepository;
 use App\Domain\Students\Support\AcademicTerm;
+use App\Domain\Students\Support\RegistrationStatistics;
 use App\Domain\Students\Support\StudentAccessScope;
 use App\Domain\Students\Support\StudentIdentityGuard;
 use App\Models\User;
@@ -160,6 +162,32 @@ final readonly class StudentDirectoryService
         }
 
         return null;
+    }
+
+    /** @return array<string, mixed> */
+    public function profileDetails(User $viewer, Student $student): array
+    {
+        if (! StudentAccessScope::forUser($viewer)->allows($student)) {
+            return [];
+        }
+
+        $profile = $this->repository instanceof StudentProfileRepository
+            ? $this->repository->profileFor($student)
+            : [];
+        foreach (['nationality' => 'nationality', 'occupation' => 'occupation', 'target_group' => 'target_group'] as $field => $category) {
+            $code = trim((string) ($profile['personal'][$field.'_code'] ?? ''));
+            if ($code !== '') {
+                $profile['personal'][$field.'_label'] = RegistrationStatistics::itemLabel($category, $code);
+            }
+        }
+        foreach (['father', 'mother', 'guardian'] as $member) {
+            $code = trim((string) ($profile['family'][$member]['occupation_code'] ?? ''));
+            if ($code !== '') {
+                $profile['family'][$member]['occupation_label'] = RegistrationStatistics::itemLabel('occupation', $code);
+            }
+        }
+
+        return $profile;
     }
 
     /** @return list<Student> */

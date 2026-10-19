@@ -44,7 +44,7 @@ final class StudentDirectoryController extends StudentsApiController
         abort_if($record === null, 404, 'ไม่พบข้อมูลนักศึกษา');
 
         return response()->json([
-            'data' => (new StudentDetailResource($record))->resolve($request),
+            'data' => (new StudentDetailResource($record, $this->directory->profileDetails($request->user(), $record)))->resolve($request),
             'meta' => $this->meta(),
         ])->header('Cache-Control', 'private, no-store');
     }

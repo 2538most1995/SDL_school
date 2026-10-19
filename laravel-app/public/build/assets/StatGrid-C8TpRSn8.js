@@ -1,0 +1,1 @@
+import{Ct as e,k as t}from"./IconBase.es-BS8GG0m8.js";var n=e();function r({children:e,columns:r=4}){return(0,n.jsx)(t,{component:`section`,"aria-label":`ข้อมูลสรุป`,className:`ui-stat-grid`,"data-columns":r,sx:{display:`grid`,gap:{xs:1.5,sm:1.75},mb:2},children:e})}export{r as t};

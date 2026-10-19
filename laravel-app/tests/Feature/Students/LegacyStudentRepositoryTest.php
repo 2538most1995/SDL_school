@@ -78,6 +78,83 @@ final class LegacyStudentRepositoryTest extends TestCase
         $this->assertStringContainsString('latest_students', $queries[array_key_last($queries)][0]);
     }
 
+    public function test_profile_query_runs_on_partial_import_schema_without_modifying_rows(): void
+    {
+        $connection = DB::connection();
+        $table = 'db_import_1700000000_abc_1_student';
+        $connection->statement("CREATE TABLE {$table} (_perf_id10 TEXT, FA_NAME TEXT, FA_SALARY NUMERIC, S_SCHOOL TEXT)");
+        try {
+            $student = (new DemoStudentRepository)->students([1])[0];
+            $connection->table($table)->insert([
+                '_perf_id10' => $student->code, 'FA_NAME' => 'บิดาทดสอบ',
+                'FA_SALARY' => 0, 'S_SCHOOL' => 'โรงเรียนเดิมทดสอบ',
+            ]);
+            $repository = new LegacyStudentRepository($connection);
+            $set = new LegacyTableSet(1, 'ทดสอบ', 'import_1700000000_abc', 1,
+                $table, 'db_import_1700000000_abc_1_grade',
+                'db_import_1700000000_abc_1_subject', null, null, null);
+            (new \ReflectionProperty($repository, 'setsByDistrict'))->setValue($repository, [1 => [$set]]);
+            $before = $connection->table($table)->first();
+            $profile = $repository->profileFor($student);
+            $this->assertSame('บิดาทดสอบ', $profile['family']['father']['name']);
+            $this->assertSame('0', $profile['family']['father']['income']);
+            $this->assertSame('โรงเรียนเดิมทดสอบ', $profile['prior_education']['school']);
+            $this->assertNull($profile['prior_education']['graduation_year']);
+            $this->assertEquals($before, $connection->table($table)->first());
+        } finally {
+            $connection->statement("DROP TABLE {$table}");
+        }
+    }
+
+    public function test_profile_reads_only_allowlisted_fields_and_preserves_zero_values(): void
+    {
+        $queries = [];
+        $rows = [[
+            'fa_prename' => 'นาย', 'fa_name' => 'บิดา', 'fa_surname' => 'ทดสอบ',
+            'fa_salary' => '0', 'mo_name' => 'มารดา', 'brother' => '0',
+            'studybro' => null, 's_school' => 'โรงเรียนทดสอบ', 's_year' => '2568',
+            's_grad' => '02', 's_province' => 'อยุธยา', 'nation' => '099',
+        ]];
+        $connection = Mockery::mock(ConnectionInterface::class);
+        $connection->shouldReceive('select')->andReturnUsing(function (string $query, array $bindings) use (&$queries, &$rows): array {
+            $queries[] = [$query, $bindings];
+            if (str_contains($query, 'INFORMATION_SCHEMA.COLUMNS')) {
+                return array_map(static fn (string $column): object => (object) ['column_name' => strtoupper($column)], [
+                    'id', 'fa_prename', 'fa_name', 'fa_surname', 'fa_salary', 'mo_name',
+                    'brother', 'studybro', 's_school', 's_year', 's_grad', 's_province', 'nation',
+                ]);
+            }
+
+            return array_map(static fn (array $row): object => (object) $row, $rows);
+        });
+        $repository = new LegacyStudentRepository($connection);
+        $set = new LegacyTableSet(1, 'ทดสอบ', 'import_1700000000_A', 1,
+            'db_import_1700000000_A_1_student', 'db_import_1700000000_A_1_grade',
+            'db_import_1700000000_A_1_subject', null, null, null);
+        (new \ReflectionProperty($repository, 'setsByDistrict'))->setValue($repository, [1 => [$set]]);
+        $student = (new DemoStudentRepository)->students([1])[0];
+        $profile = $repository->profileFor($student);
+        $this->assertSame('นายบิดา ทดสอบ', $profile['family']['father']['name']);
+        $this->assertSame('0', $profile['family']['father']['income']);
+        $this->assertSame('0', $profile['family']['siblings']);
+        $this->assertNull($profile['family']['studying_siblings']);
+        $this->assertSame('โรงเรียนทดสอบ', $profile['prior_education']['school']);
+        $this->assertSame('02', $profile['prior_education']['qualification_code']);
+        $this->assertSame('099', $profile['personal']['nationality_code']);
+        $this->assertNull($profile['personal']['religion_code']);
+        [$query, $bindings] = $queries[array_key_last($queries)];
+        $this->assertStringContainsString('s.`FA_NAME` AS `fa_name`', $query);
+        $this->assertStringNotContainsString('SELECT *', $query);
+        $this->assertStringNotContainsString('PICFILE', $query);
+        $this->assertStringContainsString('LIMIT 2', $query);
+        $this->assertNotEmpty($bindings);
+        $this->assertStringNotContainsString($student->code, $query);
+        $rows = [$rows[0], $rows[0]];
+        $this->assertSame([], $repository->profileFor($student));
+        $rows = [];
+        $this->assertSame([], $repository->profileFor($student));
+    }
+
     public function test_phone_uses_valid_database_text_when_memo_files_are_unavailable(): void
     {
         $repository = new LegacyStudentRepository(

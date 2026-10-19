@@ -200,3 +200,7 @@ A 650 ms debounce coalesces typing, blur flushes the current row, and one queue 
 ### Student directory term selection (2026-10-19)
 
 Term discovery reads DISTINCT `_perf_semestry` from grade tables of the active successful district batch, with the existing `_perf_expsem` fallback only when no valid grade term exists. Normalized terms are memoized per table set during the repository lifetime; student caches include district scope and selected term. Historical roster membership uses the existing indexed `_perf_std10`/`_perf_id10` EXISTS join with bound academic-term variants; aggregate queries remain restricted to the selected cohort. No migration/index added. Live MySQL EXPLAIN and production-scale latency: Not verified.
+
+### Student profile tabs (2026-10-19)
+
+The detail view adds one bounded single-student SELECT (LIMIT 2 to reject ambiguous identities) against its already-resolved district/level active table set. Only allowlisted existing columns are projected; missing columns use NULL. It reuses cached column metadata and bound identity predicates. Roster/API integration paths make no added profile query, and switching tabs causes no network request. No persistent profile cache, index or migration added. SQLite fixture verified the partial-schema query and unchanged rows; live MySQL EXPLAIN and production-scale latency: Not verified.
