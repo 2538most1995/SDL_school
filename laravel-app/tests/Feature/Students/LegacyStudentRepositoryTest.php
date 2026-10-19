@@ -53,6 +53,31 @@ final class LegacyStudentRepositoryTest extends TestCase
         $this->assertFalse($regularChosen[0]->remedial);
     }
 
+    public function test_historical_roster_query_uses_bound_term_variants_without_recent_students(): void
+    {
+        $queries = [];
+        $connection = Mockery::mock(ConnectionInterface::class);
+        $connection->shouldReceive('select')->andReturnUsing(function (string $query, array $bindings) use (&$queries): array {
+            $queries[] = [$query, $bindings];
+
+            return [];
+        });
+        $repository = new LegacyStudentRepository($connection);
+        $set = new LegacyTableSet(1, 'ทดสอบ', 'import_1700000000_A', 1,
+            'db_import_1700000000_A_1_student', 'db_import_1700000000_A_1_grade',
+            'db_import_1700000000_A_1_subject', null, null, null);
+        $method = new \ReflectionMethod($repository, 'activeStudentRows');
+        $method->invoke($repository, $set, '2/2568', false);
+        [$historicalSql, $bindings] = $queries[array_key_last($queries)];
+        $this->assertStringContainsString('active_grade._perf_std10 = s._perf_id10', $historicalSql);
+        $this->assertStringNotContainsString('latest_students', $historicalSql);
+        $this->assertContains('68/2', $bindings);
+        $this->assertContains('2/2568', $bindings);
+        $this->assertStringNotContainsString('2/2568', $historicalSql);
+        $method->invoke($repository, $set, '1/2569', true);
+        $this->assertStringContainsString('latest_students', $queries[array_key_last($queries)][0]);
+    }
+
     public function test_phone_uses_valid_database_text_when_memo_files_are_unavailable(): void
     {
         $repository = new LegacyStudentRepository(
@@ -143,7 +168,7 @@ final class LegacyStudentRepositoryTest extends TestCase
                     str_contains($query, 'AS hours') => [
                         (object) ['code' => '6650100001', 'hours' => '128'],
                     ],
-                    str_contains($query, 'latest_students') => [
+                    str_contains($query, 'active_grade._perf_std10') => [
                         (object) [
                             'code' => '6650100001',
                             'prename' => 'นาย',
@@ -241,6 +266,14 @@ final class LegacyStudentRepositoryTest extends TestCase
         $this->assertCount(1, $repository->kpchFor($student));
         $this->assertNull($repository->kpchFor($student)[0]->completedOn);
         $this->assertSame('ดีมาก', $repository->moralFor($student)[0]->result);
+
+        $this->assertSame(['2/2568', '1/2568'], $repository->availableTerms([1]));
+        $historical = $repository->studentsForTerm([1], '68/1');
+        $this->assertCount(1, $historical);
+        $this->assertSame('1/2568', $historical[0]->currentTerm);
+        $this->assertSame('2/2568', $repository->students([1])[0]->currentTerm);
+        $this->assertSame([], $repository->studentsForTerm([], '1/2568'));
+        $this->assertSame([], $repository->studentsForTerm([1], 'invalid'));
 
         $dynamicQueries = array_values(array_filter($queries, static fn (string $query): bool => str_contains($query, 'db_import_')));
         $this->assertNotEmpty($dynamicQueries);

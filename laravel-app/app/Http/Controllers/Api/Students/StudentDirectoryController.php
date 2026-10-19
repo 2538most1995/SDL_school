@@ -27,7 +27,7 @@ final class StudentDirectoryController extends StudentsApiController
             'page' => ['nullable', 'integer', 'min:1'],
             'per_page' => ['nullable', 'integer', 'min:1', 'max:1000'],
         ]);
-        $result = $this->directory->paginate($request->user(), $filters);
+        $result = $this->directory->paginate($request->user(), $filters, selectAcademicTerm: true);
 
         return response()->json([
             'data' => array_map(

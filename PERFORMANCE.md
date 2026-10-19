@@ -196,3 +196,7 @@ The former immutable-batch academic-cache assumption no longer holds for grade v
 ## Score-entry autosave requests (2026-10-15)
 
 A 650 ms debounce coalesces typing, blur flushes the current row, and one queue serializes writes to avoid district-lock contention. Edits during an in-flight save retain the latest draft and chain the returned token. Errors stop retries until correction/user action; stale tokens require explicit row reload. Finishing drains saves before one completion request. GET loads completion flags in one scoped visible-page query; finishing reads grade candidates once per level (at most three queries) and bulk-upserts metadata. Entry suspends refetch/filter/pagination; compact column views reduce rendering and horizontal scrolling. Reports are invalidated after completion. Synthetic concurrency/queue tests pass. Production throughput/EXPLAIN and physical mobile-device entry: Not verified.
+
+### Student directory term selection (2026-10-19)
+
+Term discovery reads DISTINCT `_perf_semestry` from grade tables of the active successful district batch, with the existing `_perf_expsem` fallback only when no valid grade term exists. Normalized terms are memoized per table set during the repository lifetime; student caches include district scope and selected term. Historical roster membership uses the existing indexed `_perf_std10`/`_perf_id10` EXISTS join with bound academic-term variants; aggregate queries remain restricted to the selected cohort. No migration/index added. Live MySQL EXPLAIN and production-scale latency: Not verified.

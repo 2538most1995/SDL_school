@@ -272,3 +272,9 @@ Verification for autosave/completion (2026-10-15): PHP suite 445 tests, 444 pass
 
 
 Score-control UI refinement (2026-10-15): entry is a filled primary button; if all visible rows are complete it stays disabled and explains individual correction. The old student/scores/audit scroll shortcut buttons are removed. A compact status/finish toolbar stays fixed below the app header while entering, and individual edit buttons are smaller. This refinement adds no migrations and does not modify stored scores.
+
+## เลือกภาคเรียนในหน้าข้อมูลนักศึกษา (19 ตุลาคม 2569)
+
+หน้า **ข้อมูลนักศึกษา** มีตัวเลือกภาคเรียน เริ่มต้นที่เทอมล่าสุดจากชุดนำเข้าปัจจุบันของอำเภอเสมอ เช่น 1/2569 และเลือกดูรายชื่อที่ลงทะเบียนในเทอมเก่า เช่น 2/2568 ได้ ปุ่มล้างตัวกรองจะกลับสู่เทอมปัจจุบัน การค้นหา สถิติ การแบ่งหน้า และส่งออก Excel ของหน้าปัจจุบันอิงรายชื่อในเทอมที่เลือก สิทธิ์อำเภอและกลุ่มครูยังคงเดิม
+
+เลือกได้เฉพาะเทอมที่มีในชุดนำเข้าล่าสุด ข้อมูลส่วนตัว กลุ่มเรียน และ GPAX สะสมยังเป็นค่าจากชุดนำเข้าปัจจุบัน ไม่ใช่ snapshot ย้อนหลัง ไม่มี migration ใหม่และไม่ต้องนำเข้าซ้ำ หลังดึง Git ให้รัน `php artisan optimize:clear`; production assets ที่ build แล้วรวมอยู่ใน Git

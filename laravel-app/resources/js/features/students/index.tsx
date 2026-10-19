@@ -318,6 +318,8 @@ function shortEducationLevel(level: string): string {
 type FilterOption = { value: string | number; label: string };
 type StudentDirectoryMeta = {
     mode?: string;
+    current_term?: string | null;
+    selected_term?: string | null;
     pagination: { current_page: number; per_page: number; total: number; last_page: number; from: number | null; to: number | null };
     filter_options: { levels: FilterOption[]; groups: FilterOption[]; terms: FilterOption[]; districts: FilterOption[] };
     summary: { total: number; male: number; female: number; groups: number; levels: number; average_gpax: number | null };
@@ -328,6 +330,7 @@ export function StudentsPage() {
     const [search, setSearch] = useState('');
     const [level, setLevel] = useState('');
     const [group, setGroup] = useState('');
+    const [term, setTerm] = useState('');
     const [page, setPage] = useState(1);
     const [perPage, setPerPage] = useState(25);
     const [filtersOpen, setFiltersOpen] = useState(true);
@@ -336,20 +339,21 @@ export function StudentsPage() {
     const canFilterGroups = role === 'teacher' || role === 'admin' || role === 'super_admin';
     const canEditSocial = role === 'teacher' || role === 'admin' || role === 'super_admin';
 
-    useEffect(() => setPage(1), [deferredSearch, level, group, perPage]);
+    useEffect(() => setPage(1), [deferredSearch, level, group, term, perPage]);
     useEffect(() => { if (!canFilterGroups && group !== '') setGroup(''); }, [canFilterGroups, group]);
 
     const queryString = useMemo(() => {
         const params = new URLSearchParams({ page: String(page), per_page: String(perPage) });
         if (deferredSearch) params.set('search', deferredSearch);
         if (level) params.set('level', level);
+        if (term) params.set('term', term);
         if (canFilterGroups && group) params.set('group', group);
 
         return params.toString();
-    }, [canFilterGroups, deferredSearch, group, level, page, perPage]);
+    }, [canFilterGroups, deferredSearch, group, level, term, page, perPage]);
 
     const students = useQuery({
-        queryKey: ['students', { search: deferredSearch, level, group, page, perPage }],
+        queryKey: ['students', { search: deferredSearch, level, group, term, page, perPage }],
         queryFn: async ({ signal }) => {
             type StudentApi = {
                 code: string;
@@ -390,6 +394,8 @@ export function StudentsPage() {
     const meta = students.data?.meta;
     const pagination = meta?.pagination;
     const summary = meta?.summary;
+    const selectedTerm = term || meta?.selected_term || '';
+    const isHistoricalTerm = Boolean(term && term !== meta?.current_term);
     const retainedGroupOptions = useRetainedFilterOptions(
         (meta?.filter_options.groups ?? []).map((option) => ({ value: String(option.value), label: option.label })),
         group,
@@ -507,6 +513,7 @@ export function StudentsPage() {
         setSearch('');
         setLevel('');
         setGroup('');
+        setTerm('');
         setPage(1);
     };
 
@@ -515,10 +522,10 @@ export function StudentsPage() {
             <PageHeader
                 category="ฐานข้อมูลนักศึกษา"
                 title="ข้อมูลนักศึกษา"
-                description="ค้นหาและดูข้อมูลนักศึกษาภาคเรียนล่าสุด แยกตามระดับชั้นและกลุ่มเรียน"
+                description="เลือกดูข้อมูลนักศึกษาตามภาคเรียน ระดับชั้น และกลุ่มเรียน"
                 icon={UsersThree}
                 illustration
-                actions={<StatusBadge tone="success">ข้อมูลภาคเรียนล่าสุด</StatusBadge>}
+                actions={<StatusBadge tone="success">{meta?.selected_term ? `ภาคเรียน ${meta.selected_term}${meta.selected_term === meta.current_term ? ' (ปัจจุบัน)' : ''}` : 'ข้อมูลภาคเรียนปัจจุบัน'}</StatusBadge>}
             />
 
             <StatGrid>
@@ -528,8 +535,14 @@ export function StudentsPage() {
                 <StatTile label="GPAX เฉลี่ย" value={summary?.average_gpax ?? '-'} detail="จากคะแนนเต็ม 4.00" icon={ChartLineUp} tone="violet" />
             </StatGrid>
 
-            <Panel title="รายชื่อนักศึกษา" icon={UsersThree} description={pagination ? `แสดง ${pagination.from ?? 0}-${pagination.to ?? 0} จากทั้งหมด ${pagination.total} คน` : 'ข้อมูลส่วนบุคคลละเอียดจะแสดงตามสิทธิ์ของผู้ใช้งาน'} action={<div className="flex flex-wrap items-center gap-2"><FilterToggle expanded={filtersOpen} controls="student-directory-filters" activeCount={[search, level, group].filter(Boolean).length} onToggle={() => setFiltersOpen((open) => !open)} />{(search || level || group) && <Button type="button" appearance="subtle" icon={<X size={15} />} onClick={resetFilters}>ล้างตัวกรองทั้งหมด</Button>}</div>}>
-                <FilterGrid id="student-directory-filters" open={filtersOpen} columns={canFilterGroups ? 3 : 2}>
+            <Panel title="รายชื่อนักศึกษา" icon={UsersThree} description={pagination ? `แสดง ${pagination.from ?? 0}-${pagination.to ?? 0} จากทั้งหมด ${pagination.total} คน` : 'ข้อมูลส่วนบุคคลละเอียดจะแสดงตามสิทธิ์ของผู้ใช้งาน'} action={<div className="flex flex-wrap items-center gap-2"><FilterToggle expanded={filtersOpen} controls="student-directory-filters" activeCount={[search, level, group, isHistoricalTerm].filter(Boolean).length} onToggle={() => setFiltersOpen((open) => !open)} />{(search || level || group || isHistoricalTerm) && <Button type="button" appearance="subtle" icon={<X size={15} />} onClick={resetFilters}>ล้างตัวกรองทั้งหมด</Button>}</div>}>
+                <FilterGrid id="student-directory-filters" open={filtersOpen} columns={canFilterGroups ? 4 : 3}>
+                    <Field label="ภาคเรียน">
+                        <Select value={selectedTerm} onChange={(_, data) => { setTerm(data.value); setGroup(''); setPage(1); }} size="large" disabled={students.isPending}>
+                            {!meta?.filter_options.terms?.length && <option value="">ภาคเรียนปัจจุบัน</option>}
+                            {(meta?.filter_options.terms ?? []).map((option) => <option key={option.value} value={String(option.value)}>{option.label}{String(option.value) === meta?.current_term ? ' (ปัจจุบัน)' : ''}</option>)}
+                        </Select>
+                    </Field>
                     <Field label="ค้นหา">
                         <Input value={search} onChange={(_, data) => setSearch(data.value)} contentBefore={<MagnifyingGlass size={18} aria-hidden="true" />} placeholder="ชื่อ รหัส หรือกลุ่ม" size="large" />
                     </Field>
@@ -550,7 +563,7 @@ export function StudentsPage() {
                 </FilterGrid>
                 {students.isPending && <QuerySkeleton />}
                 {students.isError && <QueryError onRetry={() => students.refetch()} />}
-                {students.data && <DataTable data={rows} columns={columns} pageSize={perPage} showPagination={false} minWidth="wide" responsiveMode="cards" emptyTitle="ไม่พบนักศึกษา" emptyDescription="ลองเปลี่ยนคำค้น ระดับ หรือกลุ่มเรียน" />}
+                {students.data && <DataTable data={rows} columns={columns} disableExport={students.isFetching || students.isError} pageSize={perPage} showPagination={false} minWidth="wide" responsiveMode="cards" emptyTitle="ไม่พบนักศึกษา" emptyDescription="ลองเปลี่ยนคำค้น ระดับ หรือกลุ่มเรียน" />}
                 {pagination && <Pagination currentPage={pagination.current_page} totalPages={pagination.last_page} totalItems={pagination.total} pageSize={perPage} itemLabel="คน" disabled={students.isFetching} onPageChange={setPage} onPageSizeChange={(nextPageSize) => { setPerPage(nextPageSize); setPage(1); }} />}
             </Panel>
             {editingSocialStudent && (

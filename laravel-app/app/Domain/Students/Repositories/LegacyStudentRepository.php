@@ -24,7 +24,7 @@ use InvalidArgumentException;
  * physical table identifier. The configured `legacy` database user must also have
  * SELECT-only grants as defence in depth.
  */
-final class LegacyStudentRepository implements StudentRepository
+final class LegacyStudentRepository implements StudentRepository, TermStudentRepository
 {
     /** @var array<int, list<LegacyTableSet>> */
     private array $setsByDistrict = [];
@@ -37,6 +37,9 @@ final class LegacyStudentRepository implements StudentRepository
 
     private array $scoreRevisions = [];
 
+    /** @var array<string, list<string>> */
+    private array $termsByBatch = [];
+
     public function __construct(
         private readonly ConnectionInterface $connection,
         private readonly ?ThaiAdministrativeAreaLookup $areaLookup = null,
@@ -48,11 +51,36 @@ final class LegacyStudentRepository implements StudentRepository
      */
     public function students(?array $districtIds = null): array
     {
+        return $this->loadStudents($districtIds);
+    }
+
+    public function studentsForTerm(array $districtIds, string $term): array
+    {
+        $normalized = AcademicTerm::normalize($term);
+
+        return $normalized === null ? [] : $this->loadStudents($districtIds, $normalized);
+    }
+
+    public function availableTerms(array $districtIds): array
+    {
+        $terms = [];
+        foreach ($this->activeDistricts($districtIds) as $district) {
+            $sets = $this->tableSetsForDistrict((int) $district['id'], (string) $district['name']);
+            $terms = [...$terms, ...$this->termsForSets($sets)];
+        }
+        $terms = array_values(array_unique($terms));
+        usort($terms, static fn (string $a, string $b): int => AcademicTerm::compare($b, $a));
+
+        return $terms;
+    }
+
+    private function loadStudents(?array $districtIds, ?string $selectedTerm = null): array
+    {
         if ($districtIds !== null) {
             $districtIds = array_values(array_unique(array_filter(array_map('intval', $districtIds), static fn (int $id): bool => $id > 0)));
             sort($districtIds);
         }
-        $cacheKey = $districtIds === null ? '*' : implode(',', $districtIds);
+        $cacheKey = ($districtIds === null ? '*' : implode(',', $districtIds)).'|'.($selectedTerm ?? 'current');
         if (array_key_exists($cacheKey, $this->studentCache)) {
             return $this->studentCache[$cacheKey];
         }
@@ -62,16 +90,17 @@ final class LegacyStudentRepository implements StudentRepository
 
         foreach ($this->activeDistricts($districtIds) as $district) {
             $sets = $this->tableSetsForDistrict((int) $district['id'], (string) $district['name']);
-            $latestTerm = $this->latestTerm($sets);
+            $currentTerm = $this->latestTerm($sets);
+            $latestTerm = $selectedTerm ?? $currentTerm;
 
             // A batch without a usable academic term is not an active student
             // source. Never fall back to another district or another batch.
-            if ($sets === [] || $latestTerm === null) {
+            if ($sets === [] || $currentTerm === null || $latestTerm === null) {
                 continue;
             }
 
             foreach ($sets as $set) {
-                $studentRows = $this->activeStudentRows($set, $latestTerm);
+                $studentRows = $this->activeStudentRows($set, $latestTerm, $latestTerm === $currentTerm);
                 $studentCodes = array_values(array_unique(array_filter(array_map(
                     static fn (array $row): string => trim((string) ($row['code'] ?? '')),
                     $studentRows,
@@ -642,6 +671,24 @@ final class LegacyStudentRepository implements StudentRepository
     /** @param list<LegacyTableSet> $sets */
     private function latestTerm(array $sets): ?string
     {
+        return AcademicTerm::latest($this->termsForSets($sets));
+    }
+
+    /** @param list<LegacyTableSet> $sets
+     * @return list<string>
+     */
+    private function termsForSets(array $sets): array
+    {
+        $key = implode('|', array_map(static fn (LegacyTableSet $set): string => $set->grade, $sets));
+
+        return $this->termsByBatch[$key] ??= $this->loadTermsForSets($sets);
+    }
+
+    /** @param list<LegacyTableSet> $sets
+     * @return list<string>
+     */
+    private function loadTermsForSets(array $sets): array
+    {
         $terms = [];
         foreach ($sets as $set) {
             $table = $this->identifier($set->grade);
@@ -652,7 +699,7 @@ final class LegacyStudentRepository implements StudentRepository
 
         $latest = AcademicTerm::latest($terms);
         if ($latest !== null) {
-            return $latest;
+            return array_values(array_unique(array_filter(array_map(AcademicTerm::normalize(...), $terms))));
         }
 
         foreach ($sets as $set) {
@@ -662,11 +709,11 @@ final class LegacyStudentRepository implements StudentRepository
             }
         }
 
-        return AcademicTerm::latest($terms);
+        return array_values(array_unique(array_filter(array_map(AcademicTerm::normalize(...), $terms))));
     }
 
     /** @return list<array<string, mixed>> */
-    private function activeStudentRows(LegacyTableSet $set, string $latestTerm): array
+    private function activeStudentRows(LegacyTableSet $set, string $latestTerm, bool $includeRecent = true): array
     {
         $student = $this->identifier($set->student);
         $grade = $this->identifier($set->grade);
@@ -687,6 +734,17 @@ final class LegacyStudentRepository implements StudentRepository
         }
         $selectFields = $this->studentSelectFields($set, $groupName, $citizenId);
 
+        $recentClause = $includeRecent ? " OR EXISTS (
+                    SELECT 1 FROM (
+                        SELECT recent_student._perf_id10
+                        FROM {$student} recent_student
+                        WHERE recent_student._perf_id10 IS NOT NULL
+                        ORDER BY recent_student._perf_id10 DESC
+                        LIMIT 2
+                    ) latest_students
+                    WHERE latest_students._perf_id10 = s._perf_id10
+               )" : '';
+
         return $this->rows(
             "SELECT {$selectFields}
              FROM {$student} s
@@ -696,16 +754,7 @@ final class LegacyStudentRepository implements StudentRepository
                     SELECT 1 FROM {$grade} active_grade
                     WHERE active_grade._perf_std10 = s._perf_id10
                       AND active_grade._perf_semestry IN ({$placeholders})
-               ) OR EXISTS (
-                    SELECT 1 FROM (
-                        SELECT recent_student._perf_id10
-                        FROM {$student} recent_student
-                        WHERE recent_student._perf_id10 IS NOT NULL
-                        ORDER BY recent_student._perf_id10 DESC
-                        LIMIT 2
-                    ) latest_students
-                    WHERE latest_students._perf_id10 = s._perf_id10
-               ))
+               ){$recentClause})
              ORDER BY s._perf_id10 ASC",
             $bindings,
         );

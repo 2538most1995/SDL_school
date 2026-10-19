@@ -2,6 +2,10 @@
 
 namespace Tests\Feature\Students;
 
+use App\Domain\Students\Models\Student;
+use App\Domain\Students\Repositories\DemoStudentRepository;
+use App\Domain\Students\Repositories\StudentRepository;
+use App\Domain\Students\Repositories\TermStudentRepository;
 use App\Http\Controllers\Api\Students\StudentDirectoryController;
 use App\Http\Controllers\Api\Students\StudentGradesController;
 use App\Http\Controllers\Api\Students\StudentKpchController;
@@ -55,6 +59,53 @@ final class StudentApiTest extends TestCase
             'code' => 'test-sena',
             'is_active' => true,
         ]);
+    }
+
+    public function test_directory_selects_current_term_and_preserves_scope_for_historical_rosters(): void
+    {
+        $base = (new DemoStudentRepository)->students([1])[0];
+        $makeStudent = fn (string $code, string $term, string $group = 'G-01', ?int $district = null) => new Student(...[
+            ...get_object_vars($base), 'code' => $code, 'currentTerm' => $term,
+            'districtId' => $district ?? $this->sena->id, 'groupCode' => $group, 'groupName' => $group,
+        ]);
+        $repository = \Mockery::mock(
+            StudentRepository::class,
+            TermStudentRepository::class,
+        );
+        $repository->shouldReceive('availableTerms')->with([$this->sena->id])->andReturn(['2/2568', '1/2569', '1/2568']);
+        $repository->shouldReceive('studentsForTerm')->with([$this->sena->id], '1/2569')->andReturn([$makeStudent('CURRENT', '1/2569')]);
+        $repository->shouldReceive('studentsForTerm')->with([$this->sena->id], '2/2568')->andReturn([
+            $makeStudent('OLD01', '2/2568'), $makeStudent('OLD02', '2/2568'),
+            $makeStudent('OTHER_GROUP', '2/2568', 'G-02'),
+            $makeStudent('OTHER_DISTRICT', '2/2568', 'G-01', $this->sena->id + 100),
+        ]);
+        $repository->shouldReceive('studentsForTerm')->with([$this->sena->id], '2/2567')->andReturn([]);
+        $this->app->instance(StudentRepository::class, $repository);
+        Sanctum::actingAs($this->viewer('admin'));
+
+        $this->getJson('/api/v1/students')->assertOk()
+            ->assertJsonPath('data.0.code', 'CURRENT')
+            ->assertJsonPath('meta.current_term', '1/2569')
+            ->assertJsonPath('meta.selected_term', '1/2569')
+            ->assertJsonPath('meta.filter_options.terms.0.value', '1/2569')
+            ->assertJsonPath('meta.filter_options.terms.1.value', '2/2568');
+        $this->getJson('/api/v1/students?term=2/2568&per_page=1&page=2&group=G-01')->assertOk()
+            ->assertJsonPath('data.0.code', 'OLD02')
+            ->assertJsonPath('data.0.current_term', '2/2568')
+            ->assertJsonPath('meta.pagination.total', 2)
+            ->assertJsonPath('meta.summary.total', 2)
+            ->assertJsonCount(3, 'meta.filter_options.terms');
+
+        $teacher = $this->viewer('teacher');
+        $teacher->assigned_groups = ['G-01'];
+        Sanctum::actingAs($teacher);
+        $this->getJson('/api/v1/students?term=2/2568')->assertOk()
+            ->assertJsonCount(2, 'data')->assertJsonPath('meta.summary.total', 2);
+        $this->getJson('/api/v1/students?term=2/2568&group=G-02')->assertOk()->assertJsonCount(0, 'data');
+        $this->getJson('/api/v1/students?term=2/2567')->assertOk()
+            ->assertJsonCount(0, 'data')->assertJsonCount(3, 'meta.filter_options.terms');
+        $this->getJson('/api/v1/students?term=invalid')->assertUnprocessable()->assertJsonValidationErrors('term');
+        $this->getJson('/api/v1/students')->assertOk()->assertJsonPath('data.0.code', 'CURRENT');
     }
 
     public function test_student_endpoints_reject_guests(): void

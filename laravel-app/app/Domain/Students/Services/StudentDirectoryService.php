@@ -4,6 +4,8 @@ namespace App\Domain\Students\Services;
 
 use App\Domain\Students\Models\Student;
 use App\Domain\Students\Repositories\StudentRepository;
+use App\Domain\Students\Repositories\TermStudentRepository;
+use App\Domain\Students\Support\AcademicTerm;
 use App\Domain\Students\Support\StudentAccessScope;
 use App\Domain\Students\Support\StudentIdentityGuard;
 use App\Models\User;
@@ -23,8 +25,22 @@ final readonly class StudentDirectoryService
         array $filters,
         bool $includeCitizenIdInSearch = true,
         bool $clampPage = true,
+        bool $selectAcademicTerm = false,
     ): array {
-        $allAccessible = $this->accessibleStudents($viewer);
+        $terms = [];
+        $currentTerm = null;
+        if ($selectAcademicTerm) {
+            $districtId = $viewer->relationLoaded('selectedDistrictContext')
+                ? (int) $viewer->getRelation('selectedDistrictContext')
+                : (int) $viewer->district_id;
+            $terms = $this->repository instanceof TermStudentRepository && $districtId > 0
+                ? $this->repository->availableTerms([$districtId])
+                : array_column($this->filterOptions($this->accessibleStudents($viewer))['terms'], 'value');
+            usort($terms, static fn (string $a, string $b): int => AcademicTerm::compare($b, $a));
+            $currentTerm = $terms[0] ?? null;
+            $filters['term'] = ($filters['term'] ?? '') ?: $currentTerm;
+        }
+        $allAccessible = $this->accessibleStudents($viewer, $selectAcademicTerm ? ($filters['term'] ?? null) : null);
         $filtered = $this->applyFilters($allAccessible, $filters, $includeCitizenIdInSearch);
         $sort = (string) ($filters['sort'] ?? 'code');
         $direction = (string) ($filters['direction'] ?? 'asc');
@@ -71,7 +87,12 @@ final readonly class StudentDirectoryService
                     'from' => $items === [] ? null : (($page - 1) * $perPage) + 1,
                     'to' => $items === [] ? null : min($page * $perPage, $total),
                 ],
-                'filter_options' => $this->filterOptions($allAccessible),
+                'filter_options' => $selectAcademicTerm
+                    ? [...$this->filterOptions($allAccessible), 'terms' => array_map(
+                        static fn (string $term): array => ['value' => $term, 'label' => "ภาคเรียน {$term}"], $terms,
+                    )]
+                    : $this->filterOptions($allAccessible),
+                ...($selectAcademicTerm ? ['current_term' => $currentTerm, 'selected_term' => $filters['term']] : []),
                 'summary' => $this->summary($filtered),
                 'applied_filters' => array_filter($filters, static fn (mixed $value): bool => $value !== null && $value !== ''),
             ],
@@ -142,7 +163,7 @@ final readonly class StudentDirectoryService
     }
 
     /** @return list<Student> */
-    public function accessibleStudents(User $viewer): array
+    public function accessibleStudents(User $viewer, ?string $term = null): array
     {
         app(StudentIdentityGuard::class)->assertUnambiguous($viewer);
         $scope = StudentAccessScope::forUser($viewer);
@@ -155,7 +176,9 @@ final readonly class StudentDirectoryService
         }
 
         $students = array_values(array_filter(
-            $this->repository->students([$districtId]),
+            $term !== null && $this->repository instanceof TermStudentRepository
+                ? $this->repository->studentsForTerm([$districtId], $term)
+                : $this->repository->students([$districtId]),
             static fn (Student $student): bool => $scope->allows($student),
         ));
 
