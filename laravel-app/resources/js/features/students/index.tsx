@@ -45,6 +45,7 @@ import { useLogout } from '../../lib/useLogout';
 import { useRetainedFilterOptions } from '../../lib/useRetainedFilterOptions';
 import { summarizeGradeRows, summarizeGradesByTerm } from './gradeSummary';
 import { StudentProfileTabs, type StudentProfileDetails } from './StudentProfileTabs';
+import { formatThaiDisplayDate } from '../../lib/thaiDate';
 
 export function EyeViewIcon({ size = 18, className = '' }: { size?: number; className?: string }) {
     return <Eye size={size} weight="bold" className={className} aria-hidden="true" />;
@@ -352,7 +353,7 @@ export function StudentsPage() {
                 district: student.district.name,
                 currentTerm: student.current_term,
                 citizenIdMasked: student.demographics?.citizen_id ?? student.demographics?.citizen_id_masked ?? '-',
-                birthDate: student.demographics?.birth_date ?? '-',
+                birthDate: formatThaiDisplayDate(student.demographics?.birth_date),
                 gender: student.demographics?.gender ?? '-',
                 gpax: student.academic.gpax,
                 creditsEarned: student.academic.credits_earned,
@@ -405,8 +406,8 @@ export function StudentsPage() {
         {
             accessorKey: 'birthDate',
             header: 'วันเกิด',
-            size: 105,
-            meta: { compactSize: 62, compactTextAlign: 'center' },
+            size: 140,
+            meta: { compactSize: 100, compactTextAlign: 'center' },
             cell: ({ getValue }) => {
                 const val = getValue<string>() || '';
                 const clean = val.replace(/^[/ ]+|[/ ]+$/g, '').trim();

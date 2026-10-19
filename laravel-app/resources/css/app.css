@@ -3189,3 +3189,53 @@ textarea {
 [data-ui-mode='dark'] .score-row-edit { color: #99f6e4; border-color: #4c7c75; }
 [data-ui-mode='dark'] .score-row-edit:hover { background-color: #183b3a; }
 [data-ui-mode='dark'] .score-panel-actions .score-entry-start-button.MuiButton-root:disabled { background-color: #334155; color: #cbd5e1; border-color: #64748b; }
+
+/* Student profile tabs read as four explicit actions, including on small screens. */
+.student-profile-navigation {
+    padding: 16px; border: 1px solid var(--ui-border); border-radius: 18px;
+    background: var(--ui-surface);
+}
+.student-profile-navigation__heading { display: flex; flex-wrap: wrap; align-items: baseline; justify-content: space-between; gap: 4px 16px; margin-bottom: 12px; }
+.student-profile-navigation__heading h2 { color: var(--ui-text); font-size: 14px; font-weight: 700; }
+.student-profile-navigation__heading p { color: var(--ui-text-muted); font-size: 12px; }
+.student-profile-navigation .student-profile-tabs { overflow: visible; }
+.student-profile-navigation .MuiTabs-scroller { overflow: visible !important; }
+.student-profile-navigation .MuiTabs-list { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 10px; }
+.student-profile-navigation .MuiTabs-indicator { display: none; }
+.student-profile-navigation .student-profile-tab.MuiTab-root {
+    display: flex; flex-direction: row; align-items: center; justify-content: flex-start; gap: 12px;
+    min-width: 0; width: 100%; min-height: 86px; max-width: none; padding: 14px;
+    border: 1px solid var(--ui-border); border-radius: 12px; background: var(--ui-surface-muted);
+    color: var(--ui-text); text-align: left; text-transform: none; opacity: 1; cursor: pointer; transition: none;
+}
+.student-profile-tab__icon { display: grid; place-items: center; width: 40px; height: 40px; flex-shrink: 0; border-radius: 11px; background: var(--ui-surface); color: var(--ui-accent-700); }
+.student-profile-tab__content { display: flex; min-width: 0; flex: 1; flex-direction: column; gap: 4px; }
+.student-profile-tab__label { font-size: 14px; font-weight: 700; line-height: 1.6; overflow-wrap: anywhere; }
+.student-profile-tab__description { color: var(--ui-text-muted); font-size: 11px; font-weight: 400; line-height: 1.6; }
+.student-profile-tab__state { display: flex; flex-shrink: 0; color: var(--ui-text-muted); }
+.student-profile-navigation .student-profile-tab.Mui-selected {
+    border-color: var(--ui-accent-700); background: var(--ui-accent-700); color: #fff;
+    box-shadow: 0 4px 12px color-mix(in srgb, var(--ui-accent-700) 18%, transparent);
+}
+.student-profile-tab.Mui-selected .student-profile-tab__icon { background: rgb(255 255 255 / 17%); color: #fff; }
+.student-profile-tab.Mui-selected .student-profile-tab__description { color: rgb(255 255 255 / 85%); }
+.student-profile-tab.Mui-selected .student-profile-tab__state { color: #fff; }
+.student-profile-navigation .student-profile-tab.Mui-focusVisible { outline: 3px solid var(--ui-accent-400); outline-offset: 3px; }
+@media (hover: hover) {
+    .student-profile-navigation .student-profile-tab:not(.Mui-selected):hover { border-color: var(--ui-accent-500); background: var(--ui-accent-50); }
+}
+.student-profile-navigation .student-profile-tab:active { transform: scale(.985); }
+@media (max-width: 1100px) {
+    .student-profile-navigation .MuiTabs-list { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+}
+@media (max-width: 480px) {
+    .student-profile-navigation { padding: 12px; }
+    .student-profile-navigation .MuiTabs-list { gap: 8px; }
+    .student-profile-navigation .student-profile-tab.MuiTab-root { gap: 6px; min-height: 78px; padding: 9px; }
+    .student-profile-tab__icon { width: 28px; height: 34px; border-radius: 8px; }
+    .student-profile-tab__label { font-size: 13px; }
+    .student-profile-tab__description { display: none; }
+    .student-profile-tab__state svg { width: 15px; height: 15px; }
+}
+[data-ui-mode='dark'] .student-profile-tab__icon { color: var(--ui-text); }
+[data-ui-mode='dark'] .student-profile-navigation .student-profile-tab:not(.Mui-selected):hover { background: var(--ui-surface-subtle); }

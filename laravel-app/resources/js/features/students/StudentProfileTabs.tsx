@@ -1,8 +1,9 @@
 import { useId, useState, type ReactNode } from 'react';
 import Tabs from '@mui/material/Tabs';
-import { GraduationCap, IdentificationCard, MapPin, UsersThree } from '@phosphor-icons/react';
+import { CaretRight, CheckCircle, GraduationCap, IdentificationCard, MapPin, UsersThree } from '@phosphor-icons/react';
 import { Tab } from '../../components/MaterialUI';
 import { Panel } from '../../components/Panel';
+import { formatThaiDisplayDate } from '../../lib/thaiDate';
 
 type ProfileValue = string | number | null;
 type FamilyMember = { name?: ProfileValue; occupation_code?: ProfileValue; occupation_label?: ProfileValue; income?: ProfileValue; status_code?: ProfileValue; status_label?: ProfileValue };
@@ -38,10 +39,10 @@ function ProfileFields({ fields }: { fields: DetailField[] }) {
 }
 
 const profileTabs = [
-    { value: 'personal', label: 'ข้อมูลส่วนตัว', icon: IdentificationCard },
-    { value: 'address', label: 'ที่อยู่', icon: MapPin },
-    { value: 'family', label: 'ครอบครัว', icon: UsersThree },
-    { value: 'education', label: 'วุฒิการศึกษาเดิม', icon: GraduationCap },
+    { value: 'personal', label: 'ข้อมูลส่วนตัว', description: 'ข้อมูลประจำตัวและการศึกษา', icon: IdentificationCard },
+    { value: 'address', label: 'ที่อยู่', description: 'ที่อยู่และช่องทางติดต่อ', icon: MapPin },
+    { value: 'family', label: 'ครอบครัว', description: 'บิดา มารดา และผู้ปกครอง', icon: UsersThree },
+    { value: 'education', label: 'วุฒิการศึกษาเดิม', description: 'ประวัติและสถานศึกษาเดิม', icon: GraduationCap },
 ] as const;
 
 export function StudentProfileTabs({ student, addressContent }: { student: ProfileStudent; addressContent: ReactNode }) {
@@ -52,18 +53,28 @@ export function StudentProfileTabs({ student, addressContent }: { student: Profi
     const education = student.profile?.prior_education;
 
     return <div className="min-w-0 space-y-4">
-        <div className="min-w-0 rounded-2xl border px-2 pt-1" style={{ borderColor: 'var(--ui-border)', background: 'var(--ui-surface)' }}>
-            <Tabs value={activeTab} onChange={(_, value: string) => setActiveTab(value)} variant="scrollable" scrollButtons="auto" allowScrollButtonsMobile selectionFollowsFocus aria-label="หมวดข้อมูลนักศึกษา"
-                sx={{ '& .MuiTab-root': { minHeight: 56, minWidth: { xs: 130, sm: 160 }, gap: 0.75, color: 'var(--ui-text-muted)' }, '& .MuiTab-root.Mui-selected': { color: 'var(--ui-text)', backgroundColor: 'var(--ui-surface-muted)', borderRadius: '12px 12px 0 0' }, '& .MuiTabs-indicator': { backgroundColor: 'var(--ui-accent-500)', transition: 'none' } }}>
-                {profileTabs.map(({ value, label, icon: Icon }) => <Tab key={value} value={value} disableRipple sx={{ '&.Mui-focusVisible': { outline: '2px solid var(--ui-accent-500)', outlineOffset: -3, borderRadius: '12px 12px 0 0' } }} id={`${id}-tab-${value}`} aria-controls={`${id}-panel-${value}`} icon={<Icon size={19} aria-hidden="true" />}>{label}</Tab>)}
+        <nav className="student-profile-navigation" aria-label="เลือกดูข้อมูลนักศึกษา">
+            <div className="student-profile-navigation__heading">
+                <h2>เลือกหมวดข้อมูลนักศึกษา</h2>
+                <p>กดปุ่มด้านล่างเพื่อดูรายละเอียด</p>
+            </div>
+            <Tabs value={activeTab} onChange={(_, value: string) => setActiveTab(value)} selectionFollowsFocus aria-label="หมวดข้อมูลนักศึกษา" className="student-profile-tabs">
+                {profileTabs.map(({ value, label, description, icon: Icon }) => <Tab key={value} value={value} disableRipple className="student-profile-tab" aria-label={label} id={`${id}-tab-${value}`} aria-controls={`${id}-panel-${value}`}>
+                    <span className="student-profile-tab__icon"><Icon size={23} weight={activeTab === value ? 'fill' : 'regular'} aria-hidden="true" /></span>
+                    <span className="student-profile-tab__content">
+                        <span className="student-profile-tab__label">{value === 'education' ? <>วุฒิการศึกษา<wbr />เดิม</> : label}</span>
+                        <span className="student-profile-tab__description">{description}</span>
+                    </span>
+                    <span className="student-profile-tab__state" aria-hidden="true">{activeTab === value ? <CheckCircle size={19} weight="fill" /> : <CaretRight size={18} weight="bold" />}</span>
+                </Tab>)}
             </Tabs>
-        </div>
+        </nav>
         {profileTabs.map(({ value, label }) => <div key={value} role="tabpanel" id={`${id}-panel-${value}`} aria-labelledby={`${id}-tab-${value}`} hidden={activeTab !== value} tabIndex={0} className="rounded-2xl focus-visible:outline-2 focus-visible:outline-offset-4 focus-visible:outline-brand-600">
             {value === 'personal' && <div className="space-y-4">
                 <Panel title={label} icon={IdentificationCard} description="ข้อมูลประจำตัวและรายละเอียดของนักศึกษา">
                     <ProfileFields fields={[
                         ['รหัสนักศึกษา', student.code], ['ชื่อ - สกุล', student.name], ['เลขบัตรประชาชน', student.citizenIdMasked],
-                        ['วันเกิด', student.birthDate], ['เพศ', student.gender], ['อายุ', student.age, 'ปี'],
+                        ['วันเกิด', formatThaiDisplayDate(student.birthDate)], ['เพศ', student.gender], ['อายุ', student.age, 'ปี'],
                         ['สัญชาติ', personal?.nationality_label], ['ศาสนา', personal?.religion_label],
                         ['อาชีพ', personal?.occupation_label], ['กลุ่มเป้าหมาย', personal?.target_group_label],
                         ['ส่วนสูง', personal?.height_cm, 'ซม.'], ['น้ำหนัก', personal?.weight_kg, 'กก.'],
@@ -75,7 +86,7 @@ export function StudentProfileTabs({ student, addressContent }: { student: Profi
                         ['ภาคเรียนปัจจุบัน', student.currentTerm], ['ภาคเรียนที่เข้าเรียน', student.enrollmentTerm], ['พื้นที่', student.district],
                         ['GPAX สะสม', student.gpax], ['หน่วยกิตสะสม', student.creditsEarned, 'หน่วยกิต'], ['หน่วยกิตที่ต้องเรียน', student.creditsRequired, 'หน่วยกิต'],
                         ['กิจกรรม กพช.', student.activityHours, 'ชั่วโมง'], ['ผลประเมินคุณธรรม', student.moralResult],
-                        ['วันที่สมัคร', student.applicationDate], ['ปรับปรุงข้อมูลล่าสุด', student.lastUpdated],
+                        ['วันที่สมัคร', formatThaiDisplayDate(student.applicationDate)], ['ปรับปรุงข้อมูลล่าสุด', formatThaiDisplayDate(student.lastUpdated)],
                     ]} />
                 </Panel>
             </div>}
