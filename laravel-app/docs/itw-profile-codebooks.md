@@ -26,3 +26,11 @@ Qualification codes must be scoped by level and actual source table. For example
 6. Render descriptions only. Unknown meanings use an unresolved-description message; empty values use the missing-data state. Do not echo unknown raw codes on the profile screen.
 
 No migration, imported-row update, or new production data import is required. Original raw API code fields are retained for compatibility. If extracted archives are unavailable, source-specific/custom qualification descriptions cannot be recovered from the numeric code alone. The live Windows ITW application and production MySQL latency were not tested.
+
+## Family-field audit (2026-10-20)
+
+A read-only check of the six locally extracted STUDENT.DBF files found multiple father/mother status codes, rather than a universal value of 01. Matching the parent names supplied in the reported screenshot found three archived records with the same relevant values: MARRYSTAT=1, FA_STATUS=01, MO_STATUS=01; FA_OCCP, MO_OCCP and PA_OCCP were blank. OCCP=05 belongs to the student, not to a parent. No identifying values or records are copied into this document.
+
+The matching screenshot is consistent with these archived source fields and the manual's value-01 description. This does not independently confirm the family's current circumstances. The configured local database contained no imported student tables at audit time, so the deployed database was not verified. Missing parent occupations must be corrected in the source register and reimported; they cannot be inferred from the student's occupation.
+
+The family screen now distinguishes an unrecorded ITW occupation from an unresolved code description, and labels individual status as the recorded ITW status. Repository regression coverage checks that student, father, mother and guardian occupations remain independent, and that the parents' combined marital-status value does not override either individual's status.

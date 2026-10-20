@@ -111,6 +111,8 @@ final class LegacyStudentRepositoryTest extends TestCase
         $queries = [];
         $rows = [[
             'fa_prename' => 'นาย', 'fa_name' => 'บิดา', 'fa_surname' => 'ทดสอบ',
+            'occp' => '05', 'marrystat' => '1', 'fa_status' => '02', 'mo_status' => '01',
+            'fa_occp' => '  ', 'mo_occp' => '04', 'pa_occp' => '01',
             'fa_salary' => '0', 'mo_name' => 'มารดา', 'brother' => '0',
             'studybro' => null, 's_school' => 'โรงเรียนทดสอบ', 's_year' => '2568',
             's_grad' => '02', 's_province' => 'อยุธยา', 'nation' => '099',
@@ -122,6 +124,7 @@ final class LegacyStudentRepositoryTest extends TestCase
                 return array_map(static fn (string $column): object => (object) ['column_name' => strtoupper($column)], [
                     'id', 'fa_prename', 'fa_name', 'fa_surname', 'fa_salary', 'mo_name',
                     'brother', 'studybro', 's_school', 's_year', 's_grad', 's_province', 'nation',
+                    'occp', 'marrystat', 'fa_status', 'mo_status', 'fa_occp', 'mo_occp', 'pa_occp',
                 ]);
             }
 
@@ -136,6 +139,14 @@ final class LegacyStudentRepositoryTest extends TestCase
         $profile = $repository->profileFor($student);
         $this->assertSame('นายบิดา ทดสอบ', $profile['family']['father']['name']);
         $this->assertSame('0', $profile['family']['father']['income']);
+        $this->assertSame('รับจ้าง', $profile['personal']['occupation_label']);
+        $this->assertNull($profile['family']['father']['occupation_label']);
+        $this->assertSame('เกษตรกร', $profile['family']['mother']['occupation_label']);
+        $this->assertSame('รับราชการ', $profile['family']['guardian']['occupation_label']);
+        $this->assertSame('อยู่ด้วยกัน', $profile['family']['marital_status_label']);
+        $this->assertSame('02', $profile['family']['father']['status_code']);
+        $this->assertSame('ยังไม่พบคำอธิบายข้อมูล', $profile['family']['father']['status_label']);
+        $this->assertSame('อยู่ด้วยกัน', $profile['family']['mother']['status_label']);
         $this->assertSame('0', $profile['family']['siblings']);
         $this->assertNull($profile['family']['studying_siblings']);
         $this->assertSame('โรงเรียนทดสอบ', $profile['prior_education']['school']);

@@ -22,16 +22,16 @@ type ProfileStudent = {
     profile?: StudentProfileDetails;
 };
 
-type DetailField = readonly [label: string, value: ProfileValue | undefined, unit?: string];
+type DetailField = readonly [label: string, value: ProfileValue | undefined, unit?: string, missingText?: string];
 
 function ProfileFields({ fields }: { fields: DetailField[] }) {
     return <dl className="grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
-        {fields.map(([label, value, unit]) => {
+        {fields.map(([label, value, unit, missingText]) => {
             const hasValue = value !== null && value !== undefined && String(value).trim() !== '' && value !== '-';
             return <div key={label} className="min-w-0 rounded-xl border p-4" style={{ borderColor: 'var(--ui-border)', background: 'var(--ui-surface-muted)' }}>
                 <dt className="text-xs font-semibold leading-5" style={{ color: 'var(--ui-text-muted)' }}>{label}</dt>
                 <dd className={`mt-1 whitespace-pre-wrap break-words text-sm leading-7 ${hasValue ? 'font-semibold' : 'font-normal'}`} style={{ color: hasValue ? 'var(--ui-text)' : 'var(--ui-text-muted)' }}>
-                    {hasValue ? `${value}${unit ? ` ${unit}` : ''}` : 'ยังไม่มีข้อมูล'}
+                    {hasValue ? `${value}${unit ? ` ${unit}` : ''}` : (missingText ?? 'ยังไม่มีข้อมูล')}
                 </dd>
             </div>;
         })}
@@ -93,6 +93,7 @@ export function StudentProfileTabs({ student, addressContent }: { student: Profi
             {value === 'address' && addressContent}
             {value === 'family' && <Panel title={label} icon={UsersThree} description="ข้อมูลบิดา มารดา และผู้ปกครองที่มีในทะเบียนนักศึกษา">
                 <div className="space-y-6">
+                    <p className="text-sm leading-6" style={{ color: 'var(--ui-text-muted)' }}>สถานภาพแสดงตามที่บันทึกใน ITW ของแต่ละคน หากข้อมูลเปลี่ยนแปลง ให้ปรับปรุงทะเบียนต้นทางแล้วนำเข้าใหม่</p>
                     <ProfileFields fields={[['สถานภาพสมรสของบิดา–มารดา', family?.marital_status_label]]} />
                     {(['father', 'mother', 'guardian'] as const).map((key) => {
                         const member = family?.[key];
@@ -100,8 +101,8 @@ export function StudentProfileTabs({ student, addressContent }: { student: Profi
                             <h3 className="mb-3 text-sm font-bold" style={{ color: 'var(--ui-text)' }}>{{ father: 'บิดา', mother: 'มารดา', guardian: 'ผู้ปกครอง' }[key]}</h3>
                             <ProfileFields fields={[
                                 ['ชื่อ - สกุล', member?.name ?? (key === 'guardian' ? student.guardian?.name : null)],
-                                ['อาชีพ', member?.occupation_label], ['รายได้ตามทะเบียน', member?.income, 'บาท'],
-                                ...(key !== 'guardian' ? [['สถานภาพ', member?.status_label] as DetailField] : []),
+                                ['อาชีพ', member?.occupation_label, undefined, 'ยังไม่ได้ระบุอาชีพในทะเบียน ITW'], ['รายได้ตามทะเบียน', member?.income, 'บาท'],
+                                ...(key !== 'guardian' ? [['สถานภาพตามทะเบียน ITW', member?.status_label] as DetailField] : []),
                                 ...(key === 'guardian' && student.guardian?.phone_masked ? [['โทรศัพท์', student.guardian.phone_masked] as DetailField] : []),
                             ]} />
                         </section>;
