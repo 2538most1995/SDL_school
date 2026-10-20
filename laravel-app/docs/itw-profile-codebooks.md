@@ -23,7 +23,7 @@ Qualification codes must be scoped by level and actual source table. For example
 3. Read only the allowlisted reference files; s_grade is restricted to the exact level directory. Shared dictionaries can also come from the same school's root or 0/ directory.
 4. Reject external symlinks, corrupt/oversized files, non-character ID/NAME fields and conflicting normalized codes. A present but unusable dictionary does not trigger a guessed label.
 5. Use documented religion defaults only when no religion reference file is supplied. Existing system dictionaries remain fallback sources for nationality, occupation and target groups. Only the family-status value explicitly verified in figure 5.4 is currently mapped.
-6. Render descriptions only. Unknown meanings use an unresolved-description message; empty values use the missing-data state. Do not echo unknown raw codes on the profile screen.
+6. Render descriptions only. Unknown meanings use an unresolved-description message; empty values render blank without placeholder text. Do not echo unknown raw codes on the profile screen.
 
 No migration, imported-row update, or new production data import is required. Original raw API code fields are retained for compatibility. If extracted archives are unavailable, source-specific/custom qualification descriptions cannot be recovered from the numeric code alone. The live Windows ITW application and production MySQL latency were not tested.
 
@@ -33,4 +33,4 @@ A read-only check of the six locally extracted STUDENT.DBF files found multiple 
 
 The matching screenshot is consistent with these archived source fields and the manual's value-01 description. This does not independently confirm the family's current circumstances. The configured local database contained no imported student tables at audit time, so the deployed database was not verified. Missing parent occupations must be corrected in the source register and reimported; they cannot be inferred from the student's occupation.
 
-The family screen now distinguishes an unrecorded ITW occupation from an unresolved code description, and labels individual status as the recorded ITW status. Repository regression coverage checks that student, father, mother and guardian occupations remain independent, and that the parents' combined marital-status value does not override either individual's status.
+The family screen labels individual status as the recorded ITW status. Empty profile values, including unrecorded occupations, render blank without substitute text; source zero values remain visible. Repository regression coverage checks that student, father, mother and guardian occupations remain independent, and that the parents' combined marital-status value does not override either individual's status.

@@ -22,16 +22,16 @@ type ProfileStudent = {
     profile?: StudentProfileDetails;
 };
 
-type DetailField = readonly [label: string, value: ProfileValue | undefined, unit?: string, missingText?: string];
+type DetailField = readonly [label: string, value: ProfileValue | undefined, unit?: string];
 
 function ProfileFields({ fields }: { fields: DetailField[] }) {
     return <dl className="grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
-        {fields.map(([label, value, unit, missingText]) => {
+        {fields.map(([label, value, unit]) => {
             const hasValue = value !== null && value !== undefined && String(value).trim() !== '' && value !== '-';
             return <div key={label} className="min-w-0 rounded-xl border p-4" style={{ borderColor: 'var(--ui-border)', background: 'var(--ui-surface-muted)' }}>
                 <dt className="text-xs font-semibold leading-5" style={{ color: 'var(--ui-text-muted)' }}>{label}</dt>
-                <dd className={`mt-1 whitespace-pre-wrap break-words text-sm leading-7 ${hasValue ? 'font-semibold' : 'font-normal'}`} style={{ color: hasValue ? 'var(--ui-text)' : 'var(--ui-text-muted)' }}>
-                    {hasValue ? `${value}${unit ? ` ${unit}` : ''}` : (missingText ?? 'ยังไม่มีข้อมูล')}
+                <dd className={`mt-1 min-h-7 whitespace-pre-wrap break-words text-sm leading-7 ${hasValue ? 'font-semibold' : 'font-normal'}`} style={{ color: hasValue ? 'var(--ui-text)' : 'var(--ui-text-muted)' }}>
+                    {hasValue ? `${value}${unit ? ` ${unit}` : ''}` : ''}
                 </dd>
             </div>;
         })}
@@ -101,7 +101,7 @@ export function StudentProfileTabs({ student, addressContent }: { student: Profi
                             <h3 className="mb-3 text-sm font-bold" style={{ color: 'var(--ui-text)' }}>{{ father: 'บิดา', mother: 'มารดา', guardian: 'ผู้ปกครอง' }[key]}</h3>
                             <ProfileFields fields={[
                                 ['ชื่อ - สกุล', member?.name ?? (key === 'guardian' ? student.guardian?.name : null)],
-                                ['อาชีพ', member?.occupation_label, undefined, 'ยังไม่ได้ระบุอาชีพในทะเบียน ITW'], ['รายได้ตามทะเบียน', member?.income, 'บาท'],
+                                ['อาชีพ', member?.occupation_label], ['รายได้ตามทะเบียน', member?.income, 'บาท'],
                                 ...(key !== 'guardian' ? [['สถานภาพตามทะเบียน ITW', member?.status_label] as DetailField] : []),
                                 ...(key === 'guardian' && student.guardian?.phone_masked ? [['โทรศัพท์', student.guardian.phone_masked] as DetailField] : []),
                             ]} />
