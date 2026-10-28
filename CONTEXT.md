@@ -2,6 +2,8 @@
 
 ## Online classroom (2026-10-28)
 
+Classroom UI now uses education-level buttons and registered-course cards, followed by four activity categories: separate video clips, knowledge, worksheets and quizzes. Category counts and type filters are scoped server-side before pagination. All classroom selectors, including authoring choices, are buttons. Teacher quiz authoring supports JSON/XLSX templates and a validated preview/replacement step before saving; files are parsed locally, never auto-published, and API validation remains authoritative. Existing stored knowledge links remain intact. No additional schema migration is needed for the video string type or importer.
+
 `/learning/classroom` adds knowledge, online worksheets and quizzes per current-term registered subject and education level, merging ITW and selected web registrations. Teachers author within assigned groups; student access requires actual registration and published group eligibility. Five question types, private prompt images, YouTube embeds and shared Google Drive/OneDrive links are supported. Submissions allow one final attempt, automatic grading plus manual essay review; answer keys never enter student responses. Content is frozen after submissions. Classroom scores are separate from ITW marks. See `laravel-app/docs/online-classroom.md` for limits, API, deployment and retention.
 
 ## Purpose and architecture

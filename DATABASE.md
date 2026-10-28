@@ -2,6 +2,8 @@
 
 ## Online classroom (2026-10-28)
 
+The classroom redesign adds `video` to the existing string `type` contract, with at least one validated external link and no questions/submission. No schema change or rewrite of existing knowledge records is performed. JSON/XLSX imports become ordinary validated question JSON on explicit save; imported files, cloud image URLs and foreign private-image IDs are not stored.
+
 Migration `2026_10_28_000037_create_online_classroom_tables.php` adds three tables without changing imported/student data: `learning_classroom_activities` (district, actor, term, subject+level, group/audience scope, knowledge/worksheet/quiz, links/questions JSON, publish status and deadline), `learning_classroom_submissions` (answers, automatic/final scores, review metadata, unique activity+student attempt), and `learning_classroom_images` (district/creator/activity and private path/MIME). The course composite index supports district+term+subject+level reads. Parent IDs are stored as unsigned bigint without foreign keys to adopted district/user tables with varying ID types. Submission writes lock the parent activity; the unique attempt index is a second concurrency guard. Normal deployment must run migrations; missing classroom tables return an actionable 503. No migration was run on the real deployment database during development.
 
 เอกสารนี้สร้างจาก `laravel-app/database/migrations/`, `app/Models/` และ query ใน `app/` เท่านั้น Migration และ source ปัจจุบันเป็น source of truth

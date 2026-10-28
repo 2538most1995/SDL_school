@@ -1,19 +1,24 @@
-import { Alert, Dialog, DialogActions, DialogContent, DialogTitle, MenuItem, TextField } from '@mui/material';
-import { Books, Plus, PencilSimple, Trash, ArrowSquareOut, UploadSimple, CheckCircle } from '@phosphor-icons/react';
+import { Alert, Dialog, DialogActions, DialogContent, DialogTitle, TextField } from '@mui/material';
+import { Books, Plus, PencilSimple, Trash, ArrowSquareOut, UploadSimple, CheckCircle, Play, BookOpenText, NotePencil, Lightning, ArrowRight, ArrowLeft, GraduationCap, RocketLaunch, Student, UsersThree, SquaresFour, Clock, MagnifyingGlass, Sparkle } from '@phosphor-icons/react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { useEffect, useState, type FormEvent, type ReactNode } from 'react';
+import { useEffect, useRef, useState, type FormEvent, type ReactNode } from 'react';
 import { Button } from '../../components/MaterialUI';
-import { PageHeader } from '../../components/PageHeader';
 import { Panel } from '../../components/Panel';
 import { EmptyState, QueryError, QuerySkeleton } from '../../components/QueryState';
 import { useDemoRole } from '../../context/DemoRoleContext';
 import { ApiError } from '../../lib/api';
 import { getFeatureBlob, getFeatureData, sendFeatureData } from '../api';
 import { kindLabels, questionLabels, safeClassroomUrl, youtubeEmbed, type Activity, type ActivityKind, type PageInfo, type Question, type QuestionType, type Subject, type Submission, type Workspace } from './classroom/types';
+import { QuizImportPanel, QuizTemplateActions } from './classroom/QuizImportPanel';
+import './classroom/classroom.css';
 
 const base = '/api/v1/learning/classroom';
 const errorText = (error: unknown) => error instanceof Error ? error.message : 'ไม่สามารถดำเนินการได้';
 const dateLabel = (date: string | null) => date ? new Date(date).toLocaleString('th-TH', { dateStyle: 'medium', timeStyle: 'short' }) : 'ไม่กำหนดวันส่ง';
+const isAssessment = (type: ActivityKind) => type === 'quiz' || type === 'worksheet';
+const kindIcons = { video: Play, knowledge: BookOpenText, worksheet: NotePencil, quiz: Lightning };
+const kindDescriptions = { video: 'ดูคลิป เข้าใจบทเรียน', knowledge: 'อ่านและเก็บไอเดีย', worksheet: 'ลงมือทำ ฝึกทักษะ', quiz: 'ลองวัดความเข้าใจ' };
+const levelChoices = [{ id: 1, label: 'ประถม', detail: 'ประถมศึกษา', Icon: Student }, { id: 2, label: 'ม.ต้น', detail: 'มัธยมศึกษาตอนต้น', Icon: GraduationCap }, { id: 3, label: 'ม.ปลาย', detail: 'มัธยมศึกษาตอนปลาย', Icon: RocketLaunch }];
 
 function PrivateImage({ url }: { url: string }) {
     const [src, setSrc] = useState('');
@@ -49,85 +54,131 @@ function Classroom({ role, district }: { role: string; district: string }) {
     const client = useQueryClient();
     const manage = role !== 'student';
     const [course, setCourse] = useState('');
+    const [level, setLevel] = useState<number | null>(null);
+    const [search, setSearch] = useState('');
     const [activityId, setActivityId] = useState('');
     const [activityPage, setActivityPage] = useState(1);
     const [submissionPage, setSubmissionPage] = useState(1);
     const [editor, setEditor] = useState<Activity | 'new' | null>(null);
+    const [initialKind, setInitialKind] = useState<ActivityKind>('knowledge');
     const [review, setReview] = useState<Submission | null>(null);
     const [deleteId, setDeleteId] = useState('');
     const [dirty, setDirty] = useState(false);
-    const [kind, setKind] = useState('all');
+    const [kind, setKind] = useState<ActivityKind | 'all'>('all');
+    const detailRef = useRef<HTMLDivElement>(null);
     const params = new URLSearchParams({ activity_page: String(activityPage), page: String(submissionPage) });
-    if (course) { const [level, code] = course.split('|'); params.set('subject_code', code); params.set('education_level', level); }
+    if (course) { const [selectedLevel, code] = course.split('|'); params.set('subject_code', code); params.set('education_level', selectedLevel); }
     if (activityId) params.set('activity_id', activityId);
-    const query = useQuery({ queryKey: ['online-classroom', role, district, course, activityId, activityPage, submissionPage],
-        queryFn: ({ signal }) => getFeatureData<Workspace>(`${base}?${params}`, signal) });
+    if (kind !== 'all') params.set('activity_type', kind);
+    const query = useQuery({ queryKey: ['online-classroom', role, district, course, activityId, kind, activityPage, submissionPage],
+        queryFn: ({ signal }) => getFeatureData<Workspace>(`${base}?${params}`, signal), placeholderData: previous => previous });
     const data = query.data?.data;
     const readOnly = Boolean(query.data?.meta?.read_only);
+    const busy = query.isPlaceholderData;
     const refresh = () => client.invalidateQueries({ queryKey: ['online-classroom'] });
     const save = useMutation({ mutationFn: ({ id, values }: { id?: string; values: unknown }) => sendFeatureData<{ id: string }>(`${base}/activities${id ? `/${id}` : ''}`, 'POST', values),
-        onSuccess: async (result, variables) => { setEditor(null); setDirty(false); if (!variables.id) setActivityPage(1); setActivityId(result.data.id); setKind('all'); await refresh(); } });
+        onSuccess: async (result, variables) => { setEditor(null); setDirty(false); setActivityPage(1); setActivityId(variables.id ? '' : result.data.id); setKind('all'); await refresh(); } });
     const status = useMutation({ mutationFn: (activity: Activity) => sendFeatureData(`${base}/activities/${activity.id}`, 'POST', { status: activity.status === 'published' ? 'draft' : 'published' }), onSuccess: refresh });
-    const remove = useMutation({ mutationFn: () => sendFeatureData(`${base}/activities/${deleteId}`, 'DELETE'), onSuccess: async () => { setDeleteId(''); setActivityId(''); await refresh(); } });
-
+    const remove = useMutation({ mutationFn: () => sendFeatureData(`${base}/activities/${deleteId}`, 'DELETE'), onSuccess: async () => { setDeleteId(''); setActivityId(''); setActivityPage(1); await refresh(); } });
     useEffect(() => {
         if (!dirty) return;
         const listener = (event: BeforeUnloadEvent) => { event.preventDefault(); event.returnValue = ''; };
         window.addEventListener('beforeunload', listener);
         return () => window.removeEventListener('beforeunload', listener);
     }, [dirty]);
+    useEffect(() => {
+        if (activityId && data?.selected_activity?.id === activityId && !busy) {
+            detailRef.current?.focus({ preventScroll: true });
+            detailRef.current?.scrollIntoView({ behavior: window.matchMedia('(prefers-reduced-motion: reduce)').matches ? 'instant' : 'smooth', block: 'start' });
+        }
+    }, [activityId, data?.selected_activity?.id, busy]);
     const leave = (action: () => void) => { if (!dirty || window.confirm('มีข้อมูลที่ยังไม่ได้บันทึก ต้องการออกจากกิจกรรมนี้หรือไม่?')) { setDirty(false); action(); } };
+    const resetActivity = () => { setActivityId(''); setActivityPage(1); setSubmissionPage(1); };
+    const add = (type: ActivityKind) => leave(() => { save.reset(); setInitialKind(type); setEditor('new'); });
     if (query.isPending) return <QuerySkeleton />;
-    if (query.isError) return <QueryError message={errorText(query.error)} onRetry={() => void query.refetch()} />;
+    if (query.isError && !data) return <QueryError message={errorText(query.error)} onRetry={() => void query.refetch()} />;
     if (!data) return null;
     const subject = data.selected_subject;
     const selected = data.selected_activity;
-    const select = (id: string) => leave(() => { setActivityId(id); setSubmissionPage(1); });
-    return <div className="online-classroom space-y-4 pb-8" style={{ color: 'var(--ui-text)' }}>
-        <PageHeader title="ห้องเรียนออนไลน์" description="เรียนรู้ ทำใบงาน และทดสอบความเข้าใจ แยกตามวิชาที่ลงทะเบียน" icon={Books} category={data.term ? `ภาคเรียน ${data.term}` : 'พื้นที่การเรียนรู้'}
-            actions={manage && subject ? <Button appearance="primary" icon={<Plus />} disabled={readOnly} onClick={() => leave(() => { save.reset(); setEditor('new'); })}>เพิ่มกิจกรรม</Button> : undefined} />
-        {readOnly && <Alert severity="info">ระบบอยู่ในโหมดอ่านอย่างเดียว ผู้ดูแลต้องเปิดการเขียนข้อมูลก่อนสร้างกิจกรรมหรือส่งคำตอบ</Alert>}
-        {data.subjects.length === 0 ? <EmptyState title="ยังไม่มีรายวิชาที่ลงทะเบียน" description="ห้องเรียนจะแสดงรายวิชาจากทะเบียนของภาคเรียนปัจจุบัน เมื่อมีการลงทะเบียนแล้วให้กลับเข้าหน้านี้อีกครั้ง" /> : <>
-            <Panel><TextField select fullWidth label="รายวิชา" value={subject ? `${subject.level}|${subject.code}` : ''} onChange={event => leave(() => { setCourse(event.target.value); setActivityId(''); setActivityPage(1); setSubmissionPage(1); setKind('all'); })}>
-                {data.subjects.map(item => <MenuItem key={`${item.level}|${item.code}`} value={`${item.level}|${item.code}`}>{item.code} · {item.name} · {item.level_label}</MenuItem>)}
-            </TextField><p className="mt-2 text-sm" style={{ color: 'var(--ui-text-muted)' }}>{manage ? `${subject?.student_count ?? 0} คนลงทะเบียนในขอบเขตของคุณ` : 'แสดงเฉพาะกิจกรรมในรายวิชาและกลุ่มเรียนของคุณ'}</p></Panel>
-            <div className="grid items-start gap-4 xl:grid-cols-[300px_minmax(0,1fr)]">
-                <Panel title="กิจกรรมในรายวิชา"><div className="mb-3 flex flex-wrap gap-1" role="group" aria-label="ประเภทกิจกรรม">
-                    {['all', ...Object.keys(kindLabels)].map(value => <Button key={value} appearance={kind === value ? 'primary' : 'subtle'} size="small" aria-pressed={kind === value} onClick={() => setKind(value)}>{value === 'all' ? 'ทั้งหมด' : kindLabels[value as ActivityKind]}</Button>)}
-                </div><div className="space-y-2">
-                    {data.activities.filter(item => kind === 'all' || item.type === kind).map(item => <button type="button" key={item.id} aria-current={selected?.id === item.id ? 'true' : undefined} onClick={() => select(item.id)}
-                        className="w-full rounded-xl border p-3 text-left transition-colors hover:border-brand-500 active:scale-[0.99]" style={{ borderColor: selected?.id === item.id ? 'var(--ui-navigation)' : 'var(--ui-border)', background: selected?.id === item.id ? 'color-mix(in srgb, var(--ui-navigation) 8%, var(--ui-surface))' : 'var(--ui-surface)' }}>
-                        <span className="text-xs font-bold text-brand-700">{kindLabels[item.type]} {item.status === 'draft' ? '· ฉบับร่าง' : ''}</span><span className="mt-1 block break-words font-semibold">{item.title}</span>
-                        <span className="mt-2 block text-xs" style={{ color: 'var(--ui-text-muted)' }}>{manage ? `${item.submission_count} คนส่งแล้ว` : item.submission ? (item.submission.status === 'reviewed' ? 'ตรวจแล้ว' : 'ส่งแล้ว · รอครูตรวจ') : item.type === 'knowledge' ? 'เปิดอ่านบทเรียน' : 'ยังไม่ส่งคำตอบ'}</span>
-                    </button>)}
-                    {!data.activities.some(item => kind === 'all' || item.type === kind) && <p className="py-5 text-sm">ยังไม่มีกิจกรรมในหมวดนี้{manage ? ' กดเพิ่มกิจกรรมเพื่อเริ่มต้น' : ' กรุณารอครูเผยแพร่กิจกรรม'}</p>}
-                </div><Pager page={data.activity_pagination} change={page => leave(() => { setActivityPage(page); setActivityId(''); })} /></Panel>
-                <div className="min-w-0 space-y-4">{selected ? <>
-                    <Panel title={selected.title} description={`${kindLabels[selected.type]} · ${selected.target_group || 'ทุกกลุ่มในขอบเขต'} · ${selected.status === 'draft' ? 'ฉบับร่าง' : 'เผยแพร่แล้ว'}`}
-                        action={manage && selected.can_edit ? <><Button icon={<PencilSimple />} disabled={readOnly || selected.has_submissions} onClick={() => { save.reset(); setEditor(selected); }}>แก้ไข</Button><Button disabled={readOnly || status.isPending} onClick={() => status.mutate(selected)}>{selected.status === 'published' ? 'ซ่อนกิจกรรม' : 'เผยแพร่'}</Button><Button aria-label="ลบกิจกรรม" icon={<Trash />} disabled={readOnly || selected.has_submissions} onClick={() => setDeleteId(selected.id)} /></> : undefined}>
-                        {selected.has_submissions && manage && <Alert severity="info" className="mb-4">มีผู้ส่งคำตอบแล้ว เนื้อหาและข้อคำถามถูกล็อก คุณยังซ่อนกิจกรรมหรือตรวจคำตอบได้</Alert>}
-                        <p className="mb-4 text-sm" style={{ color: 'var(--ui-text-muted)' }}>{selected.type !== 'knowledge' ? `${dateLabel(selected.due_at)} · ${selected.max_score} คะแนน · ส่งได้ 1 ครั้ง` : 'ใบความรู้และสื่อประกอบการเรียน'}</p>
-                        {selected.content && <p className="mb-5 whitespace-pre-wrap break-words leading-7">{selected.content}</p>}
-                        <div className="space-y-4">{selected.links.map((link, i) => <LearningLink key={`${i}:${link.url}`} title={link.title} url={link.url} />)}</div>
-                        {selected.type !== 'knowledge' && <AnswerForm key={`${role}:${district}:${selected.id}`} activity={selected} manage={manage} readOnly={readOnly} onDirty={setDirty} refresh={refresh} />}
-                    </Panel>
-                    {manage && selected.type !== 'knowledge' && <Panel title="คำตอบที่ส่งแล้ว" description={`${selected.submission_count} รายการ`}>
-                        {data.submissions.length === 0 && <p className="text-sm">ยังไม่มีผู้ส่งคำตอบ</p>}
-                        <div className="divide-y" style={{ borderColor: 'var(--ui-border)' }}>{data.submissions.map(submission => <div key={submission.id} className="flex flex-wrap items-center justify-between gap-3 py-3"><div><p className="font-semibold">{submission.student_name}</p><p className="text-sm">{submission.student_code} · {submission.status === 'submitted' ? 'รอตรวจ' : `${submission.score} / ${submission.max_score} คะแนน`}</p></div><Button appearance="outline" disabled={!selected.can_edit} onClick={() => setReview(submission)}>ตรวจคำตอบ</Button></div>)}</div>
-                        <Pager page={data.submission_pagination} change={setSubmissionPage} />
-                    </Panel>}
-                </> : <EmptyState title="พร้อมเริ่มต้นการเรียนรู้" description={manage ? 'เพิ่มใบความรู้ ใบงาน หรือแบบทดสอบในรายวิชาที่เลือก' : 'ครูยังไม่ได้เผยแพร่กิจกรรมสำหรับรายวิชานี้'} />}</div>
+    const activeLevel = level ?? subject?.level ?? data.subjects[0]?.level ?? 1;
+    const levelSubjects = data.subjects.filter(item => item.level === activeLevel);
+    const visibleSubjects = levelSubjects.filter(item => `${item.code} ${item.name}`.toLocaleLowerCase('th').includes(search.trim().toLocaleLowerCase('th')));
+    const activeCourseKey = course || (subject ? `${subject.level}|${subject.code}` : '');
+    const counts = data.activity_counts ?? { all: data.activities.length, video: 0, knowledge: 0, worksheet: 0, quiz: 0 };
+    return <div className="online-classroom classroom-v2">
+        <header className="classroom-hero">
+            <div className="classroom-hero-copy">
+                <span className="classroom-eyebrow"><Sparkle size={16} weight="fill" /> พื้นที่เรียนรู้ของเรา {data.term && <span>ภาคเรียน {data.term}</span>}</span>
+                <h1>ห้องเรียนออนไลน์<span>{manage ? 'ออกแบบการเรียนรู้ ให้สนุกขึ้น' : 'วันนี้ อยากเรียนรู้อะไร?'}</span></h1>
+                <p>{manage ? 'รวมคลิป ใบความรู้ ใบงาน และแบบทดสอบไว้ให้ผู้เรียนในแต่ละวิชา' : 'เลือกวิชาของคุณ ดูคลิป ลองทำ และค่อย ๆ เก่งขึ้นในแบบของตัวเอง'}</p>
+                <div className="classroom-hero-actions">{manage && subject ? <>
+                    <Button appearance="primary" icon={<Plus size={20} />} disabled={readOnly || busy} onClick={() => add(kind === 'all' ? 'knowledge' : kind)}>สร้างกิจกรรม</Button>
+                    <Button appearance="outline" icon={<UploadSimple size={19} />} disabled={readOnly || busy} onClick={() => add('quiz')}>นำเข้าข้อสอบ</Button>
+                </> : <span className="classroom-registration-note"><CheckCircle size={19} weight="fill" /> รายวิชาที่คุณลงทะเบียน {data.subjects.length} วิชา</span>}</div>
             </div>
-        </>}
-        {editor && subject && <ActivityEditor key={editor === 'new' ? 'new' : editor.id} activity={editor === 'new' ? null : editor} subject={subject} pending={save.isPending} error={save.error} onClose={() => leave(() => setEditor(null))} onDirty={() => setDirty(true)} onSave={values => save.mutate({ id: editor === 'new' ? undefined : editor.id, values })} />}
+            <div className="classroom-hero-art" aria-hidden="true"><div className="classroom-art-sheet"><Books size={56} weight="duotone" /><span>เรียนรู้ในแบบของคุณ</span><i /><i /><i /></div><span className="classroom-art-play"><Play size={32} weight="fill" /></span><span className="classroom-art-check"><CheckCircle size={30} weight="fill" /></span><span className="classroom-art-spark"><Sparkle size={28} weight="fill" /></span></div>
+        </header>
+        {readOnly && <Alert severity="info">ระบบอยู่ในโหมดอ่านอย่างเดียว ผู้ดูแลต้องเปิดการเขียนข้อมูลก่อนสร้างกิจกรรมหรือส่งคำตอบ</Alert>}
+        {query.isError && <Alert severity="warning" action={<Button onClick={() => void query.refetch()}>ลองโหลดใหม่</Button>}>โหลดข้อมูลล่าสุดไม่สำเร็จ ข้อมูลที่กำลังกรอกยังอยู่ กรุณาลองโหลดใหม่เมื่อเชื่อมต่อได้</Alert>}
+        <section className="classroom-course-section" aria-labelledby="classroom-course-heading">
+            <div className="classroom-section-heading"><div><span className="classroom-step">01 · เลือกห้องเรียน</span><h2 id="classroom-course-heading">เริ่มจากวิชาที่ใช่</h2></div><span className="classroom-muted">{manage ? 'เฉพาะรายวิชาและกลุ่มที่คุณดูแล' : 'เฉพาะรายวิชาที่คุณลงทะเบียน'}</span></div>
+            <div className="classroom-levels" role="group" aria-label="ระดับการศึกษา">{levelChoices.map(({ id, label, detail, Icon }) => {
+                const total = data.subjects.filter(item => item.level === id).length;
+                return <button key={id} type="button" aria-pressed={activeLevel === id} disabled={total === 0 || busy} title={total === 0 ? `ยังไม่มีรายวิชา${detail}ในขอบเขตของคุณ` : detail} className="classroom-level" onClick={() => leave(() => { const first = data.subjects.find(item => item.level === id); if (first) { setLevel(id); setCourse(`${id}|${first.code}`); setSearch(''); resetActivity(); } })}>
+                    <span className="classroom-level-icon"><Icon size={27} weight="duotone" /></span><span><strong>{label}</strong><small>{total} รายวิชา</small></span>{activeLevel === id && <CheckCircle size={20} weight="fill" className="classroom-level-check" />}
+                </button>;
+            })}</div>
+            {levelSubjects.length > 6 && <TextField className="classroom-course-search" size="small" label="ค้นหารายวิชา" placeholder="ชื่อวิชาหรือรหัสวิชา" value={search} onChange={event => setSearch(event.target.value)} slotProps={{ input: { startAdornment: <MagnifyingGlass className="mr-2" size={20} /> } }} />}
+            {data.subjects.length === 0 ? <div className="classroom-empty"><GraduationCap size={45} weight="duotone" /><h3>รายวิชาของคุณจะอยู่ตรงนี้</h3><p>เมื่อมีการลงทะเบียนในภาคเรียนปัจจุบัน คุณจะเลือกวิชาและเริ่มเรียนได้ที่นี่</p></div> : <div className="classroom-courses" role="group" aria-label="รายวิชา">
+                {visibleSubjects.map((item, index) => { const active = activeCourseKey === `${item.level}|${item.code}`; return <button key={`${item.level}|${item.code}`} type="button" className="classroom-course" aria-pressed={active} disabled={busy} onClick={() => leave(() => { setCourse(`${item.level}|${item.code}`); resetActivity(); })}>
+                    <span className="classroom-course-top"><span className="classroom-course-number">{String(index + 1).padStart(2, '0')}</span><span className="classroom-course-code">{item.code}</span>{active ? <CheckCircle size={21} weight="fill" /> : <ArrowRight size={20} />}</span>
+                    <strong>{item.name}</strong><span className="classroom-course-footer"><BookOpenText size={17} />{item.level_label}{manage && <span><UsersThree size={16} /> {item.student_count} คน</span>}</span>
+                </button>; })}
+                {visibleSubjects.length === 0 && <p className="classroom-muted py-4">ไม่พบวิชาที่ตรงกับคำค้น ลองค้นด้วยชื่อหรือรหัสวิชาอื่น</p>}
+            </div>}
+        </section>
+        {subject && <section className="classroom-activity-section" aria-labelledby="classroom-activities-heading">
+            <div className="classroom-section-heading"><div><span className="classroom-step">02 · เลือกกิจกรรม</span><h2 id="classroom-activities-heading">{subject.name}<small>{subject.code}</small></h2></div><button type="button" className="classroom-all-button" aria-pressed={kind === 'all'} disabled={busy} onClick={() => leave(() => { setKind('all'); resetActivity(); })}><SquaresFour size={19} /> ทั้งหมด <span>{counts.all}</span></button></div>
+            <div className="classroom-kind-grid" role="group" aria-label="ประเภทกิจกรรม">{(Object.keys(kindLabels) as ActivityKind[]).map(type => { const Icon = kindIcons[type]; return <button type="button" key={type} data-kind={type} className="classroom-kind" aria-pressed={kind === type} disabled={busy} onClick={() => leave(() => { setKind(type); resetActivity(); })}>
+                <span className="classroom-kind-icon"><Icon size={26} weight={type === 'video' ? 'fill' : 'duotone'} /></span><span className="classroom-kind-count">{counts[type]}</span><strong>{kindLabels[type]}</strong><small>{kindDescriptions[type]}</small><ArrowRight className="classroom-kind-arrow" size={18} />
+            </button>; })}</div>
+            {manage && <div className="classroom-teacher-tools"><span><NotePencil size={20} /> เตรียมข้อสอบได้สะดวกขึ้น</span><QuizTemplateActions compact /></div>}
+            <div className="classroom-gallery-heading"><h3>{kind === 'all' ? 'กิจกรรมทั้งหมด' : kindLabels[kind]}</h3><span className="classroom-muted">{busy ? 'กำลังโหลด…' : `${data.activity_pagination?.total ?? data.activities.length} กิจกรรม`}</span></div>
+            {busy ? <QuerySkeleton rows={3} /> : data.activities.length === 0 ? <div className="classroom-empty"><span className="classroom-empty-icon"><Books size={42} weight="duotone" /></span><h3>{manage ? 'เติมห้องเรียนด้วยไอเดียของคุณ' : 'บทเรียนใหม่กำลังจะมา'}</h3><p>{manage ? `สร้าง${kind === 'all' ? 'คลิป ใบความรู้ ใบงาน หรือแบบทดสอบ' : kindLabels[kind]}ให้ผู้เรียนเริ่มเรียนได้เลย` : 'เมื่อครูเผยแพร่กิจกรรม คุณจะกลับมาเรียนต่อได้จากตรงนี้'}</p>{manage && <Button appearance="primary" icon={<Plus />} disabled={readOnly} onClick={() => add(kind === 'all' ? 'knowledge' : kind)}>สร้าง{kind === 'all' ? 'กิจกรรมแรก' : kindLabels[kind]}</Button>}</div> : <div className="classroom-activity-grid">{data.activities.map(item => {
+                const Icon = kindIcons[item.type];
+                const activityStatus = item.status === 'draft' ? 'ฉบับร่าง' : item.submission ? item.submission.status === 'reviewed' ? `คะแนน ${item.submission.score}/${item.submission.max_score}` : 'ส่งแล้ว · รอครูตรวจ' : isAssessment(item.type) ? 'พร้อมให้ลองทำ' : 'พร้อมเรียน';
+                return <button type="button" className="classroom-activity-card" data-kind={item.type} key={item.id} aria-pressed={activityId === item.id} onClick={() => leave(() => { setActivityId(item.id); setSubmissionPage(1); })}>
+                    <span className="classroom-activity-cover"><Icon size={51} weight="duotone" /><span>{kindLabels[item.type]}</span><span className="classroom-cover-mark" aria-hidden="true"><Icon size={120} weight="thin" /></span></span>
+                    <span className="classroom-activity-body"><span className={`classroom-activity-status ${item.status === 'draft' ? 'is-draft' : ''}`}>{activityStatus}</span><strong>{item.title}</strong><span className="classroom-activity-meta">{isAssessment(item.type) ? <><Lightning size={16} /> {item.max_score} คะแนน {manage && <span>· ส่งแล้ว {item.submission_count} คน</span>}</> : <><BookOpenText size={16} /> {item.type === 'video' ? 'คลิปและสื่อวิดีโอ' : 'อ่านได้ตามจังหวะของคุณ'}</>}</span><span className="classroom-activity-go">{item.type === 'video' ? 'เปิดดูคลิป' : item.type === 'knowledge' ? 'เปิดอ่านบทเรียน' : item.submission ? 'ดูคำตอบและคะแนน' : 'เริ่มทำกิจกรรม'}<ArrowRight size={19} /></span></span>
+                </button>;
+            })}</div>}
+            <Pager page={data.activity_pagination} change={page => leave(() => { setActivityPage(page); setActivityId(''); })} />
+        </section>}
+        {activityId && !busy && selected?.id === activityId && <div ref={detailRef} tabIndex={-1} role="region" aria-label={`กิจกรรม ${selected.title}`} className="classroom-detail" data-kind={selected.type}>
+            <div className="classroom-detail-heading"><button type="button" className="classroom-back" onClick={() => leave(() => setActivityId(''))}><ArrowLeft size={20} /> ปิดกิจกรรม</button><span className="classroom-muted">{kindLabels[selected.type]} · {subject?.name}</span></div>
+            <Panel title={selected.title} description={`${kindLabels[selected.type]} · ${selected.target_group || 'ทุกกลุ่มในขอบเขต'} · ${selected.status === 'draft' ? 'ฉบับร่าง' : 'เผยแพร่แล้ว'}`}
+                action={manage && selected.can_edit ? <><Button icon={<PencilSimple />} disabled={readOnly || selected.has_submissions} onClick={() => { save.reset(); setEditor(selected); }}>แก้ไข</Button><Button disabled={readOnly || status.isPending} onClick={() => status.mutate(selected)}>{selected.status === 'published' ? 'ซ่อนกิจกรรม' : 'เผยแพร่'}</Button><Button aria-label="ลบกิจกรรม" icon={<Trash />} disabled={readOnly || selected.has_submissions} onClick={() => setDeleteId(selected.id)} /></> : undefined}>
+                {selected.has_submissions && manage && <Alert severity="info" className="mb-4">มีผู้ส่งคำตอบแล้ว เนื้อหาและข้อคำถามถูกล็อก คุณยังซ่อนกิจกรรมหรือตรวจคำตอบได้</Alert>}
+                {isAssessment(selected.type) && <p className="mb-4 flex flex-wrap items-center gap-2 text-sm classroom-muted"><Clock size={17} />{dateLabel(selected.due_at)} · {selected.max_score} คะแนน · ส่งได้ 1 ครั้ง</p>}
+                {selected.content && <p className="mb-5 whitespace-pre-wrap break-words leading-7">{selected.content}</p>}
+                <div className="space-y-4">{selected.links.map((link, i) => <LearningLink key={`${i}:${link.url}`} title={link.title} url={link.url} embedVideo={selected.type === 'video'} />)}</div>
+                {isAssessment(selected.type) && <AnswerForm key={`${role}:${district}:${selected.id}`} activity={selected} manage={manage} readOnly={readOnly} onDirty={setDirty} refresh={refresh} />}
+            </Panel>
+            {manage && isAssessment(selected.type) && <Panel title="คำตอบที่ส่งแล้ว" description={`${selected.submission_count} รายการ`}>
+                {data.submissions.length === 0 && <p className="text-sm">ยังไม่มีผู้ส่งคำตอบ</p>}
+                <div className="divide-y" style={{ borderColor: 'var(--ui-border)' }}>{data.submissions.map(submission => <div key={submission.id} className="flex flex-wrap items-center justify-between gap-3 py-3"><div><p className="font-semibold">{submission.student_name}</p><p className="text-sm">{submission.student_code} · {submission.status === 'submitted' ? 'รอตรวจ' : `${submission.score} / ${submission.max_score} คะแนน`}</p></div><Button appearance="outline" disabled={!selected.can_edit} onClick={() => setReview(submission)}>ตรวจคำตอบ</Button></div>)}</div>
+                <Pager page={data.submission_pagination} change={setSubmissionPage} />
+            </Panel>}
+        </div>}
+        {editor && subject && <ActivityEditor key={editor === 'new' ? `new:${initialKind}` : editor.id} activity={editor === 'new' ? null : editor} initialKind={initialKind} subject={subject} pending={save.isPending} error={save.error} onClose={() => leave(() => setEditor(null))} onDirty={() => setDirty(true)} onSave={values => save.mutate({ id: editor === 'new' ? undefined : editor.id, values })} />}
         {review && selected && <ReviewDialog submission={review} activity={selected} readOnly={readOnly} close={() => setReview(null)} refresh={refresh} />}
         <Dialog open={Boolean(deleteId)} onClose={() => { if (!remove.isPending) setDeleteId(''); }}><DialogTitle>ลบกิจกรรมนี้?</DialogTitle><DialogContent>กิจกรรมที่ยังไม่มีผู้ส่งคำตอบจะถูกลบออกจากห้องเรียน</DialogContent><DialogActions><Button disabled={remove.isPending} onClick={() => setDeleteId('')}>ยกเลิก</Button><Button appearance="primary" disabled={remove.isPending} onClick={() => remove.mutate()}>ยืนยันลบ</Button></DialogActions></Dialog>
     </div>;
 }
 
-function LearningLink({ title, url }: { title: string; url: string }) {
+function LearningLink({ title, url, embedVideo = true }: { title: string; url: string; embedVideo?: boolean }) {
     const safe = safeClassroomUrl(url);
-    const embed = youtubeEmbed(url);
+    const embed = embedVideo ? youtubeEmbed(url) : null;
     if (!safe) return null;
     return <div className="overflow-hidden rounded-xl border" style={{ borderColor: 'var(--ui-border)' }}>
         {embed && <iframe className="aspect-video w-full" src={embed} title={title} loading="lazy" referrerPolicy="strict-origin-when-cross-origin" allow="accelerometer; autoplay; encrypted-media; picture-in-picture; fullscreen" allowFullScreen />}
@@ -178,34 +229,37 @@ function AnswerForm({ activity, manage, readOnly, onDirty, refresh }: { activity
 
 function newQuestion(): Question { return { id: crypto.randomUUID(), type: 'single_choice', prompt: '', options: ['ตัวเลือก 1', 'ตัวเลือก 2'], answer: 'ตัวเลือก 1', image_id: null, points: 1 }; }
 
-function ActivityEditor({ activity, subject, pending, error, onClose, onDirty, onSave }: { activity: Activity | null; subject: Subject; pending: boolean; error: unknown; onClose: () => void; onDirty: () => void; onSave: (values: unknown) => void }) {
+function ActivityEditor({ activity, initialKind, subject, pending, error, onClose, onDirty, onSave }: { activity: Activity | null; initialKind: ActivityKind; subject: Subject; pending: boolean; error: unknown; onClose: () => void; onDirty: () => void; onSave: (values: unknown) => void }) {
     const [title, setTitle] = useState(activity?.title ?? '');
-    const [type, setType] = useState<ActivityKind>(activity?.type ?? 'knowledge');
+    const [type, setType] = useState<ActivityKind>(activity?.type ?? initialKind);
     const [content, setContent] = useState(activity?.content ?? '');
     const [group, setGroup] = useState(activity?.target_group ?? '');
     const [status, setStatus] = useState(activity?.status ?? 'draft');
     const [due, setDue] = useState(() => { if (!activity?.due_at) return ''; const date = new Date(activity.due_at); return new Date(date.getTime() - date.getTimezoneOffset() * 60000).toISOString().slice(0, 16); });
-    const [links, setLinks] = useState(activity?.links ?? []);
-    const [questions, setQuestions] = useState<Question[]>(() => activity?.questions.length ? activity.questions : [newQuestion()]);
+    const [links, setLinks] = useState(activity?.links ?? (initialKind === 'video' ? [{ title: '', url: '' }] : []));
+    const [questions, setQuestions] = useState<Question[]>(() => activity?.questions.length ? activity.questions : [{ ...newQuestion(), ...(initialKind === 'worksheet' ? { type: 'essay' as QuestionType, options: [], answer: undefined } : {}) }]);
     const [uploading, setUploading] = useState(false);
     const submit = (event: FormEvent) => { event.preventDefault(); if (uploading) return; onSave({ title, type, content, subject_code: subject.code, education_level: subject.level, target_group: group, status,
-        due_at: due ? new Date(due).toISOString() : null, links, questions: type === 'knowledge' ? [] : questions.map(({ image_url: _imageUrl, ...question }) => question) }); };
-    return <Dialog open onClose={() => { if (!pending && !uploading) onClose(); }} fullWidth maxWidth="md"><form onSubmit={submit} onChange={onDirty}>
-        <DialogTitle>{activity ? 'แก้ไขกิจกรรม' : 'เพิ่มกิจกรรม'} · {subject.name}</DialogTitle><DialogContent><div className="space-y-5 pt-2">
-            <div className="grid gap-4 sm:grid-cols-2"><TextField select fullWidth label="ประเภทกิจกรรม" value={type} onChange={event => setType(event.target.value as ActivityKind)}>{Object.entries(kindLabels).map(([value, label]) => <MenuItem value={value} key={value}>{label}</MenuItem>)}</TextField><TextField select fullWidth label="กลุ่มเป้าหมาย" value={group} slotProps={{ inputLabel: { shrink: true }, select: { displayEmpty: true } }} onChange={event => setGroup(event.target.value)}><MenuItem value="">ทุกกลุ่มในขอบเขตของคุณ</MenuItem>{subject.groups.map(item => <MenuItem value={item.code} key={item.code}>{item.name || item.code}</MenuItem>)}</TextField></div>
-            <TextField fullWidth required label="ชื่อกิจกรรม" value={title} slotProps={{ htmlInput: { maxLength: 220 } }} onChange={event => setTitle(event.target.value)} />
-            <TextField fullWidth multiline minRows={5} label={type === 'knowledge' ? 'เนื้อหาใบความรู้' : 'คำชี้แจง'} value={content} slotProps={{ htmlInput: { maxLength: 30000 } }} onChange={event => setContent(event.target.value)} />
-            <section className="space-y-3"><h3 className="font-bold">สื่อและลิงก์ประกอบ</h3><p className="text-sm">เพิ่ม YouTube, Google Drive, OneDrive หรือเว็บไซต์อื่น โดยใช้ลิงก์แชร์ที่ผู้เรียนเปิดดูได้ (สูงสุด 20 ลิงก์)</p>
-                {links.map((link, i) => <div key={i} className="grid items-start gap-2 sm:grid-cols-[1fr_2fr_auto]"><TextField required label={`ชื่อสื่อ ${i + 1}`} value={link.title} onChange={event => setLinks(current => current.map((item, index) => index === i ? { ...item, title: event.target.value } : item))} /><TextField required type="url" label="ลิงก์ HTTP / HTTPS" value={link.url} onChange={event => setLinks(current => current.map((item, index) => index === i ? { ...item, url: event.target.value } : item))} /><Button aria-label={`ลบลิงก์ ${i + 1}`} icon={<Trash />} onClick={() => { setLinks(current => current.filter((_, index) => i !== index)); onDirty(); }} /></div>)}
-                <Button appearance="outline" icon={<Plus />} disabled={links.length >= 20} onClick={() => { setLinks(current => [...current, { title: '', url: '' }]); onDirty(); }}>เพิ่มลิงก์สื่อ</Button>
+        due_at: isAssessment(type) && due ? new Date(due).toISOString() : null, links, questions: isAssessment(type) ? questions.map(({ image_url: _imageUrl, ...question }) => question) : [] }); };
+    return <Dialog className="classroom-dialog" open onClose={() => { if (!pending && !uploading) onClose(); }} fullWidth maxWidth="md"><form onSubmit={submit} onChange={onDirty}>
+        <DialogTitle><span className="classroom-step">{subject.code} · {subject.name}</span><span className="block mt-1">{activity ? 'ปรับกิจกรรมให้น่าเรียน' : 'สร้างกิจกรรมใหม่'}</span></DialogTitle><DialogContent><div className="space-y-5 pt-2">
+            <fieldset><legend className="classroom-field-label">วันนี้จะสร้างอะไรดี?</legend><div className="classroom-editor-kinds" role="group" aria-label="ประเภทกิจกรรม">{(Object.keys(kindLabels) as ActivityKind[]).map(value => { const Icon = kindIcons[value]; return <button type="button" data-kind={value} className="classroom-editor-kind" key={value} aria-pressed={type === value} disabled={pending || uploading} onClick={() => { setType(value); if (value === 'video' && links.length === 0) setLinks([{ title: '', url: '' }]); onDirty(); }}><Icon size={25} weight="duotone" /><strong>{kindLabels[value]}</strong></button>; })}</div></fieldset>
+            <TextField fullWidth required label="ชื่อกิจกรรม" placeholder={type === 'video' ? 'เช่น ดูคลิป รู้จักระบบสุริยะ' : 'ตั้งชื่อที่ทำให้ผู้เรียนอยากเปิดดู'} value={title} disabled={pending || uploading} slotProps={{ htmlInput: { maxLength: 220 } }} onChange={event => setTitle(event.target.value)} />
+            <fieldset><legend className="classroom-field-label">ให้กลุ่มไหนเรียนบ้าง?</legend><div className="classroom-choice-buttons" role="group" aria-label="กลุ่มเป้าหมาย">{[{ code: '', name: 'ทุกกลุ่มในขอบเขตของคุณ' }, ...subject.groups].map(item => <button type="button" key={item.code} aria-pressed={group === item.code} disabled={pending || uploading} onClick={() => { setGroup(item.code); onDirty(); }}>{item.name || item.code}{group === item.code && <CheckCircle size={16} weight="fill" />}</button>)}</div></fieldset>
+            <TextField fullWidth multiline minRows={4} label={type === 'knowledge' ? 'เนื้อหาใบความรู้' : type === 'video' ? 'คำอธิบายคลิป' : 'คำชี้แจง'} value={content} disabled={pending || uploading} slotProps={{ htmlInput: { maxLength: 30000 } }} onChange={event => setContent(event.target.value)} />
+            <section className="space-y-3"><h3 className="font-bold">{type === 'video' ? 'ลิงก์คลิปวิดีโอ' : 'เอกสารและลิงก์ประกอบ'}</h3><p className="text-sm classroom-muted">{type === 'video' ? 'YouTube เล่นในห้องเรียนได้ทันที หรือแนบวิดีโอจาก Drive / OneDrive ผ่านลิงก์แชร์' : 'แนบเอกสาร Google Drive, OneDrive หรือเว็บไซต์ที่ผู้เรียนเปิดดูได้'} · สูงสุด 20 ลิงก์</p>
+                {links.map((link, i) => <div key={i} className="grid items-start gap-2 sm:grid-cols-[1fr_2fr_auto]"><TextField required label={`ชื่อสื่อ ${i + 1}`} value={link.title} disabled={pending || uploading} onChange={event => setLinks(current => current.map((item, index) => index === i ? { ...item, title: event.target.value } : item))} /><TextField required type="url" label="ลิงก์ HTTP / HTTPS" value={link.url} disabled={pending || uploading} onChange={event => setLinks(current => current.map((item, index) => index === i ? { ...item, url: event.target.value } : item))} /><Button aria-label={`ลบลิงก์ ${i + 1}`} icon={<Trash />} disabled={pending || uploading || (type === 'video' && links.length === 1)} onClick={() => { setLinks(current => current.filter((_, index) => i !== index)); onDirty(); }} /></div>)}
+                <Button appearance="outline" icon={<Plus />} disabled={links.length >= 20 || pending || uploading} onClick={() => { setLinks(current => [...current, { title: '', url: '' }]); onDirty(); }}>{type === 'video' ? 'เพิ่มลิงก์คลิป' : 'เพิ่มลิงก์สื่อ'}</Button>
             </section>
-            {type !== 'knowledge' && <section className="space-y-4"><h3 className="font-bold">คำถาม · รวม {questions.reduce((sum, question) => sum + Number(question.points || 0), 0)} คะแนน</h3><p className="text-sm">เลือกหลายคำตอบได้คะแนนเมื่อตอบถูกครบชุด เติมคำเทียบข้อความโดยไม่สนตัวพิมพ์ใหญ่/เล็กและช่องว่างหัวท้าย ส่วนอัตนัยรอครูตรวจ</p>
+            {isAssessment(type) && <section className="space-y-4">
+                <QuizImportPanel disabled={pending || uploading} existingCount={questions.filter(question => question.prompt.trim() !== '').length} apply={value => { setQuestions(value.questions); if (value.title && !title.trim()) setTitle(value.title); onDirty(); }} />
+                <div className="classroom-section-heading"><h3 className="font-bold">คำถามของกิจกรรม</h3><span className="classroom-total-points">{questions.length} ข้อ · รวม {Number(questions.reduce((sum, question) => sum + Number(question.points || 0), 0).toFixed(2))} คะแนน</span></div><p className="text-sm classroom-muted">เลือกหลายคำตอบต้องถูกครบชุด เติมคำไม่สนตัวพิมพ์ใหญ่/เล็กและช่องว่างหัวท้าย ส่วนอัตนัยรอครูตรวจ</p>
                 {questions.map((question, index) => <QuestionEditor key={question.id} question={question} index={index} disabled={pending || uploading} onUpload={setUploading} change={next => { setQuestions(current => current.map(item => item.id === question.id ? next : item)); onDirty(); }} remove={() => { setQuestions(current => current.filter(item => item.id !== question.id)); onDirty(); }} />)}
-                <Button appearance="outline" icon={<Plus />} disabled={questions.length >= 100} onClick={() => { setQuestions(current => [...current, { ...newQuestion(), ...(type === 'worksheet' ? { type: 'essay' as QuestionType, options: [], answer: undefined } : {}) }]); onDirty(); }}>เพิ่มคำถาม</Button>
+                <Button appearance="outline" icon={<Plus />} disabled={questions.length >= 100 || pending || uploading} onClick={() => { setQuestions(current => [...current, { ...newQuestion(), ...(type === 'worksheet' ? { type: 'essay' as QuestionType, options: [], answer: undefined } : {}) }]); onDirty(); }}>เพิ่มคำถาม</Button>
             </section>}
-            <div className="grid gap-4 sm:grid-cols-2"><TextField select fullWidth label="สถานะ" value={status} onChange={event => setStatus(event.target.value as Activity['status'])}><MenuItem value="draft">ฉบับร่าง</MenuItem><MenuItem value="published">เผยแพร่</MenuItem></TextField>{type !== 'knowledge' && <TextField type="datetime-local" label="กำหนดส่ง (เว้นว่างได้)" value={due} slotProps={{ inputLabel: { shrink: true } }} onChange={event => setDue(event.target.value)} />}</div>
+            <div className="grid gap-5 sm:grid-cols-2"><fieldset><legend className="classroom-field-label">พร้อมให้ผู้เรียนเห็นหรือยัง?</legend><div className="classroom-choice-buttons" role="group" aria-label="สถานะกิจกรรม">{[{ value: 'draft', label: 'เก็บเป็นฉบับร่าง' }, { value: 'published', label: 'เผยแพร่เลย' }].map(item => <button type="button" key={item.value} aria-pressed={status === item.value} disabled={pending || uploading} onClick={() => { setStatus(item.value as Activity['status']); onDirty(); }}>{item.label}{status === item.value && <CheckCircle size={16} weight="fill" />}</button>)}</div></fieldset>{isAssessment(type) && <TextField type="datetime-local" label="กำหนดส่ง (เว้นว่างได้)" value={due} disabled={pending || uploading} slotProps={{ inputLabel: { shrink: true } }} onChange={event => setDue(event.target.value)} />}</div>
             {error != null && <Alert severity="error">{errorText(error)}</Alert>}
-        </div></DialogContent><DialogActions><Button disabled={pending || uploading} onClick={onClose}>ยกเลิก</Button><Button type="submit" appearance="primary" disabled={pending || uploading || (type !== 'knowledge' && questions.length === 0)}>{uploading ? 'กำลังอัปโหลดภาพ…' : pending ? 'กำลังบันทึก…' : 'บันทึกกิจกรรม'}</Button></DialogActions>
+        </div></DialogContent><DialogActions><Button disabled={pending || uploading} onClick={onClose}>ยกเลิก</Button><Button type="submit" appearance="primary" disabled={pending || uploading || (isAssessment(type) && questions.length === 0)}>{uploading ? 'กำลังอัปโหลดภาพ…' : pending ? 'กำลังบันทึก…' : 'บันทึกกิจกรรม'}</Button></DialogActions>
     </form></Dialog>;
 }
 
@@ -213,7 +267,7 @@ function QuestionEditor({ question, index, disabled, change, remove, onUpload }:
     const upload = useMutation({ mutationFn: (file: File) => { const form = new FormData(); form.set('image', file); return sendFeatureData<{ id: string; url: string }>(`${base}/images`, 'POST', form); }, onMutate: () => onUpload(true), onSuccess: result => change({ ...question, image_id: result.data.id, image_url: result.data.url }), onSettled: () => onUpload(false) });
     const options = ['single_choice', 'multiple_choice'].includes(question.type);
     return <div className="space-y-3 rounded-xl border p-4" style={{ borderColor: 'var(--ui-border)' }}><div className="flex items-center justify-between"><h4 className="font-bold">ข้อ {index + 1}</h4><Button aria-label={`ลบคำถาม ${index + 1}`} icon={<Trash />} disabled={disabled || upload.isPending} onClick={remove} /></div>
-        <div className="grid gap-3 sm:grid-cols-[2fr_1fr]"><TextField select label="ชนิดคำถาม" value={question.type} disabled={disabled || upload.isPending} onChange={event => { const type = event.target.value as QuestionType; change({ ...question, type, options: ['single_choice', 'multiple_choice'].includes(type) ? ['ตัวเลือก 1', 'ตัวเลือก 2'] : [], answer: type === 'multiple_choice' ? [] : type === 'true_false' ? 'true' : type === 'single_choice' ? 'ตัวเลือก 1' : undefined }); }}>{Object.entries(questionLabels).map(([type, label]) => <MenuItem value={type} key={type}>{label}</MenuItem>)}</TextField><TextField required label="คะแนน" type="number" value={question.points} disabled={disabled} slotProps={{ htmlInput: { min: 0.01, max: 1000, step: 0.01 } }} onChange={event => change({ ...question, points: Number(event.target.value) })} /></div>
+        <fieldset><legend className="classroom-field-label">ชนิดคำถาม</legend><div className="classroom-choice-buttons" role="group" aria-label={`ชนิดคำถามข้อ ${index + 1}`}>{Object.entries(questionLabels).map(([value, label]) => <button type="button" key={value} aria-pressed={question.type === value} disabled={disabled || upload.isPending} onClick={() => { if (value === question.type) return; const type = value as QuestionType; change({ ...question, type, options: ['single_choice', 'multiple_choice'].includes(type) ? ['ตัวเลือก 1', 'ตัวเลือก 2'] : [], answer: type === 'multiple_choice' ? [] : type === 'true_false' ? 'true' : type === 'single_choice' ? 'ตัวเลือก 1' : undefined }); }}>{label}</button>)}</div></fieldset><TextField required className="max-w-44" label="คะแนน" type="number" value={question.points} disabled={disabled} slotProps={{ htmlInput: { min: 0.01, max: 1000, step: 0.01 } }} onChange={event => change({ ...question, points: Number(event.target.value) })} />
         <TextField fullWidth required multiline minRows={2} label="โจทย์ / คำถาม" value={question.prompt} disabled={disabled} slotProps={{ htmlInput: { maxLength: 5000 } }} onChange={event => change({ ...question, prompt: event.target.value })} />
         {question.image_url && <><PrivateImage url={question.image_url} /><Button disabled={disabled || upload.isPending} onClick={() => change({ ...question, image_id: null, image_url: null })}>นำภาพออกจากโจทย์</Button></>}
         <Button as="label" appearance="outline" icon={<UploadSimple />} disabled={disabled || upload.isPending}>{upload.isPending ? 'กำลังอัปโหลด…' : 'อัปโหลดภาพโจทย์'}<input type="file" hidden accept="image/jpeg,image/png,image/webp" disabled={disabled || upload.isPending} onChange={event => { const file = event.target.files?.[0]; if (file) upload.mutate(file); event.target.value = ''; }} /></Button><p className="text-xs">JPG, PNG, WebP ไม่เกิน 5 MB</p>

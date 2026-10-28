@@ -1,1 +1,0 @@
-import{I as e,Rt as t}from"./IconBase.es-omOV8__w.js";var n=t();function r({children:t,columns:r=4}){return(0,n.jsx)(e,{component:`section`,"aria-label":`ข้อมูลสรุป`,className:`ui-stat-grid`,"data-columns":r,sx:{display:`grid`,gap:{xs:1.5,sm:1.75},mb:2},children:t})}export{r as t};

@@ -295,4 +295,63 @@ final class OnlineClassroomTest extends TestCase
         $this->postJson(self::BASE."/activities/{$id}", ['status' => 'draft'])->assertForbidden();
         $this->deleteJson(self::BASE."/activities/{$id}")->assertForbidden();
     }
+
+    public function test_video_is_a_separate_published_activity_with_links_and_no_submission(): void
+    {
+        $links = [['title' => 'คลิปการทดลอง', 'url' => 'https://www.youtube.com/watch?v=dQw4w9WgXcQ'],
+            ['title' => 'คลิปจาก Drive', 'url' => 'https://drive.google.com/file/d/example/view'],
+            ['title' => 'คลิปจาก OneDrive', 'url' => 'https://1drv.ms/v/s!example']];
+        $id = $this->createActivity(['type' => 'video', 'questions' => [], 'links' => $links]);
+        Sanctum::actingAs($this->student());
+        $this->getJson($this->selected($id))->assertOk()->assertJsonPath('data.selected_activity.type', 'video')
+            ->assertJsonPath('data.selected_activity.links', $links)->assertJsonCount(0, 'data.selected_activity.questions')
+            ->assertJsonPath('data.activity_counts.video', 1)->assertJsonPath('data.activity_counts.knowledge', 0);
+        $this->postJson(self::BASE."/activities/{$id}/submit", ['answers' => ['q1' => 'ก']])->assertUnprocessable();
+        $this->assertDatabaseCount('learning_classroom_submissions', 0);
+    }
+
+    public function test_video_requires_a_safe_link_and_cannot_contain_quiz_questions(): void
+    {
+        $this->postJson(self::BASE.'/activities', $this->values(['type' => 'video', 'links' => [], 'questions' => []]))
+            ->assertUnprocessable()->assertJsonValidationErrors('links');
+        $this->postJson(self::BASE.'/activities', $this->values(['type' => 'video', 'links' => [['title' => 'คลิป', 'url' => 'javascript:alert(1)']], 'questions' => []]))
+            ->assertUnprocessable()->assertJsonValidationErrors('links.0.url');
+        $this->postJson(self::BASE.'/activities', $this->values(['type' => 'video', 'links' => [['title' => 'คลิป', 'url' => 'https://youtu.be/dQw4w9WgXcQ']]]))
+            ->assertUnprocessable()->assertJsonValidationErrors('questions');
+        $this->assertDatabaseCount('learning_classroom_activities', 0);
+    }
+
+    public function test_activity_type_filter_runs_before_pagination_and_counts_only_authorized_published_activities(): void
+    {
+        $knowledge = $this->createActivity(['type' => 'knowledge', 'questions' => []]);
+        $video = $this->createActivity(['type' => 'video', 'questions' => [], 'links' => [['title' => 'คลิป', 'url' => 'https://youtu.be/dQw4w9WgXcQ']]]);
+        $quiz = $this->createActivity();
+        $quizRow = (array) DB::table('learning_classroom_activities')->where('id', $quiz)->first();
+        unset($quizRow['id']);
+        DB::table('learning_classroom_activities')->insert(array_fill(0, 55, $quizRow));
+        $videoRow = (array) DB::table('learning_classroom_activities')->where('id', $video)->first();
+        unset($videoRow['id']);
+        DB::table('learning_classroom_activities')->insert([
+            array_replace($videoRow, ['status' => 'draft']),
+            array_replace($videoRow, ['target_group' => 'SENA-M3-B', 'audience_groups' => json_encode(['SENA-M3-B'])]),
+        ]);
+        Sanctum::actingAs($this->student());
+        $response = $this->getJson(self::BASE.'?subject_code='.urlencode('พว31001').'&education_level=3&activity_type=knowledge')
+            ->assertOk()->assertJsonCount(1, 'data.activities')->assertJsonPath('data.activity_pagination.total', 1)
+            ->assertJsonPath('data.selected_activity.id', (string) $knowledge)
+            ->assertJsonPath('data.activity_counts', ['all' => 58, 'knowledge' => 1, 'video' => 1, 'worksheet' => 0, 'quiz' => 56]);
+        $this->assertSame('knowledge', $response->json('data.selected_activity.type'));
+        $this->getJson($this->selected($knowledge).'&activity_type=video')->assertNotFound();
+        $this->getJson(self::BASE.'?subject_code='.urlencode('พว31001').'&education_level=3&activity_type=worksheet')
+            ->assertOk()->assertJsonCount(0, 'data.activities')->assertJsonPath('data.selected_activity', null)
+            ->assertJsonPath('data.activity_counts.all', 58);
+        $this->getJson(self::BASE.'?activity_type=unknown')->assertUnprocessable();
+    }
+
+    public function test_empty_classroom_has_zero_category_counts(): void
+    {
+        Sanctum::actingAs($this->student('unknown'));
+        $this->getJson(self::BASE.'?activity_type=video')->assertOk()->assertJsonPath('data.selected_activity', null)
+            ->assertJsonPath('data.activity_counts', ['all' => 0, 'knowledge' => 0, 'video' => 0, 'worksheet' => 0, 'quiz' => 0]);
+    }
 }

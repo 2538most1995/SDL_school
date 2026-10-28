@@ -21,7 +21,8 @@ final class OnlineClassroomController extends Controller
     {
         $this->service->ready();
         $filters = $request->validate(['subject_code' => ['nullable', 'string', 'max:32'], 'education_level' => ['required_with:subject_code', 'nullable', 'integer', 'in:1,2,3'],
-            'activity_id' => ['nullable', 'integer', 'min:1'], 'page' => ['nullable', 'integer', 'min:1'], 'activity_page' => ['nullable', 'integer', 'min:1']]);
+            'activity_id' => ['nullable', 'integer', 'min:1'], 'activity_type' => ['nullable', Rule::in(['knowledge', 'video', 'worksheet', 'quiz'])],
+            'page' => ['nullable', 'integer', 'min:1'], 'activity_page' => ['nullable', 'integer', 'min:1']]);
 
         return response()->json(['data' => $this->service->workspace($request->user(), $this->district($request), $filters),
             'meta' => ['read_only' => ! (bool) config('system_data.write_enabled')]])->header('Cache-Control', 'private, no-store');
@@ -130,16 +131,16 @@ final class OnlineClassroomController extends Controller
 
         return $request->validate([
             'subject_code' => ['required', 'string', 'max:32'], 'education_level' => ['required', 'integer', 'in:1,2,3'],
-            'target_group' => ['nullable', 'string', 'max:120'], 'type' => ['required', Rule::in(['knowledge', 'worksheet', 'quiz'])],
+            'target_group' => ['nullable', 'string', 'max:120'], 'type' => ['required', Rule::in(['knowledge', 'video', 'worksheet', 'quiz'])],
             'title' => ['required', 'string', 'max:220', 'regex:/\S/u'], 'content' => ['nullable', 'string', 'max:30000'],
             'status' => ['required', Rule::in(['draft', 'published'])], 'due_at' => ['nullable', 'date'],
-            'links' => ['present', 'array', 'max:20'], 'links.*' => ['array:title,url'], 'links.*.title' => ['required', 'string', 'max:220'],
+            'links' => ['present', 'array', 'max:20', 'min:'.($request->input('type') === 'video' ? 1 : 0)], 'links.*' => ['array:title,url'], 'links.*.title' => ['required', 'string', 'max:220'],
             'links.*.url' => ['required', 'url:http,https', 'max:2048', function ($attribute, $value, $fail) {
                 if (preg_match('/[\x00-\x20\x7f\\\\]/', $value) || parse_url($value, PHP_URL_USER) !== null || parse_url($value, PHP_URL_PASS) !== null) {
                     $fail('ลิงก์ต้องเป็น HTTP/HTTPS และไม่มีข้อมูลเข้าสู่ระบบ');
                 }
             }],
-            'questions' => ['present', 'array', 'max:100'], 'questions.*' => ['array:id,type,prompt,image_id,options,points,answer'],
+            'questions' => ['present', 'array', $request->input('type') === 'video' ? 'size:0' : 'max:100'], 'questions.*' => ['array:id,type,prompt,image_id,options,points,answer'],
             'questions.*.id' => ['required', 'string', 'max:64', 'regex:/^[A-Za-z0-9_-]+$/', 'not_in:__proto__,constructor,prototype'],
             'questions.*.type' => ['required', Rule::in(['single_choice', 'multiple_choice', 'true_false', 'short_answer', 'essay'])],
             'questions.*.prompt' => ['required', 'string', 'max:5000', 'regex:/\S/u'], 'questions.*.image_id' => ['nullable', 'integer', 'min:1'],

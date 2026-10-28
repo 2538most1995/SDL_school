@@ -88,7 +88,7 @@ final class OnlineClassroomService
         abort_if(! empty($filters['subject_code']) && $subject === null, 404);
         $groupPairs = collect($catalog['registrations'])->filter(fn ($item) => $subject !== null && $item['subject_code'] === $subject['code'] && (int) $item['level'] === $subject['level'])
             ->unique(fn ($item) => $item['group_code'].'|'.$item['group_name'])->values();
-        $activityPage = $subject === null ? null : DB::table('learning_classroom_activities')
+        $activityQuery = $subject === null ? null : DB::table('learning_classroom_activities')
             ->where('district_id', $districtId)->where('academic_term', $catalog['term'])
             ->where('subject_code', $subject['code'])->where('education_level', $subject['level'])
             ->when($viewer->role === 'student', fn ($query) => $query->where('status', 'published'))
@@ -100,7 +100,18 @@ final class OnlineClassroomService
                             ->where(fn ($scope) => $scope->whereNull('audience_groups')->orWhereJsonContains('audience_groups', $group['group_code']));
                     });
                 }
-            })
+            });
+        $activityCounts = ['all' => 0, 'knowledge' => 0, 'video' => 0, 'worksheet' => 0, 'quiz' => 0];
+        if ($activityQuery !== null) {
+            $totals = (clone $activityQuery)->selectRaw('type, COUNT(*) as total')->groupBy('type')->pluck('total', 'type');
+            foreach ($totals as $type => $total) {
+                $activityCounts['all'] += (int) $total;
+                if (array_key_exists($type, $activityCounts)) {
+                    $activityCounts[$type] = (int) $total;
+                }
+            }
+        }
+        $activityPage = $activityQuery?->when(! empty($filters['activity_type']), fn ($query) => $query->where('type', $filters['activity_type']))
             ->orderByDesc('id')->paginate(50, ['*'], 'activity_page', (int) ($filters['activity_page'] ?? 1));
         $rows = collect($activityPage?->items() ?? []);
         $rows = $rows->filter(fn ($row) => $this->audience($catalog, $row) !== [])->values();
@@ -128,7 +139,7 @@ final class OnlineClassroomService
 
                 return $activity;
             })->all(),
-            'selected_activity' => $selectedPayload, 'submissions' => $submissions, 'submission_pagination' => $pagination,
+            'selected_activity' => $selectedPayload, 'submissions' => $submissions, 'submission_pagination' => $pagination, 'activity_counts' => $activityCounts,
             'activity_pagination' => $activityPage === null ? null : ['current_page' => $activityPage->currentPage(), 'last_page' => $activityPage->lastPage(), 'total' => $activityPage->total()]];
     }
 
@@ -241,7 +252,7 @@ final class OnlineClassroomService
 
     private function validatedQuestions(array $questions, string $type): array
     {
-        if ($type === 'knowledge') {
+        if (in_array($type, ['knowledge', 'video'], true)) {
             return [];
         }
         if ($questions === []) {
@@ -286,7 +297,7 @@ final class OnlineClassroomService
         return DB::transaction(function () use ($viewer, $districtId, $id, $answers, $catalog) {
             DB::table('learning_classroom_activities')->where('id', $id)->lockForUpdate()->first();
             $activity = $this->authorizedActivity($viewer, $districtId, $id, false, $catalog);
-            abort_if($activity->type === 'knowledge', 422, 'ใบความรู้ไม่มีการส่งคำตอบ');
+            abort_if(in_array($activity->type, ['knowledge', 'video'], true), 422, 'ใบความรู้และคลิปวิดีโอไม่มีการส่งคำตอบ');
             abort_if($activity->due_at !== null && now()->gt($activity->due_at), 422, 'พ้นกำหนดส่งแล้ว');
             $studentCode = (string) ($viewer->student_code ?: $viewer->username);
             abort_if(DB::table('learning_classroom_submissions')->where('activity_id', $id)->where('student_code', $studentCode)->exists(), 409, 'ส่งคำตอบแล้ว กิจกรรมนี้ส่งได้หนึ่งครั้ง');

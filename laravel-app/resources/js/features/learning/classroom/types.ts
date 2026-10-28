@@ -1,12 +1,12 @@
 export type QuestionType = 'single_choice' | 'multiple_choice' | 'true_false' | 'short_answer' | 'essay';
 export type Question = { id: string; type: QuestionType; prompt: string; image_id: string | null; image_url?: string | null; options: string[]; points: number; answer?: string | string[] };
 export type Submission = { id: string; student_code: string; student_name: string; answers: Record<string, string | string[]>; auto_score: number; score: number | null; max_score: number; status: 'submitted' | 'reviewed'; feedback: string | null; submitted_at: string };
-export type ActivityKind = 'knowledge' | 'worksheet' | 'quiz';
+export type ActivityKind = 'knowledge' | 'video' | 'worksheet' | 'quiz';
 export type Activity = { id: string; title: string; type: ActivityKind; content: string; links: { title: string; url: string }[]; questions: Question[]; status: 'draft' | 'published'; due_at: string | null; target_group: string; subject_code: string; subject_name: string; education_level: number; max_score: number; can_edit: boolean; has_submissions: boolean; submission_count: number; submission: Submission | null };
 export type Subject = { code: string; name: string; level: number; level_label: string; student_count: number; groups: { code: string; name: string }[] };
 export type PageInfo = { current_page: number; last_page: number; total: number };
-export type Workspace = { term: string | null; subjects: Subject[]; selected_subject: Subject | null; activities: Activity[]; selected_activity: Activity | null; submissions: Submission[]; submission_pagination: PageInfo | null; activity_pagination: PageInfo | null };
-export const kindLabels: Record<ActivityKind, string> = { knowledge: 'ใบความรู้', worksheet: 'ใบงานออนไลน์', quiz: 'แบบทดสอบ' };
+export type Workspace = { term: string | null; subjects: Subject[]; selected_subject: Subject | null; activities: Activity[]; selected_activity: Activity | null; submissions: Submission[]; submission_pagination: PageInfo | null; activity_pagination: PageInfo | null; activity_counts: Record<ActivityKind | 'all', number> };
+export const kindLabels: Record<ActivityKind, string> = { video: 'คลิปวิดีโอ', knowledge: 'ใบความรู้', worksheet: 'ใบงานออนไลน์', quiz: 'แบบทดสอบ' };
 export const questionLabels: Record<QuestionType, string> = { single_choice: 'เลือกตอบ 1 ข้อ', multiple_choice: 'เลือกหลายคำตอบ', true_false: 'ถูก / ผิด', short_answer: 'เติมคำ', essay: 'อัตนัย' };
 
 export function safeClassroomUrl(value: string): string | null {
