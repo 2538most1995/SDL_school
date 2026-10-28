@@ -10,6 +10,7 @@ final class StudentDashboardMenu
     private const FEATURED = [
         'my-learning' => ['ข้อมูลส่วนตัว', 'โปรไฟล์และสถานะการศึกษา', 'blue'],
         'learning-home' => ['พื้นที่การเรียนรู้', 'ภาพรวมงานและบทเรียน', 'violet'],
+        'online-classroom' => ['ห้องเรียนออนไลน์', 'ใบความรู้ ใบงาน และแบบทดสอบรายวิชา', 'blue'],
         'assignments' => ['งานและการส่งงาน', 'ติดตามกำหนดและส่งงาน', 'rose'],
         'resources' => ['คลังสื่อ', 'เอกสารและสื่อการเรียน', 'teal'],
         'public-relations' => ['ข่าวประชาสัมพันธ์', 'ข่าวและข้อมูลสำคัญ', 'amber'],

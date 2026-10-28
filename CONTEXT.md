@@ -1,5 +1,9 @@
 # SDL School Context
 
+## Online classroom (2026-10-28)
+
+`/learning/classroom` adds knowledge, online worksheets and quizzes per current-term registered subject and education level, merging ITW and selected web registrations. Teachers author within assigned groups; student access requires actual registration and published group eligibility. Five question types, private prompt images, YouTube embeds and shared Google Drive/OneDrive links are supported. Submissions allow one final attempt, automatic grading plus manual essay review; answer keys never enter student responses. Content is frozen after submissions. Classroom scores are separate from ITW marks. See `laravel-app/docs/online-classroom.md` for limits, API, deployment and retention.
+
 ## Purpose and architecture
 
 SDL School is a Laravel 13 + React 19 application for multi-district student administration and learning services. The deployment owns one database selected by `DB_*`; users, districts, settings, audit, queue, learning data, import registry and imported DBF tables all live in that database. There is no connection to the former Sena Care School database.

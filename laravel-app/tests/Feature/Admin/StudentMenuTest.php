@@ -30,7 +30,7 @@ final class StudentMenuTest extends TestCase
         return ['key' => $key, 'label' => 'ข่าวโรงเรียน', 'description' => 'เปิดข้อมูลเพิ่มเติม', 'visible' => true, 'link_type' => $type, 'url' => $url];
     }
 
-    public function test_default_student_menu_preserves_eight_homepage_buttons_and_allows_only_student_modules(): void
+    public function test_default_student_menu_includes_online_classroom_and_allows_only_student_modules(): void
     {
         $district = $this->district('menu');
         Sanctum::actingAs(User::factory()->create(['role' => 'admin', 'district_id' => $district->id]));
@@ -38,7 +38,7 @@ final class StudentMenuTest extends TestCase
         $items = $response->json('data.items');
         $this->assertSame($response->json('data.defaults'), $items);
         $this->assertSame([
-            'my-learning', 'learning-home', 'assignments', 'resources', 'public-relations', 'schedule', 'exam-attendance-check', 'nnet-report',
+            'my-learning', 'learning-home', 'online-classroom', 'assignments', 'resources', 'public-relations', 'schedule', 'exam-attendance-check', 'nnet-report',
         ], array_column(array_filter($items, fn (array $item): bool => $item['visible']), 'key'));
         $allowed = collect(config('sena.modules'))->flatMap(fn (array $group) => $group['items'])
             ->filter(fn (array $item): bool => in_array('student', $item['roles'], true) && $item['key'] !== 'dashboard')->pluck('key')->sort()->values()->all();
@@ -72,7 +72,7 @@ final class StudentMenuTest extends TestCase
         $this->assertSame('/settings/appearance', $response->json('data.student_menu.0.route'));
         $this->assertFalse(collect($response->json('data.groups'))->flatMap(fn (array $group) => $group['items'])->contains('key', 'student-menu'));
         Sanctum::actingAs(User::factory()->create(['role' => 'student', 'district_id' => $other->id]));
-        $this->getJson('/api/v1/system/catalog')->assertOk()->assertJsonCount(8, 'data.student_menu')
+        $this->getJson('/api/v1/system/catalog')->assertOk()->assertJsonCount(9, 'data.student_menu')
             ->assertJsonPath('data.student_menu.0.label', 'ข้อมูลส่วนตัว');
     }
 
@@ -174,7 +174,7 @@ final class StudentMenuTest extends TestCase
         $this->getJson('/api/v1/admin/student-menu')->assertOk()->assertJsonPath('data.can_save', false)->assertJsonPath('data.items.0.key', 'my-learning');
         $this->patchJson('/api/v1/admin/student-menu', ['items' => $this->items()])->assertStatus(503);
         Sanctum::actingAs(User::factory()->create(['role' => 'student', 'district_id' => $district->id]));
-        $this->getJson('/api/v1/system/catalog')->assertOk()->assertJsonCount(8, 'data.student_menu');
+        $this->getJson('/api/v1/system/catalog')->assertOk()->assertJsonCount(9, 'data.student_menu');
     }
 
     public function test_migration_can_run_again_without_overwriting_preferences(): void
@@ -212,7 +212,7 @@ final class StudentMenuTest extends TestCase
             ->assertJsonPath('data.student_menu.2.key', 'custom-school')->assertJsonPath('data.student_menu.2.external', true);
         $this->assertFalse(collect($student->json('data.student_menu'))->contains('key', 'custom-hidden'));
         Sanctum::actingAs(User::factory()->create(['role' => 'student', 'district_id' => $other->id]));
-        $this->getJson('/api/v1/system/catalog')->assertOk()->assertJsonCount(8, 'data.student_menu');
+        $this->getJson('/api/v1/system/catalog')->assertOk()->assertJsonCount(9, 'data.student_menu');
         Sanctum::actingAs(User::factory()->create(['role' => 'admin', 'district_id' => $district->id]));
         $this->patchJson('/api/v1/admin/student-menu', ['items' => [$defaults[0], $this->custom(), ...array_slice($defaults, 1)]])->assertOk()
             ->assertJsonPath('data.items.1.key', 'custom-school');
@@ -289,7 +289,7 @@ final class StudentMenuTest extends TestCase
         ];
         $district->save();
         Sanctum::actingAs(User::factory()->create(['role' => 'student', 'district_id' => $district->id]));
-        $response = $this->getJson('/api/v1/system/catalog')->assertOk()->assertJsonCount(10, 'data.student_menu')
+        $response = $this->getJson('/api/v1/system/catalog')->assertOk()->assertJsonCount(11, 'data.student_menu')
             ->assertJsonPath('data.student_menu.0.key', 'custom-good')
             ->assertJsonPath('data.student_menu.1.key', 'custom-tampered')->assertJsonPath('data.student_menu.1.external', true)
             ->assertJsonPath('data.student_menu.1.route', $this->custom()['url'])->assertJsonPath('data.student_menu.1.icon', 'link');

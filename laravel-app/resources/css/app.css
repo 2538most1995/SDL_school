@@ -810,6 +810,18 @@ textarea {
     min-height: 7rem;
 }
 
+/* MUI measures a hidden textarea to calculate rows. A fixed minimum on that
+   measuring element multiplies the visible answer field height by minRows. */
+.online-classroom .MuiInputBase-multiline textarea {
+    min-height: 0;
+    background: transparent;
+    box-shadow: none;
+}
+
+.online-classroom .MuiInputBase-multiline textarea:focus {
+    box-shadow: none;
+}
+
 .portal-shell :where(input, textarea)::placeholder {
     color: var(--ui-text-soft);
     opacity: 1;

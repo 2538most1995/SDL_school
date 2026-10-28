@@ -21,6 +21,7 @@ use App\Http\Controllers\Api\Learning\ExamAttendanceController;
 use App\Http\Controllers\Api\Learning\ExamScheduleDocumentController;
 use App\Http\Controllers\Api\Learning\LearningContentController;
 use App\Http\Controllers\Api\Learning\LessonPlanController;
+use App\Http\Controllers\Api\Learning\OnlineClassroomController;
 use App\Http\Controllers\Api\Learning\OverviewController as LearningOverviewController;
 use App\Http\Controllers\Api\Learning\ResourceController;
 use App\Http\Controllers\Api\Learning\ResourceFileController;
@@ -129,6 +130,16 @@ Route::prefix('v1')->group(function (): void {
         Route::patch('/admin/student-menu', [StudentMenuController::class, 'update'])->middleware('role:admin,super_admin');
         Route::get('/portal', PortalController::class);
         Route::get('/learning', LearningOverviewController::class)->middleware('learning.schema');
+        Route::prefix('learning/classroom')->middleware('learning.schema')->group(function (): void {
+            Route::get('/', [OnlineClassroomController::class, 'index']);
+            Route::post('/activities', [OnlineClassroomController::class, 'store']);
+            Route::post('/activities/{activity}', [OnlineClassroomController::class, 'update'])->whereNumber('activity');
+            Route::delete('/activities/{activity}', [OnlineClassroomController::class, 'destroy'])->whereNumber('activity');
+            Route::post('/activities/{activity}/submit', [OnlineClassroomController::class, 'submit'])->whereNumber('activity')->middleware('throttle:30,1');
+            Route::patch('/activities/{activity}/submissions/{submission}/review', [OnlineClassroomController::class, 'review'])->whereNumber(['activity', 'submission']);
+            Route::post('/images', [OnlineClassroomController::class, 'uploadImage'])->middleware('throttle:30,1');
+            Route::get('/images/{image}', [OnlineClassroomController::class, 'image'])->whereNumber('image');
+        });
         Route::get('/learning/assignments', [AssignmentWorkflowController::class, 'index'])->middleware('learning.schema');
         Route::post('/learning/assignments/{assignment}/submit', [AssignmentWorkflowController::class, 'submit'])->middleware('learning.schema')->whereNumber('assignment');
         Route::get('/learning/assignments/{assignment}/submissions/{submission}/file', [AssignmentWorkflowController::class, 'file'])->middleware('learning.schema')->whereNumber(['assignment', 'submission']);

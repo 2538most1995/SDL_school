@@ -1,5 +1,11 @@
 # Performance Audit
 
+## Online classroom (2026-10-28)
+
+The classroom reuses current-term registration reads and merges web registrations with one district+term+accessible-student query, without per-student database queries. Activities and review submissions use SQL pagination (50 rows), with group eligibility applied before activity pagination. Counts and own attempts are batched by visible activity IDs. A course composite index and unique activity+student attempt index support list/submission operations; writes add parent-row locking to serialize submission, question changes and deletion. Image blobs are fetched through authorization endpoints and object URLs are revoked on unmount. No external links are fetched server-side. Live MySQL plans, large-roster latency and concurrency throughput are Not verified; validation uses synthetic SQLite fixtures.
+
+Verification: 17 new classroom feature tests pass, including filtering before pagination, separate student attempts, deadline timezone normalization and repeatable migration. Full PHP suite: 486 passed / 1 existing skip; frontend: 62 passed. Typecheck, production build and changed-file Pint pass. Browser synthetic demo checks cover creation/upload, student submit failure/retry, teacher review, 390px/1440px and dark mode. A local CSS override keeps MUI's hidden textarea measurement free of the portal's fixed minimum, preventing oversized essay inputs without changing other modules.
+
 ## Student homepage menu settings (2026-10-15)
 
 - Custom internal/external links reuse the same district preference JSON and catalog response. Validation and resolution run in memory (maximum 50 custom links), with no server-side URL fetches, extra database queries or schema changes. Removing student grade-detail buttons changes presentation only; grade/GPA queries and calculations are unchanged.
