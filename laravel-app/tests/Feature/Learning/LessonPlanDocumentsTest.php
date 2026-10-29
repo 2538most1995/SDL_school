@@ -60,6 +60,7 @@ final class LessonPlanDocumentsTest extends TestCase
         app(LearningSchemaReadiness::class)->ensure();
         (require database_path('migrations/2026_10_29_000038_add_lesson_plan_documents.php'))->up();
         (require database_path('migrations/2026_10_29_000039_add_scope_to_lesson_plans.php'))->up();
+        (require database_path('migrations/2026_10_29_000040_add_word_documents_to_lesson_plans.php'))->up();
     }
 
     public function test_combined_links_save_on_the_deployed_legacy_schema_with_empty_optional_text(): void
@@ -455,6 +456,48 @@ final class LessonPlanDocumentsTest extends TestCase
         $this->assertNull($cleared->pdf_path);
         $this->assertNotNull($cleared->cover_path);
         Storage::disk('local')->assertMissing($withPdf->pdf_path);
+    }
+
+    public function test_plan_supports_word_upload_and_download_alongside_pdf(): void
+    {
+        $docxFile = UploadedFile::fake()->create('sample-lesson.docx', 350, 'application/vnd.openxmlformats-officedocument.wordprocessingml.document');
+        $pdfFile = UploadedFile::fake()->create('sample-lesson.pdf', 200, 'application/pdf');
+
+        $payload = $this->metadata([
+            'source_type' => 'pdf',
+            'pdf' => $pdfFile,
+            'word' => $docxFile,
+        ]);
+        $response = $this->post('/api/v1/learning/lesson-plans', $payload)->assertCreated();
+        $id = $response->json('data.id');
+
+        $row = DB::table('learning_lesson_plans')->find($id);
+        $this->assertNotNull($row->pdf_path);
+        $this->assertNotNull($row->word_path);
+        $this->assertSame('sample-lesson.docx', $row->word_original_name);
+        Storage::disk('local')->assertExists([$row->pdf_path, $row->word_path]);
+
+        // Verify index response includes word metadata
+        $index = $this->getJson('/api/v1/learning/lesson-plans')->assertOk();
+        $item = collect($index->json('data'))->firstWhere('id', (string) $id);
+        $this->assertNotNull($item['word_url']);
+        $this->assertSame('sample-lesson.docx', $item['word_filename']);
+
+        // Test downloading word file
+        $wordDownload = $this->get("/api/v1/learning/lesson-plans/{$id}/word")->assertOk();
+        $this->assertStringContainsString('sample-lesson.docx', $wordDownload->headers->get('Content-Disposition') ?? '');
+
+        // Test clearing word file
+        $this->post("/api/v1/learning/lesson-plans/{$id}", [
+            '_method' => 'PATCH',
+            'clear_word' => '1',
+        ])->assertOk();
+
+        $cleared = DB::table('learning_lesson_plans')->find($id);
+        $this->assertNull($cleared->word_path);
+        $this->assertNotNull($cleared->pdf_path);
+        Storage::disk('local')->assertMissing($row->word_path);
+        Storage::disk('local')->assertExists($row->pdf_path);
     }
 }
 

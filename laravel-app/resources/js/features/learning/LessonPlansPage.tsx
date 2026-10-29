@@ -1,5 +1,5 @@
 import { Alert, Dialog, DialogActions, DialogContent, DialogTitle, IconButton, TextField, Tooltip } from '@mui/material';
-import { ArrowSquareOut, BookOpen, BookOpenText, CalendarBlank, CheckCircle, DownloadSimple, FileImage, FilePdf, LinkSimple, MagnifyingGlass, Notebook, PencilSimple, Plus, Sparkle, Trash, UploadSimple, User } from '@phosphor-icons/react';
+import { ArrowSquareOut, BookOpen, BookOpenText, CalendarBlank, CheckCircle, DownloadSimple, FileDoc, FileImage, FilePdf, LinkSimple, MagnifyingGlass, Notebook, PencilSimple, Plus, Sparkle, Trash, UploadSimple, User } from '@phosphor-icons/react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useDeferredValue, useEffect, useRef, useState, type FormEvent, type ReactNode } from 'react';
 import { Button } from '../../components/MaterialUI';
@@ -9,7 +9,7 @@ import { withAppBasePath } from '../../lib/urls';
 import { getFeatureBlob, getFeatureData, sendFeatureData } from '../api';
 import { documentOpenTarget, documentPreview } from './lesson-plans/documentLinks';
 import { loadPlanCover } from './lesson-plans/coverSource';
-import { lessonPlanFilePath } from './lesson-plans/fileUrls';
+import { lessonPlanFilePath, lessonPlanWordPath } from './lesson-plans/fileUrls';
 import { filterLessonPlans, planScope, planScopeLabels, type PlanScope } from './lesson-plans/planFilters';
 import { generateSmartCoverBlob } from './lesson-plans/smartCover';
 import './lesson-plans.css';
@@ -17,6 +17,7 @@ import './lesson-plans.css';
 type LessonPlan = {
     id: string; title: string; description: string; course: string; timing: string; status: string; can_edit: boolean;
     teacher_name?: string; external_url?: string | null; file_url?: string | null; cover_url?: string | null;
+    word_url?: string | null; word_filename?: string | null; word_size?: number | null;
     filename?: string | null; file_size?: number | null;
     page_count?: number | null; plan_scope?: PlanScope; raw: Record<string, string>;
 };
@@ -125,30 +126,86 @@ function LessonPlanLibrary({ role, district }: { role: string; district: string 
             <div className="lesson-plan-card-body">{planScope(plan) === 'all_subjects' && <span className="lesson-plan-scope-badge">แผนรวมทุกวิชา</span>}<h3>{plan.title}</h3><p className="lesson-plan-card-meta">{plan.teacher_name && <span className="lesson-plan-author"><User size={14} />{plan.teacher_name}</span>}{plan.teacher_name && <span className="lesson-plan-dot">·</span>}<span>{plan.course || 'ไม่ระบุรายวิชา'}{plan.raw?.level && <> · {levels.find(item => item.value === String(plan.raw.level))?.label || plan.raw.level}</>}</span></p><div className="lesson-plan-card-bottom"><span><CalendarBlank size={14} /> {plan.timing || 'ไม่ระบุภาคเรียน'}</span>{plan.page_count ? <span><BookOpen size={14} /> {plan.page_count} หน้า</span> : <span>{plan.status}</span>}</div>
                 <div className="lesson-plan-card-actions">
                     <PlanOpen plan={plan} read={setReading} />
-                    {canManage && plan.can_edit && (
-                        <div className="lesson-plan-card-icons">
-                            <Tooltip title="แก้ไขแผนการสอน" arrow>
+                    <div className="lesson-plan-card-icons">
+                        {plan.file_url ? (
+                            <Tooltip title={`ดาวน์โหลด PDF (${plan.filename || plan.title})`} arrow>
                                 <IconButton
                                     size="small"
-                                    className="lesson-plan-icon-btn lesson-plan-icon-btn--edit"
-                                    aria-label={`แก้ไข ${plan.title}`}
-                                    onClick={() => setEditing(plan)}
+                                    component="a"
+                                    href={withAppBasePath(lessonPlanFilePath(plan.id, plan.file_url, district, true))}
+                                    download={`${plan.title}.pdf`}
+                                    className="lesson-plan-icon-btn lesson-plan-icon-btn--pdf"
+                                    aria-label={`ดาวน์โหลด PDF ${plan.title}`}
                                 >
-                                    <PencilSimple size={17} />
+                                    <FilePdf size={17} weight="duotone" />
                                 </IconButton>
                             </Tooltip>
-                            <Tooltip title="ลบแผนการสอน" arrow>
+                        ) : (
+                            <Tooltip title="ไม่มีไฟล์ PDF" arrow>
+                                <span>
+                                    <IconButton
+                                        size="small"
+                                        disabled
+                                        className="lesson-plan-icon-btn lesson-plan-icon-btn--pdf lesson-plan-icon-btn--disabled"
+                                        aria-label="ไม่มีไฟล์ PDF"
+                                    >
+                                        <FilePdf size={17} />
+                                    </IconButton>
+                                </span>
+                            </Tooltip>
+                        )}
+                        {plan.word_url ? (
+                            <Tooltip title={`ดาวน์โหลด Word (${plan.word_filename || plan.title})`} arrow>
                                 <IconButton
                                     size="small"
-                                    className="lesson-plan-icon-btn lesson-plan-icon-btn--delete"
-                                    aria-label={`ลบ ${plan.title}`}
-                                    onClick={() => { remove.reset(); setDeleting(plan); }}
+                                    component="a"
+                                    href={withAppBasePath(lessonPlanWordPath(plan.id, plan.word_url, district))}
+                                    download={`${plan.title}.${plan.word_filename?.endsWith('.doc') ? 'doc' : 'docx'}`}
+                                    className="lesson-plan-icon-btn lesson-plan-icon-btn--word"
+                                    aria-label={`ดาวน์โหลด Word ${plan.title}`}
                                 >
-                                    <Trash size={17} />
+                                    <FileDoc size={17} weight="duotone" />
                                 </IconButton>
                             </Tooltip>
-                        </div>
-                    )}
+                        ) : (
+                            <Tooltip title="ไม่มีไฟล์ Word" arrow>
+                                <span>
+                                    <IconButton
+                                        size="small"
+                                        disabled
+                                        className="lesson-plan-icon-btn lesson-plan-icon-btn--word lesson-plan-icon-btn--disabled"
+                                        aria-label="ไม่มีไฟล์ Word"
+                                    >
+                                        <FileDoc size={17} />
+                                    </IconButton>
+                                </span>
+                            </Tooltip>
+                        )}
+                        {canManage && plan.can_edit && (
+                            <>
+                                <Tooltip title="แก้ไขแผนการสอน" arrow>
+                                    <IconButton
+                                        size="small"
+                                        className="lesson-plan-icon-btn lesson-plan-icon-btn--edit"
+                                        aria-label={`แก้ไข ${plan.title}`}
+                                        onClick={() => setEditing(plan)}
+                                    >
+                                        <PencilSimple size={17} />
+                                    </IconButton>
+                                </Tooltip>
+                                <Tooltip title="ลบแผนการสอน" arrow>
+                                    <IconButton
+                                        size="small"
+                                        className="lesson-plan-icon-btn lesson-plan-icon-btn--delete"
+                                        aria-label={`ลบ ${plan.title}`}
+                                        onClick={() => { remove.reset(); setDeleting(plan); }}
+                                    >
+                                        <Trash size={17} />
+                                    </IconButton>
+                                </Tooltip>
+                            </>
+                        )}
+                    </div>
                 </div>
             </div>
         </article>)}</div>}
@@ -165,6 +222,7 @@ function PlanReader({ plan, close }: { plan: LessonPlan; close: () => void }) {
     const district = window.localStorage.getItem('sena-district-id') ?? '';
     const url = plan.file_url ? withAppBasePath(lessonPlanFilePath(plan.id, plan.file_url, district)) : '';
     const download = plan.file_url ? withAppBasePath(lessonPlanFilePath(plan.id, plan.file_url, district, true)) : '';
+    const wordDownload = plan.word_url ? withAppBasePath(lessonPlanWordPath(plan.id, plan.word_url, district)) : '';
     return <Dialog className="lesson-plan-dialog lesson-plan-reader" open onClose={close} fullWidth maxWidth="lg"><DialogTitle>{plan.title}</DialogTitle><DialogContent>
         <div className="lesson-plan-reader-header-bar">
             {activeExternal ? (
@@ -183,8 +241,8 @@ function PlanReader({ plan, close }: { plan: LessonPlan; close: () => void }) {
                 </>
             ) : null}
         </div>
-        {activeExternal ? <>{activeExternal.embedUrl ? <iframe className="lesson-plan-document" src={activeExternal.embedUrl} title={`แผนการสอน ${plan.title}`} referrerPolicy="no-referrer" sandbox="allow-scripts allow-same-origin allow-forms allow-popups allow-downloads" allowFullScreen /> : <div className="lesson-plan-reader-link"><LinkSimple size={43} /><h3>พร้อมเปิดเอกสารของคุณ</h3><p>ลิงก์นี้เปิดผ่านเว็บไซต์ต้นทางเพื่อความรวดเร็ว</p><Button as="a" appearance="primary" icon={<ArrowSquareOut size={18} />} href={activeExternal.url} target="_blank" rel="noopener noreferrer">เปิดเอกสารต้นทางทันที</Button></div>}</> : !url ? <Alert severity="warning">ลิงก์เอกสารนี้ไม่ถูกต้อง กรุณาแก้ไขลิงก์หรือแนบ PDF</Alert> : <iframe className="lesson-plan-document" src={url} title={`แผนการสอน ${plan.title}`} referrerPolicy="same-origin" />}
-    </DialogContent><DialogActions><Button onClick={close}>ปิด</Button>{external && <Button as="a" appearance="primary" icon={<ArrowSquareOut />} href={external.url} target="_blank" rel="noopener noreferrer">เปิดในแท็บใหม่</Button>}{download && <Button as="a" appearance="outline" icon={<DownloadSimple />} href={download} download={`${plan.title}.pdf`}>ดาวน์โหลด PDF</Button>}</DialogActions></Dialog>;
+        {activeExternal ? <>{activeExternal.embedUrl ? <iframe className="lesson-plan-document" src={activeExternal.embedUrl} title={`แผนการสอน ${plan.title}`} referrerPolicy="no-referrer" sandbox="allow-scripts allow-same-origin allow-forms allow-popups allow-downloads" allowFullScreen /> : <div className="lesson-plan-reader-link"><LinkSimple size={43} /><h3>พร้อมเปิดเอกสารของคุณ</h3><p>ลิงก์นี้เปิดผ่านเว็บไซต์ต้นทางเพื่อความรวดเร็ว</p><Button as="a" appearance="primary" icon={<ArrowSquareOut size={18} />} href={activeExternal.url} target="_blank" rel="noopener noreferrer">เปิดเอกสารต้นทางทันที</Button></div>}</> : !url ? <Alert severity="warning">ไม่มีตัวอย่างแสดงผลออนไลน์ กรุณาดาวน์โหลดเอกสาร PDF หรือ Word เพื่อเปิดอ่าน</Alert> : <iframe className="lesson-plan-document" src={url} title={`แผนการสอน ${plan.title}`} referrerPolicy="same-origin" />}
+    </DialogContent><DialogActions><Button onClick={close}>ปิด</Button>{external && <Button as="a" appearance="primary" icon={<ArrowSquareOut />} href={external.url} target="_blank" rel="noopener noreferrer">เปิดในแท็บใหม่</Button>}{download && <Button as="a" appearance="outline" icon={<DownloadSimple />} href={download} download={`${plan.title}.pdf`}>ดาวน์โหลด PDF</Button>}{wordDownload && <Button as="a" appearance="outline" icon={<DownloadSimple />} href={wordDownload} download={`${plan.title}.${plan.word_filename?.endsWith('.doc') ? 'doc' : 'docx'}`}>ดาวน์โหลด Word</Button>}</DialogActions></Dialog>;
 }
 
 function PlanEditor({ plan, initialScope, initialLevel, close, saved }: { plan: LessonPlan | null; initialScope: PlanScope; initialLevel: string; close: () => void; saved: () => Promise<void> }) {
@@ -196,17 +254,21 @@ function PlanEditor({ plan, initialScope, initialLevel, close, saved }: { plan: 
         external_url: plan ? sourceUrl(plan) : '',
     }));
     const [scope, setScope] = useState<PlanScope>(() => plan ? planScope(plan) : initialScope);
-    const [source, setSource] = useState<'link' | 'pdf' | ''>(() => plan ? sourceUrl(plan) ? 'link' : plan.file_url ? 'pdf' : '' : 'link');
+    const [source, setSource] = useState<'link' | 'pdf' | 'word' | ''>(() => plan ? sourceUrl(plan) ? 'link' : plan.file_url ? 'pdf' : plan.word_url ? 'word' : '' : 'link');
     const [file, setFile] = useState<File | null>(null);
     const [fileInputKey, setFileInputKey] = useState(0);
+    const [wordFile, setWordFile] = useState<File | null>(null);
+    const [wordInputKey, setWordInputKey] = useState(0);
     const [cover, setCover] = useState<Blob | null>(null);
     const [coverUrl, setCoverUrl] = useState('');
     const [coverDescription, setCoverDescription] = useState('');
     const [pages, setPages] = useState<number | null>(() => plan?.page_count ?? null);
     const [customPageCount, setCustomPageCount] = useState<string>(() => plan?.page_count ? String(plan.page_count) : '');
     const [clearPdf, setClearPdf] = useState(false);
+    const [clearWord, setClearWord] = useState(false);
     const [rendering, setRendering] = useState(false);
     const [fileError, setFileError] = useState('');
+    const [wordError, setWordError] = useState('');
     const [dirty, setDirty] = useState(false);
     const generation = useRef(0);
     const preview = documentPreview(draft.external_url);
@@ -285,6 +347,21 @@ function PlanEditor({ plan, initialScope, initialLevel, close, saved }: { plan: 
         finally { if (generation.current === id) setRendering(false); }
     };
 
+    const selectWord = (next: File | null) => {
+        setDirty(true);
+        setWordFile(next);
+        setWordError('');
+        if (!next) return;
+        if (next.size > 30 * 1024 * 1024) {
+            setWordError('กรุณาเลือกไฟล์ Word ขนาดไม่เกิน 30 MB');
+            return;
+        }
+        if (!/\.(docx?)$/i.test(next.name)) {
+            setWordError('รองรับเฉพาะไฟล์เอกสาร Word (.doc หรือ .docx)');
+            return;
+        }
+    };
+
     const save = useMutation({
         mutationFn: () => {
             const form = new FormData();
@@ -292,8 +369,10 @@ function PlanEditor({ plan, initialScope, initialLevel, close, saved }: { plan: 
             form.set('plan_scope', scope);
             if (scope === 'all_subjects') form.set('subject', '');
             if (source) form.append('source_type', source);
-            if (source === 'pdf' && file) form.append('pdf', file);
+            if (file) form.append('pdf', file);
             if (clearPdf) form.append('clear_pdf', '1');
+            if (wordFile) form.append('word', wordFile);
+            if (clearWord) form.append('clear_word', '1');
             if (cover) form.append('cover_image', cover, 'cover.jpg');
             const parsedPages = source === 'link'
                 ? (customPageCount.trim() ? parseInt(customPageCount.trim(), 10) : null)
@@ -310,10 +389,216 @@ function PlanEditor({ plan, initialScope, initialLevel, close, saved }: { plan: 
     const closeEditor = () => { if (!busy && (!dirty || window.confirm('มีแผนการสอนที่ยังไม่ได้บันทึก ต้องการปิดแบบร่างนี้หรือไม่?'))) close(); };
     const submit = (event: FormEvent) => {
         event.preventDefault();
-        if (!busy && !fileError && (source !== 'pdf' || file || plan?.file_url) && (source !== 'link' || preview)) {
+        if (!busy && !fileError && !wordError && (source !== 'pdf' || file || plan?.file_url) && (source !== 'word' || wordFile || plan?.word_url) && (source !== 'link' || preview)) {
             save.mutate();
         }
     };
+
+    const renderCoverSection = () => (
+        <div className="lesson-plan-cover-section">
+            <label className="text-sm font-bold text-slate-700 dark:text-slate-300">ภาพหน้าปกของแผนการสอน</label>
+            <div className="lesson-plan-cover-actions">
+                <Button type="button" appearance="primary" size="small" icon={<Sparkle size={18} weight="fill" />} disabled={busy} onClick={handleCreateSmartCover}>
+                    สร้างปกสำเร็จรูปอัตโนมัติ
+                </Button>
+                <label className="lesson-plan-cover-upload-btn">
+                    <FileImage size={18} />
+                    <span>เลือกไฟล์ภาพหน้าปก (JPG / PNG / WebP)</span>
+                    <input type="file" accept="image/jpeg,image/png,image/webp" disabled={busy} onChange={handleSelectCoverImage} />
+                </label>
+            </div>
+            {coverUrl && (
+                <div className="lesson-plan-generated-cover mt-3">
+                    <img src={coverUrl} alt="ตัวอย่างหน้าปกที่เลือก" />
+                    <div>
+                        <CheckCircle size={22} weight="fill" />
+                        <strong>ตั้งค่าภาพหน้าปกเรียบร้อย</strong>
+                        <span>{coverDescription || 'พร้อมบันทึก'}</span>
+                        <Button appearance="outline" size="small" disabled={busy} icon={<Trash size={15} />} onClick={() => { setCover(null); setCoverDescription(''); }}>
+                            นำภาพปกออก
+                        </Button>
+                    </div>
+                </div>
+            )}
+        </div>
+    );
+
+    const renderWordUpload = (required = false) => (
+        <div className="lesson-plan-upload-word-section mt-3">
+            <label className="text-sm font-bold text-slate-700 dark:text-slate-300 block mb-1.5">
+                ไฟล์เอกสาร Word (.doc / .docx)
+            </label>
+            {wordFile ? (
+                <div className="lesson-plan-file-attached">
+                    <div>
+                        <FileDoc size={24} weight="duotone" className="text-blue-600 shrink-0" />
+                        <div>
+                            <strong>{wordFile.name}</strong>
+                            <small>{(wordFile.size / 1024).toFixed(0)} KB · ไฟล์ Word ใหม่ที่เลือก</small>
+                        </div>
+                    </div>
+                    <Button
+                        appearance="outline"
+                        size="small"
+                        disabled={busy}
+                        icon={<Trash size={15} />}
+                        onClick={() => { setWordFile(null); setWordError(''); setWordInputKey(k => k + 1); }}
+                    >
+                        ยกเลิกไฟล์นี้
+                    </Button>
+                </div>
+            ) : plan?.word_url && !clearWord ? (
+                <div className="lesson-plan-file-attached">
+                    <div>
+                        <FileDoc size={24} weight="duotone" className="text-blue-600 shrink-0" />
+                        <div>
+                            <strong>{plan.word_filename || 'ไฟล์ Word ในระบบ'}</strong>
+                            <small>{plan.word_size ? `${(plan.word_size / 1024).toFixed(0)} KB` : ''} · มีไฟล์อยู่ในระบบแล้ว</small>
+                        </div>
+                    </div>
+                    <div className="flex items-center gap-2">
+                        <label className="lesson-plan-cover-upload-btn text-xs py-1 px-2.5">
+                            <span>เปลี่ยนไฟล์</span>
+                            <input
+                                key={`word-replace:${wordInputKey}`}
+                                type="file"
+                                accept=".doc,.docx,application/msword,application/vnd.openxmlformats-officedocument.wordprocessingml.document"
+                                disabled={busy}
+                                onChange={event => selectWord(event.target.files?.[0] ?? null)}
+                            />
+                        </label>
+                        <Button
+                            appearance="outline"
+                            size="small"
+                            disabled={busy}
+                            icon={<Trash size={15} />}
+                            onClick={() => { setDirty(true); setClearWord(true); }}
+                        >
+                            ลบไฟล์ออก
+                        </Button>
+                    </div>
+                </div>
+            ) : (
+                <>
+                    {clearWord && (
+                        <Alert severity="warning" className="mb-2" action={<Button size="small" onClick={() => setClearWord(false)}>ยกเลิกการลบ</Button>}>
+                            จะลบไฟล์ Word เดิมออกจากระบบเมื่อกดบันทึก
+                        </Alert>
+                    )}
+                    <label className="lesson-plan-upload lesson-plan-upload--word">
+                        <FileDoc size={30} weight="duotone" />
+                        <span>
+                            <strong>เลือกไฟล์ Word (.doc หรือ .docx)</strong>
+                            <small>ขนาดไม่เกิน 30 MB{required ? ' *จำเป็นต้องแนบไฟล์ Word' : ' (ไม่บังคับ · แนบเพื่อให้เพื่อนครูหรือนักศึกษาดาวน์โหลดไปปรับใช้ได้)'}</small>
+                        </span>
+                        <input
+                            key={`word:${wordInputKey}`}
+                            type="file"
+                            accept=".doc,.docx,application/msword,application/vnd.openxmlformats-officedocument.wordprocessingml.document"
+                            disabled={busy}
+                            required={required && !plan?.word_url}
+                            onChange={event => selectWord(event.target.files?.[0] ?? null)}
+                        />
+                    </label>
+                </>
+            )}
+            {wordError && <Alert severity="error" className="mt-2">{wordError}</Alert>}
+        </div>
+    );
+
+    const renderPdfUpload = (primary = false) => (
+        <div className="lesson-plan-upload-pdf-section mt-3">
+            <label className="text-sm font-bold text-slate-700 dark:text-slate-300 block mb-1.5">
+                {primary ? 'ไฟล์เอกสาร PDF' : 'ไฟล์เอกสาร PDF (สำหรับเปิดอ่านและดาวน์โหลด)'}
+            </label>
+            {file ? (
+                <div className="lesson-plan-file-attached">
+                    <div>
+                        <FilePdf size={24} weight="duotone" className="text-red-600 shrink-0" />
+                        <div>
+                            <strong>{file.name}</strong>
+                            <small>{(file.size / 1024).toFixed(0)} KB · {pages ? `${pages} หน้า · ` : ''}ไฟล์ PDF ใหม่ที่เลือก</small>
+                        </div>
+                    </div>
+                    <Button
+                        appearance="outline"
+                        size="small"
+                        disabled={busy}
+                        icon={<Trash size={15} />}
+                        onClick={() => { generation.current++; setFile(null); setCover(null); setPages(null); setCoverDescription(''); setFileError(''); setFileInputKey(k => k + 1); }}
+                    >
+                        ยกเลิกไฟล์นี้
+                    </Button>
+                </div>
+            ) : plan?.file_url && !clearPdf ? (
+                <div className="lesson-plan-file-attached">
+                    <div>
+                        <FilePdf size={24} weight="duotone" className="text-red-600 shrink-0" />
+                        <div>
+                            <strong>{plan.filename || 'ไฟล์ PDF ในระบบ'}</strong>
+                            <small>{plan.file_size ? `${(plan.file_size / (1024 * 1024)).toFixed(1)} MB` : ''} · มีไฟล์อยู่ในระบบแล้ว</small>
+                        </div>
+                    </div>
+                    <div className="flex items-center gap-2">
+                        <label className="lesson-plan-cover-upload-btn text-xs py-1 px-2.5">
+                            <span>เปลี่ยนไฟล์</span>
+                            <input
+                                key={`pdf-replace:${fileInputKey}`}
+                                type="file"
+                                accept="application/pdf,.pdf"
+                                disabled={busy}
+                                onChange={event => void selectPdf(event.target.files?.[0] ?? null)}
+                            />
+                        </label>
+                        <Button
+                            appearance="outline"
+                            size="small"
+                            disabled={busy}
+                            icon={<Trash size={15} />}
+                            onClick={() => { setDirty(true); setClearPdf(true); }}
+                        >
+                            ลบไฟล์ออก
+                        </Button>
+                    </div>
+                </div>
+            ) : (
+                <>
+                    {clearPdf && (
+                        <Alert severity="warning" className="mb-2" action={<Button size="small" onClick={() => setClearPdf(false)}>ยกเลิกการลบ</Button>}>
+                            จะลบไฟล์ PDF เดิมออกจากระบบเมื่อกดบันทึก (ช่วยประหยัดพื้นที่)
+                        </Alert>
+                    )}
+                    <label className="lesson-plan-upload lesson-plan-upload--pdf">
+                        <FilePdf size={30} weight="duotone" />
+                        <span>
+                            <strong>{plan?.file_url ? 'เลือก PDF ใหม่เมื่อต้องการเปลี่ยนไฟล์' : 'เลือกไฟล์ PDF'}</strong>
+                            <small>สูงสุด 20 MB · ใช้หน้าแรกเป็นปกให้อัตโนมัติ</small>
+                        </span>
+                        <input
+                            key={`pdf:${fileInputKey}`}
+                            type="file"
+                            accept="application/pdf,.pdf"
+                            disabled={busy}
+                            required={primary && !plan?.file_url}
+                            onChange={event => void selectPdf(event.target.files?.[0] ?? null)}
+                        />
+                    </label>
+                </>
+            )}
+            {rendering && <p role="status" className="lesson-plan-muted mt-1">กำลังอ่าน PDF และสร้างหน้าปก…</p>}
+            {coverUrl && !coverDescription.includes('ปกสำเร็จรูป') && !coverDescription.includes('ไฟล์ภาพ') && (
+                <div className="lesson-plan-generated-cover mt-2">
+                    <img src={coverUrl} alt="ตัวอย่างหน้าปกจากหน้าแรกของ PDF" />
+                    <div>
+                        <CheckCircle size={22} weight="fill" />
+                        <strong>ใช้หน้าแรกเป็นปกเรียบร้อย</strong>
+                        <span>{pages} หน้า · {file?.name || coverDescription}</span>
+                    </div>
+                </div>
+            )}
+            {fileError && <Alert severity="error" className="mt-2">{fileError}</Alert>}
+        </div>
+    );
 
     return <Dialog className="lesson-plan-dialog" open onClose={closeEditor} fullWidth maxWidth="md"><form onSubmit={submit}><DialogTitle>{plan ? 'แก้ไขแผนการสอน' : 'เพิ่มแผนการสอน'}</DialogTitle><DialogContent><div className="lesson-plan-editor-grid">
         <TextField className="lesson-plan-form-wide" fullWidth required label="ชื่อแผนการสอน" value={draft.title} disabled={busy} slotProps={{ htmlInput: { maxLength: 220 } }} onChange={event => update({ title: event.target.value })} />
@@ -321,7 +606,7 @@ function PlanEditor({ plan, initialScope, initialLevel, close, saved }: { plan: 
         {scope === 'subject' ? <TextField fullWidth required label="รายวิชา / รหัสวิชา" value={draft.subject} disabled={busy} slotProps={{ htmlInput: { maxLength: 32 } }} onChange={event => update({ subject: event.target.value })} /> : <Alert severity="info" className="lesson-plan-form-wide">แผนนี้รวมทุกวิชาของระดับ{levels.find(item => item.value === draft.level)?.label} เลือกระดับและแนบเอกสารได้โดยไม่ต้องกรอกรหัสวิชา</Alert>}
         <TextField className={scope === 'all_subjects' ? 'lesson-plan-form-wide' : undefined} fullWidth required label="ภาคเรียน" placeholder="เช่น 2/2569" value={draft.semester} disabled={busy} slotProps={{ htmlInput: { maxLength: 16 } }} onChange={event => update({ semester: event.target.value })} />
         <fieldset className="lesson-plan-form-wide"><legend>ระดับการศึกษา</legend><div className="lesson-plan-choice-buttons" role="group" aria-label="ระดับแผนการสอน">{levels.map(item => <button type="button" key={item.value} aria-pressed={draft.level === item.value} disabled={busy} onClick={() => update({ level: item.value })}>{item.label}{draft.level === item.value && <CheckCircle size={16} weight="fill" />}</button>)}</div></fieldset>
-        <section className="lesson-plan-source-editor lesson-plan-form-wide"><h3>เอกสารแผนการสอน</h3><div className="lesson-plan-choice-buttons" role="group" aria-label="วิธีแนบเอกสาร">{[{ value: 'link', label: 'แนบลิงก์ (แนะนำ)', Icon: LinkSimple }, { value: 'pdf', label: 'อัปโหลด PDF ในระบบ', Icon: UploadSimple }, ...(plan && !plan.file_url && !sourceUrl(plan) ? [{ value: '', label: 'เฉพาะรายละเอียดเดิม', Icon: Notebook }] : [])].map(({ value, label, Icon }) => <button type="button" key={value} aria-pressed={source === value} disabled={busy} onClick={() => { if (value === source) return; setSource(value as typeof source); setDirty(true); setFile(null); setCover(null); setPages(null); setCoverDescription(''); setFileError(''); }}><Icon size={19} />{label}</button>)}</div>
+        <section className="lesson-plan-source-editor lesson-plan-form-wide"><h3>เอกสารแผนการสอน</h3><div className="lesson-plan-choice-buttons" role="group" aria-label="วิธีแนบเอกสาร">{[{ value: 'link', label: 'แนบลิงก์ (แนะนำ)', Icon: LinkSimple }, { value: 'pdf', label: 'อัปโหลด PDF ในระบบ', Icon: FilePdf }, { value: 'word', label: 'อัปโหลด Word ในระบบ', Icon: FileDoc }, ...(plan && !plan.file_url && !plan.word_url && !sourceUrl(plan) ? [{ value: '', label: 'เฉพาะรายละเอียดเดิม', Icon: Notebook }] : [])].map(({ value, label, Icon }) => <button type="button" key={value} aria-pressed={source === value} disabled={busy} onClick={() => { if (value === source) return; setSource(value as typeof source); setDirty(true); setFile(null); setCover(null); setPages(null); setCoverDescription(''); setFileError(''); setWordError(''); }}><Icon size={19} />{label}</button>)}</div>
             {source === 'link' && <>
                 <TextField fullWidth required type="url" label="ลิงก์เอกสาร HTTP / HTTPS" placeholder="Google Drive, OneDrive หรือเว็บไซต์เอกสาร" value={draft.external_url} disabled={busy} slotProps={{ htmlInput: { maxLength: 2048 } }} onChange={event => update({ external_url: event.target.value })} />
                 <p className="lesson-plan-muted">ใช้ลิงก์แชร์ที่ผู้เปิดมีสิทธิ์เข้าถึงได้ รองรับ Google Drive, OneDrive และลิงก์เว็บทั่วไป</p>
@@ -338,49 +623,24 @@ function PlanEditor({ plan, initialScope, initialLevel, close, saved }: { plan: 
                     </div>
                 )}
 
-                <div className="lesson-plan-cover-section">
-                    <label className="text-sm font-bold text-slate-700 dark:text-slate-300">ภาพหน้าปกของแผนการสอน</label>
-                    <div className="lesson-plan-cover-actions">
-                        <Button type="button" appearance="primary" size="small" icon={<Sparkle size={18} weight="fill" />} disabled={busy} onClick={handleCreateSmartCover}>
-                            สร้างปกสำเร็จรูปอัตโนมัติ
-                        </Button>
-                        <label className="lesson-plan-cover-upload-btn">
-                            <FileImage size={18} />
-                            <span>เลือกไฟล์ภาพหน้าปก (JPG / PNG / WebP)</span>
-                            <input type="file" accept="image/jpeg,image/png,image/webp" disabled={busy} onChange={handleSelectCoverImage} />
-                        </label>
-                    </div>
-                    {coverUrl && (
-                        <div className="lesson-plan-generated-cover mt-3">
-                            <img src={coverUrl} alt="ตัวอย่างหน้าปกที่เลือก" />
-                            <div>
-                                <CheckCircle size={22} weight="fill" />
-                                <strong>ตั้งค่าภาพหน้าปกเรียบร้อย</strong>
-                                <span>{coverDescription || 'พร้อมบันทึก'}</span>
-                                <Button appearance="outline" size="small" disabled={busy} icon={<Trash size={15} />} onClick={() => { setCover(null); setCoverDescription(''); }}>
-                                    นำภาพปกออก
-                                </Button>
-                            </div>
-                        </div>
-                    )}
-                </div>
+                {renderCoverSection()}
 
                 <TextField fullWidth type="number" size="small" label="จำนวนหน้า (ไม่บังคับ)" placeholder="เช่น 222" value={customPageCount} disabled={busy} slotProps={{ htmlInput: { min: 1, max: 10000 } }} onChange={event => { setDirty(true); setCustomPageCount(event.target.value); }} helperText="ระบุจำนวนหน้าเพื่อแสดงบนการ์ดแผนการสอน โดยไม่ต้องอัปโหลดไฟล์ PDF ขนาดใหญ่" />
 
-                {plan?.file_url && (
-                    <Alert severity={clearPdf ? "warning" : "info"} action={<Button size="small" onClick={() => { setDirty(true); setClearPdf(val => !val); }}>{clearPdf ? 'ยกเลิกการลบ' : 'ลบไฟล์ PDF ออก'}</Button>}>
-                        {clearPdf ? 'จะลบไฟล์ PDF สำเนาออกจากเซิร์ฟเวอร์เมื่อกดบันทึก (ช่วยประหยัดพื้นที่)' : `แผนนี้มีไฟล์ PDF เดิมขนาด ${plan.file_size ? `${(plan.file_size / (1024 * 1024)).toFixed(1)} MB` : ''} บันทึกอยู่ในระบบ สามารถกดลบออกเพื่อประหยัดพื้นที่เซิร์ฟเวอร์`}
-                    </Alert>
-                )}
+                {renderPdfUpload(false)}
+                {renderWordUpload(false)}
             </>}
             {source === 'pdf' && <>
-                <label className="lesson-plan-upload"><FilePdf size={30} weight="duotone" /><span><strong>{file ? file.name : plan?.file_url ? 'เลือก PDF ใหม่เมื่อต้องการเปลี่ยนไฟล์' : 'เลือกไฟล์ PDF'}</strong><small>สูงสุด 20 MB · ใช้หน้าแรกเป็นปกให้อัตโนมัติ</small></span><input key={`${source}:${fileInputKey}`} type="file" accept="application/pdf,.pdf" disabled={busy} required={source === 'pdf' && !plan?.file_url} onChange={event => void selectPdf(event.target.files?.[0] ?? null)} /></label>
-                {file && <Button appearance="outline" size="small" disabled={busy} icon={<Trash size={16} />} onClick={() => { generation.current++; setFile(null); setCover(null); setPages(null); setCoverDescription(''); setFileError(''); setFileInputKey(value => value + 1); }}>นำไฟล์ที่เลือกออก</Button>}
-                {rendering && <p role="status" className="lesson-plan-muted">กำลังอ่าน PDF และสร้างหน้าปก…</p>}
-                {coverUrl && <div className="lesson-plan-generated-cover"><img src={coverUrl} alt="ตัวอย่างหน้าปกจากหน้าแรกของ PDF" /><div><CheckCircle size={22} weight="fill" /><strong>ใช้หน้าแรกเป็นปกเรียบร้อย</strong><span>{pages} หน้า · {file?.name || coverDescription}</span></div></div>}
+                {renderPdfUpload(true)}
+                {renderCoverSection()}
+                {renderWordUpload(false)}
             </>}
-            {fileError && <Alert severity="error">{fileError}</Alert>}
+            {source === 'word' && <>
+                {renderWordUpload(true)}
+                {renderCoverSection()}
+                {renderPdfUpload(false)}
+            </>}
         </section>
         {save.isError && <Alert className="lesson-plan-form-wide" severity="error">{errorText(save.error)}</Alert>}
-    </div></DialogContent><DialogActions><Button disabled={busy} onClick={closeEditor}>ยกเลิก</Button><Button appearance="primary" type="submit" disabled={busy || Boolean(fileError) || (source === 'pdf' && !file && !plan?.file_url) || (source === 'link' && !preview)}>{rendering ? 'กำลังสร้างปก…' : save.isPending ? 'กำลังบันทึก…' : 'บันทึกแผนการสอน'}</Button></DialogActions></form></Dialog>;
+    </div></DialogContent><DialogActions><Button disabled={busy} onClick={closeEditor}>ยกเลิก</Button><Button appearance="primary" type="submit" disabled={busy || Boolean(fileError) || Boolean(wordError) || (source === 'pdf' && !file && !plan?.file_url) || (source === 'word' && !wordFile && !plan?.word_url) || (source === 'link' && !preview)}>{rendering ? 'กำลังสร้างปก…' : save.isPending ? 'กำลังบันทึก…' : 'บันทึกแผนการสอน'}</Button></DialogActions></form></Dialog>;
 }

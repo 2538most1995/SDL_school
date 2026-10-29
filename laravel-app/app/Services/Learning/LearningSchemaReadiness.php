@@ -393,6 +393,9 @@ final class LearningSchemaReadiness
         $this->addMissingColumn($schema, 'learning_lesson_plans', 'activities', fn (Blueprint $table) => $table->text('activities')->nullable());
         $this->addMissingColumn($schema, 'learning_lesson_plans', 'assessment', fn (Blueprint $table) => $table->text('assessment')->nullable());
         $this->addMissingColumn($schema, 'learning_lesson_plans', 'status', fn (Blueprint $table) => $table->string('status', 24)->default('draft'));
+        $this->addMissingColumn($schema, 'learning_lesson_plans', 'word_path', fn (Blueprint $table) => $table->string('word_path', 255)->nullable());
+        $this->addMissingColumn($schema, 'learning_lesson_plans', 'word_original_name', fn (Blueprint $table) => $table->string('word_original_name', 255)->nullable());
+        $this->addMissingColumn($schema, 'learning_lesson_plans', 'word_size', fn (Blueprint $table) => $table->unsignedBigInteger('word_size')->nullable());
         $this->addTimestamps($schema, 'learning_lesson_plans');
     }
 

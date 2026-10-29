@@ -153,6 +153,7 @@ Route::prefix('v1')->group(function (): void {
         Route::get('/learning/resources/{resource}/file', ResourceFileController::class)->middleware('learning.schema')->whereNumber('resource');
         Route::get('/learning/lesson-plans', LessonPlanController::class)->middleware(['learning.schema', 'role:teacher,admin,super_admin']);
         Route::get('/learning/lesson-plans/{plan}/file', [LessonPlanController::class, 'file'])->middleware(['learning.schema', 'role:teacher,admin,super_admin'])->whereNumber('plan');
+        Route::get('/learning/lesson-plans/{plan}/word', [LessonPlanController::class, 'word'])->middleware(['learning.schema', 'role:teacher,admin,super_admin'])->whereNumber('plan');
         Route::get('/learning/lesson-plans/{plan}/cover', [LessonPlanController::class, 'cover'])->middleware(['learning.schema', 'role:teacher,admin,super_admin'])->whereNumber('plan');
         Route::get('/learning/calendar', CalendarController::class)->middleware('learning.schema');
         Route::get('/learning/schedule', ScheduleController::class)->middleware('learning.schema');

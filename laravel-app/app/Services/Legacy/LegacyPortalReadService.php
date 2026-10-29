@@ -390,8 +390,9 @@ final class LegacyPortalReadService
         return $query->orderByDesc('plan.updated_at')->limit(250)->get()->map(function (object $row) use ($viewer): array {
             $external = (string) ($row->external_url ?? '');
             $pdf = (string) ($row->pdf_path ?? '');
+            $word = (string) ($row->word_path ?? '');
             $cover = (string) ($row->cover_path ?? '');
-            $source = $external !== '' ? 'link' : ($pdf !== '' ? 'pdf' : 'legacy');
+            $source = $external !== '' ? 'link' : ($pdf !== '' ? 'pdf' : ($word !== '' ? 'word' : 'legacy'));
             $scope = ($row->plan_scope ?? 'subject') === 'all_subjects' ? 'all_subjects' : 'subject';
 
             return [
@@ -407,9 +408,12 @@ final class LegacyPortalReadService
                 'external_url' => $external,
                 'source_type' => $source,
                 'file_url' => $pdf === '' ? null : '/api/v1/learning/lesson-plans/'.$row->id.'/file?v='.substr(hash('sha256', $pdf), 0, 12),
+                'word_url' => $word === '' ? null : '/api/v1/learning/lesson-plans/'.$row->id.'/word?v='.substr(hash('sha256', $word), 0, 12),
                 'cover_url' => $cover === '' ? null : '/api/v1/learning/lesson-plans/'.$row->id.'/cover?v='.substr(hash('sha256', $cover), 0, 12),
                 'filename' => (string) ($row->pdf_original_name ?? ''),
                 'file_size' => isset($row->pdf_size) ? (int) $row->pdf_size : null,
+                'word_filename' => (string) ($row->word_original_name ?? ''),
+                'word_size' => isset($row->word_size) ? (int) $row->word_size : null,
                 'page_count' => isset($row->page_count) ? (int) $row->page_count : null,
                 'can_edit' => $viewer->role !== 'teacher' || (int) $row->teacher_id === (int) $viewer->id,
                 'raw' => [

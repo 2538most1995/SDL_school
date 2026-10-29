@@ -49,6 +49,11 @@ final class LessonPlanController extends Controller
         return $documents->file($request, $plan);
     }
 
+    public function word(Request $request, int $plan, LessonPlanDocumentService $documents): BinaryFileResponse
+    {
+        return $documents->word($request, $plan);
+    }
+
     public function cover(Request $request, int $plan, LessonPlanDocumentService $documents): BinaryFileResponse
     {
         return $documents->file($request, $plan, true);

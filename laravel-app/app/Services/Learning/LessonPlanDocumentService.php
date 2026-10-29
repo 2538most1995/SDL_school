@@ -16,7 +16,7 @@ use Throwable;
 
 final class LessonPlanDocumentService
 {
-    private const DOCUMENT_COLUMNS = ['external_url', 'pdf_path', 'pdf_original_name', 'pdf_size', 'cover_path', 'page_count'];
+    private const DOCUMENT_COLUMNS = ['external_url', 'pdf_path', 'pdf_original_name', 'pdf_size', 'word_path', 'word_original_name', 'word_size', 'cover_path', 'page_count'];
 
     public function row(Request $request, int $id, bool $lock = false): object
     {
@@ -55,7 +55,7 @@ final class LessonPlanDocumentService
                 ]);
                 $document = $this->documentValues($request, $values, $row, $savedId, $newPaths);
                 DB::table('learning_lesson_plans')->where('id', $savedId)->update([...$metadata, ...$document]);
-                foreach (['pdf_path', 'cover_path'] as $column) {
+                foreach (['pdf_path', 'word_path', 'cover_path'] as $column) {
                     $old = (string) ($row?->{$column} ?? '');
                     if ($old !== '' && $old !== ($document[$column] ?? null) && $this->ownedPath($this->district($request), $savedId, $old)) {
                         $oldPaths[] = $old;
@@ -86,13 +86,16 @@ final class LessonPlanDocumentService
             'activities' => ['sometimes', 'nullable', 'string', 'max:10000'],
             'assessment' => ['sometimes', 'nullable', 'string', 'max:10000'],
             'status' => ['sometimes', Rule::in(['draft', 'published'])],
-            'source_type' => ['sometimes', Rule::in(['link', 'pdf'])],
+            'source_type' => ['sometimes', Rule::in(['link', 'pdf', 'word'])],
             'external_url' => ['sometimes', 'nullable', 'string', 'url:http,https', 'max:2048'],
             'pdf' => ['sometimes', 'nullable', 'file', 'mimes:pdf', 'max:20480'],
+            'word' => ['sometimes', 'nullable', 'file', 'mimes:doc,docx', 'max:30720'],
             'cover_image' => ['sometimes', 'nullable', 'file', 'image', 'mimes:jpg,jpeg,png,webp', 'max:2048', 'dimensions:min_width=1,min_height=1,max_width=2000,max_height=2000'],
             'page_count' => ['sometimes', 'nullable', 'integer', 'min:1', 'max:10000'],
             'clear_pdf' => ['sometimes', 'nullable'],
             'remove_pdf' => ['sometimes', 'nullable'],
+            'clear_word' => ['sometimes', 'nullable'],
+            'remove_word' => ['sometimes', 'nullable'],
             'clear_cover' => ['sometimes', 'nullable'],
             'remove_cover' => ['sometimes', 'nullable'],
         ], ['title.max' => "ชื่อแผนการสอนต้องไม่เกิน {$titleLimit} ตัวอักษร"]);
@@ -117,15 +120,21 @@ final class LessonPlanDocumentService
         if (isset($values['pdf']) && strtolower($values['pdf']->getClientOriginalExtension()) !== 'pdf') {
             throw ValidationException::withMessages(['pdf' => 'ต้องแนบไฟล์นามสกุล PDF เท่านั้น']);
         }
-        $source = $values['source_type'] ?? ($url !== '' ? 'link' : (isset($values['pdf']) || filled($existing?->pdf_path ?? null) ? 'pdf' : null));
+        if (isset($values['word']) && ! in_array(strtolower($values['word']->getClientOriginalExtension()), ['doc', 'docx'], true)) {
+            throw ValidationException::withMessages(['word' => 'ต้องแนบไฟล์เอกสาร Word (.doc หรือ .docx) เท่านั้น']);
+        }
+        $source = $values['source_type'] ?? ($url !== '' ? 'link' : (isset($values['pdf']) || filled($existing?->pdf_path ?? null) ? 'pdf' : (isset($values['word']) || filled($existing?->word_path ?? null) ? 'word' : null)));
         if ($source === 'link' && $url === '') {
             throw ValidationException::withMessages(['external_url' => 'กรุณาระบุลิงก์แผนการสอน']);
         }
         if ($source === 'pdf' && ! isset($values['pdf']) && ! filled($existing?->pdf_path ?? null)) {
             throw ValidationException::withMessages(['pdf' => 'กรุณาแนบไฟล์ PDF']);
         }
+        if ($source === 'word' && ! isset($values['word']) && ! filled($existing?->word_path ?? null)) {
+            throw ValidationException::withMessages(['word' => 'กรุณาแนบไฟล์ Word']);
+        }
         if ($source === null && (isset($values['cover_image']) || isset($values['page_count']))) {
-            throw ValidationException::withMessages(['source_type' => 'กรุณาแนบลิงก์หรือ PDF ก่อนสร้างปก']);
+            throw ValidationException::withMessages(['source_type' => 'กรุณาแนบลิงก์, PDF หรือ Word ก่อนสร้างปก']);
         }
         $values['resolved_source'] = $source;
 
@@ -181,15 +190,25 @@ final class LessonPlanDocumentService
         }
         $url = $values['external_url'] ?? $row?->external_url ?? null;
         $changedLink = $values['resolved_source'] === 'link' && $url !== ($row?->external_url ?? null);
-        $replacing = isset($values['pdf']) || $changedLink;
-        if ($replacing) {
-            $document = array_fill_keys(self::DOCUMENT_COLUMNS, null);
+        if ($changedLink) {
+            $document['pdf_path'] = null;
+            $document['pdf_original_name'] = null;
+            $document['pdf_size'] = null;
+            $document['cover_path'] = null;
+            $document['page_count'] = null;
+        } elseif (isset($values['pdf'])) {
+            $document['cover_path'] = null;
         }
         $document['external_url'] = $values['resolved_source'] === 'link' ? $url : null;
         if ($request->boolean('clear_pdf') || $request->boolean('remove_pdf')) {
             $document['pdf_path'] = null;
             $document['pdf_original_name'] = null;
             $document['pdf_size'] = null;
+        }
+        if ($request->boolean('clear_word') || $request->boolean('remove_word')) {
+            $document['word_path'] = null;
+            $document['word_original_name'] = null;
+            $document['word_size'] = null;
         }
         if ($request->boolean('clear_cover') || $request->boolean('remove_cover')) {
             $document['cover_path'] = null;
@@ -201,6 +220,15 @@ final class LessonPlanDocumentService
             $document['pdf_path'] = $path;
             $document['pdf_original_name'] = mb_substr($this->filename($values['pdf']->getClientOriginalName()), 0, 255);
             $document['pdf_size'] = $values['pdf']->getSize();
+        }
+        if (isset($values['word'])) {
+            $extension = strtolower($values['word']->getClientOriginalExtension()) === 'doc' ? 'doc' : 'docx';
+            $path = $values['word']->storeAs("learning/lesson-plans/{$this->district($request)}/{$id}", Str::uuid().'.'.$extension, 'local');
+            abort_unless(is_string($path), 500, 'ไม่สามารถบันทึกไฟล์ Word ได้');
+            $newPaths[] = $path;
+            $document['word_path'] = $path;
+            $document['word_original_name'] = mb_substr($this->filename($values['word']->getClientOriginalName()), 0, 255);
+            $document['word_size'] = $values['word']->getSize();
         }
         if (isset($values['cover_image'])) {
             $extension = match ($values['cover_image']->getMimeType()) {
@@ -230,7 +258,7 @@ final class LessonPlanDocumentService
 
             return $row;
         });
-        foreach (['pdf_path', 'cover_path'] as $column) {
+        foreach (['pdf_path', 'word_path', 'cover_path'] as $column) {
             $path = (string) ($row->{$column} ?? '');
             if ($this->ownedPath($this->district($request), $id, $path)) {
                 Storage::disk('local')->delete($path);
@@ -262,6 +290,21 @@ final class LessonPlanDocumentService
         ], false);
     }
 
+    public function word(Request $request, int $id): BinaryFileResponse
+    {
+        $row = $this->row($request, $id);
+        $path = (string) ($row->word_path ?? '');
+        abort_unless($this->ownedPath($this->district($request), $id, $path) && Storage::disk('local')->exists($path), 404);
+        $extension = strtolower(pathinfo($path, PATHINFO_EXTENSION)) === 'doc' ? 'doc' : 'docx';
+        $mime = $extension === 'doc' ? 'application/msword' : 'application/vnd.openxmlformats-officedocument.wordprocessingml.document';
+        $filename = $this->filename((string) ($row->word_original_name ?: $row->title.'.'.$extension));
+
+        return new BinaryFileResponse(Storage::disk('local')->path($path), 200, [
+            'Content-Type' => $mime, 'X-Content-Type-Options' => 'nosniff', 'Cache-Control' => 'private, no-store',
+            'Content-Disposition' => HeaderUtils::makeDisposition('attachment', $filename, 'lesson-plan.'.$extension),
+        ], false);
+    }
+
     private function filename(string $name): string
     {
         $name = trim((string) preg_replace('~[\x00-\x1f\x7f/\\\\]+~u', ' ', $name));
@@ -271,7 +314,7 @@ final class LessonPlanDocumentService
 
     private function ownedPath(int $district, int $id, string $path): bool
     {
-        return preg_match('#^learning/lesson-plans/'.preg_quote((string) $district, '#').'/'.preg_quote((string) $id, '#').'/[0-9a-f-]+\.(?:pdf|png|jpg|webp)$#D', $path) === 1;
+        return preg_match('#^learning/lesson-plans/'.preg_quote((string) $district, '#').'/'.preg_quote((string) $id, '#').'/[0-9a-f-]+\.(?:pdf|png|jpg|webp|doc|docx)$#D', $path) === 1;
     }
 
     private function district(Request $request): int
@@ -299,7 +342,7 @@ final class LessonPlanDocumentService
         DB::table('audit_logs')->insert([
             'user_id' => $request->user()->id, 'district_id' => $this->district($request), 'event' => "learning.lesson-plans.{$action}",
             'auditable_type' => 'system_learning_lesson-plans', 'auditable_id' => $id, 'ip_address' => $request->ip(), 'before' => null,
-            'after' => json_encode(['has_pdf' => filled($document['pdf_path'] ?? null), 'has_cover' => filled($document['cover_path'] ?? null), 'page_count' => $document['page_count'] ?? null], JSON_THROW_ON_ERROR), 'created_at' => now(),
+            'after' => json_encode(['has_pdf' => filled($document['pdf_path'] ?? null), 'has_word' => filled($document['word_path'] ?? null), 'has_cover' => filled($document['cover_path'] ?? null), 'page_count' => $document['page_count'] ?? null], JSON_THROW_ON_ERROR), 'created_at' => now(),
         ]);
     }
 }
