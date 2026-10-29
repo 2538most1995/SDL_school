@@ -1,0 +1,42 @@
+.classroom-tasks { margin: 24px 0 32px; padding: clamp(18px, 3vw, 28px); border: 1px solid var(--ui-border); border-radius: 22px; background: var(--ui-surface); }
+.classroom-tasks-heading { display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 16px; margin-bottom: 20px; }
+.classroom-tasks-heading .classroom-step { display: flex; align-items: center; gap: 7px; }
+.classroom-tasks-heading h3 { margin: 6px 0; font-size: 1.3rem; font-weight: 800; }
+.classroom-tasks-heading p, .classroom-task-form .classroom-muted { font-size: .875rem; color: var(--ui-text-muted); }
+.classroom-task-list { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 320px), 1fr)); gap: 14px; }
+.classroom-task-card { display: flex; flex-direction: column; gap: 12px; min-width: 0; padding: 20px; text-align: left; border: 1px solid var(--ui-border); border-radius: 16px; background: var(--ui-surface); color: var(--ui-text); cursor: pointer; }
+.classroom-task-card > strong { font-size: 1.1rem; line-height: 1.6; overflow-wrap: anywhere; }
+.classroom-task-card-top, .classroom-task-card-bottom { display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 8px; font-size: .8rem; }
+.classroom-task-subject { color: var(--ui-text-muted); }
+.classroom-task-state { padding: 4px 9px; border-radius: 8px; background: var(--ui-surface-muted); color: var(--ui-text-muted); font-size: .8rem; font-weight: 700; }
+.classroom-task-state[data-state="completed"] { color: var(--classroom-accent, var(--ui-navigation)); background: color-mix(in srgb, var(--classroom-accent, var(--ui-navigation)) 12%, var(--ui-surface)); }
+.classroom-task-state[data-state="in_progress"] { color: var(--ui-text); }
+.classroom-task-deadline { display: flex; align-items: center; flex-wrap: wrap; gap: 6px; color: var(--ui-text-muted); font-size: .875rem; }
+.classroom-task-deadline[data-overdue="true"] { font-weight: 700; }
+.classroom-task-card-bottom > span:last-child { display: flex; align-items: center; gap: 7px; color: var(--classroom-accent, var(--ui-navigation)); font-weight: 700; }
+.classroom-task-card:focus-visible, .classroom-task-option:focus-visible { outline: 3px solid var(--classroom-accent, var(--ui-navigation)); outline-offset: 3px; }
+.classroom-task-form, .classroom-task-detail { display: flex; flex-direction: column; gap: 20px; }
+.classroom-task-form { padding-top: 12px !important; }
+.classroom-task-form > fieldset { border: 0; padding: 0; margin: 0; min-width: 0; }
+.classroom-task-form > fieldset > legend { margin-bottom: 10px; font-weight: 700; }
+.classroom-task-form > fieldset p { margin-top: 12px; line-height: 1.7; }
+.classroom-task-options { display: flex; flex-direction: column; gap: 8px; max-height: 360px; overflow: auto; padding: 3px; }
+.classroom-task-option { width: 100%; display: flex; align-items: center; gap: 12px; padding: 14px; text-align: left; border: 1px solid var(--ui-border); border-radius: 12px; background: var(--ui-surface); color: var(--ui-text); cursor: pointer; }
+.classroom-task-option input { width: 20px; height: 20px; flex-shrink: 0; accent-color: var(--classroom-accent, var(--ui-navigation)); }
+.classroom-task-option > span { flex: 1; min-width: 0; }
+.classroom-task-option strong, .classroom-task-option small, .classroom-task-student small { display: block; overflow-wrap: anywhere; }
+.classroom-task-option small, .classroom-task-student small { font-size: .8rem; color: var(--ui-text-muted); margin-top: 5px; }
+.classroom-task-roster { border: 1px solid var(--ui-border); border-radius: 14px; padding: 0 16px; }
+.classroom-task-student { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 15px 0; border-bottom: 1px solid var(--ui-border); }
+.classroom-task-student:last-child { border-bottom: 0; }
+.classroom-task-student > div { min-width: 0; }
+.classroom-task-student > div:last-child { text-align: right; flex-shrink: 0; }
+.classroom-task-student strong { overflow-wrap: anywhere; }
+.classroom-task-pagination { display: flex; align-items: center; justify-content: space-between; gap: 6px; margin-top: 15px; font-size: .8rem; }
+.classroom-task-completion { margin-top: 24px; border-top: 1px solid var(--ui-border); padding-top: 20px; display: flex; align-items: flex-start; flex-direction: column; gap: 12px; }
+@media (hover: hover) and (pointer: fine) { .classroom-task-card:hover, button.classroom-task-option:hover { border-color: var(--classroom-accent, var(--ui-navigation)); } }
+@media (max-width: 480px) { .classroom-task-student { align-items: flex-start; } .classroom-task-pagination { flex-wrap: wrap; } }
+
+.classroom-task-editor-body { display: flex; flex-direction: column; min-height: 0; overflow: hidden; }
+.classroom-task-editor-body > .MuiDialogContent-root { overflow-y: auto; }
+.classroom-task-dialog .MuiDialogTitle-root { overflow-wrap: anywhere; }

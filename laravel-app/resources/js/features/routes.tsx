@@ -16,7 +16,6 @@ const StatisticsOverviewPage = lazyWithReload(async () => ({ default: (await imp
 const RegistrationStatisticsPage = lazyWithReload(async () => ({ default: (await import('./reports/RegistrationStatisticsPage')).RegistrationStatisticsPage }));
 const ExamEligibleStudentsPage = lazyWithReload(async () => ({ default: (await import('./reports/ExamEligibleStudentsPage')).ExamEligibleStudentsPage }));
 const ExamAttendanceCheckPage = lazyWithReload(async () => ({ default: (await import('./learning/ExamAttendanceCheckPage')).ExamAttendanceCheckPage }));
-const LearningHomePage = lazyWithReload(async () => ({ default: (await import('./learning')).LearningHomePage }));
 const LessonPlansPage = lazyWithReload(async () => ({ default: (await import('./learning/LessonPlansPage')).LessonPlansPage }));
 const OnlineClassroomPage = lazyWithReload(async () => ({ default: (await import('./learning/OnlineClassroomPage')).OnlineClassroomPage }));
 const LearningListPage = lazyWithReload(async () => ({ default: (await import('./learning')).LearningListPage }));
@@ -67,7 +66,7 @@ export const featureRouteCatalog: FeatureRoute[] = [
     { path: '/reports/exam-eligible', label: 'นักศึกษามีสิทธิ์สอบ', roles: ['teacher', 'admin', 'super_admin'], element: <ExamEligibleStudentsPage /> },
     { path: '/learning/exam-attendance-check', label: 'เช็คชื่อเข้าสอบ', roles: ['student', 'teacher', 'admin', 'super_admin'], element: <ExamAttendanceCheckPage /> },
 
-    { path: '/learning', label: 'พื้นที่การเรียนรู้', roles: ['student', 'teacher', 'admin', 'super_admin'], element: <LearningHomePage /> },
+    { path: '/learning', label: 'ห้องเรียนออนไลน์', roles: ['student', 'teacher', 'admin', 'super_admin'], element: <ClassroomHomeRedirect /> },
     { path: '/learning/classroom', label: 'ห้องเรียนออนไลน์', roles: ['student', 'teacher', 'admin', 'super_admin'], element: <OnlineClassroomPage /> },
     { path: '/learning/assignments', label: 'งานและการส่งงาน', roles: ['student', 'teacher', 'admin', 'super_admin'], element: <ClassroomLegacyRedirect kind="assignments" /> },
     { path: '/learning/resources', label: 'คลังสื่อ', roles: ['student', 'teacher', 'admin', 'super_admin'], element: <ClassroomLegacyRedirect kind="resources" /> },
@@ -100,4 +99,9 @@ export const featureRouteCatalog: FeatureRoute[] = [
 function ClassroomLegacyRedirect({ kind }: { kind: 'assignments' | 'resources' }) {
     const { search } = useLocation();
     return <Navigate replace to={legacyClassroomLocation(kind, search)} />;
+}
+
+function ClassroomHomeRedirect() {
+    const { search } = useLocation();
+    return <Navigate replace to={`/learning/classroom${search}`} />;
 }

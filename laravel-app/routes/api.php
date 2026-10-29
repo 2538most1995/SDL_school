@@ -16,6 +16,7 @@ use App\Http\Controllers\Api\Integrations\SenaCareTeacherController;
 use App\Http\Controllers\Api\Integrations\StudentDataController;
 use App\Http\Controllers\Api\Learning\AssignmentWorkflowController;
 use App\Http\Controllers\Api\Learning\CalendarController;
+use App\Http\Controllers\Api\Learning\ClassroomTaskController;
 use App\Http\Controllers\Api\Learning\CourseRegistrationController;
 use App\Http\Controllers\Api\Learning\CourseRegistrationDocumentController;
 use App\Http\Controllers\Api\Learning\ExamAttendanceController;
@@ -136,6 +137,11 @@ Route::prefix('v1')->group(function (): void {
         Route::get('/learning', LearningOverviewController::class)->middleware('learning.schema');
         Route::prefix('learning/classroom')->middleware('learning.schema')->group(function (): void {
             Route::get('/', [OnlineClassroomController::class, 'index']);
+            Route::get('/tasks', [ClassroomTaskController::class, 'index']);
+            Route::get('/tasks/options', [ClassroomTaskController::class, 'options']);
+            Route::post('/tasks', [ClassroomTaskController::class, 'store']);
+            Route::get('/tasks/{task}', [ClassroomTaskController::class, 'show'])->whereNumber('task');
+            Route::post('/tasks/{task}/activities/{activity}/complete', [ClassroomTaskController::class, 'complete'])->whereNumber(['task', 'activity'])->middleware('throttle:30,1');
             Route::post('/activities', [OnlineClassroomController::class, 'store']);
             Route::post('/activities/{activity}', [OnlineClassroomController::class, 'update'])->whereNumber('activity');
             Route::delete('/activities/{activity}', [OnlineClassroomController::class, 'destroy'])->whereNumber('activity');

@@ -352,3 +352,9 @@ php artisan system:create-student-api-token ADMIN_USERNAME --name=sena-care --se
 Add `--district-code=CODE` for a super-admin owner and `--replace` only when rotating an existing named client. `--no-expiry` stores NULL in `expires_at`; it cannot be combined with `--expires-in-days`. Omitting this flag retains the default 90-day expiry, with `--expires-in-days` accepting 1–365 days. Existing tokens do not become permanent automatically. A permanent token remains subject to revocation, active owner/district checks, fixed district scope, abilities and rate limits. `system:revoke-student-api-token CLIENT_ID` revokes it immediately, including teacher-password verification. No password or teacher login changes are needed.
 
 The migration is intentionally forward-only on rollback: restoring a NOT NULL constraint would require changing or deleting already issued permanent credentials. Source/data migrations and token issuance must run on the intended deployment database; tests use isolated in-memory SQLite.
+
+## Classroom task deployment (2026-10-29)
+
+Courses and activities now open in separate views. Teachers issue tasks with deadlines for all currently available activities or selected items; students see assigned work in the classroom, and staff filter pending/in-progress/completed rosters. The retired `/learning` page redirects to the classroom and its menu is removed.
+
+Before using task writes, apply migration `2026_10_29_000042_create_classroom_tasks.php` through the project's normal staging/backup procedure: run `php artisan migrate --force` and `php artisan optimize:clear` inside `laravel-app`. Use the included production build. Development did not migrate the real database. See [docs/online-classroom.md](docs/online-classroom.md) for authorization, deadline and completion details.

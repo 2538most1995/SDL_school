@@ -48,7 +48,6 @@ return [
             'label' => 'learning',
             'color' => 'violet',
             'items' => [
-                ['key' => 'learning-home', 'label' => 'พื้นที่การเรียนรู้', 'description' => 'ภาพรวมการเรียนและการสอน', 'route' => '/learning', 'icon' => 'planet', 'roles' => ['student', 'teacher', 'admin', 'super_admin']],
                 ['key' => 'online-classroom', 'label' => 'ห้องเรียนออนไลน์', 'description' => 'คลิป เอกสาร ใบงาน ส่งไฟล์ และแบบทดสอบในห้องเรียนเดียว', 'route' => '/learning/classroom', 'icon' => 'books', 'roles' => ['student', 'teacher', 'admin', 'super_admin']],
                 ['key' => 'public-relations', 'label' => 'ข่าวประชาสัมพันธ์', 'description' => 'ข่าวสาร รูปภาพ และข้อมูลสำคัญจากอำเภอ', 'route' => '/public-relations', 'icon' => 'newspaper', 'roles' => ['student']],
                 ['key' => 'lesson-plans', 'label' => 'แผนการสอน', 'description' => 'แผนการจัดการเรียนรู้ของครู', 'route' => '/learning/lesson-plans', 'icon' => 'notebook', 'roles' => ['teacher', 'admin', 'super_admin']],

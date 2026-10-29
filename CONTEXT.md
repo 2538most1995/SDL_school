@@ -1,5 +1,9 @@
 # SDL School Context
 
+## Classroom tasks and separate course navigation (2026-10-29)
+
+The classroom starts with a course chooser, then opens activities at a course-specific URL with a return action. The retired learning-home menu is removed from system/student catalogs and `/learning` redirects to the classroom. Teachers issue named tasks with deadlines to their registered course/group audience, snapshot all currently eligible activities or select specific online/file activities. Students see assigned tasks globally and per course; staff see paginated pending/in-progress/completed rosters. Existing submissions supply assessment completion; knowledge/video use explicit self acknowledgement, not watch-time proof. Assigned sources are frozen while grading remains available. Migration `2026_10_29_000042_create_classroom_tasks.php` is required. No production DB changes were made during development. See `laravel-app/docs/online-classroom.md` for deadline and retention rules.
+
 ## One-click lesson-plan reading and cover recovery (2026-10-29)
 
 Cover, primary read action and details now share the same opening decision: an attached private PDF opens immediately in the in-app reader, a supported provider embed opens its viewer, and link-only OneDrive/general documents use a native external anchor directly without an intermediate dialog. Cloud originals remain available from PDF readers. Visible cards use their stored private cover first; a missing cover can be rendered from the authorized PDF in the browser. No arbitrary external fetch, cloud permission change or schema change is introduced. The reported 222-page OneDrive plan was updated through its existing authorized editor with a PDF companion and generated first-page cover, retaining its original link and metadata.

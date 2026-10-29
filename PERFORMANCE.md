@@ -254,3 +254,7 @@ Province labels (2026-10-19): single-student details reuse the existing cached l
 ## SENA Care teacher integration (2026-10-19)
 
 Teacher export selects an explicit public identity field list and uses SQL pagination with at most 100 teachers per page. Authentication queries one active teacher by the token district plus username/email and verifies locally with Laravel Hash; per-identifier/district and per-IP failure limits bound password work. Group export reuses `DistrictLearningGroupCatalog` and its latest-successful-batch scope/cache, without per-teacher group queries. No indexes or imported-data writes added. SQLite in-memory contract and authorization tests pass; live MySQL latency/plans remain Not verified.
+
+## Classroom task progress (2026-10-29)
+
+Task lists paginate at 50. Evidence is fetched in three batched queries (online submissions, file submissions, content acknowledgements) for the visible tasks and authorized student codes; no per-student queries or answer/attachment reads are introduced. A reverse `(kind, content_id, task_id)` index supports source-freeze checks and authorized maximum deadline lookup. Detail status filtering precedes in-memory roster pagination; current registered audience remains the access authority. Task options cap each source scan at 501 and fail explicitly above 500 source rows or 200 eligible items. Source rows are locked during task creation and source mutations to preserve the issued snapshot. Live MySQL plans, lock contention and large-roster memory usage are Not verified.

@@ -52,6 +52,8 @@ final readonly class AssignmentWorkflowService
             ->limit(250);
         $assignmentRows = $query->get();
         $assignmentIds = $assignmentRows->pluck('id')->map(static fn ($id): int => (int) $id)->all();
+        $lockedIds = $this->database->connection()->getSchemaBuilder()->hasTable('learning_classroom_task_items')
+            ? $this->database->connection()->table('learning_classroom_task_items')->where('kind', 'assignment')->whereIn('content_id', $assignmentIds)->pluck('content_id')->map(fn ($id) => (int) $id)->all() : [];
         $submissions = $assignmentIds === []
             ? collect()
             : $this->database->connection()->table('learning_submissions')
@@ -96,6 +98,7 @@ final readonly class AssignmentWorkflowService
                     ->whereIn('status', ['submitted', 'reviewed'])->count(),
                 $ownSubmission,
                 $submissionAttachments,
+                in_array((int) $assignment->id, $lockedIds, true),
             );
         }
 
@@ -180,6 +183,7 @@ final readonly class AssignmentWorkflowService
         $before = null;
         if ($assignmentId !== null) {
             $before = $this->ownedAssignment($viewer, $districtId, $assignmentId);
+            ClassroomTaskService::assertContentEditable('assignment', $assignmentId);
         }
         $stored = [
             'academic_term' => $term,
@@ -228,6 +232,8 @@ final readonly class AssignmentWorkflowService
                         'created_at' => now(),
                     ]);
                 } else {
+                    $connection->table('learning_assignments')->where('id', $savedId)->lockForUpdate()->first();
+                    ClassroomTaskService::assertContentEditable('assignment', $savedId);
                     $connection->table('learning_assignments')->where('id', $savedId)->update($stored);
                 }
 
@@ -287,6 +293,7 @@ final readonly class AssignmentWorkflowService
     public function deleteAssignment(User $viewer, int $districtId, int $assignmentId, ?string $ipAddress): void
     {
         $assignment = $this->ownedAssignment($viewer, $districtId, $assignmentId);
+        ClassroomTaskService::assertContentEditable('assignment', $assignmentId);
         $connection = $this->database->connection();
         $submissionIds = $connection->table('learning_submissions')
             ->where('assignment_id', $assignmentId)->pluck('id')->all();
@@ -304,6 +311,8 @@ final readonly class AssignmentWorkflowService
         }
         $materialPath = trim((string) ($assignment->material_path ?? ''));
         $connection->transaction(function () use ($connection, $assignmentId, $submissionIds): void {
+            $connection->table('learning_assignments')->where('id', $assignmentId)->lockForUpdate()->first();
+            ClassroomTaskService::assertContentEditable('assignment', $assignmentId);
             if ($submissionIds !== []) {
                 $connection->table('learning_submission_attachments')->whereIn('submission_id', $submissionIds)->delete();
             }
@@ -612,6 +621,7 @@ final readonly class AssignmentWorkflowService
         int $submittedCount,
         ?object $ownSubmission,
         Collection $submissionAttachments,
+        bool $contentLocked = false,
     ): array {
         return [
             'id' => (string) $assignment->id,
@@ -639,6 +649,7 @@ final readonly class AssignmentWorkflowService
                 : null,
             'student_count' => $studentCount,
             'submitted_count' => $submittedCount,
+            'content_locked' => $contentLocked,
             'can_edit' => in_array($viewer->role, ['admin', 'super_admin'], true)
                 || ($viewer->role === 'teacher' && (int) $assignment->created_by === (int) $viewer->id),
             'submission' => $ownSubmission === null ? null : $this->submissionPayload(

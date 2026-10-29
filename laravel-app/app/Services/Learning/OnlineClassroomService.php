@@ -115,14 +115,25 @@ final class OnlineClassroomService
             ->orderByDesc('id')->paginate(50, ['*'], 'activity_page', (int) ($filters['activity_page'] ?? 1));
         $rows = collect($activityPage?->items() ?? []);
         $rows = $rows->filter(fn ($row) => $this->audience($catalog, $row) !== [])->values();
-        $selected = isset($filters['activity_id']) ? $rows->firstWhere('id', (int) $filters['activity_id']) : $rows->first();
-        abort_if(isset($filters['activity_id']) && $selected === null, 404);
+        if (isset($filters['activity_id']) && $viewer->role === 'teacher') {
+            abort_unless(DB::table('learning_classroom_activities')->where('district_id', $districtId)->where('id', $filters['activity_id'])->where('created_by', $viewer->id)->exists(), 404);
+        }
+        $selected = isset($filters['activity_id']) ? $this->authorizedActivity($viewer, $districtId, (int) $filters['activity_id'], false, $catalog) : $rows->first();
+        abort_if($selected !== null && ($subject === null || $selected->subject_code !== $subject['code'] || (int) $selected->education_level !== $subject['level'] || (! empty($filters['activity_type']) && $selected->type !== $filters['activity_type'])), 404);
+        if ($selected !== null && ! $rows->contains('id', $selected->id)) {
+            $rows->push($selected);
+        }
         $ids = $rows->pluck('id')->all();
         $counts = DB::table('learning_classroom_submissions')->whereIn('activity_id', $ids)->groupBy('activity_id')->selectRaw('activity_id, COUNT(*) as total')->pluck('total', 'activity_id');
         $own = $viewer->role === 'student' ? DB::table('learning_classroom_submissions')->whereIn('activity_id', $ids)
             ->where('student_code', $viewer->student_code ?: $viewer->username)->get()->keyBy('activity_id') : collect();
-        $payloads = $rows->map(fn ($row) => $this->activityPayload($viewer, $row, (int) ($counts[$row->id] ?? 0), $own[$row->id] ?? null, $this->canEdit($viewer, $row, $catalog)));
+        $lockedIds = Schema::hasTable('learning_classroom_task_items') ? DB::table('learning_classroom_task_items')->where('kind', 'activity')->whereIn('content_id', $ids)->pluck('content_id')->map(fn ($id) => (int) $id)->all() : [];
+        $payloads = $rows->map(fn ($row) => $this->activityPayload($viewer, $row, (int) ($counts[$row->id] ?? 0), $own[$row->id] ?? null, $this->canEdit($viewer, $row, $catalog), in_array((int) $row->id, $lockedIds, true)));
         $selectedPayload = $selected === null ? null : $payloads->firstWhere('id', (string) $selected->id);
+        if ($selected !== null && $viewer->role === 'student') {
+            $deadline = app(ClassroomTaskService::class)->activityDeadline($viewer, $districtId, $selected, $catalog);
+            $selectedPayload['due_at'] = $deadline === null ? null : Carbon::parse($deadline)->toIso8601String();
+        }
         $submissions = [];
         $pagination = null;
         if ($selected !== null && $viewer->role !== 'student') {
@@ -134,7 +145,7 @@ final class OnlineClassroomService
         }
 
         return ['term' => $catalog['term'], 'subjects' => $catalog['subjects'], 'selected_subject' => $subject,
-            'activities' => $payloads->map(function ($activity) {
+            'activities' => $payloads->filter(fn ($activity) => in_array((int) $activity['id'], array_map(fn ($row) => (int) $row->id, $activityPage?->items() ?? []), true))->values()->map(function ($activity) {
                 unset($activity['questions'], $activity['content'], $activity['links']);
 
                 return $activity;
@@ -199,6 +210,7 @@ final class OnlineClassroomService
             if ($id !== null) {
                 DB::table('learning_classroom_activities')->where('id', $id)->lockForUpdate()->first();
                 $this->authorizedActivity($viewer, $districtId, $id, true, $catalog);
+                ClassroomTaskService::assertContentEditable('activity', $id);
                 if (DB::table('learning_classroom_submissions')->where('activity_id', $id)->exists()) {
                     if (array_diff(array_keys($values), ['status']) !== []) {
                         throw ValidationException::withMessages(['questions' => 'มีผู้ส่งคำตอบแล้ว เปลี่ยนได้เฉพาะสถานะ กรุณาสร้างกิจกรรมใหม่หากต้องการแก้เนื้อหา']);
@@ -298,7 +310,8 @@ final class OnlineClassroomService
             DB::table('learning_classroom_activities')->where('id', $id)->lockForUpdate()->first();
             $activity = $this->authorizedActivity($viewer, $districtId, $id, false, $catalog);
             abort_if(in_array($activity->type, ['knowledge', 'video'], true), 422, 'ใบความรู้และคลิปวิดีโอไม่มีการส่งคำตอบ');
-            abort_if($activity->due_at !== null && now()->gt($activity->due_at), 422, 'พ้นกำหนดส่งแล้ว');
+            $deadline = app(ClassroomTaskService::class)->activityDeadline($viewer, $districtId, $activity, $catalog);
+            abort_if($deadline !== null && now()->gt($deadline), 422, 'พ้นกำหนดส่งแล้ว');
             $studentCode = (string) ($viewer->student_code ?: $viewer->username);
             abort_if(DB::table('learning_classroom_submissions')->where('activity_id', $id)->where('student_code', $studentCode)->exists(), 409, 'ส่งคำตอบแล้ว กิจกรรมนี้ส่งได้หนึ่งครั้ง');
             $questions = $this->decode($activity->questions);
@@ -369,13 +382,14 @@ final class OnlineClassroomService
         DB::transaction(function () use ($viewer, $districtId, $id) {
             DB::table('learning_classroom_activities')->where('id', $id)->lockForUpdate()->first();
             $this->authorizedActivity($viewer, $districtId, $id, true);
+            ClassroomTaskService::assertContentEditable('activity', $id);
             abort_if(DB::table('learning_classroom_submissions')->where('activity_id', $id)->exists(), 422, 'มีผู้ส่งคำตอบแล้ว กรุณาเปลี่ยนเป็นฉบับร่างเพื่อซ่อนกิจกรรม');
             DB::table('learning_classroom_activities')->where('id', $id)->delete();
             // Keep private image metadata attached to the deleted activity: it then fails closed on read.
         });
     }
 
-    private function activityPayload(User $viewer, object $row, int $count, ?object $submission, bool $canEdit): array
+    private function activityPayload(User $viewer, object $row, int $count, ?object $submission, bool $canEdit, bool $contentLocked = false): array
     {
         $questions = $this->decode($row->questions);
         foreach ($questions as &$question) {
@@ -390,7 +404,7 @@ final class OnlineClassroomService
             'education_level' => (int) $row->education_level, 'target_group' => $row->target_group, 'type' => $row->type,
             'title' => $row->title, 'content' => $row->content ?? '', 'links' => $this->decode($row->links), 'status' => $row->status,
             'due_at' => $row->due_at === null ? null : Carbon::parse($row->due_at)->toIso8601String(), 'questions' => $questions, 'max_score' => round(array_sum(array_column($questions, 'points')), 2),
-            'can_edit' => $canEdit,
+            'can_edit' => $canEdit, 'content_locked' => $contentLocked,
             'has_submissions' => $count > 0, 'submission_count' => $count, 'submission' => $submission === null ? null : $this->submissionPayload($submission)];
     }
 
