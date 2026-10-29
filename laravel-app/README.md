@@ -1,5 +1,9 @@
 # Sena Care School Laravel
 
+## แผนรวมทุกวิชาแยกตามระดับ (29 ตุลาคม 2569)
+
+เพิ่มตัวเลือก **แผนรวมทุกวิชา** สำหรับประถม ม.ต้น และ ม.ปลาย แยกจาก **แผนรายวิชา** โดยไม่ต้องกรอกรหัสวิชา เลือกระดับ/ภาคเรียนแล้วแนบลิงก์หรือ PDF ได้ตามเดิม พร้อมปกจากหน้าแรกและตัวกรองประเภท/ระดับ หลังดึง Git ให้รัน `php artisan migrate --force` เพื่อเพิ่ม `plan_scope` จาก migration `2026_10_29_000039_add_scope_to_lesson_plans.php` แล้ว `php artisan optimize:clear` และใช้ build ที่แนบใน Git แผนเดิมคงเป็นแผนรายวิชา ดู [docs/lesson-plans.md](docs/lesson-plans.md)
+
 ## ชั้นเอกสารแผนการสอน (29 ตุลาคม 2569)
 
 หน้าแผนการสอนรองรับลิงก์ HTTP/HTTPS รวม Google Drive, OneDrive/SharePoint หรืออัปโหลด PDF ไม่เกิน 20 MB แสดงเป็นการ์ดพร้อมปกจากหน้าแรกของ PDF และจำนวนหน้าจริง ลิงก์คลาวด์ที่ไม่เปิดเผยปกแนบ PDF สำเนาเพิ่มเพื่อสร้างปกและอ่านสำรองได้ โดยยังเปิดลิงก์เดิม ไม่มีการเชื่อมบัญชีคลาวด์หรือเปลี่ยนสิทธิ์แชร์ หลังดึง Git **ต้องรัน `php artisan migrate --force` และ `php artisan optimize:clear`** ภายใน `laravel-app` แล้วใช้ build ที่แนบไว้ การ build เองใช้ Node.js 22.13+ พร้อม `npm ci` และ `npm run build` เอกสารเดิมยังอยู่ครบ ดู [docs/lesson-plans.md](docs/lesson-plans.md)

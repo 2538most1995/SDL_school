@@ -1,5 +1,11 @@
 # Performance Audit
 
+## Combined lesson-plan scope (2026-10-29)
+
+Optional `plan_scope` and `education_level` filters apply to the existing district/teacher SQL query before the 250-plan cap; no per-card query or copied plan per course is introduced. A regression fixture with 251 newer subject plans confirms an older combined plan remains discoverable. Scope-filtered requests check column availability once for pre-migration compatibility. Existing bounded cover rendering and file limits are unchanged; no new index is added without MySQL plan evidence.
+
+Verification: PHP 512 passed / 1 existing skip, frontend 87 passed, typecheck/build and changed-file Pint pass. Synthetic demo-browser checks created PDF combined plans for all three levels without a subject input, verified selected scope/level defaults, filtered out other levels, retained the PDF after metadata edits, and checked 1440px/390px without horizontal overflow. Real deployment data and MySQL timing remain Not verified.
+
 ## Lesson-plan document shelf (2026-10-29)
 
 The existing bounded 250-plan read adds one teacher LEFT JOIN, without per-card SQL. Covers fetch only as cards approach the viewport and use revoked blob URLs; PDF.js loads only when selecting a PDF. Its worker, CMaps, fonts and image decoders ship in the build for root/subdirectory deployments without CDN requests. Rendering is limited to page one, a 900×1400 bounding box, 20 MB PDF input and a 30-second deadline; stored covers are at most 2 MB. External document links are never downloaded by the server. Legacy list search/level filtering remains client-side within the latest 250; live MySQL plans/large-library latency remain Not verified.

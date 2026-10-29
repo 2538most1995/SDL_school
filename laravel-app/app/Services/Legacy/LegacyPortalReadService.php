@@ -363,7 +363,7 @@ final class LegacyPortalReadService
     }
 
     /** @return list<array<string, mixed>> */
-    public function lessonPlans(User $viewer, int $districtId): array
+    public function lessonPlans(User $viewer, int $districtId, array $filters = []): array
     {
         $query = $this->connection()->table('learning_lesson_plans as plan')
             ->leftJoin('users as teacher', 'teacher.id', '=', 'plan.teacher_id')
@@ -372,18 +372,34 @@ final class LegacyPortalReadService
         if ($viewer->role === 'teacher') {
             $query->where('plan.teacher_id', (int) $viewer->id);
         }
+        if (isset($filters['plan_scope'])) {
+            if ($this->connection()->getSchemaBuilder()->hasColumn('learning_lesson_plans', 'plan_scope')) {
+                if ($filters['plan_scope'] === 'all_subjects') {
+                    $query->where('plan.plan_scope', 'all_subjects');
+                } else {
+                    $query->where(fn (Builder $scope) => $scope->where('plan.plan_scope', '!=', 'all_subjects')->orWhereNull('plan.plan_scope'));
+                }
+            } elseif ($filters['plan_scope'] === 'all_subjects') {
+                return [];
+            }
+        }
+        if (isset($filters['education_level'])) {
+            $query->where('plan.education_level', (int) $filters['education_level']);
+        }
 
         return $query->orderByDesc('plan.updated_at')->limit(250)->get()->map(function (object $row) use ($viewer): array {
             $external = (string) ($row->external_url ?? '');
             $pdf = (string) ($row->pdf_path ?? '');
             $cover = (string) ($row->cover_path ?? '');
             $source = $external !== '' ? 'link' : ($pdf !== '' ? 'pdf' : 'legacy');
+            $scope = ($row->plan_scope ?? 'subject') === 'all_subjects' ? 'all_subjects' : 'subject';
 
             return [
                 'id' => (string) $row->id,
                 'title' => (string) $row->title,
                 'description' => Str::limit((string) ($row->objectives ?? ''), 180),
-                'course' => (string) ($row->subject_code ?? ''),
+                'course' => $scope === 'all_subjects' ? 'รวมทุกวิชา' : (string) ($row->subject_code ?? ''),
+                'plan_scope' => $scope,
                 'timing' => (string) ($row->academic_term ?? '-'),
                 'status' => (string) $row->status === 'published' ? 'เผยแพร่แล้ว' : 'ฉบับร่าง',
                 'teacher_name' => (string) $row->teacher_name,
@@ -397,7 +413,7 @@ final class LegacyPortalReadService
                 'page_count' => isset($row->page_count) ? (int) $row->page_count : null,
                 'can_edit' => $viewer->role !== 'teacher' || (int) $row->teacher_id === (int) $viewer->id,
                 'raw' => [
-                    'title' => (string) $row->title, 'subject' => (string) ($row->subject_code ?? ''),
+                    'title' => (string) $row->title, 'subject' => (string) ($row->subject_code ?? ''), 'plan_scope' => $scope,
                     'level' => (string) ($row->education_level ?? ''), 'semester' => (string) ($row->academic_term ?? ''),
                     'objectives' => (string) ($row->objectives ?? ''), 'activities' => (string) ($row->activities ?? ''),
                     'assessment' => (string) ($row->assessment ?? ''), 'external_url' => $external, 'source_type' => $source,

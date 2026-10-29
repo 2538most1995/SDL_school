@@ -206,4 +206,89 @@ final class LessonPlanDocumentsTest extends TestCase
         $this->deleteJson("/api/v1/learning/lesson-plans/{$first}")->assertOk();
         Storage::disk('local')->assertExists([$secondRow->pdf_path, $secondRow->cover_path]);
     }
+
+    public function test_combined_pdf_plans_can_be_uploaded_without_a_subject_for_each_education_level(): void
+    {
+        foreach (['1', '2', '3'] as $level) {
+            $values = $this->metadata([
+                'plan_scope' => 'all_subjects', 'level' => $level, 'source_type' => 'pdf',
+                'pdf' => UploadedFile::fake()->create('รวมทุกวิชา.pdf', 10, 'application/pdf'),
+                'cover_image' => UploadedFile::fake()->image('cover.jpg', 160, 220), 'page_count' => 100,
+            ]);
+            unset($values['subject']);
+            $id = $this->post('/api/v1/learning/lesson-plans', $values)->assertCreated()->json('data.id');
+            $this->assertDatabaseHas('learning_lesson_plans', ['id' => $id, 'plan_scope' => 'all_subjects', 'subject_code' => '', 'education_level' => (int) $level]);
+            $this->getJson('/api/v1/learning/lesson-plans?plan_scope=all_subjects&education_level='.$level)
+                ->assertOk()->assertJsonCount(1, 'data')->assertJsonPath('data.0.plan_scope', 'all_subjects')
+                ->assertJsonPath('data.0.course', 'รวมทุกวิชา')->assertJsonPath('data.0.raw.level', $level)
+                ->assertJsonPath('data.0.page_count', 100);
+            $this->get("/api/v1/learning/lesson-plans/{$id}/file")->assertOk();
+            $this->get("/api/v1/learning/lesson-plans/{$id}/cover")->assertOk();
+        }
+        $this->getJson('/api/v1/learning/lesson-plans')->assertOk()->assertJsonCount(3, 'data');
+    }
+
+    public function test_combined_scope_survives_edits_and_scope_changes_preserve_the_document(): void
+    {
+        $id = $this->createPdf(['plan_scope' => 'all_subjects', 'subject' => 'ignored', 'level' => '2']);
+        $old = DB::table('learning_lesson_plans')->find($id);
+        $this->assertSame('', $old->subject_code);
+        $this->patchJson("/api/v1/learning/lesson-plans/{$id}", ['title' => 'แผนรวม ม.ต้น'])->assertOk();
+        $this->assertDatabaseHas('learning_lesson_plans', ['id' => $id, 'plan_scope' => 'all_subjects', 'pdf_path' => $old->pdf_path, 'cover_path' => $old->cover_path]);
+        $this->patchJson("/api/v1/learning/lesson-plans/{$id}", ['plan_scope' => 'subject'])->assertUnprocessable()->assertJsonValidationErrors('subject');
+        $this->patchJson("/api/v1/learning/lesson-plans/{$id}", ['plan_scope' => 'subject', 'subject' => 'พว21001'])->assertOk();
+        $this->assertDatabaseHas('learning_lesson_plans', ['id' => $id, 'plan_scope' => 'subject', 'subject_code' => 'พว21001', 'pdf_path' => $old->pdf_path]);
+        $this->patchJson("/api/v1/learning/lesson-plans/{$id}", ['plan_scope' => 'all_subjects'])->assertOk();
+        $this->assertDatabaseHas('learning_lesson_plans', ['id' => $id, 'subject_code' => '', 'cover_path' => $old->cover_path]);
+        $this->postJson('/api/v1/learning/lesson-plans', $this->metadata(['subject' => '']))->assertUnprocessable();
+        foreach ([null, '', 'unknown'] as $invalidScope) {
+            $this->postJson('/api/v1/learning/lesson-plans', $this->metadata(['plan_scope' => $invalidScope]))->assertUnprocessable();
+            $this->patchJson("/api/v1/learning/lesson-plans/{$id}", ['plan_scope' => $invalidScope])->assertUnprocessable();
+        }
+        foreach (['level', 'semester', 'title'] as $field) {
+            foreach ([null, ''] as $empty) {
+                $this->patchJson("/api/v1/learning/lesson-plans/{$id}", [$field => $empty])->assertUnprocessable();
+            }
+        }
+        $this->postJson('/api/v1/learning/lesson-plans', $this->metadata(['plan_scope' => 'all_subjects', 'level' => '4']))->assertUnprocessable();
+        $this->getJson('/api/v1/learning/lesson-plans?plan_scope=unknown')->assertUnprocessable();
+        $this->getJson('/api/v1/learning/lesson-plans?education_level=4')->assertUnprocessable();
+        $link = $this->metadata(['plan_scope' => 'all_subjects', 'source_type' => 'link', 'external_url' => 'https://1drv.ms/b/s!AllSubjects']);
+        unset($link['subject']);
+        $this->postJson('/api/v1/learning/lesson-plans', $link)->assertCreated();
+        Storage::disk('local')->assertExists([$old->pdf_path, $old->cover_path]);
+    }
+
+    public function test_scope_and_level_filter_before_the_limit_without_expanding_teacher_or_district_access(): void
+    {
+        $id = $this->createPdf(['plan_scope' => 'all_subjects', 'level' => '2']);
+        DB::table('learning_lesson_plans')->where('id', $id)->update(['updated_at' => '2000-01-01 00:00:00']);
+        $record = ['district_id' => $this->district->id, 'teacher_id' => $this->teacher->id, 'plan_scope' => 'subject', 'subject_code' => 'พว21001', 'academic_term' => '2/2569', 'education_level' => 2, 'title' => 'รายวิชาใหม่', 'status' => 'published', 'created_at' => now(), 'updated_at' => now()];
+        DB::table('learning_lesson_plans')->insert(array_fill(0, 251, $record));
+        $otherTeacher = User::factory()->create(['role' => 'teacher', 'district_id' => $this->district->id]);
+        DB::table('learning_lesson_plans')->insert([...$record, 'teacher_id' => $otherTeacher->id, 'plan_scope' => 'all_subjects']);
+        $otherDistrict = District::create(['name' => 'อื่น', 'code' => 'other', 'is_active' => true]);
+        DB::table('learning_lesson_plans')->insert([...$record, 'district_id' => $otherDistrict->id, 'plan_scope' => 'all_subjects']);
+        $this->getJson('/api/v1/learning/lesson-plans?plan_scope=all_subjects&education_level=2')
+            ->assertOk()->assertJsonCount(1, 'data')->assertJsonPath('data.0.id', (string) $id);
+        $this->getJson('/api/v1/learning/lesson-plans?plan_scope=all_subjects&education_level=1')->assertOk()->assertJsonCount(0, 'data');
+        Sanctum::actingAs($otherTeacher);
+        $this->get("/api/v1/learning/lesson-plans/{$id}/file")->assertNotFound();
+        $this->patchJson("/api/v1/learning/lesson-plans/{$id}", ['plan_scope' => 'all_subjects'])->assertNotFound();
+    }
+
+    public function test_scope_migration_can_be_repeated_and_preserves_existing_subject_plans(): void
+    {
+        $id = $this->createPdf();
+        Schema::table('learning_lesson_plans', fn ($table) => $table->dropColumn('plan_scope'));
+        $this->getJson('/api/v1/learning/lesson-plans')->assertOk()->assertJsonPath('data.0.plan_scope', 'subject');
+        $this->getJson('/api/v1/learning/lesson-plans?plan_scope=all_subjects')->assertOk()->assertJsonCount(0, 'data');
+        $this->patchJson("/api/v1/learning/lesson-plans/{$id}", ['plan_scope' => 'all_subjects'])->assertStatus(503)->assertSee('migrate');
+        $migration = require database_path('migrations/2026_10_29_000039_add_scope_to_lesson_plans.php');
+        $migration->up();
+        $migration->up();
+        $migration->down();
+        $this->assertDatabaseHas('learning_lesson_plans', ['id' => $id, 'plan_scope' => 'subject', 'subject_code' => 'พว31001']);
+        $this->get("/api/v1/learning/lesson-plans/{$id}/file")->assertOk();
+    }
 }

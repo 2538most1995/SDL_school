@@ -1,5 +1,9 @@
 # SDL School Context
 
+## Combined lesson plans by education level (2026-10-29)
+
+Lesson plans support explicit `plan_scope=subject|all_subjects`. An all-subject plan belongs to one education level (primary, lower secondary or upper secondary) and term, without requiring a course code. The same private PDF/link/cover workflow is retained. Scope and level buttons filter server-side before the 250-record cap; existing plans remain subject plans. Creating from a filtered shelf preselects its scope and level. Migration `2026_10_29_000039_add_scope_to_lesson_plans.php` is required for writes; teacher/district permissions remain unchanged.
+
 ## Lesson-plan document shelf (2026-10-29)
 
 The staff lesson-plan page is a responsive book-card shelf with generic HTTP(S), Google Drive and OneDrive/SharePoint links or private PDF uploads. PDF.js renders the actual first page and page count locally; generated covers and PDF copies remain private behind district/teacher-authorized endpoints. Link entries can attach a PDF companion for a reliable cover and fallback reading. Provider embeds require the original sharing permissions; arbitrary links open at their source, and no cloud URL is fetched by Laravel or connected through OAuth. Existing metadata-only plans remain readable/editable. The new document columns require migration `2026_10_29_000038_add_lesson_plan_documents.php`. See `laravel-app/docs/lesson-plans.md`.

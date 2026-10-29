@@ -7,13 +7,18 @@ use App\Services\Learning\LessonPlanDocumentService;
 use App\Services\Legacy\LegacyPortalReadService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
+use Illuminate\Validation\Rule;
 use Symfony\Component\HttpFoundation\StreamedResponse;
 
 final class LessonPlanController extends Controller
 {
     public function __invoke(Request $request, LegacyPortalReadService $legacy): JsonResponse
     {
-        $items = $legacy->lessonPlans($request->user(), (int) $request->attributes->get('district_id'));
+        $filters = $request->validate([
+            'plan_scope' => ['nullable', Rule::in(['subject', 'all_subjects'])],
+            'education_level' => ['nullable', 'integer', Rule::in([1, 2, 3])],
+        ]);
+        $items = $legacy->lessonPlans($request->user(), (int) $request->attributes->get('district_id'), $filters);
 
         return response()->json(['data' => $items, 'meta' => ['mode' => 'production', 'source' => 'system_database', 'read_only' => ! (bool) config('system_data.write_enabled')]]);
     }

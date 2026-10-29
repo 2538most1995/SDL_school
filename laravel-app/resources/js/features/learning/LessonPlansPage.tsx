@@ -7,12 +7,13 @@ import { QueryError, QuerySkeleton } from '../../components/QueryState';
 import { useDemoRole } from '../../context/DemoRoleContext';
 import { getFeatureBlob, getFeatureData, sendFeatureData } from '../api';
 import { documentPreview } from './lesson-plans/documentLinks';
+import { filterLessonPlans, planScope, planScopeLabels, type PlanScope } from './lesson-plans/planFilters';
 import './lesson-plans.css';
 
 type LessonPlan = {
     id: string; title: string; description: string; course: string; timing: string; status: string; can_edit: boolean;
     teacher_name?: string; external_url?: string | null; file_url?: string | null; cover_url?: string | null;
-    page_count?: number | null; raw: Record<string, string>;
+    page_count?: number | null; plan_scope?: PlanScope; raw: Record<string, string>;
 };
 type Draft = { title: string; subject: string; level: string; semester: string; objectives: string; activities: string; assessment: string; external_url: string };
 const base = '/api/v1/learning/lesson-plans';
@@ -61,11 +62,15 @@ function LessonPlanLibrary({ role, district }: { role: string; district: string 
     const [search, setSearch] = useState('');
     const deferredSearch = useDeferredValue(search);
     const [level, setLevel] = useState('');
+    const [scope, setScope] = useState<PlanScope | ''>('');
     const [editing, setEditing] = useState<LessonPlan | 'new' | null>(null);
     const [reading, setReading] = useState<LessonPlan | null>(null);
     const [details, setDetails] = useState<LessonPlan | null>(null);
     const [deleting, setDeleting] = useState<LessonPlan | null>(null);
-    const query = useQuery({ queryKey: ['lesson-plan-library', role, district], queryFn: ({ signal }) => getFeatureData<LessonPlan[]>(base, signal) });
+    const params = new URLSearchParams();
+    if (level) params.set('education_level', level);
+    if (scope) params.set('plan_scope', scope);
+    const query = useQuery({ queryKey: ['lesson-plan-library', role, district, level, scope], queryFn: ({ signal }) => getFeatureData<LessonPlan[]>(`${base}?${params}`, signal) });
     const data = query.data?.data;
     const canManage = role !== 'student' && query.data !== undefined && query.data.meta.read_only !== true;
     const refresh = () => client.invalidateQueries({ queryKey: ['lesson-plan-library'] });
@@ -74,7 +79,7 @@ function LessonPlanLibrary({ role, district }: { role: string; district: string 
     if (query.isError && !data) return <QueryError onRetry={() => void query.refetch()} />;
     const rows = data ?? [];
     const needle = deferredSearch.trim().toLocaleLowerCase('th');
-    const visible = rows.filter(plan => (!level || String(plan.raw?.level) === level) && (!needle || `${plan.title} ${plan.course} ${plan.teacher_name || ''} ${plan.timing}`.toLocaleLowerCase('th').includes(needle)));
+    const visible = filterLessonPlans(rows, { level, scope, search: deferredSearch });
     return <div className="lesson-plan-library">
         <header className="lesson-plan-hero"><div className="lesson-plan-hero-icon"><Notebook size={33} weight="duotone" /></div><div><span className="lesson-plan-eyebrow">พื้นที่เตรียมการสอน</span><h1>แผนการสอน</h1><p>เก็บแผนดี ๆ ไว้ใกล้มือ เปิดอ่าน เตรียมสอน และต่อยอดไอเดีย</p></div>{canManage && <Button appearance="primary" icon={<Plus size={20} />} onClick={() => setEditing('new')}>เพิ่มแผนการสอน</Button>}</header>
         {query.data?.meta.read_only === true && <Alert severity="info">ระบบอยู่ในโหมดอ่านอย่างเดียว ยังเพิ่มหรือแก้ไขแผนการสอนไม่ได้</Alert>}
@@ -83,18 +88,19 @@ function LessonPlanLibrary({ role, district }: { role: string; district: string 
             <div className="lesson-plan-search"><TextField fullWidth size="small" label="ค้นหาแผนการสอน" placeholder="ชื่อแผน รหัสวิชา หรือผู้จัดทำ" value={search} onChange={event => setSearch(event.target.value)} slotProps={{ input: { startAdornment: <MagnifyingGlass size={20} className="mr-2" /> } }} /></div>
             <div className="lesson-plan-levels" role="group" aria-label="ระดับการศึกษา">{[{ value: '', label: 'ทั้งหมด' }, ...levels].map(item => <button type="button" key={item.value} aria-pressed={level === item.value} onClick={() => setLevel(item.value)}>{item.label}</button>)}</div>
         </section>
-        <div className="lesson-plan-shelf-heading"><h2>{needle || level ? 'แผนที่ค้นพบ' : 'ชั้นหนังสือของคุณ'}</h2><span>{visible.length} แผน{needle || level ? ` จาก ${rows.length} แผน` : ''}</span></div>
+        <div className="lesson-plan-scope-filter"><span>ประเภทแผน</span><div className="lesson-plan-choice-buttons" role="group" aria-label="ประเภทแผนที่แสดง">{[{ value: '', label: 'ทุกประเภท' }, ...Object.entries(planScopeLabels).map(([value, label]) => ({ value, label }))].map(item => <button type="button" key={item.value} aria-pressed={scope === item.value} onClick={() => setScope(item.value as PlanScope | '')}>{item.label}</button>)}</div></div>
+        <div className="lesson-plan-shelf-heading"><h2>{needle || level || scope ? 'แผนที่ค้นพบ' : 'ชั้นหนังสือของคุณ'}</h2><span>{visible.length} แผน{needle ? ` จาก ${rows.length} แผน` : ''}</span></div>
         {visible.length === 0 ? <section className="lesson-plan-empty"><BookOpenText size={52} weight="duotone" /><h3>{rows.length ? 'ยังไม่พบแผนที่ตรงกับคำค้น' : 'แผนการสอนเล่มแรก เริ่มได้ที่นี่'}</h3><p>{rows.length ? 'ลองเปลี่ยนคำค้นหรือระดับการศึกษา' : 'อัปโหลด PDF เพื่อใช้หน้าแรกเป็นปก หรือแนบลิงก์ Google Drive, OneDrive และเว็บไซต์เอกสาร'}</p>{canManage && rows.length === 0 && <Button appearance="primary" icon={<Plus />} onClick={() => setEditing('new')}>เพิ่มแผนแรก</Button>}</section> : <div className="lesson-plan-grid">{visible.map(plan => <article key={plan.id} className="lesson-plan-card">
             <button type="button" className="lesson-plan-cover-button" aria-label={`เปิดอ่าน ${plan.title}`} onClick={() => plan.file_url || sourceUrl(plan) ? setReading(plan) : setDetails(plan)}><PlanCover plan={plan} /><span className="lesson-plan-cover-hover"><BookOpen size={24} /> เปิดอ่านทันที</span></button>
-            <div className="lesson-plan-card-body"><h3>{plan.title}</h3>{plan.teacher_name && <p className="lesson-plan-author"><User size={15} />{plan.teacher_name}</p>}<p className="lesson-plan-card-meta">{plan.course || 'ไม่ระบุรายวิชา'}{plan.raw?.level && <> · {levels.find(item => item.value === String(plan.raw.level))?.label || plan.raw.level}</>}</p><div className="lesson-plan-card-bottom"><span><CalendarBlank size={15} /> {plan.timing || 'ไม่ระบุภาคเรียน'}</span>{plan.page_count ? <span><BookOpen size={15} /> {plan.page_count} หน้า</span> : <span>{plan.status}</span>}</div>
+            <div className="lesson-plan-card-body">{planScope(plan) === 'all_subjects' && <span className="lesson-plan-scope-badge">แผนรวมทุกวิชา</span>}<h3>{plan.title}</h3>{plan.teacher_name && <p className="lesson-plan-author"><User size={15} />{plan.teacher_name}</p>}<p className="lesson-plan-card-meta">{plan.course || 'ไม่ระบุรายวิชา'}{plan.raw?.level && <> · {levels.find(item => item.value === String(plan.raw.level))?.label || plan.raw.level}</>}</p><div className="lesson-plan-card-bottom"><span><CalendarBlank size={15} /> {plan.timing || 'ไม่ระบุภาคเรียน'}</span>{plan.page_count ? <span><BookOpen size={15} /> {plan.page_count} หน้า</span> : <span>{plan.status}</span>}</div>
                 <div className="lesson-plan-card-actions"><Button appearance="primary" icon={<BookOpen size={17} />} onClick={() => plan.file_url || sourceUrl(plan) ? setReading(plan) : setDetails(plan)}>เปิดอ่าน</Button><Button appearance="outline" onClick={() => setDetails(plan)}>รายละเอียด</Button></div>
                 {canManage && plan.can_edit && <div className="lesson-plan-card-manage"><Button size="small" icon={<PencilSimple size={16} />} onClick={() => setEditing(plan)}>แก้ไข<span className="sr-only"> {plan.title}</span></Button><Button size="small" icon={<Trash size={16} />} onClick={() => { remove.reset(); setDeleting(plan); }}>ลบ<span className="sr-only"> {plan.title}</span></Button></div>}
             </div>
         </article>)}</div>}
         {rows.length >= 250 && <p className="lesson-plan-muted">แสดงแผนล่าสุดสูงสุด 250 รายการ</p>}
-        {editing && <PlanEditor key={editing === 'new' ? 'new' : editing.id} plan={editing === 'new' ? null : editing} close={() => setEditing(null)} saved={async () => { setEditing(null); await refresh(); }} />}
+        {editing && <PlanEditor key={editing === 'new' ? 'new' : editing.id} plan={editing === 'new' ? null : editing} initialScope={scope || 'subject'} initialLevel={level || '1'} close={() => setEditing(null)} saved={async () => { setEditing(null); await refresh(); }} />}
         {reading && <PlanReader key={reading.id} plan={reading} close={() => setReading(null)} />}
-        {details && <Dialog className="lesson-plan-dialog" open onClose={() => setDetails(null)} fullWidth maxWidth="md"><DialogTitle>{details.title}</DialogTitle><DialogContent><div className="lesson-plan-details-meta"><span>{details.course}</span><span>ภาคเรียน {details.timing}</span>{details.teacher_name && <span>{details.teacher_name}</span>}</div>{[['วัตถุประสงค์', details.raw?.objectives], ['กิจกรรมการเรียนรู้', details.raw?.activities], ['การวัดและประเมินผล', details.raw?.assessment]].map(([label, value]) => <section className="lesson-plan-detail-section" key={label}><h3>{label}</h3><p>{value || 'ยังไม่ได้ระบุ'}</p></section>)}</DialogContent><DialogActions><Button onClick={() => setDetails(null)}>ปิด</Button>{(details.file_url || sourceUrl(details)) && <Button appearance="primary" icon={<BookOpen />} onClick={() => { setReading(details); setDetails(null); }}>เปิดเอกสาร</Button>}</DialogActions></Dialog>}
+        {details && <Dialog className="lesson-plan-dialog" open onClose={() => setDetails(null)} fullWidth maxWidth="md"><DialogTitle>{details.title}</DialogTitle><DialogContent><div className="lesson-plan-details-meta"><span>{planScopeLabels[planScope(details)]}</span>{planScope(details) === 'subject' && <span>{details.course}</span>}<span>{levels.find(item => item.value === details.raw?.level)?.label}</span><span>ภาคเรียน {details.timing}</span>{details.teacher_name && <span>{details.teacher_name}</span>}</div>{[['วัตถุประสงค์', details.raw?.objectives], ['กิจกรรมการเรียนรู้', details.raw?.activities], ['การวัดและประเมินผล', details.raw?.assessment]].map(([label, value]) => <section className="lesson-plan-detail-section" key={label}><h3>{label}</h3><p>{value || 'ยังไม่ได้ระบุ'}</p></section>)}</DialogContent><DialogActions><Button onClick={() => setDetails(null)}>ปิด</Button>{(details.file_url || sourceUrl(details)) && <Button appearance="primary" icon={<BookOpen />} onClick={() => { setReading(details); setDetails(null); }}>เปิดเอกสาร</Button>}</DialogActions></Dialog>}
         <Dialog open={Boolean(deleting)} onClose={() => { if (!remove.isPending) setDeleting(null); }} fullWidth maxWidth="xs"><DialogTitle>ลบแผนการสอนนี้?</DialogTitle><DialogContent>ลบ “{deleting?.title}” พร้อมไฟล์แนบและหน้าปก{remove.isError && <Alert className="mt-3" severity="error">{errorText(remove.error)}</Alert>}</DialogContent><DialogActions><Button disabled={remove.isPending} onClick={() => setDeleting(null)}>ยกเลิก</Button><Button appearance="primary" disabled={remove.isPending} onClick={() => { if (deleting) remove.mutate(deleting); }}>{remove.isPending ? 'กำลังลบ…' : 'ยืนยันลบ'}</Button></DialogActions></Dialog>
     </div>;
 }
@@ -117,8 +123,9 @@ function PlanReader({ plan, close }: { plan: LessonPlan; close: () => void }) {
     </DialogContent><DialogActions><Button onClick={close}>ปิด</Button>{external && plan.file_url && !useCopy && <Button appearance="outline" onClick={() => setUseCopy(true)}>อ่าน PDF สำเนาที่แนบ</Button>}{external && <Button as="a" appearance="primary" icon={<ArrowSquareOut />} href={external.url} target="_blank" rel="noopener noreferrer">เปิดในแท็บใหม่</Button>}{url && <Button as="a" appearance="primary" icon={<DownloadSimple />} href={url} download={`${plan.title}.pdf`}>ดาวน์โหลด PDF</Button>}</DialogActions></Dialog>;
 }
 
-function PlanEditor({ plan, close, saved }: { plan: LessonPlan | null; close: () => void; saved: () => Promise<void> }) {
-    const [draft, setDraft] = useState<Draft>(() => ({ title: plan?.title ?? '', subject: plan?.raw?.subject ?? '', level: plan?.raw?.level || '1', semester: plan?.raw?.semester ?? '', objectives: plan?.raw?.objectives ?? '', activities: plan?.raw?.activities ?? '', assessment: plan?.raw?.assessment ?? '', external_url: plan ? sourceUrl(plan) : '' }));
+function PlanEditor({ plan, initialScope, initialLevel, close, saved }: { plan: LessonPlan | null; initialScope: PlanScope; initialLevel: string; close: () => void; saved: () => Promise<void> }) {
+    const [draft, setDraft] = useState<Draft>(() => ({ title: plan?.title ?? '', subject: plan?.raw?.subject ?? '', level: plan?.raw?.level || initialLevel, semester: plan?.raw?.semester ?? '', objectives: plan?.raw?.objectives ?? '', activities: plan?.raw?.activities ?? '', assessment: plan?.raw?.assessment ?? '', external_url: plan ? sourceUrl(plan) : '' }));
+    const [scope, setScope] = useState<PlanScope>(() => plan ? planScope(plan) : initialScope);
     const [source, setSource] = useState<'link' | 'pdf' | ''>(() => plan ? sourceUrl(plan) ? 'link' : plan.file_url ? 'pdf' : '' : 'link');
     const [file, setFile] = useState<File | null>(null);
     const [fileInputKey, setFileInputKey] = useState(0);
@@ -145,6 +152,8 @@ function PlanEditor({ plan, close, saved }: { plan: LessonPlan | null; close: ()
     const save = useMutation({ mutationFn: () => {
         const form = new FormData();
         Object.entries(draft).forEach(([key, value]) => { if (key !== 'external_url' || source === 'link') form.append(key, value); });
+        form.set('plan_scope', scope);
+        if (scope === 'all_subjects') form.set('subject', '');
         if (source) form.append('source_type', source);
         if (file) form.append('pdf', file);
         if (cover) form.append('cover_image', cover, 'first-page.jpg');
@@ -171,8 +180,9 @@ function PlanEditor({ plan, close, saved }: { plan: LessonPlan | null; close: ()
     const submit = (event: FormEvent) => { event.preventDefault(); if (!busy && !fileError && (!file || cover) && (source !== 'link' || preview)) save.mutate(); };
     return <Dialog className="lesson-plan-dialog" open onClose={closeEditor} fullWidth maxWidth="md"><form onSubmit={submit}><DialogTitle>{plan ? 'แก้ไขแผนการสอน' : 'เพิ่มแผนการสอน'}</DialogTitle><DialogContent><div className="lesson-plan-editor-grid">
         <TextField className="lesson-plan-form-wide" fullWidth required label="ชื่อแผนการสอน" value={draft.title} disabled={busy} slotProps={{ htmlInput: { maxLength: 220 } }} onChange={event => update({ title: event.target.value })} />
-        <TextField fullWidth required label="รายวิชา / รหัสวิชา" value={draft.subject} disabled={busy} slotProps={{ htmlInput: { maxLength: 32 } }} onChange={event => update({ subject: event.target.value })} />
-        <TextField fullWidth required label="ภาคเรียน" placeholder="เช่น 2/2569" value={draft.semester} disabled={busy} slotProps={{ htmlInput: { maxLength: 16 } }} onChange={event => update({ semester: event.target.value })} />
+        <fieldset className="lesson-plan-form-wide"><legend>ขอบเขตของแผน</legend><div className="lesson-plan-choice-buttons" role="group" aria-label="ขอบเขตของแผน">{(Object.entries(planScopeLabels) as [PlanScope, string][]).map(([value, label]) => <button type="button" key={value} aria-pressed={scope === value} disabled={busy} onClick={() => { setScope(value); setDirty(true); }}>{label}{scope === value && <CheckCircle size={16} weight="fill" />}</button>)}</div></fieldset>
+        {scope === 'subject' ? <TextField fullWidth required label="รายวิชา / รหัสวิชา" value={draft.subject} disabled={busy} slotProps={{ htmlInput: { maxLength: 32 } }} onChange={event => update({ subject: event.target.value })} /> : <Alert severity="info" className="lesson-plan-form-wide">แผนนี้รวมทุกวิชาของระดับ{levels.find(item => item.value === draft.level)?.label} เลือกระดับและแนบเอกสารได้โดยไม่ต้องกรอกรหัสวิชา</Alert>}
+        <TextField className={scope === 'all_subjects' ? 'lesson-plan-form-wide' : undefined} fullWidth required label="ภาคเรียน" placeholder="เช่น 2/2569" value={draft.semester} disabled={busy} slotProps={{ htmlInput: { maxLength: 16 } }} onChange={event => update({ semester: event.target.value })} />
         <fieldset className="lesson-plan-form-wide"><legend>ระดับการศึกษา</legend><div className="lesson-plan-choice-buttons" role="group" aria-label="ระดับแผนการสอน">{levels.map(item => <button type="button" key={item.value} aria-pressed={draft.level === item.value} disabled={busy} onClick={() => update({ level: item.value })}>{item.label}{draft.level === item.value && <CheckCircle size={16} weight="fill" />}</button>)}</div></fieldset>
         <section className="lesson-plan-source-editor lesson-plan-form-wide"><h3>เอกสารแผนการสอน</h3><div className="lesson-plan-choice-buttons" role="group" aria-label="วิธีแนบเอกสาร">{[{ value: 'link', label: 'แนบลิงก์', Icon: LinkSimple }, { value: 'pdf', label: 'อัปโหลด PDF', Icon: UploadSimple }, ...(plan && !plan.file_url && !sourceUrl(plan) ? [{ value: '', label: 'เฉพาะรายละเอียดเดิม', Icon: Notebook }] : [])].map(({ value, label, Icon }) => <button type="button" key={value} aria-pressed={source === value} disabled={busy} onClick={() => { if (value === source) return; setSource(value as typeof source); setDirty(true); setFile(null); setCover(null); setPages(null); setFileError(''); }}><Icon size={19} />{label}</button>)}</div>
             {source === 'link' && <><TextField fullWidth required type="url" label="ลิงก์เอกสาร HTTP / HTTPS" placeholder="Google Drive, OneDrive หรือเว็บไซต์เอกสาร" value={draft.external_url} disabled={busy} slotProps={{ htmlInput: { maxLength: 2048 } }} onChange={event => update({ external_url: event.target.value })} /><p className="lesson-plan-muted">ใช้ลิงก์แชร์ที่ผู้เปิดมีสิทธิ์เข้าถึงได้ รองรับ Google Drive, OneDrive และลิงก์เว็บทั่วไป</p>{draft.external_url && !preview && <Alert severity="error">ลิงก์ต้องขึ้นต้นด้วย http:// หรือ https:// และไม่มีข้อมูลเข้าสู่ระบบในลิงก์</Alert>}</>}

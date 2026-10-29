@@ -8,6 +8,9 @@
 .lesson-plan-hero > .MuiButton-root { margin-left:auto; white-space:nowrap; border-radius:14px; }
 .lesson-plan-toolbar { display:flex; align-items:center; justify-content:space-between; gap:18px; }
 .lesson-plan-search { width:min(100%,460px); }
+.lesson-plan-scope-filter { display:flex; flex-wrap:wrap; align-items:center; gap:12px; }
+.lesson-plan-scope-filter > span { font-size:.83rem; font-weight:650; color:var(--ui-text-muted); }
+.lesson-plan-scope-badge { display:inline-flex; align-self:flex-start; margin-bottom:9px; padding:5px 9px; border-radius:8px; font-size:.7rem; font-weight:700; color:var(--lesson-accent); background:color-mix(in srgb,var(--lesson-accent) 9%,var(--ui-surface)); }
 .lesson-plan-levels, .lesson-plan-choice-buttons { display:flex; flex-wrap:wrap; gap:8px; }
 .lesson-plan-levels button, .lesson-plan-choice-buttons button { display:inline-flex; align-items:center; justify-content:center; gap:7px; min-height:42px; padding:9px 16px; border:1px solid var(--ui-border); border-radius:12px; background:var(--ui-surface); color:var(--ui-text); font-size:.83rem; font-weight:650; cursor:pointer; }
 .lesson-plan-levels button[aria-pressed=true], .lesson-plan-choice-buttons button[aria-pressed=true] { color:var(--lesson-accent,#6950c9); border-color:var(--lesson-accent,#6950c9); background:color-mix(in srgb,var(--lesson-accent,#6950c9) 8%,var(--ui-surface)); }

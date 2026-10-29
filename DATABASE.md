@@ -1,5 +1,9 @@
 # Database Knowledge Base
 
+## Combined lesson-plan scope (2026-10-29)
+
+Migration `2026_10_29_000039_add_scope_to_lesson_plans.php` adds `learning_lesson_plans.plan_scope` VARCHAR(16), default `subject`. Existing rows remain subject plans. `all_subjects` records retain a required education level and academic term, storing an empty `subject_code` to satisfy adopted NOT NULL schemas without inventing a course. Scope changes/metadata edits preserve existing PDF and cover paths; reads before migration default to subject plans, while writes return an actionable 503. The migration checks column existence and its rollback retains scope/data to avoid relabelling combined records. No index or imported/student-table change and no production migration was run.
+
 ## Lesson-plan attachments and covers (2026-10-29)
 
 Additive migration `2026_10_29_000038_add_lesson_plan_documents.php` adds nullable `external_url` TEXT, `pdf_path`, `pdf_original_name`, `pdf_size`, `cover_path` and `page_count` to `learning_lesson_plans`, checking each column before adding. Existing metadata, teacher/district IDs and documents remain intact. Rollback intentionally retains attachments/columns. PDF and cover paths point to private local storage under `learning/lesson-plans/{district}/{plan}/`; responses expose authorized file/cover endpoints, never physical paths. Save locks the latest row before resolving omitted metadata/source, rolls back new files on failure, and removes replaced files after commit. Deletes and source changes clean only paths owned by that district/plan. No migration ran against real student/deployment data during development.

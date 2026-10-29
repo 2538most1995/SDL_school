@@ -44,6 +44,7 @@ final class LessonPlanDocumentService
                 $values = $this->validated($request, $row);
                 $metadata = [
                     'title' => $values['title'], 'subject_code' => $values['subject'], 'education_level' => $values['level'],
+                    'plan_scope' => $values['plan_scope'],
                     'academic_term' => $values['semester'], 'objectives' => $values['objectives'] ?? null,
                     'activities' => $values['activities'] ?? null, 'assessment' => $values['assessment'] ?? null,
                     'status' => $values['status'] ?? $row?->status ?? 'published', 'updated_at' => now(),
@@ -74,10 +75,11 @@ final class LessonPlanDocumentService
 
     private function validated(Request $request, ?object $existing): array
     {
-        $required = $existing === null ? 'required' : 'sometimes';
+        $required = $existing === null ? ['required'] : ['sometimes', 'required'];
         $values = $request->validate([
-            'title' => [$required, 'string', 'max:220'], 'subject' => [$required, 'string', 'max:32'],
-            'level' => [$required, Rule::in(['1', '2', '3'])], 'semester' => [$required, 'string', 'max:16'],
+            'title' => [...$required, 'string', 'max:220'], 'subject' => ['sometimes', 'nullable', 'string', 'max:32'],
+            'plan_scope' => ['sometimes', 'required', Rule::in(['subject', 'all_subjects'])],
+            'level' => [...$required, Rule::in(['1', '2', '3'])], 'semester' => [...$required, 'string', 'max:16'],
             'objectives' => ['sometimes', 'nullable', 'string', 'max:10000'],
             'activities' => ['sometimes', 'nullable', 'string', 'max:10000'],
             'assessment' => ['sometimes', 'nullable', 'string', 'max:10000'],
@@ -89,11 +91,19 @@ final class LessonPlanDocumentService
             'page_count' => ['sometimes', 'nullable', 'integer', 'min:1', 'max:10000'],
         ]);
         $values = [
+            'plan_scope' => $existing?->plan_scope ?? 'subject',
             'title' => $existing?->title, 'subject' => $existing?->subject_code, 'level' => $existing?->education_level,
             'semester' => $existing?->academic_term, 'objectives' => $existing?->objectives,
             'activities' => $existing?->activities, 'assessment' => $existing?->assessment,
             ...$values,
         ];
+        if ($values['plan_scope'] === 'all_subjects') {
+            // The level is still mandatory; the document covers every subject
+            // in that level rather than pretending to belong to one course.
+            $values['subject'] = '';
+        } elseif (blank($values['subject']) && ($existing === null || ($existing->plan_scope ?? 'subject') !== 'subject' || $request->has('subject'))) {
+            throw ValidationException::withMessages(['subject' => 'กรุณาระบุรายวิชาหรือเลือกแผนรวมทุกวิชา']);
+        }
         $url = (string) ($values['external_url'] ?? $existing?->external_url ?? '');
         if ($url !== '' && ! self::safeExternalUrl($url)) {
             throw ValidationException::withMessages(['external_url' => 'กรุณาใช้ลิงก์ HTTP หรือ HTTPS ที่ไม่มีข้อมูลเข้าสู่ระบบหรืออักขระผิดรูปแบบ']);
@@ -222,7 +232,7 @@ final class LessonPlanDocumentService
     {
         $this->assertStaff($request);
         abort_unless(config('system_data.write_enabled'), 503, 'ระบบเขียนข้อมูลยังไม่เปิดใช้งาน');
-        abort_unless(Schema::hasColumns('learning_lesson_plans', self::DOCUMENT_COLUMNS), 503, 'กรุณาให้ผู้ดูแลรัน php artisan migrate --force เพื่อเปิดใช้เอกสารแผนการสอน');
+        abort_unless(Schema::hasColumns('learning_lesson_plans', [...self::DOCUMENT_COLUMNS, 'plan_scope']), 503, 'กรุณาให้ผู้ดูแลรัน php artisan migrate --force เพื่อเปิดใช้เอกสารแผนการสอน');
     }
 
     private function audit(Request $request, string $action, int $id, array $document): void
