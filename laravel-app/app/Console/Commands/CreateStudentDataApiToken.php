@@ -16,6 +16,8 @@ final class CreateStudentDataApiToken extends Command
         {--name=student-data-integration : ชื่อ client สำหรับตรวจสอบย้อนหลัง}
         {--district-code= : รหัสอำเภอ (จำเป็นสำหรับ super_admin)}
         {--expires-in-days=90 : อายุ token เป็นวัน (1-365)}
+        {--no-expiry : สร้าง token ที่ไม่มีวันหมดอายุ (ยังเพิกถอนได้)}
+        {--sena-care : อนุญาตอ่านรายชื่อครูและตรวจสอบรหัสผ่านครูสำหรับ SENA Care}
         {--replace : เพิกถอน client ชื่อเดิมในอำเภอนี้ก่อนสร้างใหม่}';
 
     protected $description = 'Create a district-scoped, read-only Bearer token for the Student Data API';
@@ -25,6 +27,7 @@ final class CreateStudentDataApiToken extends Command
         $username = trim((string) $this->argument('username'));
         $name = trim((string) $this->option('name'));
         $expiresInDays = filter_var($this->option('expires-in-days'), FILTER_VALIDATE_INT);
+        $noExpiry = (bool) $this->option('no-expiry');
         $user = User::query()->where('username', $username)->first();
 
         if ($user === null || ! in_array($user->role, ['admin', 'super_admin'], true) || $user->disabled_at !== null) {
@@ -37,7 +40,12 @@ final class CreateStudentDataApiToken extends Command
 
             return self::FAILURE;
         }
-        if ($expiresInDays === false || $expiresInDays < 1 || $expiresInDays > 365) {
+        if ($noExpiry && $this->input->hasParameterOption('--expires-in-days')) {
+            $this->error('เลือก --no-expiry หรือ --expires-in-days เพียงอย่างเดียว');
+
+            return self::FAILURE;
+        }
+        if (! $noExpiry && ($expiresInDays === false || $expiresInDays < 1 || $expiresInDays > 365)) {
             $this->error('อายุ token ต้องอยู่ระหว่าง 1-365 วัน');
 
             return self::FAILURE;
@@ -49,7 +57,7 @@ final class CreateStudentDataApiToken extends Command
         }
 
         $plainToken = 'sdl_student_'.Str::random(64);
-        $client = DB::transaction(function () use ($district, $expiresInDays, $name, $plainToken, $user): ?StudentApiClient {
+        $client = DB::transaction(function () use ($district, $expiresInDays, $noExpiry, $name, $plainToken, $user): ?StudentApiClient {
             $existing = StudentApiClient::query()
                 ->where('district_id', $district->id)
                 ->where('name', $name)
@@ -68,8 +76,10 @@ final class CreateStudentDataApiToken extends Command
                 'user_id' => $user->id,
                 'district_id' => $district->id,
                 'token_hash' => hash('sha256', $plainToken),
-                'abilities' => ['student-data:read'],
-                'expires_at' => now()->addDays($expiresInDays),
+                'abilities' => $this->option('sena-care')
+                    ? ['student-data:read', 'sena-care:teachers', 'sena-care:authenticate']
+                    : ['student-data:read'],
+                'expires_at' => $noExpiry ? null : now()->addDays($expiresInDays),
             ]);
         });
 

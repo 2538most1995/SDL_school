@@ -139,6 +139,56 @@ final class LessonPlanDocumentsTest extends TestCase
         $this->assertDatabaseHas('audit_logs', ['event' => 'learning.lesson-plans.created', 'auditable_id' => $id]);
     }
 
+    public function test_pdf_range_and_head_requests_only_send_requested_bytes_and_allow_same_origin_readers(): void
+    {
+        $id = $this->createPdf();
+        $row = DB::table('learning_lesson_plans')->find($id);
+        $bytes = "%PDF-1.4\n".str_repeat('0123456789', 100000)."\n%%EOF";
+        Storage::disk('local')->put($row->pdf_path, $bytes);
+        $path = "/api/v1/learning/lesson-plans/{$id}/file?district_id={$this->district->id}";
+        $range = $this->get($path, ['Range' => 'bytes=0-63'])->assertStatus(206)
+            ->assertHeader('Accept-Ranges', 'bytes')->assertHeader('Content-Length', '64')
+            ->assertHeader('Content-Range', 'bytes 0-63/'.strlen($bytes))->assertHeader('X-Frame-Options', 'SAMEORIGIN');
+        $this->assertStringContainsString("frame-ancestors 'self'", $range->headers->get('Content-Security-Policy'));
+        $this->assertStringContainsString('no-store', $range->headers->get('Cache-Control'));
+        ob_start();
+        $range->baseResponse->sendContent();
+        $this->assertSame(substr($bytes, 0, 64), ob_get_clean());
+        $suffix = $this->get($path, ['Range' => 'bytes=-32'])->assertStatus(206)->assertHeader('Content-Length', '32');
+        ob_start();
+        $suffix->baseResponse->sendContent();
+        $this->assertSame(substr($bytes, -32), ob_get_clean());
+        $this->get($path, ['Range' => 'bytes=2000000-'])->assertStatus(416)->assertHeader('Content-Range', 'bytes */'.strlen($bytes));
+        $this->head($path)->assertOk()->assertHeader('Content-Length', (string) strlen($bytes));
+        $this->get($path.'&download=1')->assertOk();
+        $this->get("/api/v1/learning/lesson-plans/{$id}/cover")->assertOk()->assertHeader('X-Frame-Options', 'DENY');
+        $page = $this->getJson('/api/v1/learning/lesson-plans')->assertOk()->assertHeader('X-Frame-Options', 'DENY');
+        $this->assertStringContainsString('img-src \'self\' data: blob: https://drive.google.com https://lh3.googleusercontent.com;', $page->headers->get('Content-Security-Policy'));
+    }
+
+    public function test_native_document_district_context_keeps_super_admin_and_teacher_boundaries(): void
+    {
+        $id = $this->createPdf();
+        $path = "/api/v1/learning/lesson-plans/{$id}/file";
+        Sanctum::actingAs(User::factory()->create(['role' => 'super_admin', 'district_id' => null]));
+        $this->get($path)->assertUnprocessable();
+        $this->get($path.'?district_id='.$this->district->id)->assertOk();
+        $this->getJson('/api/v1/learning/lesson-plans?district_id='.$this->district->id)->assertUnprocessable();
+        foreach (['bad', '0', '-1', '1.5', '1e2'] as $district) {
+            $this->get($path.'?district_id='.$district)->assertUnprocessable();
+        }
+        $this->get($path.'?district_id[]=1')->assertUnprocessable();
+        $other = District::create(['name' => 'อื่น', 'code' => 'range-other', 'is_active' => true]);
+        $this->get($path.'?district_id='.$other->id)->assertNotFound();
+        $this->get($path.'?district_id='.$other->id, ['X-District-Id' => (string) $this->district->id])->assertOk();
+        Sanctum::actingAs(User::factory()->create(['role' => 'teacher', 'district_id' => $this->district->id]));
+        $this->get($path.'?district_id='.$this->district->id, ['Range' => 'bytes=0-63'])->assertNotFound();
+        Sanctum::actingAs(User::factory()->create(['role' => 'admin', 'district_id' => $other->id]));
+        $this->get($path.'?district_id='.$this->district->id)->assertForbidden();
+        Sanctum::actingAs(User::factory()->create(['role' => 'student', 'district_id' => $this->district->id]));
+        $this->get($path.'?district_id='.$this->district->id)->assertForbidden();
+    }
+
     public function test_cloud_and_generic_links_are_stored_without_server_fetching_and_can_have_pdf_companions(): void
     {
         foreach (['https://drive.google.com/file/d/example/view?usp=sharing', 'https://1drv.ms/b/s!Example?e=demo', 'https://tenant.sharepoint.com/:b:/s/classroom/example', 'https://school.example.org/plan.pdf'] as $url) {
@@ -364,4 +414,47 @@ final class LessonPlanDocumentsTest extends TestCase
         $this->assertDatabaseHas('learning_lesson_plans', ['id' => $id, 'plan_scope' => 'subject', 'subject_code' => 'พว31001']);
         $this->get("/api/v1/learning/lesson-plans/{$id}/file")->assertOk();
     }
+
+    public function test_link_plan_saves_cover_image_without_pdf_and_clear_pdf_deletes_disk_file(): void
+    {
+        $cover = UploadedFile::fake()->image('cover.jpg', 600, 848);
+        $payload = $this->metadata([
+            'source_type' => 'link',
+            'external_url' => 'https://drive.google.com/file/d/test1234/view',
+            'cover_image' => $cover,
+            'page_count' => 222,
+        ]);
+        $response = $this->post('/api/v1/learning/lesson-plans', $payload)->assertCreated();
+        $id = $response->json('data.id');
+
+        $row = DB::table('learning_lesson_plans')->find($id);
+        $this->assertNull($row->pdf_path);
+        $this->assertNotNull($row->cover_path);
+        $this->assertSame(222, (int) $row->page_count);
+        $this->get("/api/v1/learning/lesson-plans/{$id}/cover")->assertOk();
+        $this->get("/api/v1/learning/lesson-plans/{$id}/file")->assertNotFound();
+
+        // Now add a PDF with cover to test clear_pdf
+        $pdfFile = UploadedFile::fake()->create('plan.pdf', 500, 'application/pdf');
+        $this->post("/api/v1/learning/lesson-plans/{$id}", [
+            '_method' => 'PATCH',
+            'pdf' => $pdfFile,
+            'cover_image' => UploadedFile::fake()->image('cover.jpg', 600, 848),
+        ])->assertOk();
+        $withPdf = DB::table('learning_lesson_plans')->find($id);
+        $this->assertNotNull($withPdf->pdf_path);
+        $this->assertNotNull($withPdf->cover_path);
+        Storage::disk('local')->assertExists($withPdf->pdf_path);
+
+        // Clear PDF to free disk space
+        $this->post("/api/v1/learning/lesson-plans/{$id}", [
+            '_method' => 'PATCH',
+            'clear_pdf' => '1',
+        ])->assertOk();
+        $cleared = DB::table('learning_lesson_plans')->find($id);
+        $this->assertNull($cleared->pdf_path);
+        $this->assertNotNull($cleared->cover_path);
+        Storage::disk('local')->assertMissing($withPdf->pdf_path);
+    }
 }
+

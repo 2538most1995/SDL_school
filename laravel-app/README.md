@@ -326,3 +326,29 @@ Student description follow-up (2026-10-19): directory/detail screens call the AP
 ## Student profile navigation and dates (2026-10-19)
 
 Student profile tabs are now explicit theme-colored buttons with an active check and icons. All four categories are visible in a two-column mobile grid; desktop uses four columns. Keyboard navigation and light/dark themes remain supported. Student directory/profile dates display Thai abbreviated month names and Buddhist years, e.g. 20 May 2006 is displayed as 20 May 2549 using the Thai month abbreviation. This affects display/export formatting only; original dates, age, district and role scope remain unchanged. No migration is required. Production assets are included; pull Git and run `php artisan optimize:clear`.
+
+## SENA Care integration: teacher accounts and groups
+
+Issue a dedicated district-scoped token with `php artisan system:create-student-api-token ADMIN_USERNAME --name=sena-care --sena-care` (super admins must also specify `--district-code`). Existing tokens keep their original read-only student ability; rotate explicitly with `--replace` when enabling this integration. Store the generated token only in the SENA Care backend configuration.
+
+The existing server-to-server `/api/v1/integrations/student-data` boundary now also provides:
+
+- `GET /teachers?page=1&per_page=100`: active teachers only, fixed to the token district. Returns `data` with `id`, `username`, `email`, `name`, `display_name`, `assigned_groups`, `district_id`, plus `meta.pagination`. Requires `sena-care:teachers` in addition to `student-data:read`.
+- `GET /groups`: latest successful imported district group catalog, including groups without active students. Returns `data` containing `code`, `name`, `label`, `level` (Thai education-level label or null). Requires `sena-care:teachers`. Match teacher assignments by exact group code or group name to support older assignments.
+- `POST /teacher-authenticate`: JSON `{ "identifier": "teacher username or email", "password": "original password" }`. Requires `sena-care:authenticate`. Successful response returns the same teacher identity as `/teachers`, without creating a source session. Invalid password, disabled account, non-teacher or another district returns the same HTTP 401 message. Failed attempts are limited to 5 per identifier/district and 60 per IP per minute; HTTP 429 includes `Retry-After`.
+
+No endpoint exports password hashes or plaintext passwords. The receiving application must verify each teacher login through this backend API, protect the submitted password from logs, use HTTPS outside localhost, and fail closed if source verification is unavailable. District selection, token expiry/revocation, browser-origin rejection and existing API rate limits remain enforced. Authentication/teacher responses use private/no-store headers. No schema migration is needed.
+
+### API token without an expiry date
+
+Deploy the updated middleware/command and run `php artisan migrate --force` before issuing non-expiring credentials. Migration `2026_10_19_000036_allow_non_expiring_student_api_clients.php` makes `student_api_clients.expires_at` nullable; it preserves existing expiry dates and revocation history.
+
+For a persistent SENA Care integration, explicitly issue:
+
+```bash
+php artisan system:create-student-api-token ADMIN_USERNAME --name=sena-care --sena-care --no-expiry
+```
+
+Add `--district-code=CODE` for a super-admin owner and `--replace` only when rotating an existing named client. `--no-expiry` stores NULL in `expires_at`; it cannot be combined with `--expires-in-days`. Omitting this flag retains the default 90-day expiry, with `--expires-in-days` accepting 1–365 days. Existing tokens do not become permanent automatically. A permanent token remains subject to revocation, active owner/district checks, fixed district scope, abilities and rate limits. `system:revoke-student-api-token CLIENT_ID` revokes it immediately, including teacher-password verification. No password or teacher login changes are needed.
+
+The migration is intentionally forward-only on rollback: restoring a NOT NULL constraint would require changing or deleting already issued permanent credentials. Source/data migrations and token issuance must run on the intended deployment database; tests use isolated in-memory SQLite.

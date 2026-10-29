@@ -50,7 +50,7 @@ final class AuthenticateStudentDataClient
         $client = StudentApiClient::query()
             ->where('token_hash', hash('sha256', $plainToken))
             ->whereNull('revoked_at')
-            ->where('expires_at', '>', now())
+            ->where(fn ($query) => $query->whereNull('expires_at')->orWhere('expires_at', '>', now()))
             ->first();
         if (! $client?->allows('student-data:read')) {
             $this->rejectInvalidCredential($attemptKey);
@@ -78,6 +78,7 @@ final class AuthenticateStudentDataClient
         $request->setUserResolver(static fn (): User => $user);
         $request->attributes->set('district_id', $districtId);
         $request->attributes->set('student_api_client_id', (int) $client->id);
+        $request->attributes->set('student_api_client', $client);
 
         if ($client->last_used_at === null || $client->last_used_at->lt(now()->subMinutes(5))) {
             $client->forceFill(['last_used_at' => now()])->save();

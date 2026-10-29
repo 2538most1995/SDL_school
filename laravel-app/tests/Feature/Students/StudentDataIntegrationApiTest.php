@@ -189,6 +189,24 @@ final class StudentDataIntegrationApiTest extends TestCase
         }
     }
 
+    public function test_expiry_is_optional_but_revocation_still_applies_to_non_expiring_clients(): void
+    {
+        $permanent = $this->client('permanent');
+        $permanent->update(['expires_at' => null]);
+        $this->withToken('permanent')->getJson('/api/v1/integrations/student-data/students')->assertOk();
+
+        $this->travel(366)->days();
+        $this->withToken('permanent')->getJson('/api/v1/integrations/student-data/students')->assertOk();
+        $permanent->update(['revoked_at' => now()]);
+        $this->withToken('permanent')->getJson('/api/v1/integrations/student-data/students')->assertUnauthorized();
+    }
+
+    public function test_a_token_expiring_at_the_current_instant_is_rejected(): void
+    {
+        $this->client('expires-now')->update(['expires_at' => now()]);
+        $this->withToken('expires-now')->getJson('/api/v1/integrations/student-data/students')->assertUnauthorized();
+    }
+
     public function test_invalid_credentials_are_rate_limited_by_ip_before_database_authentication(): void
     {
         config(['system_data.student_api_auth_rate_limit_per_minute' => 2]);

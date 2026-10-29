@@ -63,6 +63,49 @@ final class StudentDataApiTokenCommandTest extends TestCase
         self::assertSame($district->id, StudentApiClient::query()->sole()->district_id);
     }
 
+    public function test_sena_care_abilities_require_an_explicit_option(): void
+    {
+        $district = $this->district('sena-care-test');
+        User::factory()->create([
+            'username' => 'care.admin', 'role' => 'admin', 'district_id' => $district->id, 'disabled_at' => null,
+        ]);
+        self::assertSame(0, Artisan::call('system:create-student-api-token', [
+            'username' => 'care.admin', '--sena-care' => true,
+        ]));
+        self::assertSame(
+            ['student-data:read', 'sena-care:teachers', 'sena-care:authenticate'],
+            StudentApiClient::query()->sole()->abilities,
+        );
+    }
+
+    public function test_an_explicit_non_expiring_sena_care_token_keeps_teacher_login_abilities(): void
+    {
+        $district = $this->district('permanent-care-test');
+        User::factory()->create([
+            'username' => 'permanent.admin', 'role' => 'admin', 'district_id' => $district->id, 'disabled_at' => null,
+        ]);
+        self::assertSame(0, Artisan::call('system:create-student-api-token', [
+            'username' => 'permanent.admin', '--sena-care' => true, '--no-expiry' => true,
+        ]));
+        $client = StudentApiClient::query()->sole();
+        self::assertNull($client->expires_at);
+        self::assertNull($client->revoked_at);
+        self::assertSame($district->id, $client->district_id);
+        self::assertSame(['student-data:read', 'sena-care:teachers', 'sena-care:authenticate'], $client->abilities);
+    }
+
+    public function test_no_expiry_cannot_be_combined_with_an_explicit_duration(): void
+    {
+        $district = $this->district('expiry-conflict');
+        User::factory()->create([
+            'username' => 'conflict.admin', 'role' => 'admin', 'district_id' => $district->id, 'disabled_at' => null,
+        ]);
+        self::assertSame(1, Artisan::call('system:create-student-api-token', [
+            'username' => 'conflict.admin', '--no-expiry' => true, '--expires-in-days' => 365,
+        ]));
+        self::assertSame(0, StudentApiClient::query()->count());
+    }
+
     public function test_replace_revokes_the_old_token_and_revoke_command_is_idempotent(): void
     {
         $district = $this->district('rotate-test');

@@ -10,8 +10,8 @@ use Illuminate\Support\Facades\Storage;
 use Illuminate\Support\Str;
 use Illuminate\Validation\Rule;
 use Illuminate\Validation\ValidationException;
+use Symfony\Component\HttpFoundation\BinaryFileResponse;
 use Symfony\Component\HttpFoundation\HeaderUtils;
-use Symfony\Component\HttpFoundation\StreamedResponse;
 use Throwable;
 
 final class LessonPlanDocumentService
@@ -89,8 +89,12 @@ final class LessonPlanDocumentService
             'source_type' => ['sometimes', Rule::in(['link', 'pdf'])],
             'external_url' => ['sometimes', 'nullable', 'string', 'url:http,https', 'max:2048'],
             'pdf' => ['sometimes', 'nullable', 'file', 'mimes:pdf', 'max:20480'],
-            'cover_image' => ['sometimes', 'nullable', 'file', 'image', 'mimes:jpg,jpeg,png', 'max:2048', 'dimensions:min_width=1,min_height=1,max_width=2000,max_height=2000'],
+            'cover_image' => ['sometimes', 'nullable', 'file', 'image', 'mimes:jpg,jpeg,png,webp', 'max:2048', 'dimensions:min_width=1,min_height=1,max_width=2000,max_height=2000'],
             'page_count' => ['sometimes', 'nullable', 'integer', 'min:1', 'max:10000'],
+            'clear_pdf' => ['sometimes', 'nullable'],
+            'remove_pdf' => ['sometimes', 'nullable'],
+            'clear_cover' => ['sometimes', 'nullable'],
+            'remove_cover' => ['sometimes', 'nullable'],
         ], ['title.max' => "ชื่อแผนการสอนต้องไม่เกิน {$titleLimit} ตัวอักษร"]);
         $values = [
             'plan_scope' => $existing?->plan_scope ?? 'subject',
@@ -182,6 +186,14 @@ final class LessonPlanDocumentService
             $document = array_fill_keys(self::DOCUMENT_COLUMNS, null);
         }
         $document['external_url'] = $values['resolved_source'] === 'link' ? $url : null;
+        if ($request->boolean('clear_pdf') || $request->boolean('remove_pdf')) {
+            $document['pdf_path'] = null;
+            $document['pdf_original_name'] = null;
+            $document['pdf_size'] = null;
+        }
+        if ($request->boolean('clear_cover') || $request->boolean('remove_cover')) {
+            $document['cover_path'] = null;
+        }
         if (isset($values['pdf'])) {
             $path = $values['pdf']->storeAs("learning/lesson-plans/{$this->district($request)}/{$id}", Str::uuid().'.pdf', 'local');
             abort_unless(is_string($path), 500, 'ไม่สามารถบันทึกไฟล์ได้');
@@ -191,7 +203,11 @@ final class LessonPlanDocumentService
             $document['pdf_size'] = $values['pdf']->getSize();
         }
         if (isset($values['cover_image'])) {
-            $extension = $values['cover_image']->getMimeType() === 'image/png' ? 'png' : 'jpg';
+            $extension = match ($values['cover_image']->getMimeType()) {
+                'image/png' => 'png',
+                'image/webp' => 'webp',
+                default => 'jpg',
+            };
             $path = $values['cover_image']->storeAs("learning/lesson-plans/{$this->district($request)}/{$id}", Str::uuid().'.'.$extension, 'local');
             abort_unless(is_string($path), 500, 'ไม่สามารถบันทึกหน้าปกได้');
             $newPaths[] = $path;
@@ -222,19 +238,28 @@ final class LessonPlanDocumentService
         }
     }
 
-    public function file(Request $request, int $id, bool $cover = false): StreamedResponse
+    public function file(Request $request, int $id, bool $cover = false): BinaryFileResponse
     {
         $row = $this->row($request, $id);
         $path = (string) ($cover ? ($row->cover_path ?? '') : ($row->pdf_path ?? ''));
         abort_unless($this->ownedPath($this->district($request), $id, $path) && Storage::disk('local')->exists($path), 404);
-        $mime = $cover ? (str_ends_with($path, '.png') ? 'image/png' : 'image/jpeg') : 'application/pdf';
+        $mime = $cover ? match (pathinfo($path, PATHINFO_EXTENSION)) {
+            'png' => 'image/png',
+            'webp' => 'image/webp',
+            default => 'image/jpeg',
+        } : 'application/pdf';
         $filename = $cover ? 'lesson-plan-cover.'.pathinfo($path, PATHINFO_EXTENSION) : $this->filename((string) ($row->pdf_original_name ?: $row->title.'.pdf'));
         $disposition = $request->boolean('download') ? 'attachment' : 'inline';
+        if ($request->isMethod('GET') && preg_match('/^bytes=(\d+)-(\d*)$/D', $request->header('Range', ''), $range)) {
+            $size = Storage::disk('local')->size($path);
+            abort_if((float) $range[1] >= $size || ($range[2] !== '' && (float) $range[2] < (float) $range[1]),
+                416, 'ช่วงข้อมูลไฟล์ไม่ถูกต้อง', ['Content-Range' => 'bytes */'.$size]);
+        }
 
-        return Storage::disk('local')->response($path, $filename, [
+        return new BinaryFileResponse(Storage::disk('local')->path($path), 200, [
             'Content-Type' => $mime, 'X-Content-Type-Options' => 'nosniff', 'Cache-Control' => 'private, no-store',
             'Content-Disposition' => HeaderUtils::makeDisposition($disposition, $filename, $cover ? 'lesson-plan-cover.'.pathinfo($path, PATHINFO_EXTENSION) : 'lesson-plan.pdf'),
-        ], $disposition);
+        ], false);
     }
 
     private function filename(string $name): string
@@ -246,7 +271,7 @@ final class LessonPlanDocumentService
 
     private function ownedPath(int $district, int $id, string $path): bool
     {
-        return preg_match('#^learning/lesson-plans/'.preg_quote((string) $district, '#').'/'.preg_quote((string) $id, '#').'/[0-9a-f-]+\.(?:pdf|png|jpg)$#D', $path) === 1;
+        return preg_match('#^learning/lesson-plans/'.preg_quote((string) $district, '#').'/'.preg_quote((string) $id, '#').'/[0-9a-f-]+\.(?:pdf|png|jpg|webp)$#D', $path) === 1;
     }
 
     private function district(Request $request): int

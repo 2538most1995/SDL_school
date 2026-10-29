@@ -61,7 +61,16 @@
 .lesson-plan-upload strong { font-size:.85rem; overflow-wrap:anywhere; }
 .lesson-plan-upload small { margin-top:4px; font-size:.75rem; line-height:1.7; color:var(--ui-text-muted); }
 .lesson-plan-upload input { display:block; width:100%; font-size:.8rem; }
-.lesson-plan-generated-cover { display:flex; align-items:center; gap:16px; padding:14px; border:1px solid var(--ui-border); border-radius:14px; }
+.lesson-plan-cover[data-level="1"] { background:linear-gradient(145deg,#064e3b,#047857 55%,#022c22); }
+.lesson-plan-cover[data-level="2"] { background:linear-gradient(145deg,#1e3a8a,#2563eb 55%,#0f172a); }
+.lesson-plan-cover[data-level="3"] { background:linear-gradient(145deg,#4c1d95,#7c3aed 55%,#1e1b4b); }
+.lesson-plan-cover-actions { display:flex; flex-wrap:wrap; align-items:center; gap:10px; margin-top:10px; }
+.lesson-plan-cover-upload-btn { display:inline-flex; align-items:center; gap:7px; min-height:38px; padding:8px 14px; border:1px solid var(--ui-border); border-radius:11px; background:var(--ui-surface); color:var(--ui-text); font-size:.82rem; font-weight:650; cursor:pointer; }
+.lesson-plan-cover-upload-btn:hover { border-color:var(--lesson-accent); background:color-mix(in srgb,var(--lesson-accent) 6%,var(--ui-surface)); }
+.lesson-plan-cover-upload-btn input { display:none; }
+.lesson-plan-reader-header-bar { display:flex; flex-wrap:wrap; align-items:center; justify-content:space-between; gap:12px; margin-bottom:14px; padding:10px 14px; border-radius:12px; background:var(--ui-surface-subtle); border:1px solid var(--ui-border); }
+.lesson-plan-reader-header-bar .lesson-plan-reader-note { margin-bottom:0; flex:1; min-width:200px; }
+.lesson-plan-generated-cover { display:flex; align-items:center; gap:16px; padding:14px; border:1px solid var(--ui-border); border-radius:14px; background:var(--ui-surface-subtle); }
 .lesson-plan-generated-cover > img { width:78px; height:104px; object-fit:contain; border:1px solid var(--ui-border); border-radius:5px; background:white; }
 .lesson-plan-generated-cover > div { display:flex; flex-direction:column; gap:8px; font-size:.84rem; }
 .lesson-plan-generated-cover svg { color:var(--ui-navigation); }

@@ -9,12 +9,14 @@ export type DocumentOpenTarget =
     | { kind: 'pdf' | 'details' | 'embed' }
     | { kind: 'external'; url: string };
 
-/** Open a readable PDF first; link-only shares go straight to their provider. */
+/** Fast cloud links open directly; PDFs open when there is no cloud link. */
 export function documentOpenTarget(value: string, hasPdf: boolean): DocumentOpenTarget {
-    if (hasPdf) return { kind: 'pdf' };
     const preview = documentPreview(value);
-    if (!preview) return { kind: 'details' };
-    return preview.embedUrl ? { kind: 'embed' } : { kind: 'external', url: preview.url };
+    if (preview) {
+        return preview.embedUrl ? { kind: 'embed' } : { kind: 'external', url: preview.url };
+    }
+    if (hasPdf) return { kind: 'pdf' };
+    return { kind: 'details' };
 }
 
 const fileId = /^[A-Za-z0-9_-]+$/;
@@ -46,6 +48,17 @@ function googlePreview(source: URL, pathname: string): string {
     return preview.href;
 }
 
+function googleThumbnail(source: URL, id: string): string {
+    const thumbnail = new URL('https://drive.google.com/thumbnail');
+    thumbnail.searchParams.set('id', id);
+    thumbnail.searchParams.set('sz', 'w800');
+    for (const key of ['resourcekey', 'authuser']) {
+        const value = source.searchParams.get(key);
+        if (value) thumbnail.searchParams.set(key, value);
+    }
+    return thumbnail.href;
+}
+
 /**
  * Recognize document viewers locally; this function never fetches a URL or
  * changes sharing permissions. A preview can still require provider sign-in.
@@ -63,7 +76,10 @@ export function documentPreview(value: string): DocumentPreview | null {
         const match = source.pathname.match(/^\/file\/(?:u\/\d+\/)?d\/([A-Za-z0-9_-]+)(?:\/(?:view|preview|edit))?\/?$/);
         const queryId = /^\/(?:open|uc)\/?$/.test(source.pathname) ? source.searchParams.get('id') : null;
         const id = match?.[1] ?? (queryId && fileId.test(queryId) ? queryId : null);
-        if (canEmbed && id) result.embedUrl = googlePreview(source, `/file/d/${id}/preview`);
+        if (canEmbed && id) {
+            result.embedUrl = googlePreview(source, `/file/d/${id}/preview`);
+            result.thumbnailUrl = googleThumbnail(source, id);
+        }
         return result;
     }
 
@@ -75,6 +91,7 @@ export function documentPreview(value: string): DocumentPreview | null {
         else result.provider = 'Google Drive';
         if (canEmbed && native) {
             result.embedUrl = googlePreview(source, `/${native[1]}/d/${native[2]}/preview`);
+            result.thumbnailUrl = googleThumbnail(source, native[2]);
             // Sheet/slide anchors select a page without changing access.
             if (/^#(?:gid=\d+|slide=id\.[A-Za-z0-9_-]+)$/.test(source.hash)) result.embedUrl += source.hash;
         } else if (canEmbed && published) {

@@ -12,6 +12,7 @@ use App\Http\Controllers\Api\Admin\StudentMenuController;
 use App\Http\Controllers\Api\Admin\UserController;
 use App\Http\Controllers\Api\Auth\DistrictOptionsController;
 use App\Http\Controllers\Api\Auth\PublicBrandingController;
+use App\Http\Controllers\Api\Integrations\SenaCareTeacherController;
 use App\Http\Controllers\Api\Integrations\StudentDataController;
 use App\Http\Controllers\Api\Learning\AssignmentWorkflowController;
 use App\Http\Controllers\Api\Learning\CalendarController;
@@ -69,6 +70,9 @@ Route::prefix('v1')->group(function (): void {
         'role:admin,super_admin',
         'throttle:student-data-api',
     ])->prefix('integrations/student-data')->group(function (): void {
+        Route::get('/teachers', [SenaCareTeacherController::class, 'index']);
+        Route::get('/groups', [SenaCareTeacherController::class, 'groups']);
+        Route::post('/teacher-authenticate', [SenaCareTeacherController::class, 'authenticate']);
         Route::get('/students', [StudentDataController::class, 'index']);
         Route::get('/students/{student}', [StudentDataController::class, 'show']);
         Route::get('/students/{student}/grades', [StudentDataController::class, 'grades']);

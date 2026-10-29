@@ -12,12 +12,15 @@ final class SecurityHeaders
     {
         $response = $next($request);
         $response->headers->set('X-Content-Type-Options', 'nosniff');
-        $response->headers->set('X-Frame-Options', 'DENY');
+        $privatePdf = $request->is('api/v1/learning/lesson-plans/*/file') && $response->isSuccessful()
+            && $response->headers->get('Content-Type') === 'application/pdf';
+        $response->headers->set('X-Frame-Options', $privatePdf ? 'SAMEORIGIN' : 'DENY');
+        $ancestors = $privatePdf ? "'self'" : "'none'";
         $response->headers->set('Referrer-Policy', 'strict-origin-when-cross-origin');
         $response->headers->set('Permissions-Policy', 'camera=(), microphone=(), geolocation=()');
         $response->headers->set(
             'Content-Security-Policy',
-            "default-src 'self'; base-uri 'self'; form-action 'self'; frame-ancestors 'none'; frame-src 'self' blob: https://www.youtube-nocookie.com https://drive.google.com https://docs.google.com https://onedrive.live.com https://*.sharepoint.com; object-src 'self' blob:; worker-src 'self' blob:; script-src 'self' 'unsafe-inline' 'wasm-unsafe-eval'; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; font-src 'self' data:; connect-src 'self'",
+            "default-src 'self'; base-uri 'self'; form-action 'self'; frame-ancestors {$ancestors}; frame-src 'self' blob: https://www.youtube-nocookie.com https://drive.google.com https://docs.google.com https://onedrive.live.com https://*.sharepoint.com; object-src 'self' blob:; worker-src 'self' blob:; script-src 'self' 'unsafe-inline' 'wasm-unsafe-eval'; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob: https://drive.google.com https://lh3.googleusercontent.com; font-src 'self' data:; connect-src 'self'",
         );
 
         if ($request->isSecure()) {

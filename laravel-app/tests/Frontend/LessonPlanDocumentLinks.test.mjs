@@ -11,10 +11,10 @@ test('link-only OneDrive and generic documents open directly without a second re
     assert.deepEqual(documentOpenTarget('', false), { kind: 'details' });
 });
 
-test('attached PDFs open immediately even when a cloud link is also present', () => {
-    for (const url of ['', 'https://1drv.ms/b/s!demo', 'https://drive.google.com/file/d/FILE123/view']) {
-        assert.deepEqual(documentOpenTarget(url, true), { kind: 'pdf' });
-    }
+test('cloud links prioritize fast provider opening over attached backup PDFs', () => {
+    assert.deepEqual(documentOpenTarget('https://1drv.ms/b/s!demo', true), { kind: 'external', url: 'https://1drv.ms/b/s!demo' });
+    assert.deepEqual(documentOpenTarget('https://drive.google.com/file/d/FILE123/view', true), { kind: 'embed' });
+    assert.deepEqual(documentOpenTarget('', true), { kind: 'pdf' });
 });
 
 test('Drive file and query sharing routes preview the same file and retain resource keys', () => {
@@ -28,7 +28,7 @@ test('Drive file and query sharing routes preview the same file and retain resou
         assert.equal(result?.url, url);
         assert.equal(result?.embedUrl, 'https://drive.google.com/file/d/file_A-123/preview?resourcekey=key_456');
         assert.equal(result?.provider, 'Google Drive');
-        assert.equal(result?.thumbnailUrl, null);
+        assert.equal(result?.thumbnailUrl, 'https://drive.google.com/thumbnail?id=file_A-123&sz=w800&resourcekey=key_456');
     }
     assert.equal(documentPreview('https://drive.google.com/drive/folders/folder_123')?.embedUrl, null);
     assert.equal(documentPreview('https://drive.google.com/open?id=bad%2Fid')?.embedUrl, null);
@@ -103,6 +103,15 @@ test('lookalike and nested hosts never gain trusted provider/embed status', () =
     ]) {
         assert.equal(documentPreview(url)?.embedUrl, null);
         assert.equal(documentPreview(url)?.provider, 'เอกสารออนไลน์');
+        assert.equal(documentPreview(url)?.thumbnailUrl, null);
+    }
+});
+
+test('Google thumbnails preserve access keys and never invent covers for folders or published IDs', () => {
+    assert.equal(documentPreview('https://docs.google.com/document/d/FILE123/edit?resourcekey=KEY&authuser=1')?.thumbnailUrl,
+        'https://drive.google.com/thumbnail?id=FILE123&sz=w800&resourcekey=KEY&authuser=1');
+    for (const url of ['https://drive.google.com/drive/folders/FOLDER123', 'http://drive.google.com/file/d/FILE123/view', 'https://docs.google.com/document/d/e/PUBLISHED/pub']) {
+        assert.equal(documentPreview(url)?.thumbnailUrl, null);
     }
 });
 

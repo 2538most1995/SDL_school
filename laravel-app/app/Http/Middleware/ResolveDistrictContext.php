@@ -16,6 +16,16 @@ final class ResolveDistrictContext
         abort_unless($user, 401);
 
         $requestedDistrict = $request->header('X-District-Id');
+        // Only native lesson-plan PDF navigation/range requests may carry
+        // district context in the URL. It selects context, never permissions:
+        // the normal user/district/teacher checks below and in the file service
+        // remain authoritative, and an explicit header always takes priority.
+        if ($requestedDistrict === null && $request->isMethodSafe()
+            && $request->is('api/v1/learning/lesson-plans/*/file') && $request->route('plan') !== null
+            && $request->query->has('district_id')) {
+            $requestedDistrict = $request->query('district_id');
+            abort_unless(is_string($requestedDistrict) && ctype_digit($requestedDistrict) && (int) $requestedDistrict > 0, 422, 'รหัสอำเภอไม่ถูกต้อง');
+        }
 
         if ($user->role === 'super_admin') {
             abort_if(blank($requestedDistrict), 422, 'กรุณาเลือกอำเภอก่อนเรียกดูข้อมูล');

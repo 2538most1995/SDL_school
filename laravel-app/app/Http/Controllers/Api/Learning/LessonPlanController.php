@@ -8,7 +8,7 @@ use App\Services\Legacy\LegacyPortalReadService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Validation\Rule;
-use Symfony\Component\HttpFoundation\StreamedResponse;
+use Symfony\Component\HttpFoundation\BinaryFileResponse;
 
 final class LessonPlanController extends Controller
 {
@@ -44,12 +44,12 @@ final class LessonPlanController extends Controller
         return response()->json(['data' => ['id' => (string) $plan, 'deleted' => true]]);
     }
 
-    public function file(Request $request, int $plan, LessonPlanDocumentService $documents): StreamedResponse
+    public function file(Request $request, int $plan, LessonPlanDocumentService $documents): BinaryFileResponse
     {
         return $documents->file($request, $plan);
     }
 
-    public function cover(Request $request, int $plan, LessonPlanDocumentService $documents): StreamedResponse
+    public function cover(Request $request, int $plan, LessonPlanDocumentService $documents): BinaryFileResponse
     {
         return $documents->file($request, $plan, true);
     }
