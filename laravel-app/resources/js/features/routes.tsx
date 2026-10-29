@@ -17,6 +17,7 @@ const RegistrationStatisticsPage = lazyWithReload(async () => ({ default: (await
 const ExamEligibleStudentsPage = lazyWithReload(async () => ({ default: (await import('./reports/ExamEligibleStudentsPage')).ExamEligibleStudentsPage }));
 const ExamAttendanceCheckPage = lazyWithReload(async () => ({ default: (await import('./learning/ExamAttendanceCheckPage')).ExamAttendanceCheckPage }));
 const LearningHomePage = lazyWithReload(async () => ({ default: (await import('./learning')).LearningHomePage }));
+const LessonPlansPage = lazyWithReload(async () => ({ default: (await import('./learning/LessonPlansPage')).LessonPlansPage }));
 const OnlineClassroomPage = lazyWithReload(async () => ({ default: (await import('./learning/OnlineClassroomPage')).OnlineClassroomPage }));
 const LearningListPage = lazyWithReload(async () => ({ default: (await import('./learning')).LearningListPage }));
 const CourseRegistrationPage = lazyWithReload(async () => ({ default: (await import('./learning/CourseRegistrationPage')).CourseRegistrationPage }));
@@ -70,7 +71,7 @@ export const featureRouteCatalog: FeatureRoute[] = [
     { path: '/learning/classroom', label: 'ห้องเรียนออนไลน์', roles: ['student', 'teacher', 'admin', 'super_admin'], element: <OnlineClassroomPage /> },
     { path: '/learning/assignments', label: 'งานและการส่งงาน', roles: ['student', 'teacher', 'admin', 'super_admin'], element: <ClassroomLegacyRedirect kind="assignments" /> },
     { path: '/learning/resources', label: 'คลังสื่อ', roles: ['student', 'teacher', 'admin', 'super_admin'], element: <ClassroomLegacyRedirect kind="resources" /> },
-    { path: '/learning/lesson-plans', label: 'แผนการสอน', roles: ['teacher', 'admin', 'super_admin'], element: <LearningListPage kind="lesson-plans" /> },
+    { path: '/learning/lesson-plans', label: 'แผนการสอน', roles: ['teacher', 'admin', 'super_admin'], element: <LessonPlansPage /> },
     { path: '/learning/calendar', label: 'ปฏิทินพบกลุ่ม', roles: ['student', 'teacher', 'admin', 'super_admin'], element: <LearningListPage kind="calendar" /> },
     { path: '/learning/schedule', label: 'ตารางสอบ', roles: ['student', 'teacher', 'admin', 'super_admin'], element: <LearningListPage kind="schedule" /> },
     { path: '/learning/registration', label: 'ลงทะเบียนเรียน', roles: ['student', 'teacher', 'admin', 'super_admin'], element: <CourseRegistrationPage /> },

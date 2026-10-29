@@ -1,5 +1,9 @@
 # Database Knowledge Base
 
+## Lesson-plan attachments and covers (2026-10-29)
+
+Additive migration `2026_10_29_000038_add_lesson_plan_documents.php` adds nullable `external_url` TEXT, `pdf_path`, `pdf_original_name`, `pdf_size`, `cover_path` and `page_count` to `learning_lesson_plans`, checking each column before adding. Existing metadata, teacher/district IDs and documents remain intact. Rollback intentionally retains attachments/columns. PDF and cover paths point to private local storage under `learning/lesson-plans/{district}/{plan}/`; responses expose authorized file/cover endpoints, never physical paths. Save locks the latest row before resolving omitted metadata/source, rolls back new files on failure, and removes replaced files after commit. Deletes and source changes clean only paths owned by that district/plan. No migration ran against real student/deployment data during development.
+
 ## Unified classroom (2026-10-29)
 
 No schema change or data migration. The classroom presents existing `learning_assignments`/`learning_submissions`/`learning_submission_attachments` and `learning_resources` alongside `learning_classroom_*` records, without copying IDs, files or grades. Assignment authoring/audiences now share the classroom's merged current-term ITW + selected, non-transferred web registrations. Optional course/level/resource-kind filters run before the legacy 250-row cap; explicit authorized assignment IDs receive bound priority ordering to keep older deep links reachable. Shared resource subject codes may remain empty. Retired navigation keys are resolved out in memory rather than rewriting district preferences.

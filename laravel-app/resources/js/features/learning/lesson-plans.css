@@ -1,0 +1,81 @@
+.lesson-plan-library { display:grid; gap:24px; max-width:1600px; margin-inline:auto; color:var(--ui-text); padding-bottom:38px; --lesson-accent: #6950c9; }
+[data-ui-mode=dark] .lesson-plan-library { --lesson-accent:#b6a3ff; }
+.lesson-plan-hero { display:flex; align-items:center; gap:20px; padding:28px 30px; border:1px solid var(--ui-border); border-radius:25px; background:var(--ui-surface); }
+.lesson-plan-hero-icon { display:grid; place-items:center; flex-shrink:0; width:65px; height:65px; border-radius:21px; color:var(--lesson-accent); background:color-mix(in srgb,var(--lesson-accent) 10%,var(--ui-surface)); }
+.lesson-plan-eyebrow { color:var(--lesson-accent); font-size:.76rem; font-weight:700; }
+.lesson-plan-hero h1 { font-size:1.9rem; font-weight:800; line-height:1.35; margin-block:4px; letter-spacing:-.03em; }
+.lesson-plan-hero p { color:var(--ui-text-muted); font-size:.9rem; line-height:1.7; }
+.lesson-plan-hero > .MuiButton-root { margin-left:auto; white-space:nowrap; border-radius:14px; }
+.lesson-plan-toolbar { display:flex; align-items:center; justify-content:space-between; gap:18px; }
+.lesson-plan-search { width:min(100%,460px); }
+.lesson-plan-levels, .lesson-plan-choice-buttons { display:flex; flex-wrap:wrap; gap:8px; }
+.lesson-plan-levels button, .lesson-plan-choice-buttons button { display:inline-flex; align-items:center; justify-content:center; gap:7px; min-height:42px; padding:9px 16px; border:1px solid var(--ui-border); border-radius:12px; background:var(--ui-surface); color:var(--ui-text); font-size:.83rem; font-weight:650; cursor:pointer; }
+.lesson-plan-levels button[aria-pressed=true], .lesson-plan-choice-buttons button[aria-pressed=true] { color:var(--lesson-accent,#6950c9); border-color:var(--lesson-accent,#6950c9); background:color-mix(in srgb,var(--lesson-accent,#6950c9) 8%,var(--ui-surface)); }
+.lesson-plan-shelf-heading { display:flex; align-items:center; justify-content:space-between; gap:12px; }
+.lesson-plan-shelf-heading h2 { font-size:1.1rem; font-weight:750; }
+.lesson-plan-shelf-heading > span { font-size:.82rem; color:var(--ui-text-muted); }
+.lesson-plan-grid { display:grid; grid-template-columns:repeat(4,minmax(0,1fr)); gap:22px; }
+.lesson-plan-card { display:flex; flex-direction:column; min-width:0; overflow:hidden; border:1px solid var(--ui-border); border-radius:23px; background:var(--ui-surface); box-shadow:0 3px 7px #18264308; transition:border-color 160ms,box-shadow 160ms,transform 160ms; }
+.lesson-plan-cover-button { position:relative; width:100%; display:block; padding:0; text-align:left; background:transparent; border:0; cursor:pointer; }
+.lesson-plan-cover { position:relative; display:grid; place-items:center; width:100%; aspect-ratio:3/4; overflow:hidden; background:linear-gradient(145deg,#31256f,#54267d 55%,#17182e); }
+.lesson-plan-cover.has-image { background:#f5f3ef; }
+.lesson-plan-cover > img { width:100%; height:100%; object-fit:contain; object-position:center top; }
+.lesson-plan-cover-fallback { display:flex; flex-direction:column; align-items:center; justify-content:center; padding:42px 23px; min-height:100%; text-align:center; color:#fff; }
+.lesson-plan-cover-fallback > span { display:grid; place-items:center; width:69px; height:69px; border-radius:23px; margin-bottom:21px; color:#d0c5ff; background:#ffffff12; }
+.lesson-plan-cover-fallback > strong { font-size:1.08rem; line-height:1.65; font-weight:750; overflow-wrap:anywhere; }
+.lesson-plan-cover-fallback > small { color:#cfbfeb; font-size:.76rem; margin-top:13px; }
+.lesson-plan-source { position:absolute; top:13px; left:13px; display:flex; align-items:center; gap:6px; border-radius:8px; background:#17132dda; color:#fff; padding:5px 9px; font-size:.65rem; font-weight:650; }
+.lesson-plan-cover-hover { position:absolute; inset:0; display:flex; align-items:center; justify-content:center; gap:9px; background:#160d3978; color:white; font-size:.9rem; font-weight:750; opacity:0; transition:opacity 160ms; }
+.lesson-plan-cover-button:focus-visible .lesson-plan-cover-hover { opacity:1; }
+.lesson-plan-card-body { display:flex; flex:1; flex-direction:column; padding:20px 20px 14px; }
+.lesson-plan-card-body h3 { font-weight:750; font-size:1rem; line-height:1.55; overflow-wrap:anywhere; }
+.lesson-plan-author { display:flex; align-items:center; gap:6px; margin-top:9px; font-size:.78rem; color:var(--ui-text-muted); }
+.lesson-plan-card-meta { margin-top:8px; font-size:.75rem; line-height:1.6; color:var(--ui-text-muted); }
+.lesson-plan-card-bottom { display:flex; align-items:center; justify-content:space-between; flex-wrap:wrap; gap:8px; margin-top:auto; padding-top:17px; font-size:.7rem; color:var(--ui-text-muted); }
+.lesson-plan-card-bottom > span { display:inline-flex; align-items:center; gap:5px; }
+.lesson-plan-card-actions { display:grid; grid-template-columns:1fr 1fr; gap:8px; margin-top:17px; }
+.lesson-plan-card-actions > .MuiButton-root { min-width:0; border-radius:11px; font-size:.76rem; padding:9px 5px; }
+.lesson-plan-card-actions > .MuiButton-contained { background:#6343c8; color:white; }
+.lesson-plan-card-manage { display:flex; align-items:center; justify-content:flex-end; gap:4px; padding-top:10px; margin-top:12px; border-top:1px solid var(--ui-border); }
+.lesson-plan-empty { display:flex; flex-direction:column; align-items:center; gap:14px; padding:65px 25px; text-align:center; border:1px dashed var(--ui-border-strong); border-radius:24px; background:var(--ui-surface); }
+.lesson-plan-empty > svg { color:var(--lesson-accent); }
+.lesson-plan-empty h3 { font-size:1.2rem; font-weight:750; }
+.lesson-plan-empty p, .lesson-plan-muted { color:var(--ui-text-muted); font-size:.83rem; line-height:1.8; }
+.lesson-plan-dialog { --lesson-accent:#6950c9; }
+[data-ui-mode=dark] .lesson-plan-dialog { --lesson-accent:#b6a3ff; }
+.lesson-plan-dialog .MuiDialog-paper { border-radius:23px; }
+.lesson-plan-dialog .MuiDialogTitle-root { font-weight:750; overflow-wrap:anywhere; }
+.lesson-plan-dialog fieldset { min-width:0; }
+.lesson-plan-dialog legend { font-size:.85rem; font-weight:700; margin-bottom:10px; }
+.lesson-plan-editor-grid { display:grid; grid-template-columns:1fr 1fr; gap:23px; padding-top:10px; }
+.lesson-plan-form-wide { grid-column:1/-1; }
+.lesson-plan-source-editor { display:grid; gap:16px; padding:20px; border:1px solid var(--ui-border); border-radius:18px; }
+.lesson-plan-source-editor h3 { font-weight:750; }
+.lesson-plan-upload { display:flex; flex-wrap:wrap; align-items:center; gap:14px; padding:19px; border:1px dashed var(--ui-border-strong); border-radius:15px; background:var(--ui-surface-subtle); }
+.lesson-plan-upload > svg { color:var(--lesson-accent); flex-shrink:0; }
+.lesson-plan-upload > span { flex:1; min-width:180px; }
+.lesson-plan-upload strong, .lesson-plan-upload small { display:block; }
+.lesson-plan-upload strong { font-size:.85rem; overflow-wrap:anywhere; }
+.lesson-plan-upload small { margin-top:4px; font-size:.75rem; line-height:1.7; color:var(--ui-text-muted); }
+.lesson-plan-upload input { display:block; width:100%; font-size:.8rem; }
+.lesson-plan-generated-cover { display:flex; align-items:center; gap:16px; padding:14px; border:1px solid var(--ui-border); border-radius:14px; }
+.lesson-plan-generated-cover > img { width:78px; height:104px; object-fit:contain; border:1px solid var(--ui-border); border-radius:5px; background:white; }
+.lesson-plan-generated-cover > div { display:flex; flex-direction:column; gap:8px; font-size:.84rem; }
+.lesson-plan-generated-cover svg { color:var(--ui-navigation); }
+.lesson-plan-generated-cover span { font-size:.75rem; color:var(--ui-text-muted); overflow-wrap:anywhere; }
+.lesson-plan-document { display:block; width:100%; height:70dvh; min-height:350px; border:1px solid var(--ui-border); border-radius:13px; background:var(--ui-surface-subtle); }
+.lesson-plan-reader-note { color:var(--ui-text-muted); font-size:.8rem; line-height:1.7; margin-bottom:14px; }
+.lesson-plan-reader-link { display:flex; flex-direction:column; align-items:center; gap:13px; padding:55px 20px; color:var(--ui-text-muted); text-align:center; }
+.lesson-plan-reader-link h3 { color:var(--ui-text); font-size:1.15rem; font-weight:700; }
+.lesson-plan-details-meta { display:flex; flex-wrap:wrap; gap:10px; margin-bottom:25px; }
+.lesson-plan-details-meta > span { border:1px solid var(--ui-border); border-radius:8px; padding:5px 10px; color:var(--ui-text-muted); font-size:.8rem; }
+.lesson-plan-detail-section { padding-block:18px; border-top:1px solid var(--ui-border); }
+.lesson-plan-detail-section h3 { font-size:.95rem; font-weight:750; }
+.lesson-plan-detail-section p { margin-top:8px; white-space:pre-wrap; overflow-wrap:anywhere; line-height:1.9; font-size:.9rem; color:var(--ui-text-muted); }
+.lesson-plan-library button:focus-visible, .lesson-plan-dialog button:focus-visible { outline:3px solid #a891ff; outline-offset:3px; }
+.lesson-plan-dialog button:disabled { opacity:.5; cursor:not-allowed; }
+@media (hover:hover) and (pointer:fine) { .lesson-plan-card:hover { border-color:#b5a6e7; box-shadow:0 10px 22px #25184c12; transform:translateY(-3px); } .lesson-plan-cover-button:hover .lesson-plan-cover-hover { opacity:1; } }
+@media (max-width:1280px) { .lesson-plan-grid { grid-template-columns:repeat(3,minmax(0,1fr)); gap:18px; } }
+@media (max-width:980px) { .lesson-plan-grid { grid-template-columns:repeat(2,minmax(0,1fr)); } .lesson-plan-toolbar { align-items:stretch; flex-direction:column; } .lesson-plan-search { width:100%; } }
+@media (max-width:600px) { .lesson-plan-library { gap:20px; } .lesson-plan-hero { flex-wrap:wrap; padding:22px; gap:14px; } .lesson-plan-hero-icon { width:48px; height:48px; border-radius:16px; } .lesson-plan-hero > div:nth-child(2) { flex:1; min-width:180px; } .lesson-plan-hero h1 { font-size:1.5rem; } .lesson-plan-hero > .MuiButton-root { width:100%; margin-left:0; } .lesson-plan-grid { grid-template-columns:1fr; max-width:420px; width:100%; justify-self:center; } .lesson-plan-cover { aspect-ratio:3/3.6; } .lesson-plan-editor-grid { grid-template-columns:1fr; gap:19px; } .lesson-plan-source-editor { padding:15px; } .lesson-plan-document { min-height:330px; height:65dvh; } }
+@media (prefers-reduced-motion:reduce) { .lesson-plan-card, .lesson-plan-cover-hover { transition:none; } .lesson-plan-card:hover { transform:none; } }

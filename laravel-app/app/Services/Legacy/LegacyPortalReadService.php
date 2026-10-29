@@ -365,26 +365,45 @@ final class LegacyPortalReadService
     /** @return list<array<string, mixed>> */
     public function lessonPlans(User $viewer, int $districtId): array
     {
-        $query = $this->connection()->table('learning_lesson_plans')->where('district_id', $districtId);
+        $query = $this->connection()->table('learning_lesson_plans as plan')
+            ->leftJoin('users as teacher', 'teacher.id', '=', 'plan.teacher_id')
+            ->where('plan.district_id', $districtId)
+            ->selectRaw("plan.*, COALESCE(teacher.name, '') AS teacher_name");
         if ($viewer->role === 'teacher') {
-            $query->where('teacher_id', (int) $viewer->id);
+            $query->where('plan.teacher_id', (int) $viewer->id);
         }
 
-        return $query->orderByDesc('updated_at')->limit(250)->get()->map(fn (object $row): array => [
-            'id' => (string) $row->id,
-            'title' => (string) $row->title,
-            'description' => Str::limit((string) ($row->objectives ?? ''), 180),
-            'course' => (string) ($row->subject_code ?? ''),
-            'timing' => (string) ($row->academic_term ?? '-'),
-            'status' => (string) $row->status === 'published' ? 'เผยแพร่แล้ว' : 'ฉบับร่าง',
-            'can_edit' => $viewer->role !== 'teacher' || (int) $row->teacher_id === (int) $viewer->id,
-            'raw' => [
-                'title' => (string) $row->title, 'subject' => (string) ($row->subject_code ?? ''),
-                'level' => (string) ($row->education_level ?? ''), 'semester' => (string) ($row->academic_term ?? ''),
-                'objectives' => (string) ($row->objectives ?? ''), 'activities' => (string) ($row->activities ?? ''),
-                'assessment' => (string) ($row->assessment ?? ''),
-            ],
-        ])->all();
+        return $query->orderByDesc('plan.updated_at')->limit(250)->get()->map(function (object $row) use ($viewer): array {
+            $external = (string) ($row->external_url ?? '');
+            $pdf = (string) ($row->pdf_path ?? '');
+            $cover = (string) ($row->cover_path ?? '');
+            $source = $external !== '' ? 'link' : ($pdf !== '' ? 'pdf' : 'legacy');
+
+            return [
+                'id' => (string) $row->id,
+                'title' => (string) $row->title,
+                'description' => Str::limit((string) ($row->objectives ?? ''), 180),
+                'course' => (string) ($row->subject_code ?? ''),
+                'timing' => (string) ($row->academic_term ?? '-'),
+                'status' => (string) $row->status === 'published' ? 'เผยแพร่แล้ว' : 'ฉบับร่าง',
+                'teacher_name' => (string) $row->teacher_name,
+                'updated_at' => (string) ($row->updated_at ?? ''),
+                'external_url' => $external,
+                'source_type' => $source,
+                'file_url' => $pdf === '' ? null : '/api/v1/learning/lesson-plans/'.$row->id.'/file?v='.substr(hash('sha256', $pdf), 0, 12),
+                'cover_url' => $cover === '' ? null : '/api/v1/learning/lesson-plans/'.$row->id.'/cover?v='.substr(hash('sha256', $cover), 0, 12),
+                'filename' => (string) ($row->pdf_original_name ?? ''),
+                'file_size' => isset($row->pdf_size) ? (int) $row->pdf_size : null,
+                'page_count' => isset($row->page_count) ? (int) $row->page_count : null,
+                'can_edit' => $viewer->role !== 'teacher' || (int) $row->teacher_id === (int) $viewer->id,
+                'raw' => [
+                    'title' => (string) $row->title, 'subject' => (string) ($row->subject_code ?? ''),
+                    'level' => (string) ($row->education_level ?? ''), 'semester' => (string) ($row->academic_term ?? ''),
+                    'objectives' => (string) ($row->objectives ?? ''), 'activities' => (string) ($row->activities ?? ''),
+                    'assessment' => (string) ($row->assessment ?? ''), 'external_url' => $external, 'source_type' => $source,
+                ],
+            ];
+        })->all();
     }
 
     /** @return list<array<string, mixed>> */

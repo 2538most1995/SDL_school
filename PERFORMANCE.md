@@ -1,5 +1,11 @@
 # Performance Audit
 
+## Lesson-plan document shelf (2026-10-29)
+
+The existing bounded 250-plan read adds one teacher LEFT JOIN, without per-card SQL. Covers fetch only as cards approach the viewport and use revoked blob URLs; PDF.js loads only when selecting a PDF. Its worker, CMaps, fonts and image decoders ship in the build for root/subdirectory deployments without CDN requests. Rendering is limited to page one, a 900×1400 bounding box, 20 MB PDF input and a 30-second deadline; stored covers are at most 2 MB. External document links are never downloaded by the server. Legacy list search/level filtering remains client-side within the latest 250; live MySQL plans/large-library latency remain Not verified.
+
+Verification: full PHP suite 508 passed / 1 existing skip; frontend 84 passed; TypeScript/build and changed-file Pint pass. Synthetic SQLite browser checks under `/SDL_school/` cover Thai two-page PDF first-page generation, four actual cover cards, PDF upload/read, cloud-link companions, retained original share URL, malformed PDF rejection, source-button stability, existing cover retention, 1440px/390px and dark mode without horizontal overflow. Private cloud-provider permissions/real cloud-file access remain Not verified. The dependency audit still reports the pre-existing locked Vite advisory; no unrelated dependency upgrade was applied.
+
 ## Unified classroom (2026-10-29)
 
 The single classroom entry reuses existing resource/file-assignment APIs and private storage; no copy, schema change or per-item query is introduced. Course-pair validation and file-assignment catalogs reuse the classroom's current-term merged registrations. Resource type, subject and level filtering happens in SQL before the retained 250-row limit; explicit selected assignment IDs are prioritized with a bound CASE within the existing scope. A regression fixture with 255 newer unrelated rows verifies scoped records and old deep links remain reachable. Supplemental search filters server-side. Live MySQL plans/large-roster latency remain Not verified.

@@ -1,5 +1,9 @@
 # SDL School Context
 
+## Lesson-plan document shelf (2026-10-29)
+
+The staff lesson-plan page is a responsive book-card shelf with generic HTTP(S), Google Drive and OneDrive/SharePoint links or private PDF uploads. PDF.js renders the actual first page and page count locally; generated covers and PDF copies remain private behind district/teacher-authorized endpoints. Link entries can attach a PDF companion for a reliable cover and fallback reading. Provider embeds require the original sharing permissions; arbitrary links open at their source, and no cloud URL is fetched by Laravel or connected through OAuth. Existing metadata-only plans remain readable/editable. The new document columns require migration `2026_10_29_000038_add_lesson_plan_documents.php`. See `laravel-app/docs/lesson-plans.md`.
+
 ## Unified classroom (2026-10-29)
 
 Assignments and resources no longer appear as independent sidebar, navigation-editor or student-home modules. Their React/legacy PHP entry links open the online classroom; assignment IDs resolve the authorized course once, including legacy NULL levels. Classroom knowledge/video categories show existing library documents/clips; worksheets offer online answers or file/link submission. File work retains its original submissions, attachments, reviews and scores, including late submissions while still open. No data is copied or deleted and no migration is added. Additional media remain accessible inside the classroom even without a current registered course. Saved retired menu keys are ignored by the existing catalog allowlist. See `laravel-app/docs/online-classroom.md` for the consolidated workflow and limits.

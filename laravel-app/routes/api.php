@@ -148,6 +148,8 @@ Route::prefix('v1')->group(function (): void {
         Route::get('/learning/resources', ResourceController::class)->middleware('learning.schema');
         Route::get('/learning/resources/{resource}/file', ResourceFileController::class)->middleware('learning.schema')->whereNumber('resource');
         Route::get('/learning/lesson-plans', LessonPlanController::class)->middleware(['learning.schema', 'role:teacher,admin,super_admin']);
+        Route::get('/learning/lesson-plans/{plan}/file', [LessonPlanController::class, 'file'])->middleware(['learning.schema', 'role:teacher,admin,super_admin'])->whereNumber('plan');
+        Route::get('/learning/lesson-plans/{plan}/cover', [LessonPlanController::class, 'cover'])->middleware(['learning.schema', 'role:teacher,admin,super_admin'])->whereNumber('plan');
         Route::get('/learning/calendar', CalendarController::class)->middleware('learning.schema');
         Route::get('/learning/schedule', ScheduleController::class)->middleware('learning.schema');
         Route::get('/learning/scores', ScoreController::class)->middleware('learning.schema');
@@ -268,9 +270,12 @@ Route::prefix('v1')->group(function (): void {
             Route::patch('/learning/assignments/{assignment}', [AssignmentWorkflowController::class, 'update'])->middleware('learning.schema')->whereNumber('assignment');
             Route::delete('/learning/assignments/{assignment}', [AssignmentWorkflowController::class, 'destroy'])->middleware('learning.schema')->whereNumber('assignment');
             Route::patch('/learning/assignments/{assignment}/submissions/{submission}', [AssignmentWorkflowController::class, 'review'])->middleware('learning.schema')->whereNumber(['assignment', 'submission']);
-            Route::post('/learning/{kind}', [LearningContentController::class, 'store'])->middleware('learning.schema')->whereIn('kind', ['resources', 'lesson-plans', 'calendar']);
-            Route::patch('/learning/{kind}/{content}', [LearningContentController::class, 'update'])->middleware('learning.schema')->whereIn('kind', ['resources', 'lesson-plans', 'calendar'])->whereNumber('content');
-            Route::delete('/learning/{kind}/{content}', [LearningContentController::class, 'destroy'])->middleware('learning.schema')->whereIn('kind', ['resources', 'lesson-plans', 'calendar'])->whereNumber('content');
+            Route::post('/learning/lesson-plans', [LessonPlanController::class, 'store'])->middleware('learning.schema');
+            Route::patch('/learning/lesson-plans/{plan}', [LessonPlanController::class, 'update'])->middleware('learning.schema')->whereNumber('plan');
+            Route::delete('/learning/lesson-plans/{plan}', [LessonPlanController::class, 'destroy'])->middleware('learning.schema')->whereNumber('plan');
+            Route::post('/learning/{kind}', [LearningContentController::class, 'store'])->middleware('learning.schema')->whereIn('kind', ['resources', 'calendar']);
+            Route::patch('/learning/{kind}/{content}', [LearningContentController::class, 'update'])->middleware('learning.schema')->whereIn('kind', ['resources', 'calendar'])->whereNumber('content');
+            Route::delete('/learning/{kind}/{content}', [LearningContentController::class, 'destroy'])->middleware('learning.schema')->whereIn('kind', ['resources', 'calendar'])->whereNumber('content');
             Route::post('/learning/scores/imported/complete', [ScoreController::class, 'completeImported']);
             Route::put('/learning/scores/imported', [ScoreController::class, 'updateImported']);
             Route::post('/learning/scores/scorebooks', [ScoreController::class, 'store'])->middleware('learning.schema');
