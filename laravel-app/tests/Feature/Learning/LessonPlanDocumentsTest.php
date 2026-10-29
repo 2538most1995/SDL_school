@@ -91,7 +91,7 @@ final class LessonPlanDocumentsTest extends TestCase
         $this->assertDatabaseHas('learning_lesson_plans', ['id' => $id, 'subject' => 'พว31001', 'level' => '3', 'file_url' => '']);
         $other = User::factory()->create(['role' => 'teacher', 'district_id' => $this->district->id]);
         Sanctum::actingAs($other);
-        $this->patchJson("/api/v1/learning/lesson-plans/{$id}", ['title' => 'เปลี่ยนเจ้าของไม่ได้'])->assertNotFound();
+        $this->patchJson("/api/v1/learning/lesson-plans/{$id}", ['title' => 'เปลี่ยนเจ้าของไม่ได้'])->assertForbidden();
         Sanctum::actingAs(User::factory()->create(['role' => 'admin', 'district_id' => $this->district->id]));
         $url = 'https://tenant.sharepoint.com/plan.pdf?token='.str_repeat('a', 600);
         $this->patchJson("/api/v1/learning/lesson-plans/{$id}", [
@@ -183,7 +183,9 @@ final class LessonPlanDocumentsTest extends TestCase
         $this->get($path.'?district_id='.$other->id)->assertNotFound();
         $this->get($path.'?district_id='.$other->id, ['X-District-Id' => (string) $this->district->id])->assertOk();
         Sanctum::actingAs(User::factory()->create(['role' => 'teacher', 'district_id' => $this->district->id]));
-        $this->get($path.'?district_id='.$this->district->id, ['Range' => 'bytes=0-63'])->assertNotFound();
+        $this->get($path.'?district_id='.$this->district->id)->assertOk();
+        Sanctum::actingAs(User::factory()->create(['role' => 'teacher', 'district_id' => $other->id]));
+        $this->get($path.'?district_id='.$this->district->id)->assertForbidden();
         Sanctum::actingAs(User::factory()->create(['role' => 'admin', 'district_id' => $other->id]));
         $this->get($path.'?district_id='.$this->district->id)->assertForbidden();
         Sanctum::actingAs(User::factory()->create(['role' => 'student', 'district_id' => $this->district->id]));
@@ -246,12 +248,12 @@ final class LessonPlanDocumentsTest extends TestCase
         $id = $this->createPdf();
         $otherTeacher = User::factory()->create(['role' => 'teacher', 'district_id' => $this->district->id]);
         Sanctum::actingAs($otherTeacher);
-        $this->getJson('/api/v1/learning/lesson-plans')->assertOk()->assertJsonCount(0, 'data');
+        $this->getJson('/api/v1/learning/lesson-plans')->assertOk()->assertJsonCount(1, 'data');
         foreach (['file', 'cover'] as $kind) {
-            $this->get("/api/v1/learning/lesson-plans/{$id}/{$kind}")->assertNotFound();
+            $this->get("/api/v1/learning/lesson-plans/{$id}/{$kind}")->assertOk();
         }
-        $this->patchJson("/api/v1/learning/lesson-plans/{$id}", ['title' => 'ขโมยแก้'])->assertNotFound();
-        $this->deleteJson("/api/v1/learning/lesson-plans/{$id}")->assertNotFound();
+        $this->patchJson("/api/v1/learning/lesson-plans/{$id}", ['title' => 'ขโมยแก้'])->assertForbidden();
+        $this->deleteJson("/api/v1/learning/lesson-plans/{$id}")->assertForbidden();
         $otherDistrict = District::create(['name' => 'อื่น', 'code' => 'other', 'is_active' => true]);
         Sanctum::actingAs(User::factory()->create(['role' => 'admin', 'district_id' => $otherDistrict->id]));
         $this->get("/api/v1/learning/lesson-plans/{$id}/file")->assertNotFound();
@@ -394,11 +396,11 @@ final class LessonPlanDocumentsTest extends TestCase
         $otherDistrict = District::create(['name' => 'อื่น', 'code' => 'other', 'is_active' => true]);
         DB::table('learning_lesson_plans')->insert([...$record, 'district_id' => $otherDistrict->id, 'plan_scope' => 'all_subjects']);
         $this->getJson('/api/v1/learning/lesson-plans?plan_scope=all_subjects&education_level=2')
-            ->assertOk()->assertJsonCount(1, 'data')->assertJsonPath('data.0.id', (string) $id);
+            ->assertOk()->assertJsonCount(2, 'data');
         $this->getJson('/api/v1/learning/lesson-plans?plan_scope=all_subjects&education_level=1')->assertOk()->assertJsonCount(0, 'data');
         Sanctum::actingAs($otherTeacher);
-        $this->get("/api/v1/learning/lesson-plans/{$id}/file")->assertNotFound();
-        $this->patchJson("/api/v1/learning/lesson-plans/{$id}", ['plan_scope' => 'all_subjects'])->assertNotFound();
+        $this->get("/api/v1/learning/lesson-plans/{$id}/file")->assertOk();
+        $this->patchJson("/api/v1/learning/lesson-plans/{$id}", ['plan_scope' => 'all_subjects'])->assertForbidden();
     }
 
     public function test_scope_migration_can_be_repeated_and_preserves_existing_subject_plans(): void
@@ -498,6 +500,68 @@ final class LessonPlanDocumentsTest extends TestCase
         $this->assertNotNull($cleared->pdf_path);
         Storage::disk('local')->assertMissing($row->word_path);
         Storage::disk('local')->assertExists($row->pdf_path);
+    }
+
+    public function test_district_admin_and_teachers_can_see_and_use_each_others_lesson_plans_together(): void
+    {
+        $teacherA = User::factory()->create(['name' => 'ครูสมศรี ใจดี', 'role' => 'teacher', 'district_id' => $this->district->id]);
+        $teacherB = User::factory()->create(['name' => 'ครูสมชาย มุ่งมั่น', 'role' => 'teacher', 'district_id' => $this->district->id]);
+        $districtAdmin = User::factory()->create(['name' => 'แอดมินอำเภอ', 'role' => 'admin', 'district_id' => $this->district->id]);
+
+        // Teacher A uploads a plan with PDF and Word
+        Sanctum::actingAs($teacherA);
+        $pdfFile = UploadedFile::fake()->create('plan-a.pdf', 100, 'application/pdf');
+        $wordFile = UploadedFile::fake()->create('plan-a.docx', 150, 'application/vnd.openxmlformats-officedocument.wordprocessingml.document');
+        $cover = UploadedFile::fake()->image('cover-a.jpg', 200, 300);
+        $resA = $this->post('/api/v1/learning/lesson-plans', $this->metadata([
+            'title' => 'แผนการสอนของครูสมศรี',
+            'pdf' => $pdfFile,
+            'word' => $wordFile,
+            'cover_image' => $cover,
+        ]))->assertCreated();
+        $idA = $resA->json('data.id');
+
+        // District Admin uploads a shared plan
+        Sanctum::actingAs($districtAdmin);
+        $resAdmin = $this->post('/api/v1/learning/lesson-plans', $this->metadata([
+            'title' => 'แผนการสอนรวมจากแอดมินอำเภอ',
+            'source_type' => 'link',
+            'external_url' => 'https://drive.google.com/file/d/shared123/view',
+        ]))->assertCreated();
+        $idAdmin = $resAdmin->json('data.id');
+
+        // Teacher B logs in and views lesson plans
+        Sanctum::actingAs($teacherB);
+        $list = $this->getJson('/api/v1/learning/lesson-plans')->assertOk()->json('data');
+        $this->assertCount(2, $list);
+
+        // Teacher B sees Teacher A's plan and Admin's plan
+        $itemA = collect($list)->firstWhere('id', (string) $idA);
+        $itemAdmin = collect($list)->firstWhere('id', (string) $idAdmin);
+        $this->assertNotNull($itemA);
+        $this->assertNotNull($itemAdmin);
+        $this->assertSame('ครูสมศรี ใจดี', $itemA['teacher_name']);
+        $this->assertSame('แอดมินอำเภอ', $itemAdmin['teacher_name']);
+
+        // Teacher B can_edit is false for other users' plans
+        $this->assertFalse($itemA['can_edit']);
+        $this->assertFalse($itemAdmin['can_edit']);
+
+        // Teacher B CAN open and download Teacher A's files
+        $this->get("/api/v1/learning/lesson-plans/{$idA}/file")->assertOk();
+        $this->get("/api/v1/learning/lesson-plans/{$idA}/word")->assertOk();
+        $this->get("/api/v1/learning/lesson-plans/{$idA}/cover")->assertOk();
+
+        // Teacher B CANNOT modify or delete Teacher A's plan
+        $this->patchJson("/api/v1/learning/lesson-plans/{$idA}", ['title' => 'แก้โดยครูสมชาย'])->assertForbidden();
+        $this->deleteJson("/api/v1/learning/lesson-plans/{$idA}")->assertForbidden();
+
+        // District Admin can view AND edit both plans
+        Sanctum::actingAs($districtAdmin);
+        $adminList = $this->getJson('/api/v1/learning/lesson-plans')->assertOk()->json('data');
+        $adminItemA = collect($adminList)->firstWhere('id', (string) $idA);
+        $this->assertTrue($adminItemA['can_edit']);
+        $this->patchJson("/api/v1/learning/lesson-plans/{$idA}", ['title' => 'แอดมินปรับปรุงแผน'])->assertOk();
     }
 }
 

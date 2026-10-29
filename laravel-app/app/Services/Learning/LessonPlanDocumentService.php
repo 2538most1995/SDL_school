@@ -27,10 +27,19 @@ final class LessonPlanDocumentService
         return $row;
     }
 
+    public function rowForWrite(Request $request, int $id, bool $lock = false): object
+    {
+        $row = $this->row($request, $id, $lock);
+        if ($request->user()->role === 'teacher') {
+            abort_if((int) $row->teacher_id !== (int) $request->user()->id, 403, 'คุณไม่มีสิทธิ์แก้ไขแผนการสอนของครูท่านอื่น');
+        }
+
+        return $row;
+    }
+
     private function query(Request $request): Builder
     {
-        return DB::table('learning_lesson_plans')->where('district_id', $this->district($request))
-            ->when($request->user()->role === 'teacher', fn (Builder $query) => $query->where('teacher_id', (int) $request->user()->id));
+        return DB::table('learning_lesson_plans')->where('district_id', $this->district($request));
     }
 
     public function save(Request $request, ?int $id = null): int
@@ -40,7 +49,7 @@ final class LessonPlanDocumentService
         $oldPaths = [];
         try {
             $savedId = DB::transaction(function () use ($request, $id, $columns, &$newPaths, &$oldPaths): int {
-                $row = $id === null ? null : $this->row($request, $id, true);
+                $row = $id === null ? null : $this->rowForWrite($request, $id, true);
                 $values = $this->validated($request, $row, $columns);
                 $metadata = [
                     'title' => $values['title'], 'subject_code' => $values['subject'], 'education_level' => $values['level'],
@@ -252,7 +261,7 @@ final class LessonPlanDocumentService
     {
         $this->assertWrite($request);
         $row = DB::transaction(function () use ($request, $id): object {
-            $row = $this->row($request, $id, true);
+            $row = $this->rowForWrite($request, $id, true);
             $this->query($request)->where('id', $id)->delete();
             $this->audit($request, 'deleted', $id, []);
 

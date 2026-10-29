@@ -369,9 +369,6 @@ final class LegacyPortalReadService
             ->leftJoin('users as teacher', 'teacher.id', '=', 'plan.teacher_id')
             ->where('plan.district_id', $districtId)
             ->selectRaw("plan.*, COALESCE(teacher.name, '') AS teacher_name");
-        if ($viewer->role === 'teacher') {
-            $query->where('plan.teacher_id', (int) $viewer->id);
-        }
         if (isset($filters['plan_scope'])) {
             if ($this->connection()->getSchemaBuilder()->hasColumn('learning_lesson_plans', 'plan_scope')) {
                 if ($filters['plan_scope'] === 'all_subjects') {
