@@ -4,6 +4,7 @@ namespace Tests\Feature\Learning;
 
 use App\Models\District;
 use App\Models\User;
+use App\Services\Learning\LearningSchemaReadiness;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Http\UploadedFile;
 use Illuminate\Support\Facades\DB;
@@ -41,6 +42,78 @@ final class LessonPlanDocumentsTest extends TestCase
             'source_type' => 'pdf', 'pdf' => UploadedFile::fake()->create('แผนการสอน.pdf', 10, 'application/pdf'),
             'cover_image' => UploadedFile::fake()->image('cover.jpg', 160, 220), 'page_count' => 12, ...$extra,
         ]))->assertCreated()->json('data.id');
+    }
+
+    private function adoptLegacyPlanTable(): void
+    {
+        // Reproduce the deployment-owned schema inspected in phpMyAdmin.
+        Schema::drop('learning_lesson_plans');
+        DB::statement("CREATE TABLE learning_lesson_plans (
+            id INTEGER PRIMARY KEY AUTOINCREMENT, district_id INTEGER NOT NULL,
+            title VARCHAR(180) NOT NULL, subject VARCHAR(150) NOT NULL,
+            level VARCHAR(80) NOT NULL DEFAULT '', semester VARCHAR(60) NOT NULL DEFAULT '',
+            objectives TEXT NULL, activities TEXT NULL, assessment TEXT NULL,
+            file_url VARCHAR(500) NOT NULL DEFAULT '', created_by INTEGER NULL,
+            created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+            updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP
+        )");
+        app(LearningSchemaReadiness::class)->ensure();
+        (require database_path('migrations/2026_10_29_000038_add_lesson_plan_documents.php'))->up();
+        (require database_path('migrations/2026_10_29_000039_add_scope_to_lesson_plans.php'))->up();
+    }
+
+    public function test_combined_links_save_on_the_deployed_legacy_schema_with_empty_optional_text(): void
+    {
+        $this->adoptLegacyPlanTable();
+        $url = 'https://1drv.ms/b/c/example/IQC_Demo-Plan_For-All-Subjects?';
+        foreach (['1', '2', '3'] as $level) {
+            $payload = $this->metadata([
+                'plan_scope' => 'all_subjects', 'level' => $level, 'subject' => '',
+                'source_type' => 'link', 'external_url' => $url,
+                'objectives' => '', 'activities' => '', 'assessment' => '',
+            ]);
+            $id = $this->post('/api/v1/learning/lesson-plans', $payload)->assertCreated()->json('data.id');
+            $this->assertDatabaseHas('learning_lesson_plans', [
+                'id' => $id, 'subject' => '', 'subject_code' => '', 'level' => $level,
+                'education_level' => (int) $level, 'semester' => '2/2569', 'academic_term' => '2/2569',
+                'created_by' => $this->teacher->id, 'teacher_id' => $this->teacher->id,
+                'external_url' => $url, 'file_url' => $url, 'objectives' => null,
+            ]);
+        }
+        $this->getJson('/api/v1/learning/lesson-plans?plan_scope=all_subjects')->assertOk()->assertJsonCount(3, 'data');
+    }
+
+    public function test_legacy_alias_updates_preserve_owner_and_long_links_and_private_pdf_access(): void
+    {
+        $this->adoptLegacyPlanTable();
+        $id = $this->createPdf();
+        $this->assertDatabaseHas('learning_lesson_plans', ['id' => $id, 'subject' => 'พว31001', 'level' => '3', 'file_url' => '']);
+        $other = User::factory()->create(['role' => 'teacher', 'district_id' => $this->district->id]);
+        Sanctum::actingAs($other);
+        $this->patchJson("/api/v1/learning/lesson-plans/{$id}", ['title' => 'เปลี่ยนเจ้าของไม่ได้'])->assertNotFound();
+        Sanctum::actingAs(User::factory()->create(['role' => 'admin', 'district_id' => $this->district->id]));
+        $url = 'https://tenant.sharepoint.com/plan.pdf?token='.str_repeat('a', 600);
+        $this->patchJson("/api/v1/learning/lesson-plans/{$id}", [
+            'plan_scope' => 'all_subjects', 'level' => '2', 'semester' => '1/2570',
+            'source_type' => 'link', 'external_url' => $url,
+        ])->assertOk();
+        $this->assertDatabaseHas('learning_lesson_plans', [
+            'id' => $id, 'subject' => '', 'subject_code' => '', 'level' => '2', 'semester' => '1/2570',
+            'external_url' => $url, 'file_url' => '', 'created_by' => $this->teacher->id, 'teacher_id' => $this->teacher->id,
+        ]);
+        $this->patchJson("/api/v1/learning/lesson-plans/{$id}", ['title' => 'แก้ชื่อเท่านั้น'])->assertOk();
+        $this->assertDatabaseHas('learning_lesson_plans', ['id' => $id, 'external_url' => $url]);
+        $this->get("/api/v1/learning/lesson-plans/{$id}/file")->assertNotFound();
+        $this->patchJson("/api/v1/learning/lesson-plans/{$id}", ['source_type' => 'link', 'external_url' => 'javascript:alert(1)'])->assertUnprocessable();
+    }
+
+    public function test_legacy_title_capacity_returns_validation_instead_of_a_database_failure(): void
+    {
+        $this->adoptLegacyPlanTable();
+        $this->postJson('/api/v1/learning/lesson-plans', $this->metadata(['title' => str_repeat('ก', 181)]))
+            ->assertUnprocessable()->assertJsonValidationErrors('title');
+        $this->postJson('/api/v1/learning/lesson-plans', $this->metadata(['title' => str_repeat('ก', 180)]))->assertCreated();
+        $this->assertDatabaseCount('learning_lesson_plans', 1);
     }
 
     public function test_teacher_uploads_pdf_and_cover_and_reads_only_authorized_private_endpoints(): void

@@ -1,5 +1,9 @@
 # SDL School Context
 
+## Lesson-plan writes on adopted tables (2026-10-29)
+
+Production logs confirmed MySQL error 1364: the adopted lesson-plan table requires `subject`, while the document service wrote only `subject_code`. Saves now populate existing `subject`, `level`, `semester`, `created_by` and `file_url` aliases alongside canonical fields in the same transaction. Combined plans use an empty subject, and admin edits preserve the original creator. Authorization, district scope and private storage remain unchanged. The failure was reproduced before the fix using the inspected schema in isolated SQLite; all 17 lesson-plan tests now pass.
+
 ## Combined lesson plans by education level (2026-10-29)
 
 Lesson plans support explicit `plan_scope=subject|all_subjects`. An all-subject plan belongs to one education level (primary, lower secondary or upper secondary) and term, without requiring a course code. The same private PDF/link/cover workflow is retained. Scope and level buttons filter server-side before the 250-record cap; existing plans remain subject plans. Creating from a filtered shelf preselects its scope and level. Migration `2026_10_29_000039_add_scope_to_lesson_plans.php` is required for writes; teacher/district permissions remain unchanged.

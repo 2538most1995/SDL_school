@@ -1,5 +1,9 @@
 # Performance Audit
 
+## Lesson-plan compatibility checks (2026-10-29)
+
+Lesson-plan writes reuse one `Schema::getColumns` result for document readiness, title capacity and legacy alias detection, replacing the former column-list readiness query. No query is added per alias or per row; list/read queries and indexes are unchanged. Regression fixtures reproduce the inspected adopted schema in isolated SQLite. MySQL latency benchmarking is Not verified.
+
 ## Combined lesson-plan scope (2026-10-29)
 
 Optional `plan_scope` and `education_level` filters apply to the existing district/teacher SQL query before the 250-plan cap; no per-card query or copied plan per course is introduced. A regression fixture with 251 newer subject plans confirms an older combined plan remains discoverable. Scope-filtered requests check column availability once for pre-migration compatibility. Existing bounded cover rendering and file limits are unchanged; no new index is added without MySQL plan evidence.

@@ -35,19 +35,20 @@ final class LessonPlanDocumentService
 
     public function save(Request $request, ?int $id = null): int
     {
-        $this->assertWrite($request);
+        $columns = $this->assertWrite($request);
         $newPaths = [];
         $oldPaths = [];
         try {
-            $savedId = DB::transaction(function () use ($request, $id, &$newPaths, &$oldPaths): int {
+            $savedId = DB::transaction(function () use ($request, $id, $columns, &$newPaths, &$oldPaths): int {
                 $row = $id === null ? null : $this->row($request, $id, true);
-                $values = $this->validated($request, $row);
+                $values = $this->validated($request, $row, $columns);
                 $metadata = [
                     'title' => $values['title'], 'subject_code' => $values['subject'], 'education_level' => $values['level'],
                     'plan_scope' => $values['plan_scope'],
                     'academic_term' => $values['semester'], 'objectives' => $values['objectives'] ?? null,
                     'activities' => $values['activities'] ?? null, 'assessment' => $values['assessment'] ?? null,
                     'status' => $values['status'] ?? $row?->status ?? 'published', 'updated_at' => now(),
+                    ...$this->legacyValues($request, $values, $row, $columns),
                 ];
                 $savedId = $id ?? (int) DB::table('learning_lesson_plans')->insertGetId([
                     ...$metadata, 'district_id' => $this->district($request), 'teacher_id' => $request->user()->id, 'created_at' => now(),
@@ -73,11 +74,12 @@ final class LessonPlanDocumentService
         return $savedId;
     }
 
-    private function validated(Request $request, ?object $existing): array
+    private function validated(Request $request, ?object $existing, array $columns): array
     {
         $required = $existing === null ? ['required'] : ['sometimes', 'required'];
+        $titleLimit = $this->stringCapacity($columns['title'] ?? [], 220);
         $values = $request->validate([
-            'title' => [...$required, 'string', 'max:220'], 'subject' => ['sometimes', 'nullable', 'string', 'max:32'],
+            'title' => [...$required, 'string', "max:{$titleLimit}"], 'subject' => ['sometimes', 'nullable', 'string', 'max:32'],
             'plan_scope' => ['sometimes', 'required', Rule::in(['subject', 'all_subjects'])],
             'level' => [...$required, Rule::in(['1', '2', '3'])], 'semester' => [...$required, 'string', 'max:16'],
             'objectives' => ['sometimes', 'nullable', 'string', 'max:10000'],
@@ -89,7 +91,7 @@ final class LessonPlanDocumentService
             'pdf' => ['sometimes', 'nullable', 'file', 'mimes:pdf', 'max:20480'],
             'cover_image' => ['sometimes', 'nullable', 'file', 'image', 'mimes:jpg,jpeg,png', 'max:2048', 'dimensions:min_width=1,min_height=1,max_width=2000,max_height=2000'],
             'page_count' => ['sometimes', 'nullable', 'integer', 'min:1', 'max:10000'],
-        ]);
+        ], ['title.max' => "ชื่อแผนการสอนต้องไม่เกิน {$titleLimit} ตัวอักษร"]);
         $values = [
             'plan_scope' => $existing?->plan_scope ?? 'subject',
             'title' => $existing?->title, 'subject' => $existing?->subject_code, 'level' => $existing?->education_level,
@@ -124,6 +126,35 @@ final class LessonPlanDocumentService
         $values['resolved_source'] = $source;
 
         return $values;
+    }
+
+    private function stringCapacity(array $column, int $maximum): int
+    {
+        return preg_match('/^(?:var)?char\((\d+)\)/i', $column['type'] ?? '', $match)
+            ? min($maximum, (int) $match[1]) : $maximum;
+    }
+
+    private function legacyValues(Request $request, array $values, ?object $row, array $columns): array
+    {
+        // Adopted tables retain these columns, including a required subject
+        // without a default. Keep aliases in the same transaction as canonical
+        // fields; never change an existing creator when an admin edits a plan.
+        $aliases = [
+            'subject' => $values['subject'], 'level' => (string) $values['level'], 'semester' => $values['semester'],
+            'created_by' => $row === null ? $request->user()->id : ($row->created_by ?? $row->teacher_id ?? null),
+        ];
+        if (isset($columns['file_url'])) {
+            $url = match ($values['resolved_source']) {
+                'link' => (string) ($values['external_url'] ?? $row?->external_url ?? ''),
+                'pdf' => '',
+                default => (string) ($row?->file_url ?? ''),
+            };
+            // The full URL lives in external_url. Do not truncate cloud links
+            // or expose a private PDF path to satisfy the old VARCHAR(500).
+            $aliases['file_url'] = mb_strlen($url) <= $this->stringCapacity($columns['file_url'], 2048) ? $url : '';
+        }
+
+        return array_intersect_key($aliases, $columns);
     }
 
     public static function safeExternalUrl(string $url): bool
@@ -228,11 +259,14 @@ final class LessonPlanDocumentService
         abort_unless($request->user() && in_array($request->user()->role, ['teacher', 'admin', 'super_admin'], true) && $this->district($request) > 0, 403);
     }
 
-    private function assertWrite(Request $request): void
+    private function assertWrite(Request $request): array
     {
         $this->assertStaff($request);
         abort_unless(config('system_data.write_enabled'), 503, 'ระบบเขียนข้อมูลยังไม่เปิดใช้งาน');
-        abort_unless(Schema::hasColumns('learning_lesson_plans', [...self::DOCUMENT_COLUMNS, 'plan_scope']), 503, 'กรุณาให้ผู้ดูแลรัน php artisan migrate --force เพื่อเปิดใช้เอกสารแผนการสอน');
+        $columns = array_column(Schema::getColumns('learning_lesson_plans'), null, 'name');
+        abort_unless(array_diff([...self::DOCUMENT_COLUMNS, 'plan_scope'], array_keys($columns)) === [], 503, 'กรุณาให้ผู้ดูแลรัน php artisan migrate --force เพื่อเปิดใช้เอกสารแผนการสอน');
+
+        return $columns;
     }
 
     private function audit(Request $request, string $action, int $id, array $document): void

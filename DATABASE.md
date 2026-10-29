@@ -1,5 +1,9 @@
 # Database Knowledge Base
 
+## Adopted lesson-plan compatibility (2026-10-29)
+
+Read-only production inspection found legacy `subject` VARCHAR(150) NOT NULL without a default, `level` VARCHAR(80), `semester` VARCHAR(60), `file_url` VARCHAR(500), nullable `created_by`, and title VARCHAR(180). No schema change is needed: write only aliases that exist, validate title length against the actual column (up to canonical 220), and retain complete long cloud URLs in canonical `external_url`; an oversized legacy URL alias is empty rather than truncated. Private PDF paths are never copied to `file_url`. Diagnosis did not modify production data or schema.
+
 ## Combined lesson-plan scope (2026-10-29)
 
 Migration `2026_10_29_000039_add_scope_to_lesson_plans.php` adds `learning_lesson_plans.plan_scope` VARCHAR(16), default `subject`. Existing rows remain subject plans. `all_subjects` records retain a required education level and academic term, storing an empty `subject_code` to satisfy adopted NOT NULL schemas without inventing a course. Scope changes/metadata edits preserve existing PDF and cover paths; reads before migration default to subject plans, while writes return an actionable 503. The migration checks column existence and its rollback retains scope/data to avoid relabelling combined records. No index or imported/student-table change and no production migration was run.
