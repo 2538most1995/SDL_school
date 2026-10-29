@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { documentOpenTarget, documentPreview } from '../../resources/js/features/learning/lesson-plans/documentLinks.ts';
+import { documentDownloadUrl, documentOpenTarget, documentPreview } from '../../resources/js/features/learning/lesson-plans/documentLinks.ts';
 
 test('link-only OneDrive and generic documents open directly without a second reader click', () => {
     for (const url of ['https://1drv.ms/b/c/example/IQC_Demo-Plan?e=demo', 'https://school.example.org/plan.pdf']) {
@@ -126,4 +126,50 @@ test('invalid schemes, userinfo, control characters and backslashes are rejected
         '\thttps://drive.google.com/file/d/FILE123/view',
         'https://example.org/doc%0Aname', 'https://example.org/doc%5cname', 'https://example.org/doc%C2%80name',
     ]) assert.equal(documentPreview(value), null, value);
+});
+
+test('documentDownloadUrl converts cloud links to direct download endpoints for PDF and Word', () => {
+    // Google Drive
+    assert.equal(
+        documentDownloadUrl('https://drive.google.com/file/d/file_123/view?usp=sharing&resourcekey=rk_99', 'pdf'),
+        'https://drive.google.com/uc?export=download&id=file_123&resourcekey=rk_99'
+    );
+    assert.equal(
+        documentDownloadUrl('https://drive.google.com/open?id=file_123', 'word'),
+        'https://drive.google.com/uc?export=download&id=file_123'
+    );
+
+    // Google Docs (exports docx for Word, pdf for PDF)
+    assert.equal(
+        documentDownloadUrl('https://docs.google.com/document/d/doc_456/edit?usp=sharing', 'word'),
+        'https://docs.google.com/document/d/doc_456/export?format=docx'
+    );
+    assert.equal(
+        documentDownloadUrl('https://docs.google.com/document/d/doc_456/edit?usp=sharing', 'pdf'),
+        'https://docs.google.com/document/d/doc_456/export?format=pdf'
+    );
+
+    // Google Sheets
+    assert.equal(
+        documentDownloadUrl('https://docs.google.com/spreadsheets/d/sheet_789/edit', 'word'),
+        'https://docs.google.com/spreadsheets/d/sheet_789/export?format=xlsx'
+    );
+
+    // OneDrive
+    assert.equal(
+        documentDownloadUrl('https://1drv.ms/b/s!demo123', 'pdf'),
+        'https://1drv.ms/b/s!demo123?download=1'
+    );
+
+    // Dropbox
+    assert.equal(
+        documentDownloadUrl('https://www.dropbox.com/s/sample/plan.docx?dl=0', 'word'),
+        'https://www.dropbox.com/s/sample/plan.docx?dl=1'
+    );
+
+    // Generic direct file URL
+    assert.equal(
+        documentDownloadUrl('https://example.com/plan.pdf', 'pdf'),
+        'https://example.com/plan.pdf'
+    );
 });

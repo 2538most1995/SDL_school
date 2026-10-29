@@ -19,6 +19,79 @@ export function documentOpenTarget(value: string, hasPdf: boolean): DocumentOpen
     return { kind: 'details' };
 }
 
+/**
+ * Convert document/cloud links to immediate direct download URLs so clicking
+ * the PDF or DOC icon starts downloading directly instead of opening a reader.
+ */
+export function documentDownloadUrl(value: string, format: 'pdf' | 'word' = 'pdf'): string {
+    const source = safeUrl(value);
+    if (!source) return value;
+    const host = source.hostname.toLowerCase();
+
+    // 1. Google Drive direct download
+    if (host === 'drive.google.com') {
+        const match = source.pathname.match(/^\/file\/(?:u\/\d+\/)?d\/([A-Za-z0-9_-]+)/);
+        const queryId = /^\/(?:open|uc)\/?$/.test(source.pathname) ? source.searchParams.get('id') : null;
+        const id = match?.[1] ?? (queryId && fileId.test(queryId) ? queryId : null);
+        if (id) {
+            const dl = new URL('https://drive.google.com/uc');
+            dl.searchParams.set('export', 'download');
+            dl.searchParams.set('id', id);
+            for (const key of ['resourcekey', 'authuser']) {
+                const val = source.searchParams.get(key);
+                if (val) dl.searchParams.set(key, val);
+            }
+            return dl.href;
+        }
+    }
+
+    // 2. Google Docs / Sheets / Slides export
+    if (host === 'docs.google.com') {
+        const native = source.pathname.match(/^\/(document|spreadsheets|presentation)\/(?:u\/\d+\/)?d\/([A-Za-z0-9_-]+)/);
+        if (native) {
+            const kind = native[1];
+            const id = native[2];
+            const dl = new URL(`/${kind}/d/${id}/export`, source.origin);
+            if (kind === 'document') {
+                dl.searchParams.set('format', format === 'pdf' ? 'pdf' : 'docx');
+            } else if (kind === 'spreadsheets') {
+                dl.searchParams.set('format', format === 'pdf' ? 'pdf' : 'xlsx');
+            } else if (kind === 'presentation') {
+                dl.searchParams.set('format', format === 'pdf' ? 'pdf' : 'pptx');
+            }
+            for (const key of ['resourcekey', 'authuser']) {
+                const val = source.searchParams.get(key);
+                if (val) dl.searchParams.set(key, val);
+            }
+            return dl.href;
+        }
+    }
+
+    // 3. OneDrive direct download
+    if (host === 'onedrive.live.com' || host === 'onedrive.com' || host === '1drv.ms') {
+        try {
+            const dl = new URL(source.href);
+            dl.searchParams.set('download', '1');
+            return dl.href;
+        } catch {
+            return source.href;
+        }
+    }
+
+    // 4. Dropbox direct download
+    if (host === 'dropbox.com' || host === 'www.dropbox.com') {
+        try {
+            const dl = new URL(source.href);
+            dl.searchParams.set('dl', '1');
+            return dl.href;
+        } catch {
+            return source.href;
+        }
+    }
+
+    return source.href;
+}
+
 const fileId = /^[A-Za-z0-9_-]+$/;
 
 function safeUrl(value: string): URL | null {
