@@ -389,7 +389,8 @@ final class LegacyPortalReadService
             $pdf = (string) ($row->pdf_path ?? '');
             $word = (string) ($row->word_path ?? '');
             $cover = (string) ($row->cover_path ?? '');
-            $source = $external !== '' ? 'link' : ($pdf !== '' ? 'pdf' : ($word !== '' ? 'word' : 'legacy'));
+            $wordUrl = (string) ($row->word_url ?? '');
+            $source = ($external !== '' || $wordUrl !== '') ? 'link' : ($pdf !== '' ? 'pdf' : ($word !== '' ? 'word' : 'legacy'));
             $scope = ($row->plan_scope ?? 'subject') === 'all_subjects' ? 'all_subjects' : 'subject';
 
             return [
@@ -405,7 +406,7 @@ final class LegacyPortalReadService
                 'external_url' => $external,
                 'source_type' => $source,
                 'file_url' => $pdf === '' ? null : '/api/v1/learning/lesson-plans/'.$row->id.'/file?v='.substr(hash('sha256', $pdf), 0, 12),
-                'word_url' => $word === '' ? null : '/api/v1/learning/lesson-plans/'.$row->id.'/word?v='.substr(hash('sha256', $word), 0, 12),
+                'word_url' => $wordUrl !== '' ? $wordUrl : ($word === '' ? null : '/api/v1/learning/lesson-plans/'.$row->id.'/word?v='.substr(hash('sha256', $word), 0, 12)),
                 'cover_url' => $cover === '' ? null : '/api/v1/learning/lesson-plans/'.$row->id.'/cover?v='.substr(hash('sha256', $cover), 0, 12),
                 'filename' => (string) ($row->pdf_original_name ?? ''),
                 'file_size' => isset($row->pdf_size) ? (int) $row->pdf_size : null,
@@ -417,7 +418,7 @@ final class LegacyPortalReadService
                     'title' => (string) $row->title, 'subject' => (string) ($row->subject_code ?? ''), 'plan_scope' => $scope,
                     'level' => (string) ($row->education_level ?? ''), 'semester' => (string) ($row->academic_term ?? ''),
                     'objectives' => (string) ($row->objectives ?? ''), 'activities' => (string) ($row->activities ?? ''),
-                    'assessment' => (string) ($row->assessment ?? ''), 'external_url' => $external, 'source_type' => $source,
+                    'assessment' => (string) ($row->assessment ?? ''), 'external_url' => $external, 'word_url' => $wordUrl, 'source_type' => $source,
                 ],
             ];
         })->all();

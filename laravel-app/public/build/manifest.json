@@ -23,32 +23,32 @@
       "_IconBase.es-LIxIdtTl.js"
     ]
   },
-  "_AssignmentWorkspacePage-CEZTfPCJ.css": {
-    "file": "assets/AssignmentWorkspacePage-CEZTfPCJ.css",
-    "src": "_AssignmentWorkspacePage-CEZTfPCJ.css"
-  },
-  "_AssignmentWorkspacePage-DshpTTdk.js": {
-    "file": "assets/AssignmentWorkspacePage-DshpTTdk.js",
+  "_AssignmentWorkspacePage-BCYDjbxN.js": {
+    "file": "assets/AssignmentWorkspacePage-BCYDjbxN.js",
     "name": "AssignmentWorkspacePage",
     "imports": [
       "_rolldown-runtime-QTnfLwEv.js",
       "_IconBase.es-LIxIdtTl.js",
       "_useMutation-m0hi7820.js",
       "_FileImage.es-J1YMrJ4t.js",
-      "_QueryState-Bbbzylh9.js",
+      "_QueryState-wzo_AQDE.js",
       "_ArrowsClockwise.es-W3hhIP0t.js",
       "_DownloadSimple.es-BlklCyTG.js",
       "_PencilSimple.es-DK31cjvz.js",
       "_Plus.es-BC6mSqTw.js",
       "_Trash.es-DlAZsXpX.js",
       "resources/js/app.tsx",
-      "_PageHeader-4HvCuSqd.js",
+      "_PageHeader-CZlNGpuy.js",
       "_api-Dt6DD-F1.js",
       "_FileTypeIcon-BAuJc9Yo.js"
     ],
     "css": [
       "assets/AssignmentWorkspacePage-CEZTfPCJ.css"
     ]
+  },
+  "_AssignmentWorkspacePage-CEZTfPCJ.css": {
+    "file": "assets/AssignmentWorkspacePage-CEZTfPCJ.css",
+    "src": "_AssignmentWorkspacePage-CEZTfPCJ.css"
   },
   "_Check.es-cgkGZF8G.js": {
     "file": "assets/Check.es-cgkGZF8G.js",
@@ -58,14 +58,14 @@
       "_IconBase.es-LIxIdtTl.js"
     ]
   },
-  "_DataTable-BUXuO5Rr.js": {
-    "file": "assets/DataTable-BUXuO5Rr.js",
+  "_DataTable-DpVlTtJy.js": {
+    "file": "assets/DataTable-DpVlTtJy.js",
     "name": "DataTable",
     "imports": [
       "_rolldown-runtime-QTnfLwEv.js",
       "_IconBase.es-LIxIdtTl.js",
-      "_QueryState-Bbbzylh9.js",
-      "_Pagination-Do_5n6M0.js",
+      "_QueryState-wzo_AQDE.js",
+      "_Pagination-CtLxTbcu.js",
       "resources/js/app.tsx",
       "_excel-DNPN8rVg.js",
       "_FileTypeIcon-BAuJc9Yo.js"
@@ -149,16 +149,16 @@
       "_IconBase.es-LIxIdtTl.js"
     ]
   },
-  "_PageHeader-4HvCuSqd.js": {
-    "file": "assets/PageHeader-4HvCuSqd.js",
+  "_PageHeader-CZlNGpuy.js": {
+    "file": "assets/PageHeader-CZlNGpuy.js",
     "name": "PageHeader",
     "imports": [
       "_IconBase.es-LIxIdtTl.js",
       "resources/js/app.tsx"
     ]
   },
-  "_Pagination-Do_5n6M0.js": {
-    "file": "assets/Pagination-Do_5n6M0.js",
+  "_Pagination-CtLxTbcu.js": {
+    "file": "assets/Pagination-CtLxTbcu.js",
     "name": "Pagination",
     "imports": [
       "_rolldown-runtime-QTnfLwEv.js",
@@ -213,8 +213,8 @@
       "_IconBase.es-LIxIdtTl.js"
     ]
   },
-  "_QueryState-Bbbzylh9.js": {
-    "file": "assets/QueryState-Bbbzylh9.js",
+  "_QueryState-wzo_AQDE.js": {
+    "file": "assets/QueryState-wzo_AQDE.js",
     "name": "QueryState",
     "imports": [
       "_rolldown-runtime-QTnfLwEv.js",
@@ -293,14 +293,14 @@
     "file": "assets/preload-helper-HclGiUj8.js",
     "name": "preload-helper"
   },
-  "_registrationStatisticsExport-Ci9Ekjyr.js": {
-    "file": "assets/registrationStatisticsExport-Ci9Ekjyr.js",
+  "_registrationStatisticsExport-BNXqzY4u.js": {
+    "file": "assets/registrationStatisticsExport-BNXqzY4u.js",
     "name": "registrationStatisticsExport",
     "imports": [
       "_rolldown-runtime-QTnfLwEv.js",
       "_IconBase.es-LIxIdtTl.js",
       "_preload-helper-HclGiUj8.js",
-      "_QueryState-Bbbzylh9.js",
+      "_QueryState-wzo_AQDE.js",
       "_ArrowsClockwise.es-W3hhIP0t.js",
       "resources/js/app.tsx",
       "_StatusBadge-BQoGj5uf.js",
@@ -540,7 +540,7 @@
     "src": "node_modules/pdfjs-dist/build/pdf.worker.min.mjs"
   },
   "resources/css/app.css": {
-    "file": "assets/app-BLlXNmV-.css",
+    "file": "assets/app-BRzq-1D7.css",
     "name": "app",
     "names": [
       "app.css"
@@ -599,7 +599,7 @@
     ]
   },
   "resources/js/app.tsx": {
-    "file": "assets/app-CD7Nz3-H.js",
+    "file": "assets/app-DThm_npj.js",
     "name": "app",
     "src": "resources/js/app.tsx",
     "isEntry": true,
@@ -636,7 +636,7 @@
     ]
   },
   "resources/js/features/admin/AnnouncementsPage.tsx": {
-    "file": "assets/AnnouncementsPage-C4eyWNQG.js",
+    "file": "assets/AnnouncementsPage-Bxb8yVlR.js",
     "name": "AnnouncementsPage",
     "src": "resources/js/features/admin/AnnouncementsPage.tsx",
     "isDynamicEntry": true,
@@ -644,7 +644,7 @@
       "_rolldown-runtime-QTnfLwEv.js",
       "_IconBase.es-LIxIdtTl.js",
       "_useMutation-m0hi7820.js",
-      "_QueryState-Bbbzylh9.js",
+      "_QueryState-wzo_AQDE.js",
       "_FloppyDisk.es-CW6OSI75.js",
       "_Image.es-BC8Qigc0.js",
       "_PencilSimple.es-DK31cjvz.js",
@@ -652,14 +652,14 @@
       "_Trash.es-DlAZsXpX.js",
       "_api-BgR7YpKw.js",
       "resources/js/app.tsx",
-      "_PageHeader-4HvCuSqd.js",
+      "_PageHeader-CZlNGpuy.js",
       "_Panel-Ct7m3jXv.js",
       "_StatusBadge-BQoGj5uf.js",
       "_api-Dt6DD-F1.js"
     ]
   },
   "resources/js/features/admin/NavigationPage.tsx": {
-    "file": "assets/NavigationPage-BOFz_w-c.js",
+    "file": "assets/NavigationPage-Bgj-s3Qy.js",
     "name": "NavigationPage",
     "src": "resources/js/features/admin/NavigationPage.tsx",
     "isDynamicEntry": true,
@@ -676,7 +676,7 @@
     ]
   },
   "resources/js/features/admin/PublicRelationsPage.tsx": {
-    "file": "assets/PublicRelationsPage-B5LkiOgp.js",
+    "file": "assets/PublicRelationsPage-DnOIOZe1.js",
     "name": "PublicRelationsPage",
     "src": "resources/js/features/admin/PublicRelationsPage.tsx",
     "isDynamicEntry": true,
@@ -684,7 +684,7 @@
       "_rolldown-runtime-QTnfLwEv.js",
       "_IconBase.es-LIxIdtTl.js",
       "_useMutation-m0hi7820.js",
-      "_QueryState-Bbbzylh9.js",
+      "_QueryState-wzo_AQDE.js",
       "_FloppyDisk.es-CW6OSI75.js",
       "_Image.es-BC8Qigc0.js",
       "_PencilSimple.es-DK31cjvz.js",
@@ -692,14 +692,14 @@
       "_Trash.es-DlAZsXpX.js",
       "_api-BgR7YpKw.js",
       "resources/js/app.tsx",
-      "_PageHeader-4HvCuSqd.js",
+      "_PageHeader-CZlNGpuy.js",
       "_Panel-Ct7m3jXv.js",
       "_StatusBadge-BQoGj5uf.js",
       "_api-Dt6DD-F1.js"
     ]
   },
   "resources/js/features/admin/StudentMenuPage.tsx": {
-    "file": "assets/StudentMenuPage-fZtHk3Oj.js",
+    "file": "assets/StudentMenuPage-C6ybDWur.js",
     "name": "StudentMenuPage",
     "src": "resources/js/features/admin/StudentMenuPage.tsx",
     "isDynamicEntry": true,
@@ -718,7 +718,7 @@
     ]
   },
   "resources/js/features/admin/index.tsx": {
-    "file": "assets/admin-DOjhIdEv.js",
+    "file": "assets/admin-DTZyT-Pj.js",
     "name": "admin",
     "src": "resources/js/features/admin/index.tsx",
     "isDynamicEntry": true,
@@ -726,8 +726,8 @@
       "_rolldown-runtime-QTnfLwEv.js",
       "_IconBase.es-LIxIdtTl.js",
       "_useMutation-m0hi7820.js",
-      "_DataTable-BUXuO5Rr.js",
-      "_QueryState-Bbbzylh9.js",
+      "_DataTable-DpVlTtJy.js",
+      "_QueryState-wzo_AQDE.js",
       "_DownloadSimple.es-BlklCyTG.js",
       "_FloppyDisk.es-CW6OSI75.js",
       "_ImageSquare.es-D-uufNyy.js",
@@ -737,14 +737,14 @@
       "_Trash.es-DlAZsXpX.js",
       "_Warning.es-DtU5aL2k.js",
       "resources/js/app.tsx",
-      "_PageHeader-4HvCuSqd.js",
+      "_PageHeader-CZlNGpuy.js",
       "_Panel-Ct7m3jXv.js",
       "_StatusBadge-BQoGj5uf.js",
       "_api-Dt6DD-F1.js"
     ]
   },
   "resources/js/features/learning/CourseRegistrationPage.tsx": {
-    "file": "assets/CourseRegistrationPage-GdfJRP2D.js",
+    "file": "assets/CourseRegistrationPage-DDC4pz1n.js",
     "name": "CourseRegistrationPage",
     "src": "resources/js/features/learning/CourseRegistrationPage.tsx",
     "isDynamicEntry": true,
@@ -752,8 +752,8 @@
       "_rolldown-runtime-QTnfLwEv.js",
       "_IconBase.es-LIxIdtTl.js",
       "_useMutation-m0hi7820.js",
-      "_DataTable-BUXuO5Rr.js",
-      "_QueryState-Bbbzylh9.js",
+      "_DataTable-DpVlTtJy.js",
+      "_QueryState-wzo_AQDE.js",
       "_Check.es-cgkGZF8G.js",
       "_FloppyDisk.es-CW6OSI75.js",
       "_FunnelSimpleX.es-BgSsxA_L.js",
@@ -762,7 +762,7 @@
       "_Trash.es-DlAZsXpX.js",
       "_Warning.es-DtU5aL2k.js",
       "resources/js/app.tsx",
-      "_PageHeader-4HvCuSqd.js",
+      "_PageHeader-CZlNGpuy.js",
       "_Panel-Ct7m3jXv.js",
       "_StatusBadge-BQoGj5uf.js",
       "_api-Dt6DD-F1.js",
@@ -772,7 +772,7 @@
     ]
   },
   "resources/js/features/learning/ExamAttendanceCheckPage.tsx": {
-    "file": "assets/ExamAttendanceCheckPage-tTYd60nQ.js",
+    "file": "assets/ExamAttendanceCheckPage-nr8pRSm1.js",
     "name": "ExamAttendanceCheckPage",
     "src": "resources/js/features/learning/ExamAttendanceCheckPage.tsx",
     "isDynamicEntry": true,
@@ -780,12 +780,12 @@
       "_rolldown-runtime-QTnfLwEv.js",
       "_IconBase.es-LIxIdtTl.js",
       "_useMutation-m0hi7820.js",
-      "_DataTable-BUXuO5Rr.js",
-      "_QueryState-Bbbzylh9.js",
+      "_DataTable-DpVlTtJy.js",
+      "_QueryState-wzo_AQDE.js",
       "_FloppyDisk.es-CW6OSI75.js",
       "_Prohibit.es-D6yBVQvQ.js",
       "resources/js/app.tsx",
-      "_PageHeader-4HvCuSqd.js",
+      "_PageHeader-CZlNGpuy.js",
       "_Panel-Ct7m3jXv.js",
       "_StatusBadge-BQoGj5uf.js",
       "_api-Dt6DD-F1.js",
@@ -793,7 +793,7 @@
     ]
   },
   "resources/js/features/learning/LessonPlansPage.tsx": {
-    "file": "assets/LessonPlansPage-DA30cUQc.js",
+    "file": "assets/LessonPlansPage-BT2ns_e9.js",
     "name": "LessonPlansPage",
     "src": "resources/js/features/learning/LessonPlansPage.tsx",
     "isDynamicEntry": true,
@@ -804,7 +804,7 @@
       "_DialogTitle-Bk32Yvk3.js",
       "_FileImage.es-J1YMrJ4t.js",
       "_preload-helper-HclGiUj8.js",
-      "_QueryState-Bbbzylh9.js",
+      "_QueryState-wzo_AQDE.js",
       "_DownloadSimple.es-BlklCyTG.js",
       "_PencilSimple.es-DK31cjvz.js",
       "_Plus.es-BC6mSqTw.js",
@@ -821,7 +821,7 @@
     ]
   },
   "resources/js/features/learning/OnlineClassroomPage.tsx": {
-    "file": "assets/OnlineClassroomPage-DGc5dv9U.js",
+    "file": "assets/OnlineClassroomPage-CxvR3Zmi.js",
     "name": "OnlineClassroomPage",
     "src": "resources/js/features/learning/OnlineClassroomPage.tsx",
     "isDynamicEntry": true,
@@ -832,8 +832,8 @@
       "_DialogTitle-Bk32Yvk3.js",
       "_FileImage.es-J1YMrJ4t.js",
       "_preload-helper-HclGiUj8.js",
-      "_QueryState-Bbbzylh9.js",
-      "_AssignmentWorkspacePage-DshpTTdk.js",
+      "_QueryState-wzo_AQDE.js",
+      "_AssignmentWorkspacePage-BCYDjbxN.js",
       "_DownloadSimple.es-BlklCyTG.js",
       "_Play.es-Dq_3YPt0.js",
       "_PencilSimple.es-DK31cjvz.js",
@@ -862,7 +862,7 @@
     ]
   },
   "resources/js/features/learning/index.tsx": {
-    "file": "assets/learning-CBNJ92mX.js",
+    "file": "assets/learning-Ckq6wh7x.js",
     "name": "learning",
     "src": "resources/js/features/learning/index.tsx",
     "isDynamicEntry": true,
@@ -871,11 +871,11 @@
       "_IconBase.es-LIxIdtTl.js",
       "_useMutation-m0hi7820.js",
       "_FileImage.es-J1YMrJ4t.js",
-      "_DataTable-BUXuO5Rr.js",
-      "_QueryState-Bbbzylh9.js",
+      "_DataTable-DpVlTtJy.js",
+      "_QueryState-wzo_AQDE.js",
       "_ArrowsClockwise.es-W3hhIP0t.js",
-      "_Pagination-Do_5n6M0.js",
-      "_AssignmentWorkspacePage-DshpTTdk.js",
+      "_Pagination-CtLxTbcu.js",
+      "_AssignmentWorkspacePage-BCYDjbxN.js",
       "_DownloadSimple.es-BlklCyTG.js",
       "_FunnelSimpleX.es-BgSsxA_L.js",
       "_ImageSquare.es-D-uufNyy.js",
@@ -884,7 +884,7 @@
       "_Trash.es-DlAZsXpX.js",
       "_api-BgR7YpKw.js",
       "resources/js/app.tsx",
-      "_PageHeader-4HvCuSqd.js",
+      "_PageHeader-CZlNGpuy.js",
       "_Panel-Ct7m3jXv.js",
       "_StatusBadge-BQoGj5uf.js",
       "_api-Dt6DD-F1.js",
@@ -906,16 +906,16 @@
     ]
   },
   "resources/js/features/nnet/index.ts": {
-    "file": "assets/nnet-1Qp6DFrm.js",
+    "file": "assets/nnet-BP--uSz-.js",
     "name": "nnet",
     "src": "resources/js/features/nnet/index.ts",
     "isDynamicEntry": true,
     "imports": [
       "_rolldown-runtime-QTnfLwEv.js",
       "_IconBase.es-LIxIdtTl.js",
-      "_QueryState-Bbbzylh9.js",
+      "_QueryState-wzo_AQDE.js",
       "_ArrowsClockwise.es-W3hhIP0t.js",
-      "_Pagination-Do_5n6M0.js",
+      "_Pagination-CtLxTbcu.js",
       "_FunnelSimple.es-De_mkT37.js",
       "_Printer.es-CwXXKWxb.js",
       "_PencilSimple.es-DK31cjvz.js",
@@ -925,7 +925,7 @@
       "_api-BgR7YpKw.js",
       "resources/js/app.tsx",
       "_sweetalert2.all-C4n5Y0SJ.js",
-      "_PageHeader-4HvCuSqd.js",
+      "_PageHeader-CZlNGpuy.js",
       "_Panel-Ct7m3jXv.js",
       "_StatusBadge-BQoGj5uf.js",
       "_api-Dt6DD-F1.js",
@@ -936,66 +936,66 @@
     ]
   },
   "resources/js/features/publicRelations/PublicRelationsPage.tsx": {
-    "file": "assets/PublicRelationsPage-CzLMvBuA.js",
+    "file": "assets/PublicRelationsPage-BagDAOph.js",
     "name": "PublicRelationsPage",
     "src": "resources/js/features/publicRelations/PublicRelationsPage.tsx",
     "isDynamicEntry": true,
     "imports": [
       "_rolldown-runtime-QTnfLwEv.js",
       "_IconBase.es-LIxIdtTl.js",
-      "_QueryState-Bbbzylh9.js",
+      "_QueryState-wzo_AQDE.js",
       "_Image.es-BC8Qigc0.js",
       "_api-BgR7YpKw.js",
       "resources/js/app.tsx",
-      "_PageHeader-4HvCuSqd.js"
+      "_PageHeader-CZlNGpuy.js"
     ]
   },
   "resources/js/features/reports/ExamEligibleStudentsPage.tsx": {
-    "file": "assets/ExamEligibleStudentsPage-DHGy2cvo.js",
+    "file": "assets/ExamEligibleStudentsPage-D3p4KKY3.js",
     "name": "ExamEligibleStudentsPage",
     "src": "resources/js/features/reports/ExamEligibleStudentsPage.tsx",
     "isDynamicEntry": true,
     "imports": [
       "_rolldown-runtime-QTnfLwEv.js",
       "_IconBase.es-LIxIdtTl.js",
-      "_DataTable-BUXuO5Rr.js",
-      "_QueryState-Bbbzylh9.js",
+      "_DataTable-DpVlTtJy.js",
+      "_QueryState-wzo_AQDE.js",
       "_FunnelSimple.es-De_mkT37.js",
       "_Prohibit.es-D6yBVQvQ.js",
       "resources/js/app.tsx",
-      "_PageHeader-4HvCuSqd.js",
+      "_PageHeader-CZlNGpuy.js",
       "_Panel-Ct7m3jXv.js",
       "_api-Dt6DD-F1.js",
       "_StatGrid-XjoimQdr.js"
     ]
   },
   "resources/js/features/reports/RegistrationStatisticsPage.tsx": {
-    "file": "assets/RegistrationStatisticsPage-Dq-MlovA.js",
+    "file": "assets/RegistrationStatisticsPage-D6V0ESQ4.js",
     "name": "RegistrationStatisticsPage",
     "src": "resources/js/features/reports/RegistrationStatisticsPage.tsx",
     "isDynamicEntry": true,
     "imports": [
       "_rolldown-runtime-QTnfLwEv.js",
       "_IconBase.es-LIxIdtTl.js",
-      "_DataTable-BUXuO5Rr.js",
+      "_DataTable-DpVlTtJy.js",
       "_preload-helper-HclGiUj8.js",
-      "_QueryState-Bbbzylh9.js",
+      "_QueryState-wzo_AQDE.js",
       "_FunnelSimple.es-De_mkT37.js",
       "resources/js/app.tsx",
-      "_PageHeader-4HvCuSqd.js",
+      "_PageHeader-CZlNGpuy.js",
       "_Panel-Ct7m3jXv.js",
       "_api-Dt6DD-F1.js",
       "_FileTypeIcon-BAuJc9Yo.js",
       "_StatGrid-XjoimQdr.js",
       "_filterOptions-G6x7dCET.js",
-      "_registrationStatisticsExport-Ci9Ekjyr.js"
+      "_registrationStatisticsExport-BNXqzY4u.js"
     ],
     "dynamicImports": [
       "_excel-DNPN8rVg.js"
     ]
   },
   "resources/js/features/reports/StatisticsOverviewPage.tsx": {
-    "file": "assets/StatisticsOverviewPage-D0imOMtK.js",
+    "file": "assets/StatisticsOverviewPage-4I8iBanm.js",
     "name": "StatisticsOverviewPage",
     "src": "resources/js/features/reports/StatisticsOverviewPage.tsx",
     "isDynamicEntry": true,
@@ -1004,34 +1004,34 @@
       "_IconBase.es-LIxIdtTl.js",
       "_useMutation-m0hi7820.js",
       "_preload-helper-HclGiUj8.js",
-      "_QueryState-Bbbzylh9.js",
+      "_QueryState-wzo_AQDE.js",
       "_Play.es-Dq_3YPt0.js",
       "_FloppyDisk.es-CW6OSI75.js",
       "_Printer.es-CwXXKWxb.js",
       "_Trash.es-DlAZsXpX.js",
       "_api-BgR7YpKw.js",
       "resources/js/app.tsx",
-      "_PageHeader-4HvCuSqd.js",
+      "_PageHeader-CZlNGpuy.js",
       "_api-Dt6DD-F1.js",
       "_FileTypeIcon-BAuJc9Yo.js",
-      "_registrationStatisticsExport-Ci9Ekjyr.js"
+      "_registrationStatisticsExport-BNXqzY4u.js"
     ],
     "dynamicImports": [
       "_excel-DNPN8rVg.js"
     ]
   },
   "resources/js/features/reports/index.tsx": {
-    "file": "assets/reports-h2RcarYz.js",
+    "file": "assets/reports-Bk6QZg7L.js",
     "name": "reports",
     "src": "resources/js/features/reports/index.tsx",
     "isDynamicEntry": true,
     "imports": [
       "_rolldown-runtime-QTnfLwEv.js",
       "_IconBase.es-LIxIdtTl.js",
-      "_DataTable-BUXuO5Rr.js",
-      "_QueryState-Bbbzylh9.js",
+      "_DataTable-DpVlTtJy.js",
+      "_QueryState-wzo_AQDE.js",
       "resources/js/app.tsx",
-      "_PageHeader-4HvCuSqd.js",
+      "_PageHeader-CZlNGpuy.js",
       "_Panel-Ct7m3jXv.js",
       "_StatusBadge-BQoGj5uf.js",
       "_api-Dt6DD-F1.js",
@@ -1040,7 +1040,7 @@
     ]
   },
   "resources/js/features/settings/index.tsx": {
-    "file": "assets/settings-z5krvv0L.js",
+    "file": "assets/settings-D6sGcoMb.js",
     "name": "settings",
     "src": "resources/js/features/settings/index.tsx",
     "isDynamicEntry": true,
@@ -1048,7 +1048,7 @@
       "_rolldown-runtime-QTnfLwEv.js",
       "_IconBase.es-LIxIdtTl.js",
       "_useMutation-m0hi7820.js",
-      "_QueryState-Bbbzylh9.js",
+      "_QueryState-wzo_AQDE.js",
       "_ArrowCounterClockwise.es-wGlD8y8y.js",
       "_Check.es-cgkGZF8G.js",
       "_Image.es-BC8Qigc0.js",
@@ -1056,26 +1056,26 @@
       "_Trash.es-DlAZsXpX.js",
       "_api-BgR7YpKw.js",
       "resources/js/app.tsx",
-      "_PageHeader-4HvCuSqd.js",
+      "_PageHeader-CZlNGpuy.js",
       "_Panel-Ct7m3jXv.js",
       "_StatusBadge-BQoGj5uf.js",
       "_api-Dt6DD-F1.js"
     ]
   },
   "resources/js/features/students/index.tsx": {
-    "file": "assets/students-CPlefxMp.js",
+    "file": "assets/students-BpLNMtGz.js",
     "name": "students",
     "src": "resources/js/features/students/index.tsx",
     "isDynamicEntry": true,
     "imports": [
       "_rolldown-runtime-QTnfLwEv.js",
       "_IconBase.es-LIxIdtTl.js",
-      "_DataTable-BUXuO5Rr.js",
-      "_QueryState-Bbbzylh9.js",
-      "_Pagination-Do_5n6M0.js",
+      "_DataTable-DpVlTtJy.js",
+      "_QueryState-wzo_AQDE.js",
+      "_Pagination-CtLxTbcu.js",
       "_PencilSimple.es-DK31cjvz.js",
       "resources/js/app.tsx",
-      "_PageHeader-4HvCuSqd.js",
+      "_PageHeader-CZlNGpuy.js",
       "_Panel-Ct7m3jXv.js",
       "_StatusBadge-BQoGj5uf.js",
       "_api-Dt6DD-F1.js",

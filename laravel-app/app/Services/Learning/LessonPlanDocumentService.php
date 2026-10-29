@@ -16,7 +16,7 @@ use Throwable;
 
 final class LessonPlanDocumentService
 {
-    private const DOCUMENT_COLUMNS = ['external_url', 'pdf_path', 'pdf_original_name', 'pdf_size', 'word_path', 'word_original_name', 'word_size', 'cover_path', 'page_count'];
+    private const DOCUMENT_COLUMNS = ['external_url', 'word_url', 'pdf_path', 'pdf_original_name', 'pdf_size', 'word_path', 'word_original_name', 'word_size', 'cover_path', 'page_count'];
 
     public function row(Request $request, int $id, bool $lock = false): object
     {
@@ -97,6 +97,7 @@ final class LessonPlanDocumentService
             'status' => ['sometimes', Rule::in(['draft', 'published'])],
             'source_type' => ['sometimes', Rule::in(['link', 'pdf', 'word'])],
             'external_url' => ['sometimes', 'nullable', 'string', 'url:http,https', 'max:2048'],
+            'word_url' => ['sometimes', 'nullable', 'string', 'url:http,https', 'max:2048'],
             'pdf' => ['sometimes', 'nullable', 'file', 'mimes:pdf', 'max:20480'],
             'word' => ['sometimes', 'nullable', 'file', 'mimes:doc,docx', 'max:30720'],
             'cover_image' => ['sometimes', 'nullable', 'file', 'image', 'mimes:jpg,jpeg,png,webp', 'max:2048', 'dimensions:min_width=1,min_height=1,max_width=2000,max_height=2000'],
@@ -122,9 +123,13 @@ final class LessonPlanDocumentService
         } elseif (blank($values['subject']) && ($existing === null || ($existing->plan_scope ?? 'subject') !== 'subject' || $request->has('subject'))) {
             throw ValidationException::withMessages(['subject' => 'กรุณาระบุรายวิชาหรือเลือกแผนรวมทุกวิชา']);
         }
-        $url = (string) ($values['external_url'] ?? $existing?->external_url ?? '');
+        $url = (string) ($request->has('external_url') ? ($request->input('external_url') ?? '') : ($existing?->external_url ?? ''));
         if ($url !== '' && ! self::safeExternalUrl($url)) {
             throw ValidationException::withMessages(['external_url' => 'กรุณาใช้ลิงก์ HTTP หรือ HTTPS ที่ไม่มีข้อมูลเข้าสู่ระบบหรืออักขระผิดรูปแบบ']);
+        }
+        $wordUrl = (string) ($request->has('word_url') ? ($request->input('word_url') ?? '') : ($existing?->word_url ?? ''));
+        if ($wordUrl !== '' && ! self::safeExternalUrl($wordUrl)) {
+            throw ValidationException::withMessages(['word_url' => 'กรุณาใช้ลิงก์ Word ที่เป็น HTTP หรือ HTTPS ที่ไม่มีข้อมูลเข้าสู่ระบบหรืออักขระผิดรูปแบบ']);
         }
         if (isset($values['pdf']) && strtolower($values['pdf']->getClientOriginalExtension()) !== 'pdf') {
             throw ValidationException::withMessages(['pdf' => 'ต้องแนบไฟล์นามสกุล PDF เท่านั้น']);
@@ -132,9 +137,10 @@ final class LessonPlanDocumentService
         if (isset($values['word']) && ! in_array(strtolower($values['word']->getClientOriginalExtension()), ['doc', 'docx'], true)) {
             throw ValidationException::withMessages(['word' => 'ต้องแนบไฟล์เอกสาร Word (.doc หรือ .docx) เท่านั้น']);
         }
-        $source = $values['source_type'] ?? ($url !== '' ? 'link' : (isset($values['pdf']) || filled($existing?->pdf_path ?? null) ? 'pdf' : (isset($values['word']) || filled($existing?->word_path ?? null) ? 'word' : null)));
-        if ($source === 'link' && $url === '') {
-            throw ValidationException::withMessages(['external_url' => 'กรุณาระบุลิงก์แผนการสอน']);
+        $hasLink = $url !== '' || $wordUrl !== '';
+        $source = $values['source_type'] ?? ($hasLink ? 'link' : (isset($values['pdf']) || filled($existing?->pdf_path ?? null) ? 'pdf' : (isset($values['word']) || filled($existing?->word_path ?? null) ? 'word' : null)));
+        if ($source === 'link' && ! $hasLink) {
+            throw ValidationException::withMessages(['external_url' => 'กรุณาระบุลิงก์แผนการสอน (PDF หรือ Word)']);
         }
         if ($source === 'pdf' && ! isset($values['pdf']) && ! filled($existing?->pdf_path ?? null)) {
             throw ValidationException::withMessages(['pdf' => 'กรุณาแนบไฟล์ PDF']);
@@ -197,18 +203,27 @@ final class LessonPlanDocumentService
         foreach (self::DOCUMENT_COLUMNS as $column) {
             $document[$column] = $row?->{$column} ?? null;
         }
-        $url = $values['external_url'] ?? $row?->external_url ?? null;
-        $changedLink = $values['resolved_source'] === 'link' && $url !== ($row?->external_url ?? null);
+        $url = $request->has('external_url') ? $request->input('external_url') : ($row?->external_url ?? null);
+        $wordUrl = $request->has('word_url') ? $request->input('word_url') : ($row?->word_url ?? null);
+        $changedLink = $values['resolved_source'] === 'link' && ($url !== ($row?->external_url ?? null) || $wordUrl !== ($row?->word_url ?? null));
         if ($changedLink) {
-            $document['pdf_path'] = null;
-            $document['pdf_original_name'] = null;
-            $document['pdf_size'] = null;
-            $document['cover_path'] = null;
-            $document['page_count'] = null;
+            if ($url !== ($row?->external_url ?? null) && filled($url)) {
+                $document['pdf_path'] = null;
+                $document['pdf_original_name'] = null;
+                $document['pdf_size'] = null;
+                $document['cover_path'] = null;
+                $document['page_count'] = null;
+            }
+            if ($wordUrl !== ($row?->word_url ?? null) && filled($wordUrl)) {
+                $document['word_path'] = null;
+                $document['word_original_name'] = null;
+                $document['word_size'] = null;
+            }
         } elseif (isset($values['pdf'])) {
             $document['cover_path'] = null;
         }
-        $document['external_url'] = $values['resolved_source'] === 'link' ? $url : null;
+        $document['external_url'] = $values['resolved_source'] === 'link' ? (filled($url) ? $url : null) : null;
+        $document['word_url'] = filled($wordUrl) ? $wordUrl : null;
         if ($request->boolean('clear_pdf') || $request->boolean('remove_pdf')) {
             $document['pdf_path'] = null;
             $document['pdf_original_name'] = null;

@@ -21,7 +21,7 @@ type LessonPlan = {
     filename?: string | null; file_size?: number | null;
     page_count?: number | null; plan_scope?: PlanScope; raw: Record<string, string>;
 };
-type Draft = { title: string; subject: string; level: string; semester: string; external_url: string };
+type Draft = { title: string; subject: string; level: string; semester: string; external_url: string; word_url: string };
 const base = '/api/v1/learning/lesson-plans';
 const levels = [{ value: '1', label: 'ประถม' }, { value: '2', label: 'ม.ต้น' }, { value: '3', label: 'ม.ปลาย' }];
 const errorText = (error: unknown) => error instanceof Error ? error.message : 'ดำเนินการไม่สำเร็จ กรุณาลองอีกครั้ง';
@@ -127,27 +127,27 @@ function LessonPlanLibrary({ role, district }: { role: string; district: string 
                 <div className="lesson-plan-card-actions">
                     <PlanOpen plan={plan} read={setReading} />
                     <div className="lesson-plan-card-icons">
-                        {plan.file_url ? (
-                            <Tooltip title={`ดาวน์โหลด PDF (${plan.filename || plan.title})`} arrow>
+                        {(plan.file_url || plan.external_url) ? (
+                            <Tooltip title={plan.file_url ? `ดาวน์โหลด PDF (${plan.filename || plan.title})` : `เปิดดู/ดาวน์โหลด PDF (${plan.title})`} arrow>
                                 <IconButton
                                     size="small"
                                     component="a"
-                                    href={withAppBasePath(lessonPlanFilePath(plan.id, plan.file_url, district, true))}
-                                    download={`${plan.title}.pdf`}
+                                    href={plan.file_url ? withAppBasePath(lessonPlanFilePath(plan.id, plan.file_url, district, true)) : plan.external_url!}
+                                    {...(plan.file_url ? { download: `${plan.title}.pdf` } : { target: '_blank', rel: 'noopener noreferrer' })}
                                     className="lesson-plan-icon-btn lesson-plan-icon-btn--pdf"
-                                    aria-label={`ดาวน์โหลด PDF ${plan.title}`}
+                                    aria-label={`PDF ${plan.title}`}
                                 >
                                     <FilePdf size={17} weight="duotone" />
                                 </IconButton>
                             </Tooltip>
                         ) : (
-                            <Tooltip title="ไม่มีไฟล์ PDF" arrow>
+                            <Tooltip title="ไม่มีไฟล์หรือลิงก์ PDF" arrow>
                                 <span>
                                     <IconButton
                                         size="small"
                                         disabled
                                         className="lesson-plan-icon-btn lesson-plan-icon-btn--pdf lesson-plan-icon-btn--disabled"
-                                        aria-label="ไม่มีไฟล์ PDF"
+                                        aria-label="ไม่มีไฟล์หรือลิงก์ PDF"
                                     >
                                         <FilePdf size={17} />
                                     </IconButton>
@@ -155,26 +155,26 @@ function LessonPlanLibrary({ role, district }: { role: string; district: string 
                             </Tooltip>
                         )}
                         {plan.word_url ? (
-                            <Tooltip title={`ดาวน์โหลด Word (${plan.word_filename || plan.title})`} arrow>
+                            <Tooltip title={`ดาวน์โหลด/เปิด Word (${plan.word_filename || plan.title})`} arrow>
                                 <IconButton
                                     size="small"
                                     component="a"
-                                    href={withAppBasePath(lessonPlanWordPath(plan.id, plan.word_url, district))}
-                                    download={`${plan.title}.${plan.word_filename?.endsWith('.doc') ? 'doc' : 'docx'}`}
+                                    href={plan.word_url.startsWith('http') ? plan.word_url : withAppBasePath(lessonPlanWordPath(plan.id, plan.word_url, district))}
+                                    {...(plan.word_url.startsWith('http') ? { target: '_blank', rel: 'noopener noreferrer' } : { download: `${plan.title}.${plan.word_filename?.endsWith('.doc') ? 'doc' : 'docx'}` })}
                                     className="lesson-plan-icon-btn lesson-plan-icon-btn--word"
-                                    aria-label={`ดาวน์โหลด Word ${plan.title}`}
+                                    aria-label={`Word ${plan.title}`}
                                 >
                                     <FileDoc size={17} weight="duotone" />
                                 </IconButton>
                             </Tooltip>
                         ) : (
-                            <Tooltip title="ไม่มีไฟล์ Word" arrow>
+                            <Tooltip title="ไม่มีไฟล์หรือลิงก์ Word" arrow>
                                 <span>
                                     <IconButton
                                         size="small"
                                         disabled
                                         className="lesson-plan-icon-btn lesson-plan-icon-btn--word lesson-plan-icon-btn--disabled"
-                                        aria-label="ไม่มีไฟล์ Word"
+                                        aria-label="ไม่มีไฟล์หรือลิงก์ Word"
                                     >
                                         <FileDoc size={17} />
                                     </IconButton>
@@ -222,7 +222,8 @@ function PlanReader({ plan, close }: { plan: LessonPlan; close: () => void }) {
     const district = window.localStorage.getItem('sena-district-id') ?? '';
     const url = plan.file_url ? withAppBasePath(lessonPlanFilePath(plan.id, plan.file_url, district)) : '';
     const download = plan.file_url ? withAppBasePath(lessonPlanFilePath(plan.id, plan.file_url, district, true)) : '';
-    const wordDownload = plan.word_url ? withAppBasePath(lessonPlanWordPath(plan.id, plan.word_url, district)) : '';
+    const isWordLink = Boolean(plan.word_url?.startsWith('http'));
+    const wordTarget = isWordLink ? plan.word_url! : (plan.word_url ? withAppBasePath(lessonPlanWordPath(plan.id, plan.word_url, district)) : '');
     return <Dialog className="lesson-plan-dialog lesson-plan-reader" open onClose={close} fullWidth maxWidth="lg"><DialogTitle>{plan.title}</DialogTitle><DialogContent>
         <div className="lesson-plan-reader-header-bar">
             {activeExternal ? (
@@ -241,8 +242,21 @@ function PlanReader({ plan, close }: { plan: LessonPlan; close: () => void }) {
                 </>
             ) : null}
         </div>
-        {activeExternal ? <>{activeExternal.embedUrl ? <iframe className="lesson-plan-document" src={activeExternal.embedUrl} title={`แผนการสอน ${plan.title}`} referrerPolicy="no-referrer" sandbox="allow-scripts allow-same-origin allow-forms allow-popups allow-downloads" allowFullScreen /> : <div className="lesson-plan-reader-link"><LinkSimple size={43} /><h3>พร้อมเปิดเอกสารของคุณ</h3><p>ลิงก์นี้เปิดผ่านเว็บไซต์ต้นทางเพื่อความรวดเร็ว</p><Button as="a" appearance="primary" icon={<ArrowSquareOut size={18} />} href={activeExternal.url} target="_blank" rel="noopener noreferrer">เปิดเอกสารต้นทางทันที</Button></div>}</> : !url ? <Alert severity="warning">ไม่มีตัวอย่างแสดงผลออนไลน์ กรุณาดาวน์โหลดเอกสาร PDF หรือ Word เพื่อเปิดอ่าน</Alert> : <iframe className="lesson-plan-document" src={url} title={`แผนการสอน ${plan.title}`} referrerPolicy="same-origin" />}
-    </DialogContent><DialogActions><Button onClick={close}>ปิด</Button>{external && <Button as="a" appearance="primary" icon={<ArrowSquareOut />} href={external.url} target="_blank" rel="noopener noreferrer">เปิดในแท็บใหม่</Button>}{download && <Button as="a" appearance="outline" icon={<DownloadSimple />} href={download} download={`${plan.title}.pdf`}>ดาวน์โหลด PDF</Button>}{wordDownload && <Button as="a" appearance="outline" icon={<DownloadSimple />} href={wordDownload} download={`${plan.title}.${plan.word_filename?.endsWith('.doc') ? 'doc' : 'docx'}`}>ดาวน์โหลด Word</Button>}</DialogActions></Dialog>;
+        {activeExternal ? (
+            <>{activeExternal.embedUrl ? <iframe className="lesson-plan-document" src={activeExternal.embedUrl} title={`แผนการสอน ${plan.title}`} referrerPolicy="no-referrer" sandbox="allow-scripts allow-same-origin allow-forms allow-popups allow-downloads" allowFullScreen /> : <div className="lesson-plan-reader-link"><LinkSimple size={43} /><h3>พร้อมเปิดเอกสารของคุณ</h3><p>ลิงก์นี้เปิดผ่านเว็บไซต์ต้นทางเพื่อความรวดเร็ว</p><Button as="a" appearance="primary" icon={<ArrowSquareOut size={18} />} href={activeExternal.url} target="_blank" rel="noopener noreferrer">เปิดเอกสารต้นทางทันที</Button></div>}</>
+        ) : isWordLink ? (
+            <div className="lesson-plan-reader-link">
+                <FileDoc size={43} className="text-blue-600" />
+                <h3>พร้อมเปิดเอกสาร Word</h3>
+                <p>เอกสาร Word เปิดผ่านลิงก์ต้นทาง (Google Docs / OneDrive) เพื่อความรวดเร็ว</p>
+                <Button as="a" appearance="primary" icon={<ArrowSquareOut size={18} />} href={wordTarget} target="_blank" rel="noopener noreferrer">เปิดเอกสาร Word ทันที</Button>
+            </div>
+        ) : !url ? (
+            <Alert severity="warning">ไม่มีตัวอย่างแสดงผลออนไลน์ กรุณาดาวน์โหลดเอกสาร PDF หรือ Word เพื่อเปิดอ่าน</Alert>
+        ) : (
+            <iframe className="lesson-plan-document" src={url} title={`แผนการสอน ${plan.title}`} referrerPolicy="same-origin" />
+        )}
+    </DialogContent><DialogActions><Button onClick={close}>ปิด</Button>{external && <Button as="a" appearance="primary" icon={<ArrowSquareOut />} href={external.url} target="_blank" rel="noopener noreferrer">เปิดในแท็บใหม่</Button>}{download && <Button as="a" appearance="outline" icon={<DownloadSimple />} href={download} download={`${plan.title}.pdf`}>ดาวน์โหลด PDF</Button>}{wordTarget && (isWordLink ? <Button as="a" appearance="outline" icon={<ArrowSquareOut />} href={wordTarget} target="_blank" rel="noopener noreferrer">เปิดไฟล์ Word</Button> : <Button as="a" appearance="outline" icon={<DownloadSimple />} href={wordTarget} download={`${plan.title}.${plan.word_filename?.endsWith('.doc') ? 'doc' : 'docx'}`}>ดาวน์โหลด Word</Button>)}</DialogActions></Dialog>;
 }
 
 function PlanEditor({ plan, initialScope, initialLevel, close, saved }: { plan: LessonPlan | null; initialScope: PlanScope; initialLevel: string; close: () => void; saved: () => Promise<void> }) {
@@ -252,9 +266,16 @@ function PlanEditor({ plan, initialScope, initialLevel, close, saved }: { plan: 
         level: plan?.raw?.level || initialLevel,
         semester: plan?.raw?.semester ?? '',
         external_url: plan ? sourceUrl(plan) : '',
+        word_url: plan?.word_url?.startsWith('http') ? plan.word_url : (plan?.raw?.word_url ?? ''),
     }));
     const [scope, setScope] = useState<PlanScope>(() => plan ? planScope(plan) : initialScope);
-    const [source, setSource] = useState<'link' | 'pdf' | 'word' | ''>(() => plan ? sourceUrl(plan) ? 'link' : plan.file_url ? 'pdf' : plan.word_url ? 'word' : '' : 'link');
+    const [source, setSource] = useState<'link' | 'pdf' | 'word' | ''>(() => {
+        if (!plan) return 'link';
+        if (sourceUrl(plan) || plan.word_url?.startsWith('http') || plan.raw?.word_url) return 'link';
+        if (plan.file_url) return 'pdf';
+        if (plan.word_url) return 'word';
+        return '';
+    });
     const [file, setFile] = useState<File | null>(null);
     const [fileInputKey, setFileInputKey] = useState(0);
     const [wordFile, setWordFile] = useState<File | null>(null);
@@ -272,6 +293,11 @@ function PlanEditor({ plan, initialScope, initialLevel, close, saved }: { plan: 
     const [dirty, setDirty] = useState(false);
     const generation = useRef(0);
     const preview = documentPreview(draft.external_url);
+    const wordLinkPreview = documentPreview(draft.word_url);
+    const isExternalValid = draft.external_url.trim() === '' || preview !== null;
+    const isWordValid = draft.word_url.trim() === '' || wordLinkPreview !== null;
+    const hasAtLeastOneLink = Boolean(draft.external_url.trim() || draft.word_url.trim());
+    const hasValidLink = isExternalValid && isWordValid && hasAtLeastOneLink;
 
     useEffect(() => () => { generation.current++; }, []);
     useEffect(() => {
@@ -365,7 +391,11 @@ function PlanEditor({ plan, initialScope, initialLevel, close, saved }: { plan: 
     const save = useMutation({
         mutationFn: () => {
             const form = new FormData();
-            Object.entries(draft).forEach(([key, value]) => { if (key !== 'external_url' || source === 'link') form.append(key, value); });
+            Object.entries(draft).forEach(([key, value]) => {
+                if ((key !== 'external_url' && key !== 'word_url') || source === 'link') {
+                    form.append(key, value);
+                }
+            });
             form.set('plan_scope', scope);
             if (scope === 'all_subjects') form.set('subject', '');
             if (source) form.append('source_type', source);
@@ -389,7 +419,7 @@ function PlanEditor({ plan, initialScope, initialLevel, close, saved }: { plan: 
     const closeEditor = () => { if (!busy && (!dirty || window.confirm('มีแผนการสอนที่ยังไม่ได้บันทึก ต้องการปิดแบบร่างนี้หรือไม่?'))) close(); };
     const submit = (event: FormEvent) => {
         event.preventDefault();
-        if (!busy && !fileError && !wordError && (source !== 'pdf' || file || plan?.file_url) && (source !== 'word' || wordFile || plan?.word_url) && (source !== 'link' || preview)) {
+        if (!busy && !fileError && !wordError && (source !== 'pdf' || file || plan?.file_url) && (source !== 'word' || wordFile || plan?.word_url) && (source !== 'link' || hasValidLink)) {
             save.mutate();
         }
     };
@@ -608,13 +638,100 @@ function PlanEditor({ plan, initialScope, initialLevel, close, saved }: { plan: 
         <fieldset className="lesson-plan-form-wide"><legend>ระดับการศึกษา</legend><div className="lesson-plan-choice-buttons" role="group" aria-label="ระดับแผนการสอน">{levels.map(item => <button type="button" key={item.value} aria-pressed={draft.level === item.value} disabled={busy} onClick={() => update({ level: item.value })}>{item.label}{draft.level === item.value && <CheckCircle size={16} weight="fill" />}</button>)}</div></fieldset>
         <section className="lesson-plan-source-editor lesson-plan-form-wide"><h3>เอกสารแผนการสอน</h3><div className="lesson-plan-choice-buttons" role="group" aria-label="วิธีแนบเอกสาร">{[{ value: 'link', label: 'แนบลิงก์ (แนะนำ)', Icon: LinkSimple }, { value: 'pdf', label: 'อัปโหลด PDF ในระบบ', Icon: FilePdf }, { value: 'word', label: 'อัปโหลด Word ในระบบ', Icon: FileDoc }, ...(plan && !plan.file_url && !plan.word_url && !sourceUrl(plan) ? [{ value: '', label: 'เฉพาะรายละเอียดเดิม', Icon: Notebook }] : [])].map(({ value, label, Icon }) => <button type="button" key={value} aria-pressed={source === value} disabled={busy} onClick={() => { if (value === source) return; setSource(value as typeof source); setDirty(true); setFile(null); setCover(null); setPages(null); setCoverDescription(''); setFileError(''); setWordError(''); }}><Icon size={19} />{label}</button>)}</div>
             {source === 'link' && <>
-                <TextField fullWidth required type="url" label="ลิงก์เอกสาร HTTP / HTTPS" placeholder="Google Drive, OneDrive หรือเว็บไซต์เอกสาร" value={draft.external_url} disabled={busy} slotProps={{ htmlInput: { maxLength: 2048 } }} onChange={event => update({ external_url: event.target.value })} />
-                <p className="lesson-plan-muted">ใช้ลิงก์แชร์ที่ผู้เปิดมีสิทธิ์เข้าถึงได้ รองรับ Google Drive, OneDrive และลิงก์เว็บทั่วไป</p>
-                {draft.external_url && !preview && <Alert severity="error">ลิงก์ต้องขึ้นต้นด้วย http:// หรือ https:// และไม่มีข้อมูลเข้าสู่ระบบในลิงก์</Alert>}
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                    <div>
+                        <TextField
+                            fullWidth
+                            type="url"
+                            label="ลิงก์ไฟล์ PDF (Google Drive / OneDrive / เว็บไซต์)"
+                            placeholder="https://drive.google.com/file/d/..."
+                            value={draft.external_url}
+                            disabled={busy}
+                            slotProps={{ htmlInput: { maxLength: 2048 } }}
+                            onChange={event => update({ external_url: event.target.value })}
+                            helperText="ลิงก์เปิด/ดาวน์โหลด PDF ผ่านคลาวด์ ไม่เปลืองพื้นที่เซิร์ฟเวอร์"
+                        />
+                        {draft.external_url && !preview && (
+                            <Alert severity="error" className="mt-1">ลิงก์ PDF ต้องขึ้นต้นด้วย http:// หรือ https://</Alert>
+                        )}
+                    </div>
+                    <div>
+                        <TextField
+                            fullWidth
+                            type="url"
+                            label="ลิงก์ไฟล์ Word (.doc / .docx เช่น Google Drive / OneDrive)"
+                            placeholder="https://docs.google.com/... หรือ ลิงก์แชร์"
+                            value={draft.word_url}
+                            disabled={busy}
+                            slotProps={{ htmlInput: { maxLength: 2048 } }}
+                            onChange={event => update({ word_url: event.target.value })}
+                            helperText="ลิงก์เปิด/ดาวน์โหลด Word ให้เพื่อนครูนำไปแก้ไขต่อได้"
+                        />
+                        {draft.word_url && !wordLinkPreview && (
+                            <Alert severity="error" className="mt-1">ลิงก์ Word ต้องขึ้นต้นด้วย http:// หรือ https://</Alert>
+                        )}
+                    </div>
+                </div>
 
-                {preview?.thumbnailUrl && !cover && (
-                    <div className="lesson-plan-generated-cover">
-                        <img src={preview.thumbnailUrl} alt="ภาพปกจาก Google Drive" referrerPolicy="no-referrer" />
+                {!draft.external_url && !draft.word_url && (
+                    <p className="lesson-plan-muted mt-1">กรุณาระบุลิงก์ไฟล์ PDF หรือลิงก์ไฟล์ Word อย่างน้อยหนึ่งรายการ (รองรับ Google Drive, OneDrive หรือเว็บไซต์ทั่วไป)</p>
+                )}
+
+                {plan?.file_url && !clearPdf && (
+                    <div className="lesson-plan-file-attached mt-2 bg-amber-50/70 border border-amber-200 dark:bg-amber-950/20 dark:border-amber-800">
+                        <div>
+                            <FilePdf size={24} weight="duotone" className="text-amber-600 shrink-0" />
+                            <div>
+                                <strong>มีไฟล์ PDF เดิมบนเซิร์ฟเวอร์ ({plan.file_size ? `${(plan.file_size / (1024 * 1024)).toFixed(1)} MB` : ''})</strong>
+                                <small className="text-amber-700 dark:text-amber-300">ลบออกเพื่อประหยัดพื้นที่เซิร์ฟเวอร์ และใช้ลิงก์แทน</small>
+                            </div>
+                        </div>
+                        <Button
+                            appearance="outline"
+                            size="small"
+                            disabled={busy}
+                            icon={<Trash size={15} />}
+                            onClick={() => { setDirty(true); setClearPdf(true); }}
+                        >
+                            ลบไฟล์ PDF ออกจากเซิร์ฟเวอร์
+                        </Button>
+                    </div>
+                )}
+                {clearPdf && (
+                    <Alert severity="success" className="mt-2" action={<Button size="small" onClick={() => setClearPdf(false)}>ยกเลิก</Button>}>
+                        จะลบไฟล์ PDF เดิมออกจากเซิร์ฟเวอร์เมื่อกดบันทึก ช่วยประหยัดพื้นที่เรียบร้อย
+                    </Alert>
+                )}
+
+                {plan?.word_url && !plan.word_url.startsWith('http') && !clearWord && (
+                    <div className="lesson-plan-file-attached mt-2 bg-blue-50/70 border border-blue-200 dark:bg-blue-950/20 dark:border-blue-800">
+                        <div>
+                            <FileDoc size={24} weight="duotone" className="text-blue-600 shrink-0" />
+                            <div>
+                                <strong>มีไฟล์ Word เดิมบนเซิร์ฟเวอร์ ({plan.word_size ? `${(plan.word_size / 1024).toFixed(0)} KB` : ''})</strong>
+                                <small className="text-blue-700 dark:text-blue-300">ลบออกเพื่อประหยัดพื้นที่เซิร์ฟเวอร์ และใช้ลิงก์แทน</small>
+                            </div>
+                        </div>
+                        <Button
+                            appearance="outline"
+                            size="small"
+                            disabled={busy}
+                            icon={<Trash size={15} />}
+                            onClick={() => { setDirty(true); setClearWord(true); }}
+                        >
+                            ลบไฟล์ Word ออกจากเซิร์ฟเวอร์
+                        </Button>
+                    </div>
+                )}
+                {clearWord && (
+                    <Alert severity="success" className="mt-2" action={<Button size="small" onClick={() => setClearWord(false)}>ยกเลิก</Button>}>
+                        จะลบไฟล์ Word เดิมออกจากเซิร์ฟเวอร์เมื่อกดบันทึก ช่วยประหยัดพื้นที่เรียบร้อย
+                    </Alert>
+                )}
+
+                {(preview?.thumbnailUrl || wordLinkPreview?.thumbnailUrl) && !cover && (
+                    <div className="lesson-plan-generated-cover mt-2">
+                        <img src={(preview?.thumbnailUrl || wordLinkPreview?.thumbnailUrl)!} alt="ภาพปกจาก Google Drive" referrerPolicy="no-referrer" />
                         <div>
                             <CheckCircle size={22} weight="fill" />
                             <strong>ดึงภาพปกจาก Google Drive อัตโนมัติ</strong>
@@ -626,9 +743,6 @@ function PlanEditor({ plan, initialScope, initialLevel, close, saved }: { plan: 
                 {renderCoverSection()}
 
                 <TextField fullWidth type="number" size="small" label="จำนวนหน้า (ไม่บังคับ)" placeholder="เช่น 222" value={customPageCount} disabled={busy} slotProps={{ htmlInput: { min: 1, max: 10000 } }} onChange={event => { setDirty(true); setCustomPageCount(event.target.value); }} helperText="ระบุจำนวนหน้าเพื่อแสดงบนการ์ดแผนการสอน โดยไม่ต้องอัปโหลดไฟล์ PDF ขนาดใหญ่" />
-
-                {renderPdfUpload(false)}
-                {renderWordUpload(false)}
             </>}
             {source === 'pdf' && <>
                 {renderPdfUpload(true)}
@@ -642,5 +756,5 @@ function PlanEditor({ plan, initialScope, initialLevel, close, saved }: { plan: 
             </>}
         </section>
         {save.isError && <Alert className="lesson-plan-form-wide" severity="error">{errorText(save.error)}</Alert>}
-    </div></DialogContent><DialogActions><Button disabled={busy} onClick={closeEditor}>ยกเลิก</Button><Button appearance="primary" type="submit" disabled={busy || Boolean(fileError) || Boolean(wordError) || (source === 'pdf' && !file && !plan?.file_url) || (source === 'word' && !wordFile && !plan?.word_url) || (source === 'link' && !preview)}>{rendering ? 'กำลังสร้างปก…' : save.isPending ? 'กำลังบันทึก…' : 'บันทึกแผนการสอน'}</Button></DialogActions></form></Dialog>;
+    </div></DialogContent><DialogActions><Button disabled={busy} onClick={closeEditor}>ยกเลิก</Button><Button appearance="primary" type="submit" disabled={busy || Boolean(fileError) || Boolean(wordError) || (source === 'pdf' && !file && !plan?.file_url) || (source === 'word' && !wordFile && !plan?.word_url) || (source === 'link' && !hasValidLink)}>{rendering ? 'กำลังสร้างปก…' : save.isPending ? 'กำลังบันทึก…' : 'บันทึกแผนการสอน'}</Button></DialogActions></form></Dialog>;
 }

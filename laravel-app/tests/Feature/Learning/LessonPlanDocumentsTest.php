@@ -61,6 +61,7 @@ final class LessonPlanDocumentsTest extends TestCase
         (require database_path('migrations/2026_10_29_000038_add_lesson_plan_documents.php'))->up();
         (require database_path('migrations/2026_10_29_000039_add_scope_to_lesson_plans.php'))->up();
         (require database_path('migrations/2026_10_29_000040_add_word_documents_to_lesson_plans.php'))->up();
+        (require database_path('migrations/2026_10_29_000041_add_word_url_to_lesson_plans.php'))->up();
     }
 
     public function test_combined_links_save_on_the_deployed_legacy_schema_with_empty_optional_text(): void
@@ -562,6 +563,69 @@ final class LessonPlanDocumentsTest extends TestCase
         $adminItemA = collect($adminList)->firstWhere('id', (string) $idA);
         $this->assertTrue($adminItemA['can_edit']);
         $this->patchJson("/api/v1/learning/lesson-plans/{$idA}", ['title' => 'แอดมินปรับปรุงแผน'])->assertOk();
+    }
+
+    public function test_attaching_pdf_and_word_as_links_saves_disk_space_and_clears_old_files(): void
+    {
+        // 1. Create a plan with PDF link and Word link (no binary files stored)
+        $pdfLink = 'https://drive.google.com/file/d/pdf-drive-123/view';
+        $wordLink = 'https://docs.google.com/document/d/word-doc-456/edit';
+        $res = $this->post('/api/v1/learning/lesson-plans', $this->metadata([
+            'title' => 'แผนการสอนแบบแนบลิงก์ประหยัดพื้นที่',
+            'source_type' => 'link',
+            'external_url' => $pdfLink,
+            'word_url' => $wordLink,
+        ]))->assertCreated();
+        $id = $res->json('data.id');
+
+        $row = DB::table('learning_lesson_plans')->where('id', $id)->first();
+        $this->assertSame($pdfLink, $row->external_url);
+        $this->assertSame($wordLink, $row->word_url);
+        $this->assertNull($row->pdf_path);
+        $this->assertNull($row->word_path);
+
+        $list = $this->getJson('/api/v1/learning/lesson-plans')->assertOk()->json('data');
+        $item = collect($list)->firstWhere('id', (string) $id);
+        $this->assertSame($pdfLink, $item['external_url']);
+        $this->assertSame($wordLink, $item['word_url']);
+        $this->assertSame($wordLink, $item['raw']['word_url']);
+        $this->assertNull($item['file_url']);
+
+        // 2. Take a plan that had heavy physical files, replace with links and clear files
+        $pdfFile = UploadedFile::fake()->create('heavy.pdf', 12000, 'application/pdf');
+        $wordFile = UploadedFile::fake()->create('heavy.docx', 5000, 'application/vnd.openxmlformats-officedocument.wordprocessingml.document');
+        $heavyId = $this->post('/api/v1/learning/lesson-plans', $this->metadata([
+            'title' => 'แผนไฟล์ใหญ่เดิม',
+            'pdf' => $pdfFile,
+            'word' => $wordFile,
+        ]))->assertCreated()->json('data.id');
+
+        $heavyRow = DB::table('learning_lesson_plans')->where('id', $heavyId)->first();
+        $this->assertNotNull($heavyRow->pdf_path);
+        $this->assertNotNull($heavyRow->word_path);
+        Storage::disk('local')->assertExists($heavyRow->pdf_path);
+        Storage::disk('local')->assertExists($heavyRow->word_path);
+
+        // Update by switching to link with clear_pdf and clear_word
+        $newPdfLink = 'https://drive.google.com/file/d/new-pdf/view';
+        $newWordLink = 'https://onedrive.live.com/view.aspx?resid=WORD123';
+        $this->patch("/api/v1/learning/lesson-plans/{$heavyId}", [
+            'source_type' => 'link',
+            'external_url' => $newPdfLink,
+            'word_url' => $newWordLink,
+            'clear_pdf' => '1',
+            'clear_word' => '1',
+        ])->assertOk();
+
+        // Server storage files should be wiped cleanly
+        Storage::disk('local')->assertMissing($heavyRow->pdf_path);
+        Storage::disk('local')->assertMissing($heavyRow->word_path);
+
+        $updatedRow = DB::table('learning_lesson_plans')->where('id', $heavyId)->first();
+        $this->assertSame($newPdfLink, $updatedRow->external_url);
+        $this->assertSame($newWordLink, $updatedRow->word_url);
+        $this->assertNull($updatedRow->pdf_path);
+        $this->assertNull($updatedRow->word_path);
     }
 }
 
