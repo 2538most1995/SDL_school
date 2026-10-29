@@ -5,6 +5,18 @@ export type DocumentPreview = {
     provider: string;
 };
 
+export type DocumentOpenTarget =
+    | { kind: 'pdf' | 'details' | 'embed' }
+    | { kind: 'external'; url: string };
+
+/** Open a readable PDF first; link-only shares go straight to their provider. */
+export function documentOpenTarget(value: string, hasPdf: boolean): DocumentOpenTarget {
+    if (hasPdf) return { kind: 'pdf' };
+    const preview = documentPreview(value);
+    if (!preview) return { kind: 'details' };
+    return preview.embedUrl ? { kind: 'embed' } : { kind: 'external', url: preview.url };
+}
+
 const fileId = /^[A-Za-z0-9_-]+$/;
 
 function safeUrl(value: string): URL | null {

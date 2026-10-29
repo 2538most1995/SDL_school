@@ -1,12 +1,13 @@
 import { Alert, Dialog, DialogActions, DialogContent, DialogTitle, TextField } from '@mui/material';
 import { ArrowSquareOut, BookOpen, BookOpenText, CalendarBlank, CheckCircle, DownloadSimple, FilePdf, LinkSimple, MagnifyingGlass, Notebook, PencilSimple, Plus, Trash, UploadSimple, User } from '@phosphor-icons/react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { useDeferredValue, useEffect, useRef, useState, type FormEvent } from 'react';
+import { useDeferredValue, useEffect, useRef, useState, type FormEvent, type ReactNode } from 'react';
 import { Button } from '../../components/MaterialUI';
 import { QueryError, QuerySkeleton } from '../../components/QueryState';
 import { useDemoRole } from '../../context/DemoRoleContext';
 import { getFeatureBlob, getFeatureData, sendFeatureData } from '../api';
-import { documentPreview } from './lesson-plans/documentLinks';
+import { documentOpenTarget, documentPreview } from './lesson-plans/documentLinks';
+import { loadPlanCover } from './lesson-plans/coverSource';
 import { filterLessonPlans, planScope, planScopeLabels, type PlanScope } from './lesson-plans/planFilters';
 import './lesson-plans.css';
 
@@ -35,20 +36,41 @@ function PlanCover({ plan }: { plan: LessonPlan }) {
         return () => observer.disconnect();
     }, []);
     useEffect(() => {
-        if (!visible || !plan.cover_url) return;
+        if (!visible || (!plan.cover_url && !plan.file_url)) return;
         let active = true;
         let url = '';
         setFailed(false); setSrc('');
-        getFeatureBlob(`${base}/${encodeURIComponent(plan.id)}/cover`).then(blob => {
-            if (active) { url = URL.createObjectURL(blob); setSrc(url); setFailed(false); }
+        const path = `${base}/${encodeURIComponent(plan.id)}`;
+        loadPlanCover({ coverPath: plan.cover_url ? `${path}/cover` : null, pdfPath: plan.file_url ? `${path}/file` : null }, getFeatureBlob, async pdf => {
+            const { renderPdfCover } = await import('./lesson-plans/pdfCover');
+            return renderPdfCover(pdf);
+        }).then(blob => {
+            if (active && blob) { url = URL.createObjectURL(blob); setSrc(url); setFailed(false); }
         }).catch(() => { if (active) setFailed(true); });
         return () => { active = false; if (url) URL.revokeObjectURL(url); };
-    }, [plan.id, plan.cover_url, visible]);
+    }, [plan.id, plan.cover_url, plan.file_url, visible]);
     const image = src || (!plan.cover_url && !failed ? external?.thumbnailUrl : '') || '';
     return <div ref={element} className={`lesson-plan-cover ${image && !failed ? 'has-image' : ''}`}>
         {image && !failed ? <img src={image} loading="lazy" referrerPolicy="no-referrer" alt={`หน้าปก ${plan.title}`} onError={() => setFailed(true)} /> : <div className="lesson-plan-cover-fallback"><span><BookOpen size={39} weight="duotone" /></span><strong>{plan.title}</strong>{plan.teacher_name && <small>{plan.teacher_name}</small>}</div>}
         <span className="lesson-plan-source">{plan.file_url && !sourceUrl(plan) ? <><FilePdf size={15} /> PDF</> : sourceUrl(plan) ? <><LinkSimple size={15} /> {external?.provider || 'ลิงก์'}</> : <><Notebook size={15} /> แผนการสอน</>}</span>
     </div>;
+}
+
+function PlanOpen({ plan, cover = false, children, read, details }: {
+    plan: LessonPlan; cover?: boolean; children?: ReactNode;
+    read: (plan: LessonPlan) => void; details: (plan: LessonPlan) => void;
+}) {
+    const target = documentOpenTarget(sourceUrl(plan), Boolean(plan.file_url));
+    const label = `เปิดอ่าน ${plan.title}`;
+    if (target.kind === 'external') {
+        return cover
+            ? <a className="lesson-plan-cover-button" href={target.url} target="_blank" rel="noopener noreferrer" aria-label={label}>{children}</a>
+            : <Button as="a" appearance="primary" icon={<BookOpen size={17} />} href={target.url} target="_blank" rel="noopener noreferrer">เปิดอ่าน</Button>;
+    }
+    const open = () => target.kind === 'details' ? details(plan) : read(plan);
+    return cover
+        ? <button type="button" className="lesson-plan-cover-button" aria-label={label} onClick={open}>{children}</button>
+        : <Button appearance="primary" icon={<BookOpen size={17} />} onClick={open}>เปิดอ่าน</Button>;
 }
 
 export function LessonPlansPage() {
@@ -91,23 +113,23 @@ function LessonPlanLibrary({ role, district }: { role: string; district: string 
         <div className="lesson-plan-scope-filter"><span>ประเภทแผน</span><div className="lesson-plan-choice-buttons" role="group" aria-label="ประเภทแผนที่แสดง">{[{ value: '', label: 'ทุกประเภท' }, ...Object.entries(planScopeLabels).map(([value, label]) => ({ value, label }))].map(item => <button type="button" key={item.value} aria-pressed={scope === item.value} onClick={() => setScope(item.value as PlanScope | '')}>{item.label}</button>)}</div></div>
         <div className="lesson-plan-shelf-heading"><h2>{needle || level || scope ? 'แผนที่ค้นพบ' : 'ชั้นหนังสือของคุณ'}</h2><span>{visible.length} แผน{needle ? ` จาก ${rows.length} แผน` : ''}</span></div>
         {visible.length === 0 ? <section className="lesson-plan-empty"><BookOpenText size={52} weight="duotone" /><h3>{rows.length ? 'ยังไม่พบแผนที่ตรงกับคำค้น' : 'แผนการสอนเล่มแรก เริ่มได้ที่นี่'}</h3><p>{rows.length ? 'ลองเปลี่ยนคำค้นหรือระดับการศึกษา' : 'อัปโหลด PDF เพื่อใช้หน้าแรกเป็นปก หรือแนบลิงก์ Google Drive, OneDrive และเว็บไซต์เอกสาร'}</p>{canManage && rows.length === 0 && <Button appearance="primary" icon={<Plus />} onClick={() => setEditing('new')}>เพิ่มแผนแรก</Button>}</section> : <div className="lesson-plan-grid">{visible.map(plan => <article key={plan.id} className="lesson-plan-card">
-            <button type="button" className="lesson-plan-cover-button" aria-label={`เปิดอ่าน ${plan.title}`} onClick={() => plan.file_url || sourceUrl(plan) ? setReading(plan) : setDetails(plan)}><PlanCover plan={plan} /><span className="lesson-plan-cover-hover"><BookOpen size={24} /> เปิดอ่านทันที</span></button>
+            <PlanOpen plan={plan} cover read={setReading} details={setDetails}><PlanCover plan={plan} /><span className="lesson-plan-cover-hover"><BookOpen size={24} /> เปิดอ่านทันที</span></PlanOpen>
             <div className="lesson-plan-card-body">{planScope(plan) === 'all_subjects' && <span className="lesson-plan-scope-badge">แผนรวมทุกวิชา</span>}<h3>{plan.title}</h3>{plan.teacher_name && <p className="lesson-plan-author"><User size={15} />{plan.teacher_name}</p>}<p className="lesson-plan-card-meta">{plan.course || 'ไม่ระบุรายวิชา'}{plan.raw?.level && <> · {levels.find(item => item.value === String(plan.raw.level))?.label || plan.raw.level}</>}</p><div className="lesson-plan-card-bottom"><span><CalendarBlank size={15} /> {plan.timing || 'ไม่ระบุภาคเรียน'}</span>{plan.page_count ? <span><BookOpen size={15} /> {plan.page_count} หน้า</span> : <span>{plan.status}</span>}</div>
-                <div className="lesson-plan-card-actions"><Button appearance="primary" icon={<BookOpen size={17} />} onClick={() => plan.file_url || sourceUrl(plan) ? setReading(plan) : setDetails(plan)}>เปิดอ่าน</Button><Button appearance="outline" onClick={() => setDetails(plan)}>รายละเอียด</Button></div>
+                <div className="lesson-plan-card-actions"><PlanOpen plan={plan} read={setReading} details={setDetails} /><Button appearance="outline" onClick={() => setDetails(plan)}>รายละเอียด</Button></div>
                 {canManage && plan.can_edit && <div className="lesson-plan-card-manage"><Button size="small" icon={<PencilSimple size={16} />} onClick={() => setEditing(plan)}>แก้ไข<span className="sr-only"> {plan.title}</span></Button><Button size="small" icon={<Trash size={16} />} onClick={() => { remove.reset(); setDeleting(plan); }}>ลบ<span className="sr-only"> {plan.title}</span></Button></div>}
             </div>
         </article>)}</div>}
         {rows.length >= 250 && <p className="lesson-plan-muted">แสดงแผนล่าสุดสูงสุด 250 รายการ</p>}
         {editing && <PlanEditor key={editing === 'new' ? 'new' : editing.id} plan={editing === 'new' ? null : editing} initialScope={scope || 'subject'} initialLevel={level || '1'} close={() => setEditing(null)} saved={async () => { setEditing(null); await refresh(); }} />}
         {reading && <PlanReader key={reading.id} plan={reading} close={() => setReading(null)} />}
-        {details && <Dialog className="lesson-plan-dialog" open onClose={() => setDetails(null)} fullWidth maxWidth="md"><DialogTitle>{details.title}</DialogTitle><DialogContent><div className="lesson-plan-details-meta"><span>{planScopeLabels[planScope(details)]}</span>{planScope(details) === 'subject' && <span>{details.course}</span>}<span>{levels.find(item => item.value === details.raw?.level)?.label}</span><span>ภาคเรียน {details.timing}</span>{details.teacher_name && <span>{details.teacher_name}</span>}</div>{[['วัตถุประสงค์', details.raw?.objectives], ['กิจกรรมการเรียนรู้', details.raw?.activities], ['การวัดและประเมินผล', details.raw?.assessment]].map(([label, value]) => <section className="lesson-plan-detail-section" key={label}><h3>{label}</h3><p>{value || 'ยังไม่ได้ระบุ'}</p></section>)}</DialogContent><DialogActions><Button onClick={() => setDetails(null)}>ปิด</Button>{(details.file_url || sourceUrl(details)) && <Button appearance="primary" icon={<BookOpen />} onClick={() => { setReading(details); setDetails(null); }}>เปิดเอกสาร</Button>}</DialogActions></Dialog>}
+        {details && <Dialog className="lesson-plan-dialog" open onClose={() => setDetails(null)} fullWidth maxWidth="md"><DialogTitle>{details.title}</DialogTitle><DialogContent><div className="lesson-plan-details-meta"><span>{planScopeLabels[planScope(details)]}</span>{planScope(details) === 'subject' && <span>{details.course}</span>}<span>{levels.find(item => item.value === details.raw?.level)?.label}</span><span>ภาคเรียน {details.timing}</span>{details.teacher_name && <span>{details.teacher_name}</span>}</div>{[['วัตถุประสงค์', details.raw?.objectives], ['กิจกรรมการเรียนรู้', details.raw?.activities], ['การวัดและประเมินผล', details.raw?.assessment]].map(([label, value]) => <section className="lesson-plan-detail-section" key={label}><h3>{label}</h3><p>{value || 'ยังไม่ได้ระบุ'}</p></section>)}</DialogContent><DialogActions><Button onClick={() => setDetails(null)}>ปิด</Button>{(details.file_url || sourceUrl(details)) && <PlanOpen plan={details} read={plan => { setReading(plan); setDetails(null); }} details={setDetails} />}</DialogActions></Dialog>}
         <Dialog open={Boolean(deleting)} onClose={() => { if (!remove.isPending) setDeleting(null); }} fullWidth maxWidth="xs"><DialogTitle>ลบแผนการสอนนี้?</DialogTitle><DialogContent>ลบ “{deleting?.title}” พร้อมไฟล์แนบและหน้าปก{remove.isError && <Alert className="mt-3" severity="error">{errorText(remove.error)}</Alert>}</DialogContent><DialogActions><Button disabled={remove.isPending} onClick={() => setDeleting(null)}>ยกเลิก</Button><Button appearance="primary" disabled={remove.isPending} onClick={() => { if (deleting) remove.mutate(deleting); }}>{remove.isPending ? 'กำลังลบ…' : 'ยืนยันลบ'}</Button></DialogActions></Dialog>
     </div>;
 }
 
 function PlanReader({ plan, close }: { plan: LessonPlan; close: () => void }) {
     const external = documentPreview(sourceUrl(plan));
-    const [useCopy, setUseCopy] = useState(false);
+    const [useCopy, setUseCopy] = useState(Boolean(plan.file_url));
     const activeExternal = useCopy ? null : external;
     const [url, setUrl] = useState('');
     const [error, setError] = useState('');

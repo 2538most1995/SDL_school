@@ -1,5 +1,9 @@
 # Performance Audit
 
+## Lesson-plan reader and missing covers (2026-10-29)
+
+PDF companions take priority on the first reader click, avoiding a provider placeholder and second action. Stored covers retain their lightweight authenticated image request. Only visible cards without a usable stored cover download the private PDF to render page one locally; these rebuilds are serialized to avoid loading multiple 20 MB PDFs concurrently, and a failed rebuild releases the queue. No PDF or cloud request is added to list queries or the application server. Browser-generated fallback covers are temporary and regenerated on remount; uploading a PDF through the editor stores a durable first-page cover.
+
 ## Lesson-plan compatibility checks (2026-10-29)
 
 Lesson-plan writes reuse one `Schema::getColumns` result for document readiness, title capacity and legacy alias detection, replacing the former column-list readiness query. No query is added per alias or per row; list/read queries and indexes are unchanged. Regression fixtures reproduce the inspected adopted schema in isolated SQLite. MySQL latency benchmarking is Not verified.

@@ -75,7 +75,7 @@
 .lesson-plan-detail-section { padding-block:18px; border-top:1px solid var(--ui-border); }
 .lesson-plan-detail-section h3 { font-size:.95rem; font-weight:750; }
 .lesson-plan-detail-section p { margin-top:8px; white-space:pre-wrap; overflow-wrap:anywhere; line-height:1.9; font-size:.9rem; color:var(--ui-text-muted); }
-.lesson-plan-library button:focus-visible, .lesson-plan-dialog button:focus-visible { outline:3px solid #a891ff; outline-offset:3px; }
+.lesson-plan-library button:focus-visible, .lesson-plan-library a:focus-visible, .lesson-plan-dialog button:focus-visible, .lesson-plan-dialog a:focus-visible { outline:3px solid #a891ff; outline-offset:3px; }
 .lesson-plan-dialog button:disabled { opacity:.5; cursor:not-allowed; }
 @media (hover:hover) and (pointer:fine) { .lesson-plan-card:hover { border-color:#b5a6e7; box-shadow:0 10px 22px #25184c12; transform:translateY(-3px); } .lesson-plan-cover-button:hover .lesson-plan-cover-hover { opacity:1; } }
 @media (max-width:1280px) { .lesson-plan-grid { grid-template-columns:repeat(3,minmax(0,1fr)); gap:18px; } }

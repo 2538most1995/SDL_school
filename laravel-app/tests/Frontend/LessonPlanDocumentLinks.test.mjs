@@ -1,6 +1,21 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { documentPreview } from '../../resources/js/features/learning/lesson-plans/documentLinks.ts';
+import { documentOpenTarget, documentPreview } from '../../resources/js/features/learning/lesson-plans/documentLinks.ts';
+
+test('link-only OneDrive and generic documents open directly without a second reader click', () => {
+    for (const url of ['https://1drv.ms/b/c/example/IQC_Demo-Plan?e=demo', 'https://school.example.org/plan.pdf']) {
+        assert.deepEqual(documentOpenTarget(url, false), { kind: 'external', url });
+    }
+    assert.deepEqual(documentOpenTarget('https://drive.google.com/file/d/FILE123/view', false), { kind: 'embed' });
+    assert.deepEqual(documentOpenTarget('javascript:alert(1)', false), { kind: 'details' });
+    assert.deepEqual(documentOpenTarget('', false), { kind: 'details' });
+});
+
+test('attached PDFs open immediately even when a cloud link is also present', () => {
+    for (const url of ['', 'https://1drv.ms/b/s!demo', 'https://drive.google.com/file/d/FILE123/view']) {
+        assert.deepEqual(documentOpenTarget(url, true), { kind: 'pdf' });
+    }
+});
 
 test('Drive file and query sharing routes preview the same file and retain resource keys', () => {
     for (const url of [

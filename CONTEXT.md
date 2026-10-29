@@ -1,5 +1,9 @@
 # SDL School Context
 
+## One-click lesson-plan reading and cover recovery (2026-10-29)
+
+Cover, primary read action and details now share the same opening decision: an attached private PDF opens immediately in the in-app reader, a supported provider embed opens its viewer, and link-only OneDrive/general documents use a native external anchor directly without an intermediate dialog. Cloud originals remain available from PDF readers. Visible cards use their stored private cover first; a missing cover can be rendered from the authorized PDF in the browser. No arbitrary external fetch, cloud permission change or schema change is introduced. The reported 222-page OneDrive plan was updated through its existing authorized editor with a PDF companion and generated first-page cover, retaining its original link and metadata.
+
 ## Lesson-plan writes on adopted tables (2026-10-29)
 
 Production logs confirmed MySQL error 1364: the adopted lesson-plan table requires `subject`, while the document service wrote only `subject_code`. Saves now populate existing `subject`, `level`, `semester`, `created_by` and `file_url` aliases alongside canonical fields in the same transaction. Combined plans use an empty subject, and admin edits preserve the original creator. Authorization, district scope and private storage remain unchanged. The failure was reproduced before the fix using the inspected schema in isolated SQLite; all 17 lesson-plan tests now pass.
