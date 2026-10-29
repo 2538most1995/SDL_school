@@ -32,8 +32,9 @@
 .lesson-plan-cover-button:focus-visible .lesson-plan-cover-hover { opacity:1; }
 .lesson-plan-card-body { display:flex; flex:1; flex-direction:column; padding:12px 14px 12px; }
 .lesson-plan-card-body h3 { font-weight:750; font-size:.92rem; line-height:1.35; overflow-wrap:anywhere; display:-webkit-box; -webkit-line-clamp:2; -webkit-box-orient:vertical; overflow:hidden; min-height:2.6em; }
-.lesson-plan-author { display:flex; align-items:center; gap:5px; margin-top:4px; font-size:.74rem; color:var(--ui-text-muted); }
-.lesson-plan-card-meta { margin-top:3px; font-size:.72rem; line-height:1.45; color:var(--ui-text-muted); }
+.lesson-plan-card-meta { display:flex; flex-wrap:wrap; align-items:center; gap:5px; margin-top:5px; font-size:.73rem; line-height:1.4; color:var(--ui-text-muted); }
+.lesson-plan-author { display:inline-flex; align-items:center; gap:4px; font-size:.73rem; color:var(--ui-text-muted); }
+.lesson-plan-dot { opacity:.5; font-weight:700; }
 .lesson-plan-card-bottom { display:flex; align-items:center; justify-content:space-between; flex-wrap:wrap; gap:6px; margin-top:auto; padding-top:8px; font-size:.68rem; color:var(--ui-text-muted); }
 .lesson-plan-card-bottom > span { display:inline-flex; align-items:center; gap:4px; }
 .lesson-plan-card-actions { display:flex; align-items:center; gap:6px; margin-top:10px; }
