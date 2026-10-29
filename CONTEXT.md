@@ -1,5 +1,9 @@
 # SDL School Context
 
+## Subdirectory asset fix (2026-10-29)
+
+Vite uses a relative build base so lazy classroom JS/CSS and fonts resolve inside the application deployment directory, including `/SDL_school/`. Previously the lazy stylesheet requested domain-root `/build/` and triggered the root error boundary. The committed production build includes this fix; no schema or permission changes. After updating server files, clear Laravel caches and refresh the page.
+
 ## Online classroom (2026-10-28)
 
 Classroom UI now uses education-level buttons and registered-course cards, followed by four activity categories: separate video clips, knowledge, worksheets and quizzes. Category counts and type filters are scoped server-side before pagination. All classroom selectors, including authoring choices, are buttons. Teacher quiz authoring supports JSON/XLSX templates and a validated preview/replacement step before saving; files are parsed locally, never auto-published, and API validation remains authoritative. Existing stored knowledge links remain intact. No additional schema migration is needed for the video string type or importer.

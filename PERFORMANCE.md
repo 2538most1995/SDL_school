@@ -1,5 +1,9 @@
 # Performance Audit
 
+## Subdirectory asset fix (2026-10-29)
+
+Relative Vite asset resolution fixes lazy classroom stylesheet/font requests under `/SDL_school/` without additional API calls or database work. Frontend tests pass 75/75, including executing the emitted preload helper and checking CSS assets for root, `/SDL_school` and nested deployments. Typecheck/build and four PHP application smoke tests pass. A browser reproduction with domain-root `/build/` blocked now opens the classroom and previews the downloaded JSON template using isolated demo data; production authenticated behavior remains unverified until deployment.
+
 ## Online classroom (2026-10-28)
 
 Classroom category counts add one SQL GROUP BY over the same district/term/course/level and audience/owner/publish scope. `activity_type` filtering happens before 50-row pagination. JSON/XLSX imports run client-side with a 5 MB input / 100-question limit; Excel parsing loads as a separate lazy chunk only on import/template actions. ZIP extraction checks actual emitted bytes against per-entry metadata and a 10 MiB total, in bounded compressed chunks, with 200-entry/expansion-ratio limits before SheetJS receives a sanitized archive. Templates retain typed scores and text-only cells, with wrapped prompts and Thai guide rows. Live MySQL plans and large-roster performance remain Not verified.
