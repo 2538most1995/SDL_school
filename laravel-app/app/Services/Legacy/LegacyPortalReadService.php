@@ -99,7 +99,7 @@ final class LegacyPortalReadService
     }
 
     /** @return list<array<string, mixed>> */
-    public function resources(User $viewer, int $districtId, ?string $category = null, ?string $search = null): array
+    public function resources(User $viewer, int $districtId, ?string $category = null, ?string $search = null, array $classroomFilters = []): array
     {
         $query = $this->connection()->table('learning_resources as resource')
             ->where('resource.district_id', $districtId);
@@ -113,6 +113,30 @@ final class LegacyPortalReadService
             });
         }
         $this->scopeGroupContent($query, $viewer, 'resource', 'target_group', 'uploaded_by');
+
+        if (isset($classroomFilters['subject_code'])) {
+            $query->where(fn (Builder $scope) => $scope
+                ->where('resource.subject_code', $classroomFilters['subject_code'])
+                ->orWhereNull('resource.subject_code')->orWhere('resource.subject_code', ''));
+            $query->where(fn (Builder $scope) => $scope
+                ->where('resource.education_level', (int) $classroomFilters['education_level'])
+                ->orWhereNull('resource.education_level'));
+        } elseif (! empty($classroomFilters['shared_only'])) {
+            $query->where(fn (Builder $scope) => $scope->whereNull('resource.subject_code')->orWhere('resource.subject_code', ''));
+        }
+        if (($classroomFilters['classroom_kind'] ?? null) === 'video') {
+            $query->whereIn('resource.resource_type', ['video', 'youtube']);
+        } elseif (($classroomFilters['classroom_kind'] ?? null) === 'knowledge') {
+            $query->where(fn (Builder $scope) => $scope->whereNotIn('resource.resource_type', ['video', 'youtube'])->orWhereNull('resource.resource_type'));
+        }
+        if ($category !== null) {
+            match ($category) {
+                'วิดีโอ' => $query->whereIn('resource.resource_type', ['video', 'youtube']),
+                'แบบฝึกหัด' => $query->where('resource.resource_type', 'exercise'),
+                'คู่มือ' => $query->where(fn (Builder $scope) => $scope->whereNotIn('resource.resource_type', ['video', 'youtube', 'exercise'])->orWhereNull('resource.resource_type')),
+                default => $query->whereRaw('1 = 0'),
+            };
+        }
 
         if ($search !== null && trim($search) !== '') {
             $needle = '%'.trim($search).'%';
@@ -136,6 +160,8 @@ final class LegacyPortalReadService
                 'category' => $mappedCategory,
                 'type' => (string) $row->resource_type,
                 'subject_code' => (string) ($row->subject_code ?? ''),
+                'education_level' => $row->education_level === null ? null : (int) $row->education_level,
+                'resource_type' => (string) $row->resource_type,
                 'duration_minutes' => null,
                 'size_label' => null,
                 'published_at' => $row->created_at,
@@ -147,7 +173,7 @@ final class LegacyPortalReadService
                     'title' => (string) $row->title, 'subject' => (string) ($row->subject_code ?? ''),
                     'description' => (string) ($row->description ?? ''), 'resource_type' => (string) $row->resource_type,
                     'url' => (string) ($row->external_url ?? ''), 'level' => (string) ($row->education_level ?? ''),
-                    'file_extension' => in_array(strtolower(pathinfo((string) ($row->storage_path ?? ''), PATHINFO_EXTENSION)), ['pdf', 'xls', 'xlsx'], true)
+                    'file_extension' => in_array(strtolower(pathinfo((string) ($row->storage_path ?? ''), PATHINFO_EXTENSION)), ['pdf', 'doc', 'docx', 'ppt', 'pptx', 'xls', 'xlsx', 'zip'], true)
                         ? strtolower(pathinfo((string) $row->storage_path, PATHINFO_EXTENSION)) : '',
                     'target_group' => (string) ($row->target_group ?? ''),
                 ],

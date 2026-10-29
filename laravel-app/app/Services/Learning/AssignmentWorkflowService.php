@@ -16,24 +16,38 @@ final readonly class AssignmentWorkflowService
 {
     public function __construct(
         private DatabaseManager $database,
-        private LearningScorebookService $scorebooks,
+        private OnlineClassroomService $classroom,
     ) {}
 
     /** @return array<string, mixed> */
-    public function workspace(User $viewer, int $districtId, ?int $selectedAssignmentId = null): array
+    public function workspace(User $viewer, int $districtId, ?int $selectedAssignmentId = null, ?string $subjectCode = null, ?int $educationLevel = null): array
     {
-        $catalog = $this->scorebooks->assignmentCatalog($viewer, $districtId);
-        $term = $catalog['selected_term'];
+        $catalog = $this->classroom->catalog($viewer, $districtId);
+        $term = $catalog['term'];
         $registrations = $catalog['registrations'];
+        $subjects = $catalog['subjects'];
+        if ($subjectCode !== null) {
+            $subjects = array_values(array_filter($subjects, static fn (array $subject): bool => $subject['code'] === $subjectCode
+                && (int) $subject['level'] === $educationLevel));
+            abort_if($subjects === [], 404);
+            $registrations = array_values(array_filter($registrations, static fn (array $registration): bool => $registration['subject_code'] === $subjectCode
+                && (int) $registration['level'] === $educationLevel));
+        }
         $query = $this->database->connection()->table('learning_assignments as assignment')
             ->leftJoin('users as creator', 'creator.id', '=', 'assignment.created_by')
             ->where('assignment.district_id', $districtId)
+            ->when($subjectCode !== null, fn ($builder) => $builder
+                ->where('assignment.subject_code', $subjectCode)
+                ->where(fn ($part) => $part->where('assignment.education_level', $educationLevel)->orWhereNull('assignment.education_level')))
             ->when($term !== null, fn ($builder) => $builder->where(function ($part) use ($term): void {
                 $part->where('assignment.academic_term', $term)->orWhereNull('assignment.academic_term');
             }))
             ->when($viewer->role === 'teacher', fn ($builder) => $builder->where('assignment.created_by', (int) $viewer->id))
             ->when($viewer->role === 'student', fn ($builder) => $builder->whereIn('assignment.status', ['open', 'closed']))
             ->selectRaw("assignment.*, COALESCE(creator.name, '') AS teacher_name")
+            // A saved deep link must remain reachable beyond the latest 250
+            // rows. Priority ordering stays inside every authorization filter.
+            ->when($selectedAssignmentId !== null, fn ($builder) => $builder->orderByRaw('CASE WHEN assignment.id = ? THEN 0 ELSE 1 END', [$selectedAssignmentId]))
             ->orderByDesc('assignment.created_at')
             ->limit(250);
         $assignmentRows = $query->get();
@@ -78,7 +92,8 @@ final readonly class AssignmentWorkflowService
                 $viewer,
                 $assignment,
                 count($audience),
-                $assignmentSubmissions->whereIn('status', ['submitted', 'reviewed'])->count(),
+                $assignmentSubmissions->when($subjectCode !== null, fn ($items) => $items->whereIn('student_code', array_column($audience, 'student_code')))
+                    ->whereIn('status', ['submitted', 'reviewed'])->count(),
                 $ownSubmission,
                 $submissionAttachments,
             );
@@ -116,7 +131,7 @@ final readonly class AssignmentWorkflowService
         return [
             'term' => $term,
             'terms' => $catalog['terms'],
-            'subjects' => $catalog['subjects'],
+            'subjects' => $subjects,
             'assignments' => $assignments,
             'selected_assignment' => $selected,
             'students' => $students,
@@ -133,8 +148,8 @@ final readonly class AssignmentWorkflowService
         ?string $ipAddress,
     ): array {
         abort_unless(in_array($viewer->role, ['teacher', 'admin', 'super_admin'], true), 403);
-        $catalog = $this->scorebooks->assignmentCatalog($viewer, $districtId);
-        $term = (string) ($catalog['selected_term'] ?? '');
+        $catalog = $this->classroom->catalog($viewer, $districtId);
+        $term = (string) ($catalog['term'] ?? '');
         if ($term === '') {
             throw ValidationException::withMessages(['subject_code' => 'ยังไม่พบรายวิชาลงทะเบียนในภาคเรียนปัจจุบัน']);
         }

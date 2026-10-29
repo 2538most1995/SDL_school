@@ -20,7 +20,9 @@ import {
     X,
 } from '@phosphor-icons/react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { useEffect, useMemo, useState, type ReactNode } from 'react';
+import { useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
+import type { Subject } from './classroom/types';
+import './classroom/assignments.css';
 import { PageHeader } from '../../components/PageHeader';
 import { QueryError, QuerySkeleton } from '../../components/QueryState';
 import { useDemoRole } from '../../context/DemoRoleContext';
@@ -271,29 +273,68 @@ function AuthenticatedAttachment({
     </>;
 }
 
-export function AssignmentWorkspacePage() {
+function ChoiceButtons({ label, value, options, onChange }: { label: string; value: string; options: Array<[string, string]>; onChange: (value: string) => void }) {
+    return <fieldset className="assignment-choices"><legend>{label}</legend><div role="group" aria-label={label}>{options.map(([key, text]) => <button type="button" key={key} aria-pressed={value === key} onClick={() => onChange(key)}>{text}{value === key && <CheckCircle size={16} weight="fill" />}</button>)}</div></fieldset>;
+}
+
+function canSubmitAssignment(assignment: Assignment, readOnly: boolean): boolean {
+    const now = Date.now();
+    return !readOnly && assignment.status === 'open' && (!assignment.opens_at || Date.parse(assignment.opens_at) <= now);
+}
+
+export function AssignmentWorkspacePage({ subject, embedded = false, initialAssignmentId = '', onDirty, onBusy }: {
+    subject?: Subject;
+    embedded?: boolean;
+    initialAssignmentId?: string;
+    onDirty?: (dirty: boolean) => void;
+    onBusy?: (busy: boolean) => void;
+} = {}) {
     const { role } = useDemoRole();
     const queryClient = useQueryClient();
-    const canManage = role !== 'student';
-    const [selectedId, setSelectedId] = useState<string>('');
+    const district = window.localStorage.getItem('sena-district-id') ?? '';
+    const isStaff = role !== 'student';
+    const [selectedId, setSelectedId] = useState<string>(initialAssignmentId);
+    const [editorBusy, setEditorBusy] = useState(false);
+    const detailRef = useRef<HTMLElement>(null);
     const [search, setSearch] = useState('');
     const [submissionFilter, setSubmissionFilter] = useState<'all' | 'submitted' | 'missing'>('all');
     const [assignmentEditor, setAssignmentEditor] = useState<Assignment | 'new' | null>(null);
     const [submissionEditor, setSubmissionEditor] = useState<Assignment | null>(null);
     const [reviewEditor, setReviewEditor] = useState<{ assignment: Assignment; student: AssignmentStudent } | null>(null);
+    const params = new URLSearchParams();
+    if (selectedId) params.set('assignment_id', selectedId);
+    if (subject) { params.set('subject_code', subject.code); params.set('education_level', String(subject.level)); }
     const query = useQuery({
-        queryKey: ['learning', 'assignment-workspace', selectedId],
+        queryKey: ['learning', 'assignment-workspace', role, district, subject?.code ?? '', subject?.level ?? '', selectedId],
         queryFn: ({ signal }) => getFeatureDataWithDemo<AssignmentWorkspace>(
-            `/api/v1/learning/assignments${selectedId ? `?assignment_id=${encodeURIComponent(selectedId)}` : ''}`,
+            `/api/v1/learning/assignments?${params}`,
             emptyWorkspace,
             signal,
         ),
+        placeholderData: previous => previous,
     });
     const data = query.data?.data;
+    const readOnly = query.data?.meta.read_only === true;
+    const canManage = isStaff && !readOnly && !query.isPlaceholderData;
+    const editorOpen = Boolean(assignmentEditor || submissionEditor || reviewEditor);
+    useEffect(() => { onDirty?.(editorOpen); }, [editorOpen, onDirty]);
+    useEffect(() => {
+        if (!editorOpen || embedded) return;
+        const warn = (event: BeforeUnloadEvent) => { event.preventDefault(); event.returnValue = ''; };
+        window.addEventListener('beforeunload', warn);
+        return () => window.removeEventListener('beforeunload', warn);
+    }, [editorOpen, embedded]);
+    useEffect(() => { onBusy?.(editorBusy); return () => onBusy?.(false); }, [editorBusy, onBusy]);
+    const closeEditor = (close: () => void) => {
+        if (!editorBusy && window.confirm('มีข้อมูลที่ยังไม่ได้บันทึก ต้องการปิดแบบร่างนี้หรือไม่?')) close();
+    };
 
     useEffect(() => {
-        if (!selectedId && data?.selected_assignment?.id) setSelectedId(data.selected_assignment.id);
-    }, [data?.selected_assignment?.id, selectedId]);
+        if (embedded && selectedId && data?.selected_assignment?.id === selectedId && !query.isPlaceholderData) {
+            detailRef.current?.focus({ preventScroll: true });
+            detailRef.current?.scrollIntoView({ behavior: window.matchMedia('(prefers-reduced-motion: reduce)').matches ? 'instant' : 'smooth', block: 'start' });
+        }
+    }, [embedded, selectedId, data?.selected_assignment?.id, query.isPlaceholderData]);
 
     const filteredAssignments = useMemo(() => {
         const needle = search.trim().toLocaleLowerCase('th');
@@ -319,7 +360,7 @@ export function AssignmentWorkspacePage() {
     });
 
     if (query.isPending) return <QuerySkeleton rows={8} />;
-    if (query.isError) return <QueryError onRetry={() => query.refetch()} />;
+    if (query.isError && !data) return <QueryError onRetry={() => query.refetch()} />;
     if (!data) return null;
 
     const selected = data.selected_assignment;
@@ -327,16 +368,18 @@ export function AssignmentWorkspacePage() {
         ? data.subjects.find((subject) => subject.code === selected.subject_code && subject.level === selected.education_level)
         : data.subjects[0];
 
-    return <div className="pb-6">
-        <PageHeader
+    return <div className={`assignment-workspace pb-6 ${embedded ? 'assignment-workspace-embedded' : ''}`}>
+        {readOnly && <p role="status" className="mb-4 rounded-xl border border-amber-200 bg-amber-50 p-3 text-sm text-amber-900">ระบบอยู่ในโหมดอ่านอย่างเดียว ยังสร้างงาน ส่งงาน หรือตรวจคะแนนไม่ได้</p>}
+        {query.isError && <p role="alert" className="mb-4 rounded-xl bg-amber-50 p-3 text-sm text-amber-900">โหลดข้อมูลล่าสุดไม่สำเร็จ แบบร่างยังอยู่ <button type="button" onClick={() => void query.refetch()} className="font-bold underline">ลองใหม่</button></p>}
+        {embedded ? <div className="classroom-section-heading mb-4"><div><h3>งานส่งไฟล์ / ลิงก์</h3><p className="classroom-muted mt-1 text-sm">ส่ง PDF รูปภาพ หรือลิงก์งาน พร้อมติดตามคะแนนและคำแนะนำจากครู</p></div>{canManage && <button type="button" disabled={data.subjects.length === 0} onClick={() => setAssignmentEditor('new')} className="assignment-primary-action"><Plus size={18} /> มอบหมายงานส่งไฟล์</button>}</div> : <PageHeader
             category="learning"
             title="งานและการส่งงาน"
             description={canManage ? 'สร้างงานจากรายวิชาที่ลงทะเบียน ตรวจงาน และให้คะแนนผู้เรียน' : 'ดูรายละเอียด ส่งงาน และติดตามผลตรวจจากครู'}
             icon={BookOpenText}
             actions={canManage ? <button type="button" onClick={() => setAssignmentEditor('new')} disabled={data.subjects.length === 0} className="inline-flex items-center gap-2 whitespace-nowrap rounded-full bg-brand-700 px-5 py-2.5 text-sm font-bold text-white hover:bg-brand-800 active:scale-[0.98] disabled:cursor-not-allowed disabled:bg-slate-300"><Plus size={17} weight="bold" /> เพิ่มงานใหม่</button> : undefined}
-        />
+        />}
 
-        <section className="mb-5 grid gap-4 rounded-2xl border border-slate-200 bg-white p-4 shadow-sm md:grid-cols-[minmax(0,1.4fr)_0.7fr_0.7fr_auto] md:items-center md:p-5">
+        {!embedded && <section className="mb-5 grid gap-4 rounded-2xl border border-slate-200 bg-white p-4 shadow-sm md:grid-cols-[minmax(0,1.4fr)_0.7fr_0.7fr_auto] md:items-center md:p-5">
             <div className="flex min-w-0 items-center gap-4">
                 <div className="grid size-14 shrink-0 place-items-center rounded-2xl bg-brand-700 text-white"><BookOpenText size={30} weight="duotone" /></div>
                 <div className="min-w-0"><p className="truncate text-lg font-black text-slate-950">{selectedSubject?.name ?? 'ยังไม่พบรายวิชาลงทะเบียน'}</p><p className="mt-1 text-sm font-bold text-slate-500">{selectedSubject ? `${selectedSubject.code} ระดับ ${selectedSubject.level_label}` : 'รอข้อมูลลงทะเบียนภาคเรียนปัจจุบัน'}</p></div>
@@ -344,32 +387,32 @@ export function AssignmentWorkspacePage() {
             <div className="border-slate-200 md:border-l md:pl-5"><p className="flex items-center gap-2 text-xs font-bold text-slate-500"><CalendarBlank size={17} /> ภาคเรียน</p><p className="mt-1 text-lg font-black text-slate-900">{data.term ?? '-'}</p></div>
             <div className="border-slate-200 md:border-l md:pl-5"><p className="flex items-center gap-2 text-xs font-bold text-slate-500"><Users size={17} /> ผู้เรียน</p><p className="mt-1 text-lg font-black text-slate-900">{selected?.student_count ?? selectedSubject?.student_count ?? 0} คน</p></div>
             <button type="button" onClick={() => void query.refetch()} className="inline-flex h-11 items-center justify-center gap-2 whitespace-nowrap rounded-xl border border-slate-200 px-4 text-sm font-bold text-slate-700 hover:border-brand-300 hover:text-brand-800 active:scale-[0.98]"><ArrowsClockwise size={17} /> ดึงข้อมูลรายวิชา</button>
-        </section>
+        </section>}
 
         {data.subjects.length === 0 ? <section className="rounded-2xl border border-amber-200 bg-amber-50 p-8 text-center"><BookOpenText size={38} className="mx-auto text-amber-700" /><h2 className="mt-3 text-lg font-black text-amber-950">ยังไม่พบรายวิชาที่ลงทะเบียนในภาคเรียนปัจจุบัน</h2><p className="mt-2 text-sm leading-6 text-amber-900">เมื่อนำเข้าข้อมูลผู้เรียนและรายวิชาลงทะเบียนแล้ว ครูจะสามารถสร้างงานจากหน้านี้ได้</p></section> : <div className="grid gap-5 xl:grid-cols-[360px_minmax(0,1fr)]">
             <aside className="overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm">
                 <div className="border-b border-slate-100 p-4">
-                    <div className="flex items-center justify-between gap-3"><h2 className="font-black text-slate-950">งานที่มอบหมาย</h2>{canManage && <button type="button" onClick={() => setAssignmentEditor('new')} className="inline-flex items-center gap-1.5 rounded-xl bg-brand-700 px-3 py-2 text-xs font-bold text-white active:scale-[0.98]"><Plus size={15} /> เพิ่มงาน</button>}</div>
+                    <div className="flex items-center justify-between gap-3"><h2 className="font-black text-slate-950">งานที่มอบหมาย</h2>{canManage && !embedded && <button type="button" onClick={() => setAssignmentEditor('new')} className="inline-flex items-center gap-1.5 rounded-xl bg-brand-700 px-3 py-2 text-xs font-bold text-white active:scale-[0.98]"><Plus size={15} /> เพิ่มงาน</button>}</div>
                     <label className="relative mt-3 block"><span className="sr-only">ค้นหาชื่องาน</span><MagnifyingGlass size={18} className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" /><input value={search} onChange={(event) => setSearch(event.target.value)} placeholder="ค้นหาชื่องานหรือรายวิชา" className="h-11 w-full rounded-xl border border-slate-300 bg-white pl-10 pr-3 text-sm text-slate-900 outline-none focus:border-brand-600 focus:ring-2 focus:ring-brand-100" /></label>
                 </div>
                 <div className="max-h-[660px] overflow-y-auto">
                     {filteredAssignments.length === 0 ? <div className="p-8 text-center"><BookOpenText size={32} className="mx-auto text-slate-300" /><p className="mt-3 font-bold text-slate-700">ยังไม่มีงานในภาคเรียนนี้</p><p className="mt-1 text-sm text-slate-500">กดเพิ่มงานเพื่อเริ่มมอบหมายงาน</p></div> : filteredAssignments.map((assignment) => {
                         const active = selected?.id === assignment.id;
                         const state = submissionStatus(assignment.submission, assignment.due_at);
-                        return <button key={assignment.id} type="button" onClick={() => setSelectedId(assignment.id)} className={`block w-full border-b border-slate-100 p-4 text-left transition last:border-b-0 ${active ? 'bg-brand-50 shadow-[inset_4px_0_0_var(--color-brand-700)]' : 'hover:bg-slate-50'}`}>
+                        return <button key={assignment.id} type="button" onClick={() => setSelectedId(assignment.id)} aria-pressed={active} className={`assignment-work-card block w-full border-b border-slate-100 p-4 text-left last:border-b-0 ${active ? 'bg-brand-50 shadow-[inset_4px_0_0_var(--color-brand-700)]' : 'hover:bg-slate-50'}`}>
                             <div className="flex items-start gap-3"><div className={`grid size-10 shrink-0 place-items-center rounded-xl ${active ? 'bg-brand-700 text-white' : 'bg-slate-100 text-slate-600'}`}><BookOpenText size={20} /></div><div className="min-w-0 flex-1"><p className="line-clamp-2 font-bold leading-5 text-slate-950">{assignment.title}</p><p className="mt-1 truncate text-xs font-bold text-slate-500">{assignment.subject_code} {assignment.subject_name}</p></div><CaretRight size={17} className="mt-2 shrink-0 text-slate-400" /></div>
-                            <div className="mt-3 flex items-end justify-between gap-2"><div><p className="text-xs text-slate-500">กำหนดส่ง</p><p className="mt-0.5 text-xs font-bold text-slate-700">{thaiDateTime(assignment.due_at)}</p></div>{canManage ? <p className="shrink-0 text-right text-xs text-slate-500">ส่งแล้ว<br /><strong className="text-base text-slate-900">{assignment.submitted_count}/{assignment.student_count}</strong></p> : <StatusPill label={state.label} tone={state.tone} />}</div>
+                            <div className="mt-3 flex items-end justify-between gap-2"><div><p className="text-xs text-slate-500">กำหนดส่ง</p><p className="mt-0.5 text-xs font-bold text-slate-700">{thaiDateTime(assignment.due_at)}</p></div>{isStaff ? <p className="shrink-0 text-right text-xs text-slate-500">ส่งแล้ว<br /><strong className="text-base text-slate-900">{assignment.submitted_count}/{assignment.student_count}</strong></p> : <StatusPill label={state.label} tone={state.tone} />}</div>
                         </button>;
                     })}
                 </div>
             </aside>
 
-            <main className="min-w-0 overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm">
+            <main ref={detailRef} tabIndex={-1} aria-label={selected ? `รายละเอียดงาน ${selected.title}` : 'รายละเอียดงานส่งไฟล์'} className="min-w-0 scroll-mt-5 overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm">
                 {!selected ? <div className="grid min-h-[440px] place-items-center p-8 text-center"><div><BookOpenText size={44} className="mx-auto text-slate-300" /><h2 className="mt-3 text-lg font-black text-slate-800">เลือกงานเพื่อดูรายละเอียด</h2></div></div> : <>
                     <header className="border-b border-slate-100 p-4 md:p-5">
                         <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
                             <div className="min-w-0"><div className="flex flex-wrap items-center gap-2"><h2 className="text-xl font-black leading-8 text-slate-950">{selected.title}</h2><StatusPill label={assignmentStatus(selected.status)} tone={selected.status === 'open' ? 'border-emerald-200 bg-emerald-50 text-emerald-800' : selected.status === 'draft' ? 'border-amber-200 bg-amber-50 text-amber-900' : 'border-slate-200 bg-slate-100 text-slate-700'} /></div><p className="mt-1 text-sm font-bold text-slate-500">{selected.subject_code} {selected.subject_name}</p></div>
-                            {canManage ? <div className="flex gap-2"><button type="button" onClick={() => setAssignmentEditor(selected)} className="inline-flex h-10 items-center gap-2 whitespace-nowrap rounded-xl border border-slate-200 px-3.5 text-sm font-bold text-slate-700 hover:text-brand-800"><PencilSimple size={17} /> แก้ไข</button><button type="button" onClick={() => { if (window.confirm(`ยืนยันลบงาน ${selected.title}? งานที่ผู้เรียนส่งไว้จะถูกลบด้วย`)) remove.mutate(selected); }} disabled={remove.isPending} className="inline-flex h-10 items-center gap-2 whitespace-nowrap rounded-xl border border-rose-200 px-3.5 text-sm font-bold text-rose-700 hover:bg-rose-50"><Trash size={17} /> ลบงาน</button></div> : selected.status === 'open' && <button type="button" onClick={() => setSubmissionEditor(selected)} className="inline-flex h-11 items-center justify-center gap-2 whitespace-nowrap rounded-xl bg-brand-700 px-5 text-sm font-bold text-white hover:bg-brand-800 active:scale-[0.98]"><UploadSimple size={18} /> {selected.submission ? 'ส่งงานอีกครั้ง' : 'ส่งงาน'}</button>}
+                            {canManage && selected.can_edit ? <div className="flex gap-2"><button type="button" onClick={() => setAssignmentEditor(selected)} className="inline-flex h-10 items-center gap-2 whitespace-nowrap rounded-xl border border-slate-200 px-3.5 text-sm font-bold text-slate-700 hover:text-brand-800"><PencilSimple size={17} /> แก้ไข</button><button type="button" onClick={() => { if (window.confirm(`ยืนยันลบงาน ${selected.title}? งานที่ผู้เรียนส่งไว้จะถูกลบด้วย`)) remove.mutate(selected); }} disabled={remove.isPending} className="inline-flex h-10 items-center gap-2 whitespace-nowrap rounded-xl border border-rose-200 px-3.5 text-sm font-bold text-rose-700 hover:bg-rose-50"><Trash size={17} /> ลบงาน</button></div> : !isStaff && canSubmitAssignment(selected, readOnly || query.isPlaceholderData) && <button type="button" onClick={() => setSubmissionEditor(selected)} className="inline-flex h-11 items-center justify-center gap-2 whitespace-nowrap rounded-xl bg-brand-700 px-5 text-sm font-bold text-white hover:bg-brand-800 active:scale-[0.98]"><UploadSimple size={18} /> {selected.submission ? 'ส่งงานอีกครั้ง' : 'ส่งงาน'}</button>}
                         </div>
                         {selected.instructions && <p className="mt-4 max-w-3xl whitespace-pre-wrap text-sm leading-6 text-slate-700">{selected.instructions}</p>}
                         <AssignmentMaterials assignment={selected} canManage={canManage} />
@@ -381,21 +424,21 @@ export function AssignmentWorkspacePage() {
                         </dl>
                     </header>
 
-                    {canManage ? <section>
-                        <div className="flex flex-col gap-3 border-b border-slate-100 p-4 md:flex-row md:items-center md:justify-between"><div><h3 className="font-black text-slate-950">งานที่ผู้เรียนส่ง</h3><p className="mt-1 text-xs text-slate-500">รายชื่อจากข้อมูลลงทะเบียนภาคเรียน {data.term}</p></div><label className="flex items-center gap-2 text-sm font-bold text-slate-700"><span>สถานะ</span><select value={submissionFilter} onChange={(event) => setSubmissionFilter(event.target.value as typeof submissionFilter)} className="h-10 rounded-xl border border-slate-300 bg-white px-3"><option value="all">ทั้งหมด</option><option value="submitted">ส่งแล้ว</option><option value="missing">ยังไม่ส่ง</option></select></label></div>
-                        <div className="hidden overflow-x-auto md:block"><table className="w-full min-w-[820px] text-left text-sm"><thead className="bg-slate-50 text-xs font-bold text-slate-600"><tr><th className="px-4 py-3">ผู้เรียน</th><th className="px-4 py-3">สถานะ</th><th className="px-4 py-3">ไฟล์งาน</th><th className="px-4 py-3">วันที่ส่ง</th><th className="px-4 py-3 text-center">คะแนน</th><th className="px-4 py-3 text-center">จัดการ</th></tr></thead><tbody>{visibleStudents.map((student) => <SubmissionRow key={student.student_code} assignment={selected} student={student} onReview={() => setReviewEditor({ assignment: selected, student })} />)}</tbody></table></div>
-                        <div className="grid gap-3 p-4 md:hidden">{visibleStudents.map((student) => <SubmissionCard key={student.student_code} assignment={selected} student={student} onReview={() => setReviewEditor({ assignment: selected, student })} />)}</div>
+                    {isStaff ? <section>
+                        <div className="flex flex-col gap-3 border-b border-slate-100 p-4 md:flex-row md:items-center md:justify-between"><div><h3 className="font-black text-slate-950">งานที่ผู้เรียนส่ง</h3><p className="mt-1 text-xs text-slate-500">รายชื่อจากข้อมูลลงทะเบียนภาคเรียน {data.term}</p></div><ChoiceButtons label="สถานะการส่งงาน" value={submissionFilter} options={[['all', 'ทั้งหมด'], ['submitted', 'ส่งแล้ว'], ['missing', 'ยังไม่ส่ง']]} onChange={value => setSubmissionFilter(value as typeof submissionFilter)} /></div>
+                        <div className="hidden overflow-x-auto md:block"><table className="w-full min-w-[820px] text-left text-sm"><thead className="bg-slate-50 text-xs font-bold text-slate-600"><tr><th className="px-4 py-3">ผู้เรียน</th><th className="px-4 py-3">สถานะ</th><th className="px-4 py-3">ไฟล์งาน</th><th className="px-4 py-3">วันที่ส่ง</th><th className="px-4 py-3 text-center">คะแนน</th><th className="px-4 py-3 text-center">จัดการ</th></tr></thead><tbody>{visibleStudents.map((student) => <SubmissionRow key={student.student_code} assignment={selected} student={student} canReview={canManage && selected.can_edit} onReview={() => setReviewEditor({ assignment: selected, student })} />)}</tbody></table></div>
+                        <div className="grid gap-3 p-4 md:hidden">{visibleStudents.map((student) => <SubmissionCard key={student.student_code} assignment={selected} student={student} canReview={canManage && selected.can_edit} onReview={() => setReviewEditor({ assignment: selected, student })} />)}</div>
                         {visibleStudents.length === 0 && <p className="p-8 text-center text-sm font-bold text-slate-500">ไม่พบผู้เรียนในสถานะที่เลือก</p>}
-                    </section> : <StudentSubmissionDetail assignment={selected} onSubmit={() => setSubmissionEditor(selected)} />}
+                    </section> : <StudentSubmissionDetail assignment={selected} canSubmit={canSubmitAssignment(selected, readOnly || query.isPlaceholderData)} onSubmit={() => setSubmissionEditor(selected)} />}
                 </>}
             </main>
         </div>}
 
-        {canManage && <aside className="mt-5 flex flex-col gap-3 rounded-2xl border border-brand-200 bg-brand-50 p-4 text-sm text-brand-950 sm:flex-row sm:items-center sm:justify-between"><div><p className="font-black">ข้อมูลรายวิชาและผู้เรียนเชื่อมจากระบบลงทะเบียน</p><p className="mt-1 leading-6 text-brand-800">หน้านี้แสดงเฉพาะภาคเรียนปัจจุบันและกลุ่มที่บัญชีครูรับผิดชอบ</p></div></aside>}
+        {canManage && !embedded && <aside className="mt-5 flex flex-col gap-3 rounded-2xl border border-brand-200 bg-brand-50 p-4 text-sm text-brand-950 sm:flex-row sm:items-center sm:justify-between"><div><p className="font-black">ข้อมูลรายวิชาและผู้เรียนเชื่อมจากระบบลงทะเบียน</p><p className="mt-1 leading-6 text-brand-800">หน้านี้แสดงเฉพาะภาคเรียนปัจจุบันและกลุ่มที่บัญชีครูรับผิดชอบ</p></div></aside>}
 
-        {assignmentEditor && <AssignmentEditor assignment={assignmentEditor} term={data.term} subjects={data.subjects} onClose={() => setAssignmentEditor(null)} onSaved={(id) => { setAssignmentEditor(null); setSelectedId(id); void queryClient.invalidateQueries({ queryKey: ['learning', 'assignment-workspace'] }); }} />}
-        {submissionEditor && <SubmissionEditor assignment={submissionEditor} onClose={() => setSubmissionEditor(null)} onSaved={() => { setSubmissionEditor(null); void queryClient.invalidateQueries({ queryKey: ['learning', 'assignment-workspace'] }); }} />}
-        {reviewEditor && <ReviewEditor assignment={reviewEditor.assignment} student={reviewEditor.student} onClose={() => setReviewEditor(null)} onSaved={() => { setReviewEditor(null); void queryClient.invalidateQueries({ queryKey: ['learning', 'assignment-workspace'] }); }} />}
+        {assignmentEditor && <AssignmentEditor assignment={assignmentEditor} term={data.term} subjects={data.subjects} onBusy={setEditorBusy} onClose={() => closeEditor(() => setAssignmentEditor(null))} onSaved={(id) => { setAssignmentEditor(null); setSelectedId(id); void queryClient.invalidateQueries({ queryKey: ['learning', 'assignment-workspace'] }); }} />}
+        {submissionEditor && <SubmissionEditor assignment={submissionEditor} onBusy={setEditorBusy} onClose={() => closeEditor(() => setSubmissionEditor(null))} onSaved={() => { setSubmissionEditor(null); void queryClient.invalidateQueries({ queryKey: ['learning', 'assignment-workspace'] }); }} />}
+        {reviewEditor && <ReviewEditor assignment={reviewEditor.assignment} student={reviewEditor.student} onBusy={setEditorBusy} onClose={() => closeEditor(() => setReviewEditor(null))} onSaved={() => { setReviewEditor(null); void queryClient.invalidateQueries({ queryKey: ['learning', 'assignment-workspace'] }); }} />}
     </div>;
 }
 
@@ -450,28 +493,28 @@ function AssignmentMaterials({ assignment, canManage }: { assignment: Assignment
     </section>;
 }
 
-function SubmissionRow({ assignment, student, onReview }: { assignment: Assignment; student: AssignmentStudent; onReview: () => void }) {
+function SubmissionRow({ assignment, student, canReview, onReview }: { assignment: Assignment; student: AssignmentStudent; canReview: boolean; onReview: () => void }) {
     const state = submissionStatus(student.submission, assignment.due_at);
-    return <tr className="border-b border-slate-100 last:border-b-0"><td className="px-4 py-3"><p className="font-bold text-slate-950">{student.full_name}</p><p className="mt-0.5 text-xs text-slate-500">รหัส {student.student_code} กลุ่ม {student.group_name}</p></td><td className="px-4 py-3"><StatusPill label={state.label} tone={state.tone} /></td><td className="px-4 py-3">{student.submission ? <SubmissionLink assignment={assignment} submission={student.submission} /> : <span className="text-slate-400">-</span>}</td><td className="px-4 py-3 text-slate-600">{student.submission ? thaiDateTime(student.submission.submitted_at) : '-'}</td><td className="px-4 py-3 text-center font-black text-slate-900">{student.submission?.score ?? '-'}<span className="font-normal text-slate-400">/{assignment.max_score}</span></td><td className="px-4 py-3 text-center">{student.submission ? <button type="button" onClick={onReview} className="inline-flex size-9 items-center justify-center rounded-xl border border-slate-200 text-slate-700 hover:text-brand-800" aria-label={`ตรวจงาน ${student.full_name}`}><ChatCircle size={18} /></button> : '-'}</td></tr>;
+    return <tr className="border-b border-slate-100 last:border-b-0"><td className="px-4 py-3"><p className="font-bold text-slate-950">{student.full_name}</p><p className="mt-0.5 text-xs text-slate-500">รหัส {student.student_code} กลุ่ม {student.group_name}</p></td><td className="px-4 py-3"><StatusPill label={state.label} tone={state.tone} /></td><td className="px-4 py-3">{student.submission ? <SubmissionLink assignment={assignment} submission={student.submission} /> : <span className="text-slate-400">-</span>}</td><td className="px-4 py-3 text-slate-600">{student.submission ? thaiDateTime(student.submission.submitted_at) : '-'}</td><td className="px-4 py-3 text-center font-black text-slate-900">{student.submission?.score ?? '-'}<span className="font-normal text-slate-400">/{assignment.max_score}</span></td><td className="px-4 py-3 text-center">{student.submission ? <button type="button" disabled={!canReview} onClick={onReview} className="inline-flex size-9 items-center justify-center rounded-xl border border-slate-200 text-slate-700 hover:text-brand-800" aria-label={`ตรวจงาน ${student.full_name}`}><ChatCircle size={18} /></button> : '-'}</td></tr>;
 }
 
-function SubmissionCard({ assignment, student, onReview }: { assignment: Assignment; student: AssignmentStudent; onReview: () => void }) {
+function SubmissionCard({ assignment, student, canReview, onReview }: { assignment: Assignment; student: AssignmentStudent; canReview: boolean; onReview: () => void }) {
     const state = submissionStatus(student.submission, assignment.due_at);
-    return <article className="rounded-xl border border-slate-200 p-4"><div className="flex items-start justify-between gap-3"><div><p className="font-bold text-slate-950">{student.full_name}</p><p className="mt-1 text-xs text-slate-500">{student.student_code} กลุ่ม {student.group_name}</p></div><StatusPill label={state.label} tone={state.tone} /></div>{student.submission && <div className="mt-3 rounded-xl bg-slate-50 p-3"><SubmissionLink assignment={assignment} submission={student.submission} /><p className="mt-2 text-xs text-slate-500">ส่งเมื่อ {thaiDateTime(student.submission.submitted_at)}</p><div className="mt-3 flex items-center justify-between"><p className="font-black text-slate-900">{student.submission.score ?? '-'} / {assignment.max_score} คะแนน</p><button type="button" onClick={onReview} className="inline-flex items-center gap-2 rounded-xl border border-slate-200 bg-white px-3 py-2 text-xs font-bold text-slate-700"><ChatCircle size={16} /> ตรวจงาน</button></div></div>}</article>;
+    return <article className="rounded-xl border border-slate-200 p-4"><div className="flex items-start justify-between gap-3"><div><p className="font-bold text-slate-950">{student.full_name}</p><p className="mt-1 text-xs text-slate-500">{student.student_code} กลุ่ม {student.group_name}</p></div><StatusPill label={state.label} tone={state.tone} /></div>{student.submission && <div className="mt-3 rounded-xl bg-slate-50 p-3"><SubmissionLink assignment={assignment} submission={student.submission} /><p className="mt-2 text-xs text-slate-500">ส่งเมื่อ {thaiDateTime(student.submission.submitted_at)}</p><div className="mt-3 flex items-center justify-between"><p className="font-black text-slate-900">{student.submission.score ?? '-'} / {assignment.max_score} คะแนน</p><button type="button" disabled={!canReview} onClick={onReview} className="inline-flex items-center gap-2 rounded-xl border border-slate-200 bg-white px-3 py-2 text-xs font-bold text-slate-700"><ChatCircle size={16} /> ตรวจงาน</button></div></div>}</article>;
 }
 
-function StudentSubmissionDetail({ assignment, onSubmit }: { assignment: Assignment; onSubmit: () => void }) {
+function StudentSubmissionDetail({ assignment, canSubmit, onSubmit }: { assignment: Assignment; canSubmit: boolean; onSubmit: () => void }) {
     const submission = assignment.submission;
     const state = submissionStatus(submission, assignment.due_at);
-    return <section className="p-4 md:p-5"><div className="flex items-center justify-between gap-3"><div><h3 className="font-black text-slate-950">การส่งงานของฉัน</h3><p className="mt-1 text-sm text-slate-500">ส่งได้ทั้งลิงก์ PDF หรือรูปภาพสูงสุด 10 รูป</p></div><StatusPill label={state.label} tone={state.tone} /></div>{submission ? <article className="mt-4 rounded-xl border border-slate-200 bg-slate-50 p-4"><SubmissionLink assignment={assignment} submission={submission} /><p className="mt-2 text-sm text-slate-600">ส่งเมื่อ {thaiDateTime(submission.submitted_at)}</p>{submission.status === 'reviewed' && <div className="mt-4 grid gap-3 rounded-xl bg-white p-4 sm:grid-cols-[140px_1fr]"><div><p className="text-xs font-bold text-slate-500">คะแนน</p><p className="mt-1 text-2xl font-black text-brand-800">{submission.score ?? '-'} <span className="text-sm text-slate-500">/ {assignment.max_score}</span></p></div><div><p className="text-xs font-bold text-slate-500">ข้อเสนอแนะจากครู</p><p className="mt-1 whitespace-pre-wrap text-sm leading-6 text-slate-700">{submission.feedback || 'ไม่มีข้อเสนอแนะเพิ่มเติม'}</p></div></div>}<button type="button" onClick={onSubmit} className="mt-4 inline-flex h-10 items-center gap-2 rounded-xl border border-brand-200 bg-white px-4 text-sm font-bold text-brand-800"><UploadSimple size={17} /> ส่งงานอีกครั้ง</button></article> : <div className="mt-4 rounded-xl border border-dashed border-slate-300 p-8 text-center"><UploadSimple size={36} className="mx-auto text-slate-400" /><p className="mt-3 font-bold text-slate-800">ยังไม่ได้ส่งงาน</p><button type="button" onClick={onSubmit} className="mt-4 inline-flex h-11 items-center gap-2 rounded-xl bg-brand-700 px-5 text-sm font-bold text-white"><UploadSimple size={18} /> ส่งงานตอนนี้</button></div>}</section>;
+    return <section className="p-4 md:p-5"><div className="flex items-center justify-between gap-3"><div><h3 className="font-black text-slate-950">การส่งงานของฉัน</h3><p className="mt-1 text-sm text-slate-500">ส่งได้ทั้งลิงก์ PDF หรือรูปภาพสูงสุด 10 รูป</p></div><StatusPill label={state.label} tone={state.tone} /></div>{submission ? <article className="mt-4 rounded-xl border border-slate-200 bg-slate-50 p-4"><SubmissionLink assignment={assignment} submission={submission} /><p className="mt-2 text-sm text-slate-600">ส่งเมื่อ {thaiDateTime(submission.submitted_at)}</p>{submission.status === 'reviewed' && <div className="mt-4 grid gap-3 rounded-xl bg-white p-4 sm:grid-cols-[140px_1fr]"><div><p className="text-xs font-bold text-slate-500">คะแนน</p><p className="mt-1 text-2xl font-black text-brand-800">{submission.score ?? '-'} <span className="text-sm text-slate-500">/ {assignment.max_score}</span></p></div><div><p className="text-xs font-bold text-slate-500">ข้อเสนอแนะจากครู</p><p className="mt-1 whitespace-pre-wrap text-sm leading-6 text-slate-700">{submission.feedback || 'ไม่มีข้อเสนอแนะเพิ่มเติม'}</p></div></div>}<button type="button" disabled={!canSubmit} onClick={onSubmit} className="mt-4 inline-flex h-10 items-center gap-2 rounded-xl border border-brand-200 bg-white px-4 text-sm font-bold text-brand-800"><UploadSimple size={17} /> ส่งงานอีกครั้ง</button></article> : <div className="mt-4 rounded-xl border border-dashed border-slate-300 p-8 text-center"><UploadSimple size={36} className="mx-auto text-slate-400" /><p className="mt-3 font-bold text-slate-800">{canSubmit ? 'ยังไม่ได้ส่งงาน' : 'ยังไม่เปิดรับงานหรือปิดรับงานแล้ว'}</p><button type="button" disabled={!canSubmit} onClick={onSubmit} className="mt-4 inline-flex h-11 items-center gap-2 rounded-xl bg-brand-700 px-5 text-sm font-bold text-white"><UploadSimple size={18} /> ส่งงานตอนนี้</button></div>}</section>;
 }
 
 function ModalShell({ title, description, onClose, children, wide = false }: { title: string; description?: string; onClose: () => void; children: ReactNode; wide?: boolean }) {
     return <div className="fixed inset-0 z-[70] grid place-items-center overflow-y-auto bg-slate-950/55 p-3" role="dialog" aria-modal="true"><section className={`my-auto w-full overflow-hidden rounded-2xl bg-white shadow-2xl ${wide ? 'max-w-3xl' : 'max-w-2xl'}`}><header className="flex items-start justify-between gap-4 border-b border-slate-100 p-5"><div><h2 className="text-xl font-black text-slate-950">{title}</h2>{description && <p className="mt-1 text-sm leading-6 text-slate-500">{description}</p>}</div><button type="button" onClick={onClose} className="grid size-9 shrink-0 place-items-center rounded-xl text-slate-600 hover:bg-slate-100" aria-label="ปิด"><X size={20} /></button></header>{children}</section></div>;
 }
 
-function AssignmentEditor({ assignment, term, subjects, onClose, onSaved }: { assignment: Assignment | 'new'; term: string | null; subjects: AssignmentSubject[]; onClose: () => void; onSaved: (id: string) => void }) {
-    const initial: AssignmentDraft = assignment === 'new' ? { ...emptyDraft } : {
+function AssignmentEditor({ assignment, term, subjects, onClose, onSaved, onBusy }: { assignment: Assignment | 'new'; term: string | null; subjects: AssignmentSubject[]; onClose: () => void; onSaved: (id: string) => void; onBusy: (busy: boolean) => void }) {
+    const initial: AssignmentDraft = assignment === 'new' ? { ...emptyDraft, subject_code: subjects[0]?.code ?? '', education_level: String(subjects[0]?.level ?? '') } : {
         title: assignment.title,
         instructions: assignment.instructions,
         subject_code: assignment.subject_code,
@@ -514,6 +557,7 @@ function AssignmentEditor({ assignment, term, subjects, onClose, onSaved }: { as
         },
         onSuccess: (response) => { showSuccessAlert(assignment === 'new' ? 'เพิ่มงานเรียบร้อยแล้ว' : 'แก้ไขงานเรียบร้อยแล้ว'); onSaved(response.data.id); },
     });
+    useEffect(() => { onBusy(save.isPending); return () => onBusy(false); }, [save.isPending, onBusy]);
     const chooseSubject = (value: string) => {
         const [level, code] = value.split('|');
         setDraft({ ...draft, subject_code: code ?? '', education_level: level ?? '', target_group: '' });
@@ -541,18 +585,18 @@ function AssignmentEditor({ assignment, term, subjects, onClose, onSaved }: { as
     };
 
     return <ModalShell
-        title={assignment === 'new' ? 'เพิ่มงานใหม่' : 'แก้ไขงาน'}
+        title={assignment === 'new' ? 'มอบหมายงานส่งไฟล์ / ลิงก์' : 'แก้ไขงานส่งไฟล์ / ลิงก์'}
         description={`กำหนดรายละเอียดและแนบเอกสารให้นักศึกษา ภาคเรียน ${term ?? 'ปัจจุบัน'}`}
-        onClose={onClose}
+        onClose={() => { if (!save.isPending) onClose(); }}
         wide
     >
-        <form onSubmit={(event) => { event.preventDefault(); if (!clientError) save.mutate(); }} className="flex max-h-[78vh] flex-col">
-            <div className="space-y-5 overflow-y-auto p-5">
+        <form onSubmit={(event) => { event.preventDefault(); if (!clientError && draft.subject_code && draft.education_level) save.mutate(); }} className="flex max-h-[78vh] flex-col">
+            <fieldset disabled={save.isPending} className="space-y-5 overflow-y-auto p-5">
                 <section className="grid gap-4 sm:grid-cols-2" aria-labelledby="assignment-basic-heading">
                     <div className="sm:col-span-2"><h3 id="assignment-basic-heading" className="font-black text-slate-950">รายละเอียดงาน</h3><p className="mt-1 text-sm text-slate-500">ชื่อและคำชี้แจงส่วนนี้จะแสดงให้นักศึกษาอ่านก่อนส่งงาน</p></div>
                     <label className="sm:col-span-2"><span className="mb-1.5 block text-sm font-bold text-slate-700">ชื่องาน *</span><input required maxLength={220} value={draft.title} onChange={(event) => setDraft({ ...draft, title: event.target.value })} placeholder="เช่น สรุปบทเรียนหน่วยที่ 1" className="h-11 w-full rounded-xl border border-slate-300 px-3 text-slate-950 outline-none placeholder:text-slate-400 focus:border-brand-600 focus:ring-2 focus:ring-brand-100" /></label>
-                    <label><span className="mb-1.5 block text-sm font-bold text-slate-700">รายวิชาที่ลงทะเบียน *</span><select required value={draft.education_level && draft.subject_code ? `${draft.education_level}|${draft.subject_code}` : ''} onChange={(event) => chooseSubject(event.target.value)} className="h-11 w-full rounded-xl border border-slate-300 bg-white px-3 text-slate-950"><option value="">เลือกรายวิชา</option>{subjects.map((subject) => <option key={`${subject.level}|${subject.code}`} value={`${subject.level}|${subject.code}`}>{subject.code} {subject.name} ({subject.level_label})</option>)}</select></label>
-                    <label><span className="mb-1.5 block text-sm font-bold text-slate-700">กลุ่มเป้าหมาย</span><select value={draft.target_group} onChange={(event) => setDraft({ ...draft, target_group: event.target.value })} className="h-11 w-full rounded-xl border border-slate-300 bg-white px-3 text-slate-950"><option value="">ผู้เรียนทุกกลุ่มในรายวิชา</option>{selectedSubject?.groups.map((group) => <option key={group.code} value={group.code}>{group.name} ({group.code})</option>)}</select></label>
+                    <div className="sm:col-span-2"><ChoiceButtons label="รายวิชาที่ลงทะเบียน" value={draft.education_level && draft.subject_code ? `${draft.education_level}|${draft.subject_code}` : ''} options={subjects.map(subject => [`${subject.level}|${subject.code}`, `${subject.code} ${subject.name} (${subject.level_label})`])} onChange={chooseSubject} /></div>
+                    <div className="sm:col-span-2"><ChoiceButtons label="กลุ่มเป้าหมาย" value={draft.target_group} options={[["", "ผู้เรียนทุกกลุ่มในรายวิชา"], ...(selectedSubject?.groups ?? []).map(group => [group.code, `${group.name} (${group.code})`] as [string, string])]} onChange={value => setDraft({ ...draft, target_group: value })} /></div>
                     <label className="sm:col-span-2"><span className="mb-1.5 block text-sm font-bold text-slate-700">คำชี้แจงและสิ่งที่ต้องส่ง</span><textarea rows={5} maxLength={10000} value={draft.instructions} onChange={(event) => setDraft({ ...draft, instructions: event.target.value })} placeholder="อธิบายขั้นตอน รูปแบบงาน และเกณฑ์ที่ต้องการให้นักศึกษาทำ" className="w-full rounded-xl border border-slate-300 p-3 text-slate-950 outline-none placeholder:text-slate-400 focus:border-brand-600 focus:ring-2 focus:ring-brand-100" /></label>
                 </section>
 
@@ -567,18 +611,18 @@ function AssignmentEditor({ assignment, term, subjects, onClose, onSaved }: { as
                     <label><span className="mb-1.5 block text-sm font-bold text-slate-700">เปิดรับงาน</span><input type="datetime-local" value={draft.opens_at} onChange={(event) => setDraft({ ...draft, opens_at: event.target.value })} className="h-11 w-full rounded-xl border border-slate-300 px-3 text-slate-950" /></label>
                     <label><span className="mb-1.5 block text-sm font-bold text-slate-700">กำหนดส่ง *</span><input required type="datetime-local" value={draft.due_at} onChange={(event) => setDraft({ ...draft, due_at: event.target.value })} className="h-11 w-full rounded-xl border border-slate-300 px-3 text-slate-950" /></label>
                     <label><span className="mb-1.5 block text-sm font-bold text-slate-700">คะแนนเต็ม *</span><input required type="number" min="0" max="100" step="0.01" value={draft.max_score} onChange={(event) => setDraft({ ...draft, max_score: event.target.value })} className="h-11 w-full rounded-xl border border-slate-300 px-3 text-slate-950" /></label>
-                    <label><span className="mb-1.5 block text-sm font-bold text-slate-700">สถานะ *</span><select value={draft.status} onChange={(event) => setDraft({ ...draft, status: event.target.value as Assignment['status'] })} className="h-11 w-full rounded-xl border border-slate-300 bg-white px-3 text-slate-950"><option value="draft">ฉบับร่าง นักศึกษายังไม่เห็น</option><option value="open">เปิดรับงาน</option><option value="closed">ปิดรับงาน</option></select></label>
+                    <div className="sm:col-span-2"><ChoiceButtons label="สถานะงาน" value={draft.status} options={[["draft", "ฉบับร่าง"], ["open", "เปิดรับงาน"], ["closed", "ปิดรับงาน"]]} onChange={value => setDraft({ ...draft, status: value as Assignment['status'] })} /></div>
                 </section>
 
                 {save.isPending && materialFile && <div><div className="h-2 overflow-hidden rounded-full bg-slate-100"><div className="h-full rounded-full bg-brand-700 transition-[width]" style={{ width: `${progress}%` }} /></div><p className="mt-1 text-right text-xs font-bold text-slate-500">อัปโหลด {progress}%</p></div>}
                 {(clientError || save.error) && <p role="alert" className="rounded-xl border border-rose-200 bg-rose-50 p-3 text-sm font-bold text-rose-800">{clientError || save.error?.message}</p>}
-            </div>
-            <footer className="flex shrink-0 justify-end gap-2 border-t border-slate-200 bg-white p-4"><button type="button" onClick={onClose} className="h-11 rounded-full border border-slate-300 px-5 text-sm font-bold text-slate-700">ยกเลิก</button><button type="submit" disabled={save.isPending || clientError !== ''} className="h-11 rounded-full bg-brand-700 px-6 text-sm font-bold text-white hover:bg-brand-800 active:scale-[0.98] disabled:cursor-not-allowed disabled:bg-slate-300">{save.isPending ? 'กำลังบันทึก' : 'บันทึกงาน'}</button></footer>
+            </fieldset>
+            <footer className="flex shrink-0 justify-end gap-2 border-t border-slate-200 bg-white p-4"><button type="button" disabled={save.isPending} onClick={onClose} className="h-11 rounded-full border border-slate-300 px-5 text-sm font-bold text-slate-700">ยกเลิก</button><button type="submit" disabled={save.isPending || clientError !== ''} className="h-11 rounded-full bg-brand-700 px-6 text-sm font-bold text-white hover:bg-brand-800 active:scale-[0.98] disabled:cursor-not-allowed disabled:bg-slate-300">{save.isPending ? 'กำลังบันทึก' : 'บันทึกงาน'}</button></footer>
         </form>
     </ModalShell>;
 }
 
-function SubmissionEditor({ assignment, onClose, onSaved }: { assignment: Assignment; onClose: () => void; onSaved: () => void }) {
+function SubmissionEditor({ assignment, onClose, onSaved, onBusy }: { assignment: Assignment; onClose: () => void; onSaved: () => void; onBusy: (busy: boolean) => void }) {
     const [type, setType] = useState<'link' | 'pdf' | 'image'>(assignment.submission?.type ?? 'link');
     const [url, setUrl] = useState(assignment.submission?.type === 'link' ? assignment.submission.url : '');
     const [files, setFiles] = useState<File[]>([]);
@@ -595,6 +639,7 @@ function SubmissionEditor({ assignment, onClose, onSaved }: { assignment: Assign
         },
         onSuccess: () => { showSuccessAlert('ส่งงานเรียบร้อยแล้ว'); onSaved(); },
     });
+    useEffect(() => { onBusy(save.isPending); return () => onBusy(false); }, [save.isPending, onBusy]);
     const chooseSubmissionFiles = (selectedFiles: File[]) => {
         setClientError('');
         setFiles([]);
@@ -631,8 +676,8 @@ function SubmissionEditor({ assignment, onClose, onSaved }: { assignment: Assign
         setFiles([]);
         setClientError('');
     };
-    return <ModalShell title="ส่งงาน" description={assignment.title} onClose={onClose}>
-        <form onSubmit={(event) => { event.preventDefault(); if (!clientError && (type === 'link' || files.length > 0)) save.mutate(); }} className="space-y-4 p-5">
+    return <ModalShell title="ส่งงาน" description={assignment.title} onClose={() => { if (!save.isPending) onClose(); }}>
+        <form onSubmit={(event) => { event.preventDefault(); if (!clientError && (type === 'link' || files.length > 0)) save.mutate(); }} className="space-y-4 p-5"><fieldset disabled={save.isPending} className="space-y-4">
             <fieldset>
                 <legend className="mb-2 text-sm font-bold text-slate-700">รูปแบบการส่ง *</legend>
                 <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
@@ -646,17 +691,18 @@ function SubmissionEditor({ assignment, onClose, onSaved }: { assignment: Assign
                 : <div><label className="block"><span className="mb-1.5 block text-sm font-bold text-slate-700">{type === 'image' ? 'เลือกรูปภาพ' : 'เลือกไฟล์ PDF'} *</span><input required type="file" multiple={type === 'image'} accept={type === 'image' ? 'image/jpeg,image/png,image/webp,.jpg,.jpeg,.png,.webp' : 'application/pdf,.pdf'} onChange={(event) => chooseSubmissionFiles(Array.from(event.target.files ?? []))} className="block w-full rounded-xl border border-slate-300 p-2.5 text-sm text-slate-700 file:mr-3 file:rounded-lg file:border-0 file:bg-brand-50 file:px-3 file:py-2 file:font-bold file:text-brand-800" /></label><p className="mt-1.5 text-xs leading-5 text-slate-500">{type === 'image' ? 'เลือกได้สูงสุด 10 รูป รูปละไม่เกิน 20 MB และรวมไม่เกิน 50 MB' : 'ไฟล์ PDF ขนาดไม่เกิน 20 MB'}</p>{files.length > 0 && <div className="mt-3 grid gap-2" aria-label={`ไฟล์ที่เลือก ${files.length} รายการ`}>{files.map((selectedFile, index) => <div key={`${selectedFile.name}-${selectedFile.lastModified}-${index}`} className="flex min-w-0 items-center gap-3 rounded-xl border border-slate-200 bg-slate-50 px-3 py-2"><span className="grid size-9 shrink-0 place-items-center rounded-lg bg-white text-brand-800">{attachmentIcon(type, 19)}</span><div className="min-w-0 flex-1"><p className="truncate text-sm font-bold text-slate-800">{selectedFile.name}</p><p className="text-xs text-slate-500">{fileSize(selectedFile.size)}</p></div><button type="button" onClick={() => removeSelectedFile(index)} className="grid size-10 shrink-0 place-items-center rounded-xl text-rose-700 hover:bg-rose-50" aria-label={`นำ ${selectedFile.name} ออก`}><Trash size={18} /></button></div>)}</div>}</div>}
             {save.isPending && <div><div className="h-2 overflow-hidden rounded-full bg-slate-100"><div className="h-full rounded-full bg-brand-700 transition-[width]" style={{ width: `${progress}%` }} /></div><p className="mt-1 text-right text-xs font-bold text-slate-500">อัปโหลด {progress}%</p></div>}
             {(clientError || save.error) && <p role="alert" className="rounded-xl border border-rose-200 bg-rose-50 p-3 text-sm font-bold text-rose-800">{clientError || save.error?.message}</p>}
-            <div className="flex justify-end gap-2"><button type="button" onClick={onClose} className="h-11 rounded-full border border-slate-300 px-5 text-sm font-bold text-slate-700">ยกเลิก</button><button type="submit" disabled={save.isPending || clientError !== '' || (type !== 'link' && files.length === 0)} className="h-11 rounded-full bg-brand-700 px-5 text-sm font-bold text-white active:scale-[0.98] disabled:cursor-not-allowed disabled:bg-slate-300">{save.isPending ? 'กำลังส่งงาน' : type === 'image' && files.length > 1 ? `ยืนยันส่ง ${files.length} รูป` : 'ยืนยันส่งงาน'}</button></div>
-        </form>
+            <div className="flex justify-end gap-2"><button type="button" disabled={save.isPending} onClick={onClose} className="h-11 rounded-full border border-slate-300 px-5 text-sm font-bold text-slate-700">ยกเลิก</button><button type="submit" disabled={save.isPending || clientError !== '' || (type !== 'link' && files.length === 0)} className="h-11 rounded-full bg-brand-700 px-5 text-sm font-bold text-white active:scale-[0.98] disabled:cursor-not-allowed disabled:bg-slate-300">{save.isPending ? 'กำลังส่งงาน' : type === 'image' && files.length > 1 ? `ยืนยันส่ง ${files.length} รูป` : 'ยืนยันส่งงาน'}</button></div>
+        </fieldset></form>
     </ModalShell>;
 }
 
-function ReviewEditor({ assignment, student, onClose, onSaved }: { assignment: Assignment; student: AssignmentStudent; onClose: () => void; onSaved: () => void }) {
+function ReviewEditor({ assignment, student, onClose, onSaved, onBusy }: { assignment: Assignment; student: AssignmentStudent; onClose: () => void; onSaved: () => void; onBusy: (busy: boolean) => void }) {
     const [score, setScore] = useState(student.submission?.score == null ? '' : String(student.submission.score));
     const [feedback, setFeedback] = useState(student.submission?.feedback ?? '');
     const save = useMutation({
         mutationFn: () => sendFeatureData(`/api/v1/learning/assignments/${assignment.id}/submissions/${student.submission?.id}`, 'PATCH', { score: score === '' ? null : Number(score), feedback }),
         onSuccess: () => { showSuccessAlert('บันทึกผลตรวจเรียบร้อยแล้ว'); onSaved(); },
     });
-    return <ModalShell title="ตรวจงานและให้คะแนน" description={`${student.full_name} รหัส ${student.student_code}`} onClose={onClose}><form onSubmit={(event) => { event.preventDefault(); save.mutate(); }} className="space-y-4 p-5">{student.submission && <div className="rounded-xl bg-slate-50 p-4"><SubmissionLink assignment={assignment} submission={student.submission} /><p className="mt-2 text-xs text-slate-500">ส่งเมื่อ {thaiDateTime(student.submission.submitted_at)}</p></div>}<label className="block"><span className="mb-1.5 block text-sm font-bold text-slate-700">คะแนน (เต็ม {assignment.max_score})</span><input type="number" min="0" max={assignment.max_score} step="0.01" value={score} onChange={(event) => setScore(event.target.value)} className="h-11 w-full rounded-xl border border-slate-300 px-3" /></label><label className="block"><span className="mb-1.5 block text-sm font-bold text-slate-700">ข้อเสนอแนะ</span><textarea rows={5} maxLength={5000} value={feedback} onChange={(event) => setFeedback(event.target.value)} className="w-full rounded-xl border border-slate-300 p-3" /></label>{save.error && <p role="alert" className="rounded-xl bg-rose-50 p-3 text-sm font-bold text-rose-800">{save.error.message}</p>}<div className="flex justify-end gap-2"><button type="button" onClick={onClose} className="h-11 rounded-full border border-slate-200 px-5 text-sm font-bold">ยกเลิก</button><button type="submit" disabled={save.isPending} className="h-11 rounded-full bg-brand-700 px-5 text-sm font-bold text-white disabled:bg-slate-300">{save.isPending ? 'กำลังบันทึก' : 'บันทึกผลตรวจ'}</button></div></form></ModalShell>;
+    useEffect(() => { onBusy(save.isPending); return () => onBusy(false); }, [save.isPending, onBusy]);
+    return <ModalShell title="ตรวจงานและให้คะแนน" description={`${student.full_name} รหัส ${student.student_code}`} onClose={() => { if (!save.isPending) onClose(); }}><form onSubmit={(event) => { event.preventDefault(); save.mutate(); }} className="space-y-4 p-5"><fieldset disabled={save.isPending} className="space-y-4">{student.submission && <div className="rounded-xl bg-slate-50 p-4"><SubmissionLink assignment={assignment} submission={student.submission} /><p className="mt-2 text-xs text-slate-500">ส่งเมื่อ {thaiDateTime(student.submission.submitted_at)}</p></div>}<label className="block"><span className="mb-1.5 block text-sm font-bold text-slate-700">คะแนน (เต็ม {assignment.max_score})</span><input type="number" min="0" max={assignment.max_score} step="0.01" value={score} onChange={(event) => setScore(event.target.value)} className="h-11 w-full rounded-xl border border-slate-300 px-3" /></label><label className="block"><span className="mb-1.5 block text-sm font-bold text-slate-700">ข้อเสนอแนะ</span><textarea rows={5} maxLength={5000} value={feedback} onChange={(event) => setFeedback(event.target.value)} className="w-full rounded-xl border border-slate-300 p-3" /></label>{save.error && <p role="alert" className="rounded-xl bg-rose-50 p-3 text-sm font-bold text-rose-800">{save.error.message}</p>}<div className="flex justify-end gap-2"><button type="button" disabled={save.isPending} onClick={onClose} className="h-11 rounded-full border border-slate-200 px-5 text-sm font-bold">ยกเลิก</button><button type="submit" disabled={save.isPending} className="h-11 rounded-full bg-brand-700 px-5 text-sm font-bold text-white disabled:bg-slate-300">{save.isPending ? 'กำลังบันทึก' : 'บันทึกผลตรวจ'}</button></div></fieldset></form></ModalShell>;
 }

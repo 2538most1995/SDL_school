@@ -72,7 +72,7 @@ final class OnlineClassroomService
         }
         unset($subject);
 
-        return ['term' => $term, 'subjects' => array_values($subjects), 'registrations' => $rows];
+        return ['term' => $term, 'terms' => $source['terms'], 'subjects' => array_values($subjects), 'registrations' => $rows];
     }
 
     public function workspace(User $viewer, int $districtId, array $filters): array

@@ -697,7 +697,7 @@ export function DashboardHomePage() {
                             {calendar.isPending
                                 ? <div className="mt-5 h-44 animate-pulse rounded-[16px] bg-slate-100" />
                                 : <EventRows items={noticeEvents} emptyText="ยังไม่มีรายการที่ต้องติดตาม" />}
-                            <Link to="/learning/assignments" className="mt-4 inline-flex items-center gap-2 text-sm font-black text-brand-700 hover:text-brand-800">ดูงานทั้งหมด <ArrowRight size={16} /></Link>
+                            <Link to="/learning/classroom?section=worksheet&mode=files" className="mt-4 inline-flex items-center gap-2 text-sm font-black text-brand-700 hover:text-brand-800">ดูงานทั้งหมด <ArrowRight size={16} /></Link>
                         </DashboardPanel>
                     </div>
                 </section>

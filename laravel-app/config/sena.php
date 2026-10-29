@@ -49,10 +49,8 @@ return [
             'color' => 'violet',
             'items' => [
                 ['key' => 'learning-home', 'label' => 'พื้นที่การเรียนรู้', 'description' => 'ภาพรวมการเรียนและการสอน', 'route' => '/learning', 'icon' => 'planet', 'roles' => ['student', 'teacher', 'admin', 'super_admin']],
-                ['key' => 'online-classroom', 'label' => 'ห้องเรียนออนไลน์', 'description' => 'ใบความรู้ ใบงาน และแบบทดสอบตามรายวิชาที่ลงทะเบียน', 'route' => '/learning/classroom', 'icon' => 'books', 'roles' => ['student', 'teacher', 'admin', 'super_admin']],
+                ['key' => 'online-classroom', 'label' => 'ห้องเรียนออนไลน์', 'description' => 'คลิป เอกสาร ใบงาน ส่งไฟล์ และแบบทดสอบในห้องเรียนเดียว', 'route' => '/learning/classroom', 'icon' => 'books', 'roles' => ['student', 'teacher', 'admin', 'super_admin']],
                 ['key' => 'public-relations', 'label' => 'ข่าวประชาสัมพันธ์', 'description' => 'ข่าวสาร รูปภาพ และข้อมูลสำคัญจากอำเภอ', 'route' => '/public-relations', 'icon' => 'newspaper', 'roles' => ['student']],
-                ['key' => 'assignments', 'label' => 'งานและการส่งงาน', 'description' => 'มอบหมาย ส่ง ตรวจ และให้คะแนนงาน', 'route' => '/learning/assignments', 'icon' => 'assignment', 'roles' => ['student', 'teacher', 'admin', 'super_admin']],
-                ['key' => 'resources', 'label' => 'คลังสื่อ', 'description' => 'เอกสารและสื่อประกอบการเรียน', 'route' => '/learning/resources', 'icon' => 'folder', 'roles' => ['student', 'teacher', 'admin', 'super_admin']],
                 ['key' => 'lesson-plans', 'label' => 'แผนการสอน', 'description' => 'แผนการจัดการเรียนรู้ของครู', 'route' => '/learning/lesson-plans', 'icon' => 'notebook', 'roles' => ['teacher', 'admin', 'super_admin']],
                 ['key' => 'calendar', 'label' => 'ปฏิทินพบกลุ่ม', 'description' => 'กิจกรรม วันพบกลุ่ม และกำหนดส่ง', 'route' => '/learning/calendar', 'icon' => 'calendar', 'roles' => ['student', 'teacher', 'admin', 'super_admin']],
                 ['key' => 'schedule', 'label' => 'ตารางสอบ', 'description' => 'ตารางสอบรายนักศึกษาและสร้าง PDF', 'route' => '/learning/schedule', 'icon' => 'clock', 'roles' => ['student', 'teacher', 'admin', 'super_admin']],

@@ -2,6 +2,9 @@ import { Alert, Dialog, DialogActions, DialogContent, DialogTitle, TextField } f
 import { Books, Plus, PencilSimple, Trash, ArrowSquareOut, UploadSimple, CheckCircle, Play, BookOpenText, NotePencil, Lightning, ArrowRight, ArrowLeft, GraduationCap, RocketLaunch, Student, UsersThree, SquaresFour, Clock, MagnifyingGlass, Sparkle } from '@phosphor-icons/react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useEffect, useRef, useState, type FormEvent, type ReactNode } from 'react';
+import { useSearchParams } from 'react-router-dom';
+import { AssignmentWorkspacePage } from './AssignmentWorkspacePage';
+import { ClassroomResources } from './classroom/ClassroomResources';
 import { Button } from '../../components/MaterialUI';
 import { Panel } from '../../components/Panel';
 import { EmptyState, QueryError, QuerySkeleton } from '../../components/QueryState';
@@ -17,7 +20,7 @@ const errorText = (error: unknown) => error instanceof Error ? error.message : '
 const dateLabel = (date: string | null) => date ? new Date(date).toLocaleString('th-TH', { dateStyle: 'medium', timeStyle: 'short' }) : 'ไม่กำหนดวันส่ง';
 const isAssessment = (type: ActivityKind) => type === 'quiz' || type === 'worksheet';
 const kindIcons = { video: Play, knowledge: BookOpenText, worksheet: NotePencil, quiz: Lightning };
-const kindDescriptions = { video: 'ดูคลิป เข้าใจบทเรียน', knowledge: 'อ่านและเก็บไอเดีย', worksheet: 'ลงมือทำ ฝึกทักษะ', quiz: 'ลองวัดความเข้าใจ' };
+const kindDescriptions = { video: 'ดูคลิป เข้าใจบทเรียน', knowledge: 'อ่านและเก็บไอเดีย', worksheet: 'ตอบออนไลน์ หรือส่งไฟล์', quiz: 'ลองวัดความเข้าใจ' };
 const levelChoices = [{ id: 1, label: 'ประถม', detail: 'ประถมศึกษา', Icon: Student }, { id: 2, label: 'ม.ต้น', detail: 'มัธยมศึกษาตอนต้น', Icon: GraduationCap }, { id: 3, label: 'ม.ปลาย', detail: 'มัธยมศึกษาตอนปลาย', Icon: RocketLaunch }];
 
 function PrivateImage({ url }: { url: string }) {
@@ -53,7 +56,20 @@ export function OnlineClassroomPage() {
 function Classroom({ role, district }: { role: string; district: string }) {
     const client = useQueryClient();
     const manage = role !== 'student';
-    const [course, setCourse] = useState('');
+    const [routeParams] = useSearchParams();
+    const initialSubject = routeParams.get('subject_code') ?? '';
+    const initialLevel = routeParams.get('education_level') ?? '';
+    const initialAssignmentId = /^[1-9]\d{0,18}$/.test(routeParams.get('assignment_id') ?? '') ? routeParams.get('assignment_id')! : '';
+    const [course, setCourse] = useState(/^[123]$/.test(initialLevel) && initialSubject ? `${initialLevel}|${initialSubject}` : '');
+    const [materials, setMaterials] = useState(routeParams.get('materials') === 'all');
+    const [worksheetMode, setWorksheetMode] = useState<'online' | 'files'>(routeParams.get('mode') === 'files' ? 'files' : 'online');
+    const [childBusy, setChildBusy] = useState(false);
+    const routedAssignment = useQuery({
+        queryKey: ['classroom-assignment-link', role, district, initialAssignmentId],
+        enabled: Boolean(initialAssignmentId),
+        queryFn: ({ signal }) => getFeatureData<{ selected_assignment: { subject_code: string; education_level: number | null } | null }>(`/api/v1/learning/assignments?assignment_id=${initialAssignmentId}`, signal),
+    });
+    const resolvedAssignmentLink = useRef(false);
     const [level, setLevel] = useState<number | null>(null);
     const [search, setSearch] = useState('');
     const [activityId, setActivityId] = useState('');
@@ -63,8 +79,11 @@ function Classroom({ role, district }: { role: string; district: string }) {
     const [initialKind, setInitialKind] = useState<ActivityKind>('knowledge');
     const [review, setReview] = useState<Submission | null>(null);
     const [deleteId, setDeleteId] = useState('');
-    const [dirty, setDirty] = useState(false);
-    const [kind, setKind] = useState<ActivityKind | 'all'>('all');
+    const [activityDirty, setDirty] = useState(false);
+    const [resourceDirty, setResourceDirty] = useState(false);
+    const [assignmentDirty, setAssignmentDirty] = useState(false);
+    const dirty = activityDirty || resourceDirty || assignmentDirty;
+    const [kind, setKind] = useState<ActivityKind | 'all'>(() => ['video', 'knowledge', 'worksheet', 'quiz'].includes(routeParams.get('section') ?? '') ? routeParams.get('section') as ActivityKind : 'all');
     const detailRef = useRef<HTMLDivElement>(null);
     const params = new URLSearchParams({ activity_page: String(activityPage), page: String(submissionPage) });
     if (course) { const [selectedLevel, code] = course.split('|'); params.set('subject_code', code); params.set('education_level', selectedLevel); }
@@ -73,6 +92,17 @@ function Classroom({ role, district }: { role: string; district: string }) {
     const query = useQuery({ queryKey: ['online-classroom', role, district, course, activityId, kind, activityPage, submissionPage],
         queryFn: ({ signal }) => getFeatureData<Workspace>(`${base}?${params}`, signal), placeholderData: previous => previous });
     const data = query.data?.data;
+    useEffect(() => {
+        if (resolvedAssignmentLink.current || !data?.subjects.length) return;
+        const assignment = routedAssignment.data?.data.selected_assignment;
+        if (!assignment) return;
+        const match = data.subjects.find(item => item.code === assignment.subject_code && (!assignment.education_level || item.level === assignment.education_level));
+        if (match) {
+            resolvedAssignmentLink.current = true;
+            setCourse(`${match.level}|${match.code}`);
+            setLevel(match.level);
+        }
+    }, [data?.subjects, routedAssignment.data]);
     const readOnly = Boolean(query.data?.meta?.read_only);
     const busy = query.isPlaceholderData;
     const refresh = () => client.invalidateQueries({ queryKey: ['online-classroom'] });
@@ -92,10 +122,15 @@ function Classroom({ role, district }: { role: string; district: string }) {
             detailRef.current?.scrollIntoView({ behavior: window.matchMedia('(prefers-reduced-motion: reduce)').matches ? 'instant' : 'smooth', block: 'start' });
         }
     }, [activityId, data?.selected_activity?.id, busy]);
-    const leave = (action: () => void) => { if (!dirty || window.confirm('มีข้อมูลที่ยังไม่ได้บันทึก ต้องการออกจากกิจกรรมนี้หรือไม่?')) { setDirty(false); action(); } };
+    const leave = (action: () => void) => { if (childBusy || save.isPending || remove.isPending) return; if (!dirty || window.confirm('มีข้อมูลที่ยังไม่ได้บันทึก ต้องการออกจากกิจกรรมนี้หรือไม่?')) { setDirty(false); setResourceDirty(false); setAssignmentDirty(false); action(); } };
     const resetActivity = () => { setActivityId(''); setActivityPage(1); setSubmissionPage(1); };
     const add = (type: ActivityKind) => leave(() => { save.reset(); setInitialKind(type); setEditor('new'); });
-    if (query.isPending) return <QuerySkeleton />;
+    useEffect(() => {
+        if (course || !initialSubject || !data?.subjects.length || initialAssignmentId) return;
+        const match = data.subjects.find(item => item.code === initialSubject);
+        if (match) setCourse(`${match.level}|${match.code}`);
+    }, [course, initialSubject, data?.subjects, initialAssignmentId]);
+    if (query.isPending || (initialAssignmentId && routedAssignment.isPending)) return <QuerySkeleton />;
     if (query.isError && !data) return <QueryError message={errorText(query.error)} onRetry={() => void query.refetch()} />;
     if (!data) return null;
     const subject = data.selected_subject;
@@ -104,23 +139,29 @@ function Classroom({ role, district }: { role: string; district: string }) {
     const levelSubjects = data.subjects.filter(item => item.level === activeLevel);
     const visibleSubjects = levelSubjects.filter(item => `${item.code} ${item.name}`.toLocaleLowerCase('th').includes(search.trim().toLocaleLowerCase('th')));
     const activeCourseKey = course || (subject ? `${subject.level}|${subject.code}` : '');
-    const counts = data.activity_counts ?? { all: data.activities.length, video: 0, knowledge: 0, worksheet: 0, quiz: 0 };
+    const fileMode = kind === 'worksheet' && worksheetMode === 'files';
     return <div className="online-classroom classroom-v2">
         <header className="classroom-hero">
             <div className="classroom-hero-copy">
                 <span className="classroom-eyebrow"><Sparkle size={16} weight="fill" /> พื้นที่เรียนรู้ของเรา {data.term && <span>ภาคเรียน {data.term}</span>}</span>
                 <h1>ห้องเรียนออนไลน์<span>{manage ? 'ออกแบบการเรียนรู้ ให้สนุกขึ้น' : 'วันนี้ อยากเรียนรู้อะไร?'}</span></h1>
-                <p>{manage ? 'รวมคลิป ใบความรู้ ใบงาน และแบบทดสอบไว้ให้ผู้เรียนในแต่ละวิชา' : 'เลือกวิชาของคุณ ดูคลิป ลองทำ และค่อย ๆ เก่งขึ้นในแบบของตัวเอง'}</p>
-                <div className="classroom-hero-actions">{manage && subject ? <>
+                <p>{manage ? 'รวมบทเรียน เอกสาร งานส่งไฟล์ และแบบทดสอบไว้ให้ผู้เรียนในแต่ละวิชา' : 'เลือกวิชาของคุณ ดูคลิป ลองทำ และค่อย ๆ เก่งขึ้นในแบบของตัวเอง'}</p>
+                <div className="classroom-hero-actions">{manage && subject && !materials && !fileMode ? <>
                     <Button appearance="primary" icon={<Plus size={20} />} disabled={readOnly || busy} onClick={() => add(kind === 'all' ? 'knowledge' : kind)}>สร้างกิจกรรม</Button>
                     <Button appearance="outline" icon={<UploadSimple size={19} />} disabled={readOnly || busy} onClick={() => add('quiz')}>นำเข้าข้อสอบ</Button>
-                </> : <span className="classroom-registration-note"><CheckCircle size={19} weight="fill" /> รายวิชาที่คุณลงทะเบียน {data.subjects.length} วิชา</span>}</div>
+                </> : <span className="classroom-registration-note"><CheckCircle size={19} weight="fill" /> {manage ? 'รายวิชาที่คุณดูแล' : 'รายวิชาที่คุณลงทะเบียน'} {data.subjects.length} วิชา</span>}</div>
             </div>
             <div className="classroom-hero-art" aria-hidden="true"><div className="classroom-art-sheet"><Books size={56} weight="duotone" /><span>เรียนรู้ในแบบของคุณ</span><i /><i /><i /></div><span className="classroom-art-play"><Play size={32} weight="fill" /></span><span className="classroom-art-check"><CheckCircle size={30} weight="fill" /></span><span className="classroom-art-spark"><Sparkle size={28} weight="fill" /></span></div>
         </header>
         {readOnly && <Alert severity="info">ระบบอยู่ในโหมดอ่านอย่างเดียว ผู้ดูแลต้องเปิดการเขียนข้อมูลก่อนสร้างกิจกรรมหรือส่งคำตอบ</Alert>}
         {query.isError && <Alert severity="warning" action={<Button onClick={() => void query.refetch()}>ลองโหลดใหม่</Button>}>โหลดข้อมูลล่าสุดไม่สำเร็จ ข้อมูลที่กำลังกรอกยังอยู่ กรุณาลองโหลดใหม่เมื่อเชื่อมต่อได้</Alert>}
-        <section className="classroom-course-section" aria-labelledby="classroom-course-heading">
+        {routedAssignment.isError && <Alert severity="warning">เปิดงานจากลิงก์เดิมไม่ได้ งานอาจถูกลบหรืออยู่นอกขอบเขตของคุณ กรุณาเลือกวิชาและงานด้านล่าง</Alert>}
+        <nav className="classroom-area-switch" aria-label="พื้นที่ในห้องเรียน">
+            <button type="button" aria-pressed={!materials} disabled={childBusy} onClick={() => leave(() => setMaterials(false))}><GraduationCap size={23} weight="duotone" /><span><strong>ห้องเรียนรายวิชา</strong><small>บทเรียน ใบงาน และแบบทดสอบ</small></span></button>
+            <button type="button" aria-pressed={materials} disabled={childBusy} onClick={() => leave(() => { setMaterials(true); resetActivity(); })}><Books size={23} weight="duotone" /><span><strong>สื่อเพิ่มเติม</strong><small>เอกสารและคลิปทั้งหมดที่คุณเปิดดูได้</small></span></button>
+        </nav>
+        {materials && <ClassroomResources key={`library:${role}:${district}`} subject={null} kind="all" onDirty={setResourceDirty} onBusy={setChildBusy} />}
+        {!materials && <section className="classroom-course-section" aria-labelledby="classroom-course-heading">
             <div className="classroom-section-heading"><div><span className="classroom-step">01 · เลือกห้องเรียน</span><h2 id="classroom-course-heading">เริ่มจากวิชาที่ใช่</h2></div><span className="classroom-muted">{manage ? 'เฉพาะรายวิชาและกลุ่มที่คุณดูแล' : 'เฉพาะรายวิชาที่คุณลงทะเบียน'}</span></div>
             <div className="classroom-levels" role="group" aria-label="ระดับการศึกษา">{levelChoices.map(({ id, label, detail, Icon }) => {
                 const total = data.subjects.filter(item => item.level === id).length;
@@ -136,14 +177,24 @@ function Classroom({ role, district }: { role: string; district: string }) {
                 </button>; })}
                 {visibleSubjects.length === 0 && <p className="classroom-muted py-4">ไม่พบวิชาที่ตรงกับคำค้น ลองค้นด้วยชื่อหรือรหัสวิชาอื่น</p>}
             </div>}
-        </section>
-        {subject && <section className="classroom-activity-section" aria-labelledby="classroom-activities-heading">
-            <div className="classroom-section-heading"><div><span className="classroom-step">02 · เลือกกิจกรรม</span><h2 id="classroom-activities-heading">{subject.name}<small>{subject.code}</small></h2></div><button type="button" className="classroom-all-button" aria-pressed={kind === 'all'} disabled={busy} onClick={() => leave(() => { setKind('all'); resetActivity(); })}><SquaresFour size={19} /> ทั้งหมด <span>{counts.all}</span></button></div>
+        </section>}
+        {subject && !materials && <section className="classroom-activity-section" aria-labelledby="classroom-activities-heading">
+            <div className="classroom-section-heading"><div><span className="classroom-step">02 · เลือกกิจกรรม</span><h2 id="classroom-activities-heading">{subject.name}<small>{subject.code}</small></h2></div><button type="button" className="classroom-all-button" aria-pressed={kind === 'all'} disabled={busy} onClick={() => leave(() => { setKind('all'); resetActivity(); })}><SquaresFour size={19} /> ทั้งหมด</button></div>
             <div className="classroom-kind-grid" role="group" aria-label="ประเภทกิจกรรม">{(Object.keys(kindLabels) as ActivityKind[]).map(type => { const Icon = kindIcons[type]; return <button type="button" key={type} data-kind={type} className="classroom-kind" aria-pressed={kind === type} disabled={busy} onClick={() => leave(() => { setKind(type); resetActivity(); })}>
-                <span className="classroom-kind-icon"><Icon size={26} weight={type === 'video' ? 'fill' : 'duotone'} /></span><span className="classroom-kind-count">{counts[type]}</span><strong>{kindLabels[type]}</strong><small>{kindDescriptions[type]}</small><ArrowRight className="classroom-kind-arrow" size={18} />
+                <span className="classroom-kind-icon"><Icon size={26} weight={type === 'video' ? 'fill' : 'duotone'} /></span><strong>{kindLabels[type]}</strong><small>{kindDescriptions[type]}</small><ArrowRight className="classroom-kind-arrow" size={18} />
             </button>; })}</div>
+            {kind === 'worksheet' && <div className="classroom-work-options">
+                <div className="classroom-choice-buttons" role="group" aria-label="รูปแบบใบงาน">
+                    <button type="button" aria-pressed={worksheetMode === 'online'} disabled={childBusy} onClick={() => leave(() => { setWorksheetMode('online'); resetActivity(); })}><NotePencil size={20} /> ตอบออนไลน์</button>
+                    <button type="button" aria-pressed={worksheetMode === 'files'} disabled={childBusy} onClick={() => leave(() => { setWorksheetMode('files'); resetActivity(); })}><UploadSimple size={20} /> ส่งไฟล์ / ลิงก์</button>
+                </div><p className="classroom-muted">{fileMode ? 'ส่ง PDF รูปภาพ หรือลิงก์ พร้อมติดตามคะแนนและความเห็นครู' : 'ตอบคำถามในห้องเรียนและยืนยันส่งได้หนึ่งครั้งต่อกิจกรรม'}</p>
+            </div>}
+            {fileMode && busy && <QuerySkeleton rows={3} />}
+            {fileMode && !busy && <AssignmentWorkspacePage key={`${role}:${district}:${subject.level}:${subject.code}`} embedded subject={subject} initialAssignmentId={routedAssignment.data?.data.selected_assignment?.subject_code === subject.code && (!routedAssignment.data?.data.selected_assignment?.education_level || routedAssignment.data?.data.selected_assignment?.education_level === subject.level) ? initialAssignmentId : ''} onDirty={setAssignmentDirty} onBusy={setChildBusy} />}
+            {!fileMode && <>
+            {kind === 'all' && <button type="button" className="classroom-file-callout" onClick={() => leave(() => { setKind('worksheet'); setWorksheetMode('files'); resetActivity(); })}><UploadSimple size={28} weight="duotone" /><span><strong>มีงานที่ต้องส่งเป็นไฟล์?</strong><small>เปิดงาน ส่ง PDF รูปภาพ หรือลิงก์ และดูผลตรวจในวิชานี้</small></span><ArrowRight size={21} /></button>}
             {manage && <div className="classroom-teacher-tools"><span><NotePencil size={20} /> เตรียมข้อสอบได้สะดวกขึ้น</span><QuizTemplateActions compact /></div>}
-            <div className="classroom-gallery-heading"><h3>{kind === 'all' ? 'กิจกรรมทั้งหมด' : kindLabels[kind]}</h3><span className="classroom-muted">{busy ? 'กำลังโหลด…' : `${data.activity_pagination?.total ?? data.activities.length} กิจกรรม`}</span></div>
+            <div className="classroom-gallery-heading"><h3>{kind === 'all' ? 'บทเรียนและกิจกรรมออนไลน์' : kindLabels[kind]}</h3><span className="classroom-muted">{busy ? 'กำลังโหลด…' : `${data.activity_pagination?.total ?? data.activities.length} กิจกรรม`}</span></div>
             {busy ? <QuerySkeleton rows={3} /> : data.activities.length === 0 ? <div className="classroom-empty"><span className="classroom-empty-icon"><Books size={42} weight="duotone" /></span><h3>{manage ? 'เติมห้องเรียนด้วยไอเดียของคุณ' : 'บทเรียนใหม่กำลังจะมา'}</h3><p>{manage ? `สร้าง${kind === 'all' ? 'คลิป ใบความรู้ ใบงาน หรือแบบทดสอบ' : kindLabels[kind]}ให้ผู้เรียนเริ่มเรียนได้เลย` : 'เมื่อครูเผยแพร่กิจกรรม คุณจะกลับมาเรียนต่อได้จากตรงนี้'}</p>{manage && <Button appearance="primary" icon={<Plus />} disabled={readOnly} onClick={() => add(kind === 'all' ? 'knowledge' : kind)}>สร้าง{kind === 'all' ? 'กิจกรรมแรก' : kindLabels[kind]}</Button>}</div> : <div className="classroom-activity-grid">{data.activities.map(item => {
                 const Icon = kindIcons[item.type];
                 const activityStatus = item.status === 'draft' ? 'ฉบับร่าง' : item.submission ? item.submission.status === 'reviewed' ? `คะแนน ${item.submission.score}/${item.submission.max_score}` : 'ส่งแล้ว · รอครูตรวจ' : isAssessment(item.type) ? 'พร้อมให้ลองทำ' : 'พร้อมเรียน';
@@ -153,8 +204,10 @@ function Classroom({ role, district }: { role: string; district: string }) {
                 </button>;
             })}</div>}
             <Pager page={data.activity_pagination} change={page => leave(() => { setActivityPage(page); setActivityId(''); })} />
+            </>}
+            {!busy && (['all', 'knowledge', 'video'].includes(kind)) && <ClassroomResources key={`${role}:${district}:${subject.level}:${subject.code}:${kind}`} subject={subject} kind={kind === 'all' ? 'all' : kind as 'knowledge' | 'video'} onDirty={setResourceDirty} onBusy={setChildBusy} />}
         </section>}
-        {activityId && !busy && selected?.id === activityId && <div ref={detailRef} tabIndex={-1} role="region" aria-label={`กิจกรรม ${selected.title}`} className="classroom-detail" data-kind={selected.type}>
+        {activityId && !materials && !fileMode && !busy && selected?.id === activityId && <div ref={detailRef} tabIndex={-1} role="region" aria-label={`กิจกรรม ${selected.title}`} className="classroom-detail" data-kind={selected.type}>
             <div className="classroom-detail-heading"><button type="button" className="classroom-back" onClick={() => leave(() => setActivityId(''))}><ArrowLeft size={20} /> ปิดกิจกรรม</button><span className="classroom-muted">{kindLabels[selected.type]} · {subject?.name}</span></div>
             <Panel title={selected.title} description={`${kindLabels[selected.type]} · ${selected.target_group || 'ทุกกลุ่มในขอบเขต'} · ${selected.status === 'draft' ? 'ฉบับร่าง' : 'เผยแพร่แล้ว'}`}
                 action={manage && selected.can_edit ? <><Button icon={<PencilSimple />} disabled={readOnly || selected.has_submissions} onClick={() => { save.reset(); setEditor(selected); }}>แก้ไข</Button><Button disabled={readOnly || status.isPending} onClick={() => status.mutate(selected)}>{selected.status === 'published' ? 'ซ่อนกิจกรรม' : 'เผยแพร่'}</Button><Button aria-label="ลบกิจกรรม" icon={<Trash />} disabled={readOnly || selected.has_submissions} onClick={() => setDeleteId(selected.id)} /></> : undefined}>

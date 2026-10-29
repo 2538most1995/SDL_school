@@ -93,7 +93,7 @@ export function LearningHomePage() {
     const data = overview.data.data;
     return (
         <div>
-            <PageHeader title={`พร้อมเรียนต่อแล้ว ${data.studentName}`} description="รวมวิชา งาน สื่อ และนัดหมายสำคัญไว้ให้เข้าถึงได้ง่าย" icon={Planet} category="learning" actions={<Link to="/learning/assignments" className="whitespace-nowrap rounded-full bg-brand-700 px-5 py-2.5 text-sm font-bold text-white hover:bg-brand-800 active:scale-[0.98]">ดูงานของฉัน</Link>} />
+            <PageHeader title={`พร้อมเรียนต่อแล้ว ${data.studentName}`} description="รวมวิชา งาน สื่อ และนัดหมายสำคัญไว้ให้เข้าถึงได้ง่าย" icon={Planet} category="learning" actions={<Link to="/learning/classroom?section=worksheet&mode=files" className="whitespace-nowrap rounded-full bg-brand-700 px-5 py-2.5 text-sm font-bold text-white hover:bg-brand-800 active:scale-[0.98]">ดูงานของฉัน</Link>} />
             <div className="mb-5 grid gap-3 sm:grid-cols-3">
                 <StatTile label="งานที่ต้องส่ง" value={data.dueAssignments} detail="ตรวจวันกำหนดส่ง" icon={ClipboardText} tone="amber" />
                 <StatTile label="งานที่ส่งแล้ว" value={data.completedAssignments} detail="ภาคเรียนปัจจุบัน" icon={CheckCircle} />
@@ -103,7 +103,7 @@ export function LearningHomePage() {
                 <Panel title="วิชาของฉัน" description="กดเลือกวิชาเพื่อดูงานและสื่อที่เกี่ยวข้อง">
                     <div className="grid gap-3 sm:grid-cols-2">
                         {data.courses.map((course, index) => (
-                            <Link key={course.id} to={`/learning/resources?course=${course.id}`} className={`rounded-2xl border p-5 transition hover:-translate-y-0.5 active:scale-[0.99] ${courseTones[course.tone]} ${index === 0 ? 'sm:col-span-2' : ''}`}>
+                            <Link key={course.id} to={`/learning/classroom?subject_code=${encodeURIComponent(course.code)}`} className={`rounded-2xl border p-5 transition hover:-translate-y-0.5 active:scale-[0.99] ${courseTones[course.tone]} ${index === 0 ? 'sm:col-span-2' : ''}`}>
                                 <p className="text-xs font-bold opacity-70">{course.code}</p>
                                 <h2 className="mt-2 text-xl font-bold tracking-[-0.02em]">{course.title}</h2>
                                 <p className="mt-3 text-sm opacity-80">{course.teacher}</p>

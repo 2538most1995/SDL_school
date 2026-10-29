@@ -38,12 +38,41 @@ final class StudentMenuTest extends TestCase
         $items = $response->json('data.items');
         $this->assertSame($response->json('data.defaults'), $items);
         $this->assertSame([
-            'my-learning', 'learning-home', 'online-classroom', 'assignments', 'resources', 'public-relations', 'schedule', 'exam-attendance-check', 'nnet-report',
+            'my-learning', 'learning-home', 'online-classroom', 'public-relations', 'schedule', 'exam-attendance-check', 'nnet-report',
         ], array_column(array_filter($items, fn (array $item): bool => $item['visible']), 'key'));
         $allowed = collect(config('sena.modules'))->flatMap(fn (array $group) => $group['items'])
             ->filter(fn (array $item): bool => in_array('student', $item['roles'], true) && $item['key'] !== 'dashboard')->pluck('key')->sort()->values()->all();
         $this->assertSame($allowed, collect($items)->pluck('key')->sort()->values()->all());
         $this->assertSame('ข้อมูลส่วนตัว', $items[0]['label']);
+    }
+
+    public function test_retired_menus_do_not_return_from_saved_sidebar_or_student_preferences(): void
+    {
+        $district = $this->district('merged');
+        $district->navigation_preferences = [['key' => 'learning', 'label' => 'เรียนรู้', 'items' => ['assignments', 'resources', 'online-classroom']]];
+        $district->student_menu_preferences = [
+            ['key' => 'assignments', 'label' => 'งานเดิม', 'description' => '', 'visible' => true],
+            ['key' => 'resources', 'label' => 'สื่อเดิม', 'description' => '', 'visible' => true],
+            $this->custom('custom-old-files', '/learning/resources', 'internal'),
+        ];
+        $district->save();
+        foreach (['student', 'teacher', 'admin', 'super_admin'] as $role) {
+            Sanctum::actingAs(User::factory()->create(['role' => $role, 'district_id' => $district->id]));
+            $response = $this->withHeader('X-District-Id', (string) $district->id)->getJson('/api/v1/system/catalog')->assertOk();
+            $keys = collect($response->json('data.groups'))->flatMap(fn (array $group) => $group['items'])->pluck('key')->all();
+            $this->assertContains('online-classroom', $keys);
+            $this->assertNotContains('assignments', $keys);
+            $this->assertNotContains('resources', $keys);
+            if ($role === 'student') {
+                $menuKeys = array_column($response->json('data.student_menu'), 'key');
+                $this->assertContains('online-classroom', $menuKeys);
+                $this->assertNotContains('assignments', $menuKeys);
+                $this->assertNotContains('resources', $menuKeys);
+                $this->assertNotContains('custom-old-files', $menuKeys);
+            }
+        }
+        // Preferences are resolved without rewriting the district's stored data.
+        $this->assertSame('assignments', $district->fresh()->student_menu_preferences[0]['key']);
     }
 
     public function test_admin_can_save_order_labels_descriptions_visibility_and_student_sees_only_visible_safe_buttons(): void
@@ -72,7 +101,7 @@ final class StudentMenuTest extends TestCase
         $this->assertSame('/settings/appearance', $response->json('data.student_menu.0.route'));
         $this->assertFalse(collect($response->json('data.groups'))->flatMap(fn (array $group) => $group['items'])->contains('key', 'student-menu'));
         Sanctum::actingAs(User::factory()->create(['role' => 'student', 'district_id' => $other->id]));
-        $this->getJson('/api/v1/system/catalog')->assertOk()->assertJsonCount(9, 'data.student_menu')
+        $this->getJson('/api/v1/system/catalog')->assertOk()->assertJsonCount(7, 'data.student_menu')
             ->assertJsonPath('data.student_menu.0.label', 'ข้อมูลส่วนตัว');
     }
 
@@ -174,7 +203,7 @@ final class StudentMenuTest extends TestCase
         $this->getJson('/api/v1/admin/student-menu')->assertOk()->assertJsonPath('data.can_save', false)->assertJsonPath('data.items.0.key', 'my-learning');
         $this->patchJson('/api/v1/admin/student-menu', ['items' => $this->items()])->assertStatus(503);
         Sanctum::actingAs(User::factory()->create(['role' => 'student', 'district_id' => $district->id]));
-        $this->getJson('/api/v1/system/catalog')->assertOk()->assertJsonCount(9, 'data.student_menu');
+        $this->getJson('/api/v1/system/catalog')->assertOk()->assertJsonCount(7, 'data.student_menu');
     }
 
     public function test_migration_can_run_again_without_overwriting_preferences(): void
@@ -212,7 +241,7 @@ final class StudentMenuTest extends TestCase
             ->assertJsonPath('data.student_menu.2.key', 'custom-school')->assertJsonPath('data.student_menu.2.external', true);
         $this->assertFalse(collect($student->json('data.student_menu'))->contains('key', 'custom-hidden'));
         Sanctum::actingAs(User::factory()->create(['role' => 'student', 'district_id' => $other->id]));
-        $this->getJson('/api/v1/system/catalog')->assertOk()->assertJsonCount(9, 'data.student_menu');
+        $this->getJson('/api/v1/system/catalog')->assertOk()->assertJsonCount(7, 'data.student_menu');
         Sanctum::actingAs(User::factory()->create(['role' => 'admin', 'district_id' => $district->id]));
         $this->patchJson('/api/v1/admin/student-menu', ['items' => [$defaults[0], $this->custom(), ...array_slice($defaults, 1)]])->assertOk()
             ->assertJsonPath('data.items.1.key', 'custom-school');
@@ -289,7 +318,7 @@ final class StudentMenuTest extends TestCase
         ];
         $district->save();
         Sanctum::actingAs(User::factory()->create(['role' => 'student', 'district_id' => $district->id]));
-        $response = $this->getJson('/api/v1/system/catalog')->assertOk()->assertJsonCount(11, 'data.student_menu')
+        $response = $this->getJson('/api/v1/system/catalog')->assertOk()->assertJsonCount(9, 'data.student_menu')
             ->assertJsonPath('data.student_menu.0.key', 'custom-good')
             ->assertJsonPath('data.student_menu.1.key', 'custom-tampered')->assertJsonPath('data.student_menu.1.external', true)
             ->assertJsonPath('data.student_menu.1.route', $this->custom()['url'])->assertJsonPath('data.student_menu.1.icon', 'link');

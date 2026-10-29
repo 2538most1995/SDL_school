@@ -19,7 +19,8 @@ class LegacyRouteCompatibilityTest extends TestCase
             ['login.php', '/login'],
             ['students.php', '/students'],
             ['grades.php', '/grades'],
-            ['assignments.php', '/learning/assignments'],
+            ['assignments.php', '/learning/classroom?section=worksheet&mode=files'],
+            ['resources.php', '/learning/classroom?materials=all'],
             ['import.php', '/admin/imports'],
             ['theme.php', '/settings/appearance'],
         ];

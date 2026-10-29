@@ -1,5 +1,11 @@
 # Performance Audit
 
+## Unified classroom (2026-10-29)
+
+The single classroom entry reuses existing resource/file-assignment APIs and private storage; no copy, schema change or per-item query is introduced. Course-pair validation and file-assignment catalogs reuse the classroom's current-term merged registrations. Resource type, subject and level filtering happens in SQL before the retained 250-row limit; explicit selected assignment IDs are prioritized with a bound CASE within the existing scope. A regression fixture with 255 newer unrelated rows verifies scoped records and old deep links remain reachable. Supplemental search filters server-side. Live MySQL plans/large-roster latency remain Not verified.
+
+Verification: full PHP suite 498 passed / 1 existing skip (499 total); frontend 77 passed, TypeScript/build and changed-file Pint pass. Isolated demo-browser checks under `/SDL_school/` cover retired-menu absence, old assignment/resource redirects, teacher file-work creation, student image submission, teacher score/feedback, PDF upload/private preview and mobile 390px without horizontal overflow. No real student records or deployment database were modified.
+
 ## Subdirectory asset fix (2026-10-29)
 
 Relative Vite asset resolution fixes lazy classroom stylesheet/font requests under `/SDL_school/` without additional API calls or database work. Frontend tests pass 75/75, including executing the emitted preload helper and checking CSS assets for root, `/SDL_school` and nested deployments. Typecheck/build and four PHP application smoke tests pass. A browser reproduction with domain-root `/build/` blocked now opens the classroom and previews the downloaded JSON template using isolated demo data; production authenticated behavior remains unverified until deployment.

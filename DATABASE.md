@@ -1,5 +1,9 @@
 # Database Knowledge Base
 
+## Unified classroom (2026-10-29)
+
+No schema change or data migration. The classroom presents existing `learning_assignments`/`learning_submissions`/`learning_submission_attachments` and `learning_resources` alongside `learning_classroom_*` records, without copying IDs, files or grades. Assignment authoring/audiences now share the classroom's merged current-term ITW + selected, non-transferred web registrations. Optional course/level/resource-kind filters run before the legacy 250-row cap; explicit authorized assignment IDs receive bound priority ordering to keep older deep links reachable. Shared resource subject codes may remain empty. Retired navigation keys are resolved out in memory rather than rewriting district preferences.
+
 ## Online classroom (2026-10-28)
 
 The classroom redesign adds `video` to the existing string `type` contract, with at least one validated external link and no questions/submission. No schema change or rewrite of existing knowledge records is performed. JSON/XLSX imports become ordinary validated question JSON on explicit save; imported files, cloud image URLs and foreign private-image IDs are not stored.

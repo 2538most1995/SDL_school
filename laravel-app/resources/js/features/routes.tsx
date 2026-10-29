@@ -1,3 +1,5 @@
+import { Navigate, useLocation } from 'react-router-dom';
+import { legacyClassroomLocation } from './learning/classroom/navigation';
 import { lazy, type ComponentType, type ReactNode } from 'react';
 
 function lazyWithReload<Props>(loader: () => Promise<{ default: ComponentType<Props> }>) {
@@ -66,8 +68,8 @@ export const featureRouteCatalog: FeatureRoute[] = [
 
     { path: '/learning', label: 'พื้นที่การเรียนรู้', roles: ['student', 'teacher', 'admin', 'super_admin'], element: <LearningHomePage /> },
     { path: '/learning/classroom', label: 'ห้องเรียนออนไลน์', roles: ['student', 'teacher', 'admin', 'super_admin'], element: <OnlineClassroomPage /> },
-    { path: '/learning/assignments', label: 'งานและการส่งงาน', roles: ['student', 'teacher', 'admin', 'super_admin'], element: <LearningListPage kind="assignments" /> },
-    { path: '/learning/resources', label: 'คลังสื่อ', roles: ['student', 'teacher', 'admin', 'super_admin'], element: <LearningListPage kind="resources" /> },
+    { path: '/learning/assignments', label: 'งานและการส่งงาน', roles: ['student', 'teacher', 'admin', 'super_admin'], element: <ClassroomLegacyRedirect kind="assignments" /> },
+    { path: '/learning/resources', label: 'คลังสื่อ', roles: ['student', 'teacher', 'admin', 'super_admin'], element: <ClassroomLegacyRedirect kind="resources" /> },
     { path: '/learning/lesson-plans', label: 'แผนการสอน', roles: ['teacher', 'admin', 'super_admin'], element: <LearningListPage kind="lesson-plans" /> },
     { path: '/learning/calendar', label: 'ปฏิทินพบกลุ่ม', roles: ['student', 'teacher', 'admin', 'super_admin'], element: <LearningListPage kind="calendar" /> },
     { path: '/learning/schedule', label: 'ตารางสอบ', roles: ['student', 'teacher', 'admin', 'super_admin'], element: <LearningListPage kind="schedule" /> },
@@ -93,3 +95,8 @@ export const featureRouteCatalog: FeatureRoute[] = [
     { path: '/settings/profile', label: 'โปรไฟล์', roles: ['student', 'teacher', 'admin', 'super_admin'], element: <ProfileSettingsPage /> },
     { path: '/settings/appearance', label: 'รูปแบบการแสดงผล', roles: ['student', 'teacher', 'admin', 'super_admin'], element: <AppearanceSettingsPage /> },
 ];
+
+function ClassroomLegacyRedirect({ kind }: { kind: 'assignments' | 'resources' }) {
+    const { search } = useLocation();
+    return <Navigate replace to={legacyClassroomLocation(kind, search)} />;
+}

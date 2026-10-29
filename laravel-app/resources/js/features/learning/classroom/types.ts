@@ -6,7 +6,7 @@ export type Activity = { id: string; title: string; type: ActivityKind; content:
 export type Subject = { code: string; name: string; level: number; level_label: string; student_count: number; groups: { code: string; name: string }[] };
 export type PageInfo = { current_page: number; last_page: number; total: number };
 export type Workspace = { term: string | null; subjects: Subject[]; selected_subject: Subject | null; activities: Activity[]; selected_activity: Activity | null; submissions: Submission[]; submission_pagination: PageInfo | null; activity_pagination: PageInfo | null; activity_counts: Record<ActivityKind | 'all', number> };
-export const kindLabels: Record<ActivityKind, string> = { video: 'คลิปวิดีโอ', knowledge: 'ใบความรู้', worksheet: 'ใบงานออนไลน์', quiz: 'แบบทดสอบ' };
+export const kindLabels: Record<ActivityKind, string> = { video: 'คลิปวิดีโอ', knowledge: 'ใบความรู้', worksheet: 'ใบงาน', quiz: 'แบบทดสอบ' };
 export const questionLabels: Record<QuestionType, string> = { single_choice: 'เลือกตอบ 1 ข้อ', multiple_choice: 'เลือกหลายคำตอบ', true_false: 'ถูก / ผิด', short_answer: 'เติมคำ', essay: 'อัตนัย' };
 
 export function safeClassroomUrl(value: string): string | null {

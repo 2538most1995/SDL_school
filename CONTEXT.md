@@ -1,5 +1,9 @@
 # SDL School Context
 
+## Unified classroom (2026-10-29)
+
+Assignments and resources no longer appear as independent sidebar, navigation-editor or student-home modules. Their React/legacy PHP entry links open the online classroom; assignment IDs resolve the authorized course once, including legacy NULL levels. Classroom knowledge/video categories show existing library documents/clips; worksheets offer online answers or file/link submission. File work retains its original submissions, attachments, reviews and scores, including late submissions while still open. No data is copied or deleted and no migration is added. Additional media remain accessible inside the classroom even without a current registered course. Saved retired menu keys are ignored by the existing catalog allowlist. See `laravel-app/docs/online-classroom.md` for the consolidated workflow and limits.
+
 ## Subdirectory asset fix (2026-10-29)
 
 Vite uses a relative build base so lazy classroom JS/CSS and fonts resolve inside the application deployment directory, including `/SDL_school/`. Previously the lazy stylesheet requested domain-root `/build/` and triggered the root error boundary. The committed production build includes this fix; no schema or permission changes. After updating server files, clear Laravel caches and refresh the page.

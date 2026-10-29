@@ -17,6 +17,8 @@ final class AssignmentWorkflowController extends Controller
     {
         $filters = $request->validate([
             'assignment_id' => ['nullable', 'integer', 'min:1'],
+            'subject_code' => ['nullable', 'required_with:education_level', 'string', 'max:32'],
+            'education_level' => ['nullable', 'required_with:subject_code', 'integer', Rule::in([1, 2, 3])],
         ]);
 
         return response()->json([
@@ -24,6 +26,8 @@ final class AssignmentWorkflowController extends Controller
                 $request->user(),
                 $this->districtId($request),
                 isset($filters['assignment_id']) ? (int) $filters['assignment_id'] : null,
+                $filters['subject_code'] ?? null,
+                isset($filters['education_level']) ? (int) $filters['education_level'] : null,
             ),
             'meta' => [
                 'mode' => 'production',

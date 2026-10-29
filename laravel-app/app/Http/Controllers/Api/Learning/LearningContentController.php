@@ -183,7 +183,7 @@ final class LearningContentController extends Controller
                 'status' => ['required', Rule::in(['draft', 'open', 'closed'])],
             ],
             'resources' => [
-                'title' => ['required', 'string', 'max:220'], 'subject' => ['required', 'string', 'max:32'],
+                'title' => ['required', 'string', 'max:220'], 'subject' => ['nullable', 'string', 'max:32'],
                 'description' => ['nullable', 'string', 'max:5000'], 'resource_type' => ['required', Rule::in(['link', 'video', 'youtube', 'pdf', 'exercise', 'file'])],
                 'url' => [Rule::requiredIf(fn (): bool => $this->requestUsesExternalUrl($request)), 'nullable', 'url:http,https', 'max:2000'],
                 'file' => [Rule::requiredIf(fn (): bool => $this->resourceFileIsRequired($request, $existing)), 'nullable', 'file', 'mimes:pdf,doc,docx,ppt,pptx,xls,xlsx,zip', 'max:20480'],
@@ -290,7 +290,7 @@ final class LearningContentController extends Controller
             ],
             'resources' => [
                 'title' => $values['title'],
-                'subject_code' => $values['subject'],
+                'subject_code' => (string) ($values['subject'] ?? ''),
                 'description' => $values['description'] ?? null,
                 'resource_type' => $values['resource_type'],
                 'external_url' => $this->usesExternalUrl($values) ? $values['url'] : null,
