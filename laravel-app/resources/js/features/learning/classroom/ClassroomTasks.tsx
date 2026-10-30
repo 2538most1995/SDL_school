@@ -36,7 +36,7 @@ export function ClassroomTasks({ subject, manage, role, district, readOnly, onDi
                 return <button type="button" key={task.id} className="classroom-task-card" onClick={() => setSelected(task.id)}>
                     <span className="classroom-task-card-top"><span className="classroom-task-subject">{subject?.name ?? task.subject_name ?? task.subject_code}</span><span className="classroom-task-state" data-state={progress?.status ?? 'pending'}>{progress ? statusLabels[progress.status] : `${task.completed_count}/${task.student_count} คนทำครบ`}</span></span>
                     <strong>{task.title}</strong><span className="classroom-task-deadline" data-overdue={overdue}><Clock size={16} /> กำหนดส่ง {dueLabel(task.due_at)}{progress?.overdue ? ' · เลยกำหนดส่ง' : progress?.late ? ' · ส่งช้า' : ''}</span>
-                    <span className="classroom-task-card-bottom"><span>{progress ? `ทำแล้ว ${progress.completed}/${progress.total} กิจกรรม` : `${task.item_count} กิจกรรม · ${task.target_group || 'ทุกกลุ่มที่รับผิดชอบ'}`}</span><span>{manage ? 'ดูรายชื่อผู้เรียน' : 'ดูงาน'} <ArrowRight size={17} /></span></span>
+                    <span className="classroom-task-card-bottom"><span>{progress ? `ทำแล้ว ${progress.completed}/${progress.total} กิจกรรม` : `${task.item_count} กิจกรรม · ${task.target_group || (role === 'teacher' ? 'กลุ่มที่รับผิดชอบ' : 'ทุกกลุ่มที่รับผิดชอบ')}`}</span><span>{manage ? 'ดูรายชื่อผู้เรียน' : 'ดูงาน'} <ArrowRight size={17} /></span></span>
                 </button>;
             })}</div>
             <TaskPager page={query.data.data.pagination} change={setPage} />
@@ -55,7 +55,7 @@ function TaskEditor({ subject, role, district, close, saved, onDirty, onBusy }: 
     const [title, setTitle] = useState('');
     const [instructions, setInstructions] = useState('');
     const [due, setDue] = useState('');
-    const [group, setGroup] = useState('');
+    const [group, setGroup] = useState(role === 'teacher' ? subject.groups[0]?.code ?? '' : '');
     const [mode, setMode] = useState<'all' | 'selected'>('all');
     const [checked, setChecked] = useState<string[]>([]);
     const [filter, setFilter] = useState<ActivityKind | 'all'>('all');
@@ -73,7 +73,7 @@ function TaskEditor({ subject, role, district, close, saved, onDirty, onBusy }: 
         <TextField required fullWidth label="ชื่องาน" value={title} onChange={event => setTitle(event.target.value)} disabled={save.isPending} slotProps={{ htmlInput: { maxLength: 220 } }} />
         <TextField fullWidth multiline minRows={2} label="คำชี้แจงสำหรับผู้เรียน" value={instructions} onChange={event => setInstructions(event.target.value)} disabled={save.isPending} slotProps={{ htmlInput: { maxLength: 5000 } }} />
         <TextField required fullWidth type="datetime-local" label="กำหนดส่ง" value={due} onChange={event => setDue(event.target.value)} disabled={save.isPending} slotProps={{ inputLabel: { shrink: true } }} helperText="วันและเวลาตามอุปกรณ์ของคุณ" />
-        <fieldset disabled={save.isPending}><legend>มอบหมายให้กลุ่มเรียน</legend><div className="classroom-choice-buttons"><button type="button" aria-pressed={!group} onClick={() => { setGroup(''); setChecked([]); setChanged(true); }}>ทุกกลุ่มที่รับผิดชอบ</button>{subject.groups.map(item => <button key={item.code} type="button" aria-pressed={group === item.code} onClick={() => { setGroup(item.code); setChecked([]); setChanged(true); }}>{item.name || item.code}</button>)}</div></fieldset>
+        <fieldset disabled={save.isPending}><legend>มอบหมายให้กลุ่มเรียน</legend><div className="classroom-choice-buttons">{role !== 'teacher' && <button type="button" aria-pressed={!group} onClick={() => { setGroup(''); setChecked([]); setChanged(true); }}>ทุกกลุ่มที่รับผิดชอบ</button>}{subject.groups.map(item => <button key={item.code} type="button" aria-pressed={group === item.code} onClick={() => { setGroup(item.code); setChecked([]); setChanged(true); }}>{item.name || item.code}</button>)}</div></fieldset>
         <fieldset disabled={save.isPending}><legend>สิ่งที่ต้องทำ</legend><div className="classroom-choice-buttons"><button type="button" aria-pressed={mode === 'all'} onClick={() => { setMode('all'); setChanged(true); }}>ทำครบทุกกิจกรรม</button><button type="button" aria-pressed={mode === 'selected'} onClick={() => { setMode('selected'); setChanged(true); }}>เลือกเฉพาะกิจกรรม</button></div><p className="classroom-muted">{mode === 'all' ? 'รวมกิจกรรมที่เผยแพร่และใบงานส่งไฟล์ที่เปิดอยู่ขณะสั่งงาน กิจกรรมที่เพิ่มภายหลังจะไม่ถูกเพิ่มในงานนี้' : 'เลือกใบงาน แบบทดสอบ หรือกิจกรรมที่ต้องการให้ผู้เรียนทำ'}</p></fieldset>
         {options.isPending ? <QuerySkeleton rows={2} /> : options.isError ? <Alert severity="error">{errorText(options.error)} <Button onClick={() => void options.refetch()}>ลองใหม่</Button></Alert> : <>
             {mode === 'selected' && <div className="classroom-choice-buttons" role="group" aria-label="กรองกิจกรรมสำหรับสั่งงาน">{(['all', 'video', 'knowledge', 'worksheet', 'quiz'] as const).map(type => <button type="button" key={type} aria-pressed={filter === type} onClick={() => setFilter(type)}>{type === 'all' ? 'ทั้งหมด' : kindLabels[type]}</button>)}</div>}
@@ -82,7 +82,7 @@ function TaskEditor({ subject, role, district, close, saved, onDirty, onBusy }: 
             <p className="classroom-muted">มอบหมาย {mode === 'all' ? available.length : selectedCount} กิจกรรม</p>
         </>}
         {save.isError && <Alert severity="error">{errorText(save.error)}</Alert>}
-    </DialogContent><DialogActions><Button disabled={save.isPending} onClick={requestClose}>ยกเลิก</Button><Button type="submit" appearance="primary" disabled={save.isPending || options.isFetching || options.isError || !title.trim() || !due || !available.length || (mode === 'selected' && !selectedCount)}>{save.isPending ? 'กำลังสั่งงาน…' : 'ยืนยันสั่งงาน'}</Button></DialogActions></form></Dialog>;
+    </DialogContent><DialogActions><Button disabled={save.isPending} onClick={requestClose}>ยกเลิก</Button><Button type="submit" appearance="primary" disabled={save.isPending || options.isFetching || options.isError || (role === 'teacher' && !group) || !title.trim() || !due || !available.length || (mode === 'selected' && !selectedCount)}>{save.isPending ? 'กำลังสั่งงาน…' : 'ยืนยันสั่งงาน'}</Button></DialogActions></form></Dialog>;
 }
 
 function TaskDialog({ id, manage, role, district, close, openItem }: { id: string; manage: boolean; role: string; district: string; close: () => void; openItem: Props['onOpen'] }) {

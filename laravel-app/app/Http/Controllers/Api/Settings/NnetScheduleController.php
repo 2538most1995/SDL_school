@@ -27,7 +27,7 @@ final class NnetScheduleController extends Controller
     public function update(Request $request): JsonResponse
     {
         $viewer = $request->user();
-        if (in_array($viewer->role, ['student'], true)) {
+        if (! in_array($viewer->role, ['admin', 'super_admin'], true)) {
             return response()->json(['message' => 'ไม่มีสิทธิ์ตั้งค่าวันเวลาสอบ N-NET'], 403);
         }
 

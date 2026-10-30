@@ -333,7 +333,9 @@ final class LegacyPortalReadService
         if ($viewer->role === 'student') {
             $query->where('student.student_code', (string) ($viewer->student_code ?: $viewer->username));
         } elseif ($viewer->role === 'teacher') {
-            $query->where('assignment.created_by', (int) $viewer->id);
+            $groups = $this->groups($viewer, $districtId);
+            $query->where('assignment.created_by', (int) $viewer->id)->where('student.district_id', $districtId)
+                ->where(fn (Builder $scope) => $scope->whereIn('student.group_code', $groups)->orWhereIn('student.group_name', $groups));
         }
 
         $rows = $query->whereIn('submission.status', ['submitted', 'reviewed'])
@@ -674,15 +676,7 @@ final class LegacyPortalReadService
             }
         } elseif ($viewer->role === 'teacher') {
             $groups = $this->groups($viewer, (int) $viewer->district_id);
-            $query->where(function (Builder $scope) use ($alias, $groups, $viewer): void {
-                $scope->where("{$alias}.created_by", (int) $viewer->id);
-                if ($groups !== []) {
-                    $scope->orWhere(function (Builder $groupScope) use ($alias, $groups): void {
-                        $groupScope->where("{$alias}.target_type", 'group')
-                            ->whereIn("{$alias}.target_value", $groups);
-                    });
-                }
-            });
+            $query->where("{$alias}.target_type", 'group')->whereIn("{$alias}.target_value", $groups);
         }
     }
 
@@ -704,12 +698,7 @@ final class LegacyPortalReadService
                 }
             });
         } elseif ($viewer->role === 'teacher') {
-            $query->where(function (Builder $scope) use ($actorColumn, $alias, $groupColumn, $groups, $viewer): void {
-                $scope->where("{$alias}.{$actorColumn}", (int) $viewer->id);
-                if ($groups !== []) {
-                    $scope->orWhereIn("{$alias}.{$groupColumn}", $groups);
-                }
-            });
+            $query->whereIn("{$alias}.{$groupColumn}", $groups);
         }
     }
 

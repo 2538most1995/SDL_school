@@ -358,3 +358,9 @@ The migration is intentionally forward-only on rollback: restoring a NOT NULL co
 Courses and activities now open in separate views. Teachers issue tasks with deadlines for all currently available activities or selected items; students see assigned work in the classroom, and staff filter pending/in-progress/completed rosters. The retired `/learning` page redirects to the classroom and its menu is removed.
 
 Before using task writes, apply migration `2026_10_29_000042_create_classroom_tasks.php` through the project's normal staging/backup procedure: run `php artisan migrate --force` and `php artisan optimize:clear` inside `laravel-app`. Use the included production build. Development did not migrate the real database. See [docs/online-classroom.md](docs/online-classroom.md) for authorization, deadline and completion details.
+
+## Teacher group isolation update (2026-10-30)
+
+Teachers can target only one explicitly selected assigned group when creating tasks, activities, file worksheets, resources or calendar events. Teacher report filters read only their current assigned roster; N-NET and private file/media endpoints enforce the same boundary. Empty group assignments grant no student access. Matching requires the exact group code or exact group name; numeric codes are no longer silently equated by removing leading zeros. District-wide N-NET schedule changes require an administrator.
+
+No new migration is required for this update. Deploy the included production assets and run `php artisan optimize:clear`. Existing classroom task migration 000042 must already be installed to use tasks. No real account assignment or production database was changed during development. See [docs/online-classroom.md](docs/online-classroom.md) for retained historical work and group targeting.

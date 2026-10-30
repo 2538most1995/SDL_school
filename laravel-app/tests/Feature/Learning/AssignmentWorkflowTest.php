@@ -381,6 +381,37 @@ final class AssignmentWorkflowTest extends TestCase
         }
     }
 
+    public function test_teacher_cannot_use_blank_target_or_download_former_group_submissions(): void
+    {
+        Storage::fake('local');
+        $teacher = $this->teacher(['SENA-M3-A']);
+        Sanctum::actingAs($teacher);
+        $values = ['title' => 'own worksheet', 'subject_code' => 'พว31001', 'education_level' => 3, 'target_group' => '', 'max_score' => 10, 'due_at' => now()->addDay()->toDateTimeString(), 'status' => 'open'];
+        $this->postJson('/api/v1/learning/assignments', $values)->assertUnprocessable()->assertJsonValidationErrors('target_group');
+        $values['target_group'] = 'SENA-M3-A';
+        $id = $this->post('/api/v1/learning/assignments', [...$values, 'material_pdf' => UploadedFile::fake()->create('teacher.pdf', 20, 'application/pdf')], ['Accept' => 'application/json'])->assertCreated()->json('data.id');
+        Sanctum::actingAs($this->student('6650300005'));
+        $submissionId = $this->post('/api/v1/learning/assignments/'.$id.'/submit', ['submission_type' => 'pdf', 'file' => UploadedFile::fake()->create('student.pdf', 20, 'application/pdf')], ['Accept' => 'application/json'])->assertOk()->json('data.id');
+        Sanctum::actingAs($teacher);
+        $this->getJson('/api/v1/learning/assignments?assignment_id='.$id)->assertOk()->assertJsonPath('data.selected_assignment.submitted_count', 1)->assertJsonPath('data.selected_assignment.can_edit_content', true);
+        $this->get('/api/v1/learning/assignments/'.$id.'/submissions/'.$submissionId.'/file')->assertOk();
+        // Existing global legacy work can be reviewed within the current roster,
+        // but its source must not be changed for learners outside that roster.
+        DB::table('learning_assignments')->where('id', $id)->update(['target_type' => 'all', 'target_value' => null]);
+        $this->getJson('/api/v1/learning/assignments?assignment_id='.$id)->assertOk()->assertJsonPath('data.selected_assignment.can_edit_content', false)->assertJsonPath('data.selected_assignment.can_edit', true);
+        $this->deleteJson('/api/v1/learning/assignments/'.$id)->assertForbidden();
+        $this->patchJson('/api/v1/learning/assignments/'.$id, $values)->assertForbidden();
+        $this->patchJson('/api/v1/learning/assignments/'.$id.'/submissions/'.$submissionId, ['score' => 5])->assertOk();
+        DB::table('learning_assignments')->where('id', $id)->update(['target_type' => 'group', 'target_value' => 'SENA-M3-A']);
+        $teacher->update(['assigned_groups' => ['SENA-M3-B']]);
+        $this->get('/api/v1/learning/assignments/'.$id.'/material')->assertNotFound();
+        $this->getJson('/api/v1/learning/assignments?assignment_id='.$id)->assertNotFound();
+        $this->get('/api/v1/learning/assignments/'.$id.'/submissions/'.$submissionId.'/file')->assertNotFound();
+        $this->patchJson('/api/v1/learning/assignments/'.$id.'/submissions/'.$submissionId, ['score' => 5])->assertNotFound();
+        $this->deleteJson('/api/v1/learning/assignments/'.$id)->assertNotFound();
+        $this->assertDatabaseHas('learning_assignments', ['id' => $id]);
+    }
+
     /** @param list<string> $groups */
     private function teacher(array $groups): User
     {

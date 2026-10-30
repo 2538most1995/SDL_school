@@ -53,7 +53,7 @@ class NnetTest extends TestCase
 
     public function test_can_bulk_import_nnet_results_and_match_student(): void
     {
-        Sanctum::actingAs($this->teacher);
+        Sanctum::actingAs($this->admin);
 
         // Bind mock student repository to return a student with citizenId
         $mockStudent = new Student(
@@ -142,7 +142,7 @@ class NnetTest extends TestCase
 
     public function test_can_list_records_and_filter(): void
     {
-        Sanctum::actingAs($this->teacher);
+        Sanctum::actingAs($this->admin);
 
         NnetResult::create([
             'district_id' => $this->district->id,
@@ -186,7 +186,7 @@ class NnetTest extends TestCase
 
     public function test_summary_calculates_averages_and_kpis(): void
     {
-        Sanctum::actingAs($this->teacher);
+        Sanctum::actingAs($this->admin);
 
         NnetResult::create([
             'district_id' => $this->district->id,
@@ -388,7 +388,7 @@ class NnetTest extends TestCase
 
     public function test_can_filter_records_and_summary_by_group(): void
     {
-        Sanctum::actingAs($this->teacher);
+        Sanctum::actingAs($this->admin);
 
         NnetResult::create([
             'district_id' => $this->district->id,
@@ -458,7 +458,7 @@ class NnetTest extends TestCase
 
     public function test_summary_calculates_overall_average_by_averaging_subject_averages(): void
     {
-        Sanctum::actingAs($this->teacher);
+        Sanctum::actingAs($this->admin);
 
         // Subject averages matching user screenshot:
         // 411: 48.57, 412: 48.77, 413: 59.76, 414: 58.73, 415: 59.36
@@ -492,7 +492,7 @@ class NnetTest extends TestCase
 
     public function test_summary_calculates_all_levels_by_averaging_across_levels(): void
     {
-        Sanctum::actingAs($this->teacher);
+        Sanctum::actingAs($this->admin);
 
         // Level 1: ประถมศึกษา (Primary)
         // Subject 0 (ทักษะการเรียนรู้) = 40.0, Overall avg = 60.0

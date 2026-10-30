@@ -473,7 +473,7 @@ export function NnetReportPage() {
                             onChange={(e) => setGroup(e.target.value)}
                             className="w-full rounded-xl border border-slate-300 p-2 text-sm bg-white focus:border-indigo-500 focus:ring-2 focus:ring-indigo-100 outline-none"
                         >
-                            <option value="">ทุกกลุ่มเรียน</option>
+                            <option value="">{role === 'teacher' ? 'เฉพาะกลุ่มที่รับผิดชอบ' : 'ทุกกลุ่มเรียน'}</option>
                             {retainedGroupOptions.map((option) => (
                                 <option key={option.value} value={option.value}>
                                     {option.label}

@@ -227,6 +227,7 @@ export function CourseRegistrationPage() {
 }
 
 function StaffCourseRegistrationPage() {
+    const { role } = useDemoRole();
     const queryClient = useQueryClient();
     const [selectedStudentCode, setSelectedStudentCode] = useState<string | null>(null);
     const [term, setTerm] = useState('');
@@ -722,7 +723,7 @@ function StaffCourseRegistrationPage() {
                                     onChange={(e) => setGroup(e.target.value)}
                                     className="w-full rounded-xl border border-slate-300 bg-white p-2.5 text-sm"
                                 >
-                                    <option value="">ทุกกลุ่มเรียน</option>
+                                    <option value="">{role === 'teacher' ? 'เฉพาะกลุ่มที่รับผิดชอบ' : 'ทุกกลุ่มเรียน'}</option>
                                     {retainedGroupOptions.map((g) => (
                                         <option key={g.value} value={g.value}>
                                             {g.label}

@@ -70,14 +70,7 @@ final class CalendarController extends Controller
             });
         } elseif ($viewer->role === 'teacher') {
             $groups = $groupCatalog->aliasesForViewer($viewer, (int) $districtId);
-            $query->where(function ($scope) use ($groups, $viewer): void {
-                $scope->where('created_by', (int) $viewer->id);
-                if ($groups !== []) {
-                    $scope->orWhere(fn ($groupScope) => $groupScope
-                        ->where('target_type', 'group')
-                        ->whereIn('target_value', $groups));
-                }
-            });
+            $query->where('target_type', 'group')->whereIn('target_value', $groups);
         }
 
         $row = $query->first(['id', 'district_id', 'image_path']);

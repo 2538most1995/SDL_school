@@ -141,9 +141,11 @@ final class OnlineClassroomTest extends TestCase
         $this->getJson(self::BASE)->assertOk()->assertJsonCount(0, 'data.subjects');
     }
 
-    public function test_teacher_all_groups_means_only_assigned_groups_and_owner_is_required(): void
+    public function test_teacher_requires_explicit_assigned_group_and_owner_is_required(): void
     {
-        $id = $this->createActivity(['target_group' => '']);
+        $this->postJson(self::BASE.'/activities', $this->values(['target_group' => '']))->assertUnprocessable()->assertJsonValidationErrors('target_group');
+        $id = $this->createActivity();
+        DB::table('learning_classroom_activities')->where('id', $id)->update(['target_group' => '']);
         Sanctum::actingAs($this->student('6650300007'));
         $this->getJson($this->selected($id))->assertNotFound();
         Sanctum::actingAs(User::factory()->create(['role' => 'teacher', 'district_id' => $this->district->id, 'assigned_groups' => ['SENA-M3-A']]));
@@ -259,7 +261,8 @@ final class OnlineClassroomTest extends TestCase
     public function test_two_students_only_receive_their_own_answers_and_scores(): void
     {
         $this->teacher->update(['assigned_groups' => ['SENA-M3-A', 'SENA-M3-B']]);
-        $id = $this->createActivity(['target_group' => '']);
+        $id = $this->createActivity();
+        DB::table('learning_classroom_activities')->where('id', $id)->update(['target_group' => '']);
         $student = $this->student();
         Sanctum::actingAs($student);
         $this->postJson(self::BASE."/activities/{$id}/submit", ['answers' => ['q1' => 'ก']])->assertOk()->assertJsonPath('data.score', 2);
@@ -271,6 +274,8 @@ final class OnlineClassroomTest extends TestCase
             ->assertJsonPath('data.selected_activity.submission.answers.q1', 'ก')->assertJsonPath('data.selected_activity.submission.score', 2);
         Sanctum::actingAs($this->teacher);
         $this->getJson($this->selected($id))->assertOk()->assertJsonCount(2, 'data.submissions');
+        $this->teacher->update(['assigned_groups' => ['SENA-M3-A']]);
+        $this->getJson($this->selected($id))->assertOk()->assertJsonCount(1, 'data.submissions')->assertJsonPath('data.selected_activity.submission_count', 1)->assertJsonPath('data.selected_activity.can_edit', false);
     }
 
     public function test_deadlines_are_normalized_for_mysql_and_migration_is_repeatable_without_data_loss(): void
@@ -289,7 +294,8 @@ final class OnlineClassroomTest extends TestCase
     public function test_teacher_cannot_change_all_group_activity_after_losing_one_assigned_group(): void
     {
         $this->teacher->update(['assigned_groups' => ['SENA-M3-A', 'SENA-M3-B']]);
-        $id = $this->createActivity(['target_group' => '']);
+        $id = $this->createActivity();
+        DB::table('learning_classroom_activities')->where('id', $id)->update(['target_group' => '']);
         $this->teacher->update(['assigned_groups' => ['SENA-M3-A']]);
         $this->getJson($this->selected($id))->assertOk()->assertJsonPath('data.selected_activity.can_edit', false);
         $this->postJson(self::BASE."/activities/{$id}", ['status' => 'draft'])->assertForbidden();

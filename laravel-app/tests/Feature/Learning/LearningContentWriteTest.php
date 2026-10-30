@@ -103,6 +103,40 @@ final class LearningContentWriteTest extends TestCase
         ])->assertForbidden();
     }
 
+    public function test_teacher_cannot_publish_to_all_groups_or_manage_owned_content_after_group_changes(): void
+    {
+        Storage::fake('local');
+        $teacher = User::factory()->create(['role' => 'teacher', 'district_id' => $this->district->id, 'assigned_groups' => ['G-01']]);
+        Sanctum::actingAs($teacher);
+        $resource = ['title' => 'own group resource', 'resource_type' => 'link', 'url' => 'https://example.test/lesson'];
+        $calendar = ['title' => 'own group calendar', 'event_date' => '2026-11-01', 'start_time' => '09:00', 'end_time' => '12:00'];
+        foreach (['', 'ทุกกลุ่ม', 'all', '*', 'G-99'] as $target) {
+            $response = $this->postJson('/api/v1/learning/resources', [...$resource, 'target_group' => $target]);
+            $target === '' ? $response->assertUnprocessable() : $response->assertForbidden();
+            $response = $this->postJson('/api/v1/learning/calendar', [...$calendar, 'target_group' => $target]);
+            $target === '' ? $response->assertUnprocessable() : $response->assertForbidden();
+        }
+        $this->postJson('/api/v1/learning/assignments', ['title' => 'all denied', 'subject' => 'พว31001', 'due_at' => now()->addDay(), 'status' => 'open', 'target_mode' => 'all', 'target_group' => 'G-01'])->assertUnprocessable();
+        $resourceId = $this->postJson('/api/v1/learning/resources', [...$resource, 'target_group' => 'G-01'])->assertCreated()->json('data.id');
+        $eventId = $this->postJson('/api/v1/learning/calendar', [...$calendar, 'target_group' => 'G-01'])->assertCreated()->json('data.id');
+        $fileId = $this->post('/api/v1/learning/resources', ['title' => 'own PDF', 'resource_type' => 'pdf', 'target_group' => 'G-01', 'file' => UploadedFile::fake()->create('own.pdf', 20, 'application/pdf')], ['Accept' => 'application/json'])->assertCreated()->json('data.id');
+        $imageEvent = $this->post('/api/v1/learning/calendar', [...$calendar, 'target_group' => 'G-01', 'image' => UploadedFile::fake()->image('event.jpg', 800, 450)], ['Accept' => 'application/json'])->assertCreated()->json('data.id');
+        $this->get('/api/v1/learning/resources/'.$fileId.'/file')->assertOk();
+        $this->get('/api/v1/learning/calendar/'.$imageEvent.'/image')->assertOk();
+        $teacher->update(['assigned_groups' => ['G-02']]);
+        $this->get('/api/v1/learning/resources/'.$fileId.'/file')->assertNotFound();
+        $this->get('/api/v1/learning/calendar/'.$imageEvent.'/image')->assertNotFound();
+        $this->getJson('/api/v1/learning/resources')->assertOk()->assertJsonCount(0, 'data');
+        $this->getJson('/api/v1/learning/calendar')->assertOk()->assertJsonCount(0, 'data');
+        $this->patchJson('/api/v1/learning/resources/'.$resourceId, [...$resource, 'target_group' => 'G-02'])->assertNotFound();
+        $this->deleteJson('/api/v1/learning/calendar/'.$eventId)->assertNotFound();
+        $teacher->update(['assigned_groups' => []]);
+        $this->postJson('/api/v1/learning/resources', [...$resource, 'target_group' => 'G-01'])->assertForbidden();
+        Sanctum::actingAs(User::factory()->create(['role' => 'admin', 'district_id' => $this->district->id]));
+        $this->postJson('/api/v1/learning/resources', $resource)->assertCreated();
+        $this->postJson('/api/v1/learning/calendar', $calendar)->assertCreated();
+    }
+
     public function test_student_cannot_mutate_learning_content(): void
     {
         Sanctum::actingAs(User::factory()->create([
@@ -245,6 +279,7 @@ final class LearningContentWriteTest extends TestCase
         Sanctum::actingAs(User::factory()->create([
             'role' => 'teacher',
             'district_id' => $this->district->id,
+            'assigned_groups' => ['G-01'],
         ]));
 
         $this->post('/api/v1/learning/resources', [
@@ -269,11 +304,12 @@ final class LearningContentWriteTest extends TestCase
             'subject' => 'พท31001',
             'resource_type' => 'link',
             'url' => $longUrl,
+            'target_group' => 'G-01',
         ])->assertCreated();
         $this->assertDatabaseHas('learning_resources', ['external_url' => $longUrl]);
     }
 
-    public function test_resource_form_receives_scoped_group_options_and_can_save_youtube_for_every_group(): void
+    public function test_resource_form_receives_scoped_group_options_and_saves_only_assigned_group(): void
     {
         $batch = 'import_1700000300_groups';
         $historyId = DB::table('import_history')->insertGetId([
@@ -332,13 +368,13 @@ final class LearningContentWriteTest extends TestCase
             'resource_type' => 'youtube',
             'url' => 'https://www.youtube.com/watch?v=bV3W62zZcTc',
             'level' => '2',
-            'target_group' => '',
+            'target_group' => 'G-01',
         ])->assertCreated();
         $this->assertDatabaseHas('learning_resources', [
             'title' => 'ทักษะการเรียนรู้',
             'external_url' => 'https://www.youtube.com/watch?v=bV3W62zZcTc',
             'education_level' => 2,
-            'target_group' => '',
+            'target_group' => 'G-01',
             'subject' => 'ทร21001',
             'url' => 'https://www.youtube.com/watch?v=bV3W62zZcTc',
             'level' => '2',
@@ -486,7 +522,7 @@ final class LearningContentWriteTest extends TestCase
         $teacher = User::factory()->create([
             'role' => 'teacher',
             'district_id' => $this->district->id,
-            'assigned_groups' => [],
+            'assigned_groups' => ['G-01'],
         ]);
         Sanctum::actingAs($teacher);
 
@@ -503,7 +539,7 @@ final class LearningContentWriteTest extends TestCase
                 ['date' => '2026-08-23', 'start_time' => '09:15', 'end_time' => '14:00'],
             ],
             'external_url' => 'https://example.test/activity-registration',
-            'target_group' => '',
+            'target_group' => 'G-01',
         ])->assertCreated()
             ->assertJsonPath('data.end_date', '2026-08-23')
             ->assertJsonPath('data.daily_schedule.1.start_time', '10:00');
@@ -513,7 +549,7 @@ final class LearningContentWriteTest extends TestCase
             'id' => $eventId,
             'starts_at' => '2026-08-21 08:30:00',
             'ends_at' => '2026-08-23 14:00:00',
-            'target_type' => 'all',
+            'target_type' => 'group',
             'external_url' => 'https://example.test/activity-registration',
         ]);
         $storedSchedule = json_decode((string) DB::table('learning_calendar_events')->where('id', $eventId)->value('daily_schedule'), true, 512, JSON_THROW_ON_ERROR);
@@ -553,7 +589,7 @@ final class LearningContentWriteTest extends TestCase
         $teacher = User::factory()->create([
             'role' => 'teacher',
             'district_id' => $this->district->id,
-            'assigned_groups' => [],
+            'assigned_groups' => ['G-01'],
         ]);
         Sanctum::actingAs($teacher);
 
@@ -568,7 +604,7 @@ final class LearningContentWriteTest extends TestCase
                 ['date' => '2026-08-21', 'start_time' => 'หลังเคารพธงชาติ', 'end_time' => 'ก่อนพักกลางวัน'],
                 ['date' => '2026-08-22', 'start_time' => 'ช่วงบ่าย', 'end_time' => 'จนเสร็จกิจกรรม'],
             ],
-            'target_group' => '',
+            'target_group' => 'G-01',
         ])->assertCreated()
             ->assertJsonPath('data.daily_schedule.0.start_time', 'หลังเคารพธงชาติ')
             ->assertJsonPath('data.daily_schedule.1.end_time', 'จนเสร็จกิจกรรม');

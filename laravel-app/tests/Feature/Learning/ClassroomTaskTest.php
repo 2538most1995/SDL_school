@@ -38,7 +38,7 @@ final class ClassroomTaskTest extends TestCase
     private function activity(string $type = 'quiz', array $overrides = []): int
     {
         return (int) $this->postJson(self::BASE.'/activities', array_replace(['title' => 'กิจกรรม '.$type, 'type' => $type, 'subject_code' => 'พว31001', 'education_level' => 3,
-            'target_group' => '', 'content' => 'เนื้อหา', 'links' => $type === 'video' ? [['title' => 'คลิป', 'url' => 'https://example.test/video']] : [],
+            'target_group' => 'SENA-M3-A', 'content' => 'เนื้อหา', 'links' => $type === 'video' ? [['title' => 'คลิป', 'url' => 'https://example.test/video']] : [],
             'questions' => in_array($type, ['knowledge', 'video']) ? [] : [['id' => 'q1', 'type' => 'single_choice', 'prompt' => 'คำถาม', 'image_id' => null, 'points' => 2, 'options' => ['ก', 'ข'], 'answer' => 'ก']],
             'status' => 'published', 'due_at' => now()->subDay()->toISOString()], $overrides))->assertCreated()->json('data.id');
     }
@@ -46,12 +46,27 @@ final class ClassroomTaskTest extends TestCase
     private function values(array $overrides = []): array
     {
         return array_replace(['subject_code' => 'พว31001', 'education_level' => 3, 'title' => 'ทบทวนก่อนสอบ', 'instructions' => 'ทำกิจกรรมที่ครูเลือก',
-            'due_at' => now()->addDays(2)->toISOString(), 'target_group' => '', 'selection_mode' => 'all', 'activity_ids' => [], 'assignment_ids' => []], $overrides);
+            'due_at' => now()->addDays(2)->toISOString(), 'target_group' => 'SENA-M3-A', 'selection_mode' => 'all', 'activity_ids' => [], 'assignment_ids' => []], $overrides);
     }
 
     private function task(array $overrides = []): int
     {
         return (int) $this->postJson(self::BASE.'/tasks', $this->values($overrides))->assertCreated()->json('data.id');
+    }
+
+    public function test_teacher_task_target_is_explicit_and_no_assignment_means_no_access(): void
+    {
+        $activity = $this->activity('knowledge');
+        foreach (['', 'ทุกกลุ่ม', 'all', '*', 'SENA-M3-B'] as $target) {
+            $this->postJson(self::BASE.'/tasks', $this->values(['target_group' => $target]))->assertUnprocessable();
+            $this->getJson(self::BASE.'/tasks/options'.self::COURSE.'&target_group='.urlencode($target))->assertUnprocessable();
+        }
+        $task = $this->task();
+        $this->teacher->update(['assigned_groups' => []]);
+        $this->getJson(self::BASE.'/tasks')->assertOk()->assertJsonCount(0, 'data.tasks');
+        $this->getJson(self::BASE.'/tasks/'.$task)->assertNotFound();
+        $this->getJson(self::BASE.self::COURSE.'&activity_id='.$activity)->assertNotFound();
+        $this->postJson(self::BASE.'/tasks', $this->values())->assertNotFound();
     }
 
     public function test_all_task_snapshots_items_tracks_pending_partial_complete_and_reuses_original_answers(): void

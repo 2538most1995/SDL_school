@@ -488,7 +488,7 @@ export function RegistrationStatisticsPage() {
                             className="h-10 rounded-xl border border-slate-300 bg-white px-3 text-sm font-semibold text-slate-900"
                             aria-label="เลือกกลุ่มเรียนด่วน"
                         >
-                            <option value="">ทุกกลุ่มเรียน</option>
+                            <option value="">{role === 'teacher' ? 'เฉพาะกลุ่มที่รับผิดชอบ' : 'ทุกกลุ่มเรียน'}</option>
                             {retainedFilterOptions.group.map((item) => (
                                 <option key={item.value} value={item.value}>{item.label}{item.count !== undefined ? ` (${item.count.toLocaleString('th-TH')})` : ''}</option>
                             ))}

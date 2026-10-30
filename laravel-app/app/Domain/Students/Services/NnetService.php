@@ -4,6 +4,7 @@ namespace App\Domain\Students\Services;
 
 use App\Domain\Students\Models\Student;
 use App\Domain\Students\Repositories\StudentRepository;
+use App\Domain\Students\Support\StudentAccessScope;
 use App\Domain\Students\Support\StudentIdentityGuard;
 use App\Models\District;
 use App\Models\NnetResult;
@@ -67,11 +68,18 @@ final class NnetService
             $query->where('district_id', $districtId);
         }
 
+        $this->applyTeacherScope($query, $user);
+        $optionsQuery = clone $query;
+
         if ($user->role === 'student') {
             $hasScope = $this->applyStudentScope($query, $user);
             if (! $hasScope) {
                 return ['items' => [], 'total' => 0, 'meta' => []];
             }
+        }
+
+        if ($user->role === 'teacher' && ! empty($filters['group'])) {
+            $this->applyTeacherScope($query, $user, trim((string) $filters['group']));
         }
 
         if (! empty($filters['education_level'])) {
@@ -94,7 +102,7 @@ final class NnetService
             }
         }
 
-        if (! empty($filters['group'])) {
+        if (! empty($filters['group']) && $user->role !== 'teacher') {
             $grp = trim((string) $filters['group']);
             $query->where(function ($q) use ($grp): void {
                 $q->where('group_code', $grp)
@@ -132,23 +140,26 @@ final class NnetService
         $paginator = $query->paginate($pageSize);
 
         // Fetch distinct filter options
-        $availableYears = NnetResult::query()
-            ->when($districtId !== null, fn ($q) => $q->where('district_id', $districtId))
+        $availableYears = (clone $optionsQuery)
             ->distinct()
             ->pluck('academic_year')
             ->sortDesc()
             ->values()
             ->all();
 
-        $availableGroups = NnetResult::query()
-            ->when($districtId !== null, fn ($q) => $q->where('district_id', $districtId))
-            ->whereNotNull('group_name')
-            ->where('group_name', '!=', '')
-            ->distinct()
-            ->pluck('group_name')
-            ->sort()
-            ->values()
-            ->all();
+        if ($user->role === 'teacher') {
+            $availableGroups = array_values(array_unique(array_map(fn (Student $student): string => $student->groupName ?: $student->groupCode, $this->teacherRoster($user))));
+            sort($availableGroups, SORT_NATURAL | SORT_FLAG_CASE);
+        } else {
+            $availableGroups = (clone $optionsQuery)
+                ->whereNotNull('group_name')
+                ->where('group_name', '!=', '')
+                ->distinct()
+                ->pluck('group_name')
+                ->sort()
+                ->values()
+                ->all();
+        }
 
         return [
             'items' => $paginator->items(),
@@ -175,6 +186,8 @@ final class NnetService
             $query->where('district_id', $districtId);
         }
 
+        $this->applyTeacherScope($query, $user, trim((string) ($filters['group'] ?? '')));
+
         $specificLevel = ! empty($filters['education_level']) ? (int) $filters['education_level'] : null;
         if ($specificLevel !== null) {
             $query->where('education_level', $specificLevel);
@@ -188,7 +201,7 @@ final class NnetService
             $query->where('round', (int) $filters['round']);
         }
 
-        if (! empty($filters['group'])) {
+        if (! empty($filters['group']) && $user->role !== 'teacher') {
             $grp = trim((string) $filters['group']);
             $query->where(function ($q) use ($grp): void {
                 $q->where('group_code', $grp)
@@ -463,7 +476,7 @@ final class NnetService
         $subjectNames = $payload['subject_names'] ?? [];
 
         // Build a student lookup dictionary from StudentRepository for this district
-        $students = $this->studentRepository->students([$districtId]);
+        $students = $user->role === 'teacher' ? $this->teacherRoster($user) : $this->studentRepository->students([$districtId]);
         $studentByCitizen = [];
         $studentByName = [];
 
@@ -480,6 +493,15 @@ final class NnetService
             $cleanName = preg_replace('/\s+/u', '', $st->fullName());
             if ($cleanName !== '') {
                 $studentByName[$cleanName] = $st;
+            }
+        }
+
+        if ($user->role === 'teacher') {
+            foreach ($rows as $index => $row) {
+                $citizen = $this->normalizedCitizen((string) ($row['citizen'] ?? $row['citizen_id'] ?? ''));
+                if ($citizen !== null) {
+                    $this->teacherStudent($user, $citizen, $level, 'rows.'.$index);
+                }
             }
         }
 
@@ -536,7 +558,9 @@ final class NnetService
             }
 
             // Student matching
-            $matchedStudent = $studentByCitizen[$cleanCitizen] ?? null;
+            $matchedStudent = $user->role === 'teacher'
+                ? $this->teacherStudent($user, $cleanCitizen, $level, 'rows')
+                : ($studentByCitizen[$cleanCitizen] ?? null);
             if (! $matchedStudent) {
                 $cleanRowName = preg_replace('/\s+/u', '', $name);
                 $matchedStudent = $studentByName[$cleanRowName] ?? null;
@@ -634,6 +658,11 @@ final class NnetService
         $academicYear = trim((string) ($data['academic_year'] ?? '2569'));
         $round = (int) ($data['round'] ?? 1);
 
+        $teacherStudent = $user->role === 'teacher' ? $this->teacherStudent($user, $cleanCitizen, $level, 'citizen_id') : null;
+        if ($teacherStudent !== null) {
+            $this->assertTeacherIdentity($data, $teacherStudent);
+        }
+
         $exists = NnetResult::query()
             ->where('district_id', $districtId)
             ->where('academic_year', $academicYear)
@@ -647,7 +676,7 @@ final class NnetService
         }
 
         // Try to match student
-        $students = $this->studentRepository->students([$districtId]);
+        $students = $teacherStudent === null ? $this->studentRepository->students([$districtId]) : [$teacherStudent];
         $matched = null;
         foreach ($students as $st) {
             if ($st->citizenId) {
@@ -662,6 +691,7 @@ final class NnetService
             }
         }
 
+        $matched = $teacherStudent ?? $matched;
         $studentCode = $data['student_code'] ?? $matched?->code;
         $groupCode = $data['group_code'] ?? $matched?->groupCode;
         $groupName = $data['group_name'] ?? $matched?->groupName;
@@ -717,6 +747,11 @@ final class NnetService
     {
         $record = NnetResult::findOrFail($id);
         $this->ensureCanAccessRecord($record, $user);
+        if ($user->role === 'teacher') {
+            $student = $this->teacherRecordStudent($record, $user);
+            abort_if($student === null, 403, 'จัดการได้เฉพาะผู้เรียนในกลุ่มที่รับผิดชอบ');
+            $this->assertTeacherIdentity($data, $student);
+        }
 
         if (isset($data['seat_no'])) {
             $record->seat_no = $data['seat_no'] ?: null;
@@ -898,7 +933,12 @@ final class NnetService
             abort(403, 'คุณไม่มีสิทธิ์เข้าถึงข้อมูลของอำเภออื่น');
         }
 
-        if ($user->role === 'admin' || $user->role === 'teacher') {
+        if ($user->role === 'teacher') {
+            abort_if($this->teacherRecordStudent($record, $user) === null, 403, 'ดูข้อมูลได้เฉพาะผู้เรียนในกลุ่มที่รับผิดชอบ');
+
+            return;
+        }
+        if ($user->role === 'admin') {
             return;
         }
 
@@ -919,6 +959,127 @@ final class NnetService
         }
 
         abort(403, 'คุณไม่มีสิทธิ์ในการจัดการข้อมูลนี้');
+    }
+
+    /** @return list<Student> */
+    private function teacherRoster(User $user): array
+    {
+        $key = $user->id.'|'.$user->district_id.'|'.json_encode($user->assigned_groups);
+        $cached = request()->attributes->get('nnet_teacher_rosters', []);
+        if (array_key_exists($key, $cached)) {
+            return $cached[$key];
+        }
+        if (! $user->district_id || empty($user->assigned_groups)) {
+            return [];
+        }
+        $students = array_values(array_filter($this->studentRepository->students([(int) $user->district_id]), fn (Student $student): bool => $student->districtId === (int) $user->district_id));
+        $citizens = [];
+        $codes = [];
+        foreach ($students as $student) {
+            $citizen = $this->normalizedCitizen((string) $student->citizenId);
+            if ($citizen !== null) {
+                $citizens[$student->level.'|'.$citizen] = ($citizens[$student->level.'|'.$citizen] ?? 0) + 1;
+            }
+            $codes[$student->level.'|'.$student->code] = ($codes[$student->level.'|'.$student->code] ?? 0) + 1;
+        }
+        $scope = StudentAccessScope::forUser($user);
+
+        $roster = array_values(array_filter($students, function (Student $student) use ($scope, $citizens, $codes): bool {
+            $citizen = $this->normalizedCitizen((string) $student->citizenId);
+            $unambiguous = $citizen === null ? ($codes[$student->level.'|'.$student->code] ?? 0) === 1 : ($citizens[$student->level.'|'.$citizen] ?? 0) === 1;
+
+            return ($citizen !== null || $student->code !== '') && $unambiguous && $scope->allows($student);
+        }));
+        $cached[$key] = $roster;
+        request()->attributes->set('nnet_teacher_rosters', $cached);
+
+        return $roster;
+    }
+
+    private function normalizedCitizen(string $value): ?string
+    {
+        $digits = preg_replace('/\D+/u', '', $value);
+        if ($digits === '' || strlen($digits) > 13) {
+            return null;
+        }
+
+        return str_pad($digits, 13, '0', STR_PAD_LEFT);
+    }
+
+    /** Match current authoritative identity, never a result's stored group. */
+    private function teacherRecordStudent(NnetResult $record, User $user): ?Student
+    {
+        $matches = array_values(array_filter($this->teacherRoster($user), function (Student $student) use ($record): bool {
+            if ($student->districtId !== (int) $record->district_id || $student->level !== (int) $record->education_level) {
+                return false;
+            }
+            $citizen = $this->normalizedCitizen((string) $student->citizenId);
+
+            return $citizen !== null
+                ? $citizen === $this->normalizedCitizen((string) $record->citizen_id)
+                : $student->code !== '' && $student->code === (string) $record->student_code;
+        }));
+
+        return count($matches) === 1 ? $matches[0] : null;
+    }
+
+    private function teacherStudent(User $user, string $citizen, int $level, string $field): Student
+    {
+        $matches = array_values(array_filter($this->teacherRoster($user), fn (Student $student): bool => $student->level === $level
+            && $this->normalizedCitizen((string) $student->citizenId) === $citizen));
+        if (count($matches) !== 1) {
+            throw ValidationException::withMessages([$field => 'ระบุตัวผู้เรียนในกลุ่มที่รับผิดชอบไม่ได้ กรุณาตรวจข้อมูลหรือติดต่อผู้ดูแล']);
+        }
+
+        return $matches[0];
+    }
+
+    private function assertTeacherIdentity(array $data, Student $student): void
+    {
+        foreach (['student_code' => $student->code, 'group_code' => $student->groupCode, 'group_name' => $student->groupName] as $field => $expected) {
+            if (array_key_exists($field, $data) && (string) $data[$field] !== $expected) {
+                throw ValidationException::withMessages([$field => 'ข้อมูลผู้เรียนและกลุ่มต้องตรงกับทะเบียนของกลุ่มที่รับผิดชอบ']);
+            }
+        }
+    }
+
+    private function applyTeacherScope(Builder $query, User $user, string $group = ''): void
+    {
+        if ($user->role !== 'teacher') {
+            return;
+        }
+        $students = array_values(array_filter($this->teacherRoster($user), fn (Student $student): bool => $group === ''
+            || in_array($group, [$student->groupCode, $student->groupName], true)));
+        $identities = [];
+        foreach ($students as $student) {
+            $citizen = $this->normalizedCitizen((string) $student->citizenId);
+            $key = $student->level.'|'.($citizen === null ? 'code:'.$student->code : 'citizen:'.$citizen);
+            $identities[$key][] = $student;
+        }
+        $levels = [];
+        foreach ($identities as $matches) {
+            if (count($matches) !== 1) {
+                continue;
+            }
+            $student = $matches[0];
+            $citizen = $this->normalizedCitizen((string) $student->citizenId);
+            $levels[$student->level][$citizen === null ? 'codes' : 'citizens'][] = $citizen ?? $student->code;
+        }
+        if ($levels === []) {
+            $query->whereRaw('1 = 0');
+
+            return;
+        }
+        $query->where(function (Builder $scope) use ($levels): void {
+            foreach ($levels as $level => $identifiers) {
+                $scope->orWhere(function (Builder $part) use ($level, $identifiers): void {
+                    $part->where('education_level', $level)->where(function (Builder $identity) use ($identifiers): void {
+                        $identity->whereIn('citizen_id', $identifiers['citizens'] ?? [])
+                            ->orWhereIn('student_code', $identifiers['codes'] ?? []);
+                    });
+                });
+            }
+        });
     }
 
     private function extractSubjectScore(NnetResult $rec, int $idx, ?string $code = null): ?float

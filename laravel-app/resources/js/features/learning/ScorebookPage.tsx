@@ -151,6 +151,7 @@ const scoreRowKey = (row: ImportedScoreRow) => JSON.stringify([row.level, row.st
 const canEnterScore = (row: ImportedScoreRow) => !!row.edit_token && !row.is_transferred && !['ม', 'มส', 'ผ', 'มผ', 'ร'].includes(row.grade ?? '');
 
 function ImportedScoresPage() {
+    const { role } = useDemoRole();
     const queryClient = useQueryClient();
     const [session, setSession] = useState<ScoreEntrySession | null>(null);
     const [finishing, setFinishing] = useState(false);
@@ -464,7 +465,7 @@ function ImportedScoresPage() {
                 <Field label="ค้นหา"><Input value={search} onChange={(_, input) => { setSearch(input.value); setPage(1); }} contentBefore={<MagnifyingGlass size={18} aria-hidden="true" />} placeholder="ชื่อหรือรหัสนักศึกษา" size="large" /></Field>
                 <Field label="ภาคเรียน"><Select value={term} onChange={(_, option) => { setTerm(option.value); setPage(1); }} size="large"><option value="all">ทุกภาคเรียน</option>{retainedTermOptions.map((option) => <option key={option.value} value={option.value}>{option.label}</option>)}</Select></Field>
                 <Field label="ระดับการศึกษา"><Select value={level} onChange={(_, option) => { setLevel(option.value); setPage(1); }} size="large"><option value="">ทุกระดับ</option>{retainedLevelOptions.map((option) => <option key={option.value} value={option.value}>{option.label}</option>)}</Select></Field>
-                <Field label="กลุ่มเรียน"><SearchableSelect value={group} options={retainedGroupOptions} allLabel="ทุกกลุ่มเรียน" onChange={(value) => { setGroup(value); setPage(1); }} /></Field>
+                <Field label="กลุ่มเรียน"><SearchableSelect value={group} options={retainedGroupOptions} allLabel={role === 'teacher' ? 'เฉพาะกลุ่มที่รับผิดชอบ' : 'ทุกกลุ่มเรียน'} onChange={(value) => { setGroup(value); setPage(1); }} /></Field>
                 <Field label="รายวิชา"><SearchableSelect value={subjectCode} options={retainedSubjectOptions} allLabel="ทุกรายวิชา" onChange={(value) => { setSubjectCode(value); setPage(1); }} /></Field>
                 <Field label="การตรวจเช็ค">
                     <Select

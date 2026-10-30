@@ -80,6 +80,9 @@ final readonly class AssignmentWorkflowService
         $audiences = [];
         foreach ($assignmentRows as $assignment) {
             $audience = $this->audience($registrations, $assignment);
+            if ($viewer->role === 'teacher' && $audience === []) {
+                continue;
+            }
             if ($viewer->role === 'student' && ! collect($audience)->contains(
                 static fn (array $student): bool => $student['student_code'] === $ownStudentCode,
             )) {
@@ -94,7 +97,7 @@ final readonly class AssignmentWorkflowService
                 $viewer,
                 $assignment,
                 count($audience),
-                $assignmentSubmissions->when($subjectCode !== null, fn ($items) => $items->whereIn('student_code', array_column($audience, 'student_code')))
+                $assignmentSubmissions->when($subjectCode !== null || $viewer->role === 'teacher', fn ($items) => $items->whereIn('student_code', array_column($audience, 'student_code')))
                     ->whereIn('status', ['submitted', 'reviewed'])->count(),
                 $ownSubmission,
                 $submissionAttachments,
@@ -164,6 +167,9 @@ final readonly class AssignmentWorkflowService
             throw ValidationException::withMessages(['subject_code' => 'รายวิชานี้ไม่อยู่ในข้อมูลลงทะเบียนภาคเรียนปัจจุบันหรืออยู่นอกขอบเขตครู']);
         }
         $group = trim((string) ($values['target_group'] ?? ''));
+        if ($viewer->role === 'teacher' && $group === '') {
+            throw ValidationException::withMessages(['target_group' => 'ครูต้องเลือกกลุ่มเรียนที่รับผิดชอบ ไม่สามารถเลือกทุกกลุ่มได้']);
+        }
         if ($group !== '' && ! collect($subject['groups'])->contains(
             static fn (array $item): bool => in_array($group, [$item['code'], $item['name']], true),
         )) {
@@ -182,7 +188,7 @@ final readonly class AssignmentWorkflowService
         $connection = $this->database->connection();
         $before = null;
         if ($assignmentId !== null) {
-            $before = $this->ownedAssignment($viewer, $districtId, $assignmentId);
+            $before = $this->ownedAssignment($viewer, $districtId, $assignmentId, true);
             ClassroomTaskService::assertContentEditable('assignment', $assignmentId);
         }
         $stored = [
@@ -292,7 +298,7 @@ final readonly class AssignmentWorkflowService
 
     public function deleteAssignment(User $viewer, int $districtId, int $assignmentId, ?string $ipAddress): void
     {
-        $assignment = $this->ownedAssignment($viewer, $districtId, $assignmentId);
+        $assignment = $this->ownedAssignment($viewer, $districtId, $assignmentId, true);
         ClassroomTaskService::assertContentEditable('assignment', $assignmentId);
         $connection = $this->database->connection();
         $submissionIds = $connection->table('learning_submissions')
@@ -506,6 +512,8 @@ final readonly class AssignmentWorkflowService
             abort_unless((string) $submission->student_code === trim((string) ($viewer->student_code ?: $viewer->username)), 404);
         } elseif ($viewer->role === 'teacher') {
             abort_unless((int) $submission->created_by === (int) $viewer->id, 404);
+            $workspace = $this->workspace($viewer, $districtId, $assignmentId);
+            abort_unless(in_array((string) $submission->student_code, array_column($workspace['students'], 'student_code'), true), 404);
         }
         $attachment = $this->database->connection()->table('learning_submission_attachments')
             ->where('submission_id', $submissionId)
@@ -544,6 +552,8 @@ final readonly class AssignmentWorkflowService
             abort_unless((string) $attachment->student_code === trim((string) ($viewer->student_code ?: $viewer->username)), 404);
         } elseif ($viewer->role === 'teacher') {
             abort_unless((int) $attachment->created_by === (int) $viewer->id, 404);
+            $workspace = $this->workspace($viewer, $districtId, $assignmentId);
+            abort_unless(in_array((string) $attachment->student_code, array_column($workspace['students'], 'student_code'), true), 404);
         } else {
             abort_unless(in_array($viewer->role, ['admin', 'super_admin'], true), 403);
         }
@@ -566,6 +576,7 @@ final readonly class AssignmentWorkflowService
             abort_unless($workspace['selected_assignment'] !== null, 404);
         } elseif ($viewer->role === 'teacher') {
             abort_unless((int) $assignment->created_by === (int) $viewer->id, 404);
+            $this->workspace($viewer, $districtId, $assignmentId);
         } else {
             abort_unless(in_array($viewer->role, ['admin', 'super_admin'], true), 403);
         }
@@ -650,6 +661,7 @@ final readonly class AssignmentWorkflowService
             'student_count' => $studentCount,
             'submitted_count' => $submittedCount,
             'content_locked' => $contentLocked,
+            'can_edit_content' => ! $contentLocked && ($viewer->role !== 'teacher' || ($assignment->target_type === 'group' && trim((string) ($assignment->target_value ?? '')) !== '')),
             'can_edit' => in_array($viewer->role, ['admin', 'super_admin'], true)
                 || ($viewer->role === 'teacher' && (int) $assignment->created_by === (int) $viewer->id),
             'submission' => $ownSubmission === null ? null : $this->submissionPayload(
@@ -702,7 +714,7 @@ final readonly class AssignmentWorkflowService
         ];
     }
 
-    private function ownedAssignment(User $viewer, int $districtId, int $assignmentId): object
+    private function ownedAssignment(User $viewer, int $districtId, int $assignmentId, bool $contentWrite = false): object
     {
         abort_unless(in_array($viewer->role, ['teacher', 'admin', 'super_admin'], true), 403);
         $query = $this->database->connection()->table('learning_assignments')
@@ -712,6 +724,13 @@ final readonly class AssignmentWorkflowService
         }
         $assignment = $query->first();
         abort_unless($assignment !== null, 404);
+        if ($viewer->role === 'teacher') {
+            $workspace = $this->workspace($viewer, $districtId, $assignmentId);
+            abort_unless($workspace['selected_assignment'] !== null, 404);
+            if ($contentWrite) {
+                abort_unless($assignment->target_type === 'group' && app(DistrictLearningGroupCatalog::class)->canTarget($viewer, $districtId, (string) ($assignment->target_value ?? '')), 403, 'ครูแก้ไขได้เฉพาะงานที่กำหนดกลุ่มเรียนของตนเองอย่างชัดเจน');
+            }
+        }
 
         return $assignment;
     }

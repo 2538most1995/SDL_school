@@ -150,7 +150,7 @@ final class DistrictLearningGroupCatalog
     {
         $target = trim($target);
         if ($target === '') {
-            return true;
+            return $viewer->role !== 'teacher';
         }
         if ($viewer->role === 'teacher') {
             return in_array($target, $this->aliasesForViewer($viewer, $districtId), true);

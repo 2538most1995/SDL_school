@@ -58,12 +58,7 @@ final class ResourceFileController extends Controller
                 }
             });
         } elseif ($viewer->role === 'teacher') {
-            $query->where(function (Builder $scope) use ($groups, $viewer): void {
-                $scope->where('uploaded_by', (int) $viewer->id);
-                if ($groups !== []) {
-                    $scope->orWhereIn('target_group', $groups);
-                }
-            });
+            $query->whereIn('target_group', $groups);
         }
     }
 

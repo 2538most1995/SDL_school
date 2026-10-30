@@ -125,10 +125,17 @@ final class OnlineClassroomService
         }
         $ids = $rows->pluck('id')->all();
         $counts = DB::table('learning_classroom_submissions')->whereIn('activity_id', $ids)->groupBy('activity_id')->selectRaw('activity_id, COUNT(*) as total')->pluck('total', 'activity_id');
+        $visibleCounts = $viewer->role === 'teacher' ? DB::table('learning_classroom_submissions')->whereIn('activity_id', $ids)
+            ->where(function ($query) use ($rows, $catalog): void {
+                foreach ($rows as $row) {
+                    $codes = array_column($this->audience($catalog, $row), 'student_code');
+                    $query->orWhere(fn ($scope) => $scope->where('activity_id', $row->id)->whereIn('student_code', $codes));
+                }
+            })->groupBy('activity_id')->selectRaw('activity_id, COUNT(*) as total')->pluck('total', 'activity_id') : $counts;
         $own = $viewer->role === 'student' ? DB::table('learning_classroom_submissions')->whereIn('activity_id', $ids)
             ->where('student_code', $viewer->student_code ?: $viewer->username)->get()->keyBy('activity_id') : collect();
         $lockedIds = Schema::hasTable('learning_classroom_task_items') ? DB::table('learning_classroom_task_items')->where('kind', 'activity')->whereIn('content_id', $ids)->pluck('content_id')->map(fn ($id) => (int) $id)->all() : [];
-        $payloads = $rows->map(fn ($row) => $this->activityPayload($viewer, $row, (int) ($counts[$row->id] ?? 0), $own[$row->id] ?? null, $this->canEdit($viewer, $row, $catalog), in_array((int) $row->id, $lockedIds, true)));
+        $payloads = $rows->map(fn ($row) => $this->activityPayload($viewer, $row, (int) ($visibleCounts[$row->id] ?? 0), $own[$row->id] ?? null, $this->canEdit($viewer, $row, $catalog), in_array((int) $row->id, $lockedIds, true), (int) ($counts[$row->id] ?? 0) > 0));
         $selectedPayload = $selected === null ? null : $payloads->firstWhere('id', (string) $selected->id);
         if ($selected !== null && $viewer->role === 'student') {
             $deadline = app(ClassroomTaskService::class)->activityDeadline($viewer, $districtId, $selected, $catalog);
@@ -231,6 +238,9 @@ final class OnlineClassroomService
                 throw ValidationException::withMessages(['subject_code' => 'รายวิชาไม่อยู่ในรายการลงทะเบียนปัจจุบันหรืออยู่นอกขอบเขตของคุณ']);
             }
             $group = trim((string) ($values['target_group'] ?? ''));
+            if ($viewer->role === 'teacher' && $group === '') {
+                throw ValidationException::withMessages(['target_group' => 'ครูต้องเลือกกลุ่มเรียนที่รับผิดชอบ ไม่สามารถเลือกทุกกลุ่มได้']);
+            }
             if ($group !== '' && ! collect($subject['groups'])->contains(fn ($item) => in_array($group, [$item['code'], $item['name']], true))) {
                 throw ValidationException::withMessages(['target_group' => 'กลุ่มเรียนอยู่นอกขอบเขตของรายวิชา']);
             }
@@ -389,7 +399,7 @@ final class OnlineClassroomService
         });
     }
 
-    private function activityPayload(User $viewer, object $row, int $count, ?object $submission, bool $canEdit, bool $contentLocked = false): array
+    private function activityPayload(User $viewer, object $row, int $count, ?object $submission, bool $canEdit, bool $contentLocked = false, ?bool $hasSubmissions = null): array
     {
         $questions = $this->decode($row->questions);
         foreach ($questions as &$question) {
@@ -405,7 +415,7 @@ final class OnlineClassroomService
             'title' => $row->title, 'content' => $row->content ?? '', 'links' => $this->decode($row->links), 'status' => $row->status,
             'due_at' => $row->due_at === null ? null : Carbon::parse($row->due_at)->toIso8601String(), 'questions' => $questions, 'max_score' => round(array_sum(array_column($questions, 'points')), 2),
             'can_edit' => $canEdit, 'content_locked' => $contentLocked,
-            'has_submissions' => $count > 0, 'submission_count' => $count, 'submission' => $submission === null ? null : $this->submissionPayload($submission)];
+            'has_submissions' => $hasSubmissions ?? $count > 0, 'submission_count' => $count, 'submission' => $submission === null ? null : $this->submissionPayload($submission)];
     }
 
     private function submissionPayload(object $row): array

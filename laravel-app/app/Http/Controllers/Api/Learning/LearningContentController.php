@@ -237,6 +237,11 @@ final class LearningContentController extends Controller
                 abort(403, 'เฉพาะผู้ดูแลอำเภอเท่านั้นที่เลือกกิจกรรมสำหรับหน้าแรกได้');
             }
         }
+        if ($request->user()->role === 'teacher' && in_array($kind, ['assignments', 'resources', 'calendar'], true)) {
+            if (trim((string) ($values['target_group'] ?? '')) === '' || ($kind === 'assignments' && ($values['target_mode'] ?? '') !== 'group')) {
+                throw ValidationException::withMessages(['target_group' => 'ครูต้องเลือกกลุ่มเรียนที่รับผิดชอบ ไม่สามารถเลือกทุกกลุ่มได้']);
+            }
+        }
         if (filled($values['target_group'] ?? null)) {
             $allowed = $this->groupCatalog->canTarget(
                 $request->user(),
@@ -264,6 +269,11 @@ final class LearningContentController extends Controller
         }
         $row = $query->first();
         abort_unless($row, 404);
+        if ($request->user()->role === 'teacher' && in_array($kind, ['assignments', 'resources', 'calendar'], true)) {
+            $target = $kind === 'resources' ? (string) ($row->target_group ?? '') : (string) ($row->target_value ?? '');
+            abort_unless($this->groupCatalog->canTarget($request->user(), $this->districtId($request), $target), 404);
+            abort_if($kind !== 'resources' && $row->target_type !== 'group', 404);
+        }
 
         return $row;
     }

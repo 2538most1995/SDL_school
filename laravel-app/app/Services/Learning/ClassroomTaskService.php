@@ -46,6 +46,9 @@ final class ClassroomTaskService
         abort_unless(in_array($viewer->role, ['teacher', 'admin', 'super_admin'], true), 403);
         [$catalog, $subject] = $this->course($viewer, $districtId, $values);
         $group = trim((string) ($values['target_group'] ?? ''));
+        if ($viewer->role === 'teacher' && $group === '') {
+            throw ValidationException::withMessages(['target_group' => 'ครูต้องเลือกกลุ่มเรียนที่รับผิดชอบ ไม่สามารถเลือกทุกกลุ่มได้']);
+        }
         $students = array_values(array_filter($catalog['registrations'], fn ($row) => $group === '' || in_array($group, [$row['group_code'], $row['group_name']], true)));
         abort_if($students === [], 422, 'กลุ่มเรียนอยู่นอกขอบเขตรายวิชา');
         $activities = DB::table('learning_classroom_activities')->where('district_id', $districtId)

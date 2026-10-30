@@ -279,6 +279,7 @@ function CalendarEditor({ event, pending, error, onClose, onSubmit, availableGro
     availableGroups: AvailableGroup[];
     canFeature: boolean;
 }) {
+    const { role } = useDemoRole();
     const raw = event === 'new' ? undefined : event.raw;
     const matchedGroup = availableGroups.find((group) => group.code === raw?.target_group || group.name === raw?.target_group);
     const initialDate = raw?.event_date ?? dateKey(new Date());
@@ -292,7 +293,7 @@ function CalendarEditor({ event, pending, error, onClose, onSubmit, availableGro
         start_time: raw?.start_time ?? '',
         end_time: raw?.end_time ?? '',
         location: raw?.location ?? '',
-        target_group: matchedGroup?.code ?? raw?.target_group ?? '',
+        target_group: matchedGroup?.code ?? (role === 'teacher' ? availableGroups[0]?.code ?? '' : raw?.target_group ?? ''),
         notes: raw?.notes ?? '',
         external_url: raw?.external_url ?? (event === 'new' ? '' : (event.external_url ?? '')),
         featured_on_dashboard: raw?.featured_on_dashboard ?? (event === 'new' ? false : Boolean(event.featured_on_dashboard)),
@@ -356,7 +357,7 @@ function CalendarEditor({ event, pending, error, onClose, onSubmit, availableGro
                         <div className="mt-4 space-y-3">{dailySchedule.map((day, index) => <div key={day.date} className="grid gap-3 rounded-xl border border-slate-200 bg-white p-3 sm:grid-cols-[minmax(150px,1fr)_minmax(160px,1fr)_minmax(160px,1fr)] sm:items-end"><div><span className="text-xs font-bold text-slate-500">วันที่</span><strong className="mt-1 block text-sm text-slate-900">{formatScheduleDate(day.date)}</strong></div><Field label="เวลาเริ่ม" required><Input value={day.start_time} onChange={(_, data) => setDailySchedule((current) => current.map((item, itemIndex) => itemIndex === index ? { ...item, start_time: data.value } : item))} placeholder="เช่น 09:00 หรือ ช่วงเช้า" maxLength={80} required /></Field><Field label="เวลาสิ้นสุด" required><Input value={day.end_time} onChange={(_, data) => setDailySchedule((current) => current.map((item, itemIndex) => itemIndex === index ? { ...item, end_time: data.value } : item))} placeholder="เช่น 12:00 หรือ ก่อนพักเที่ยง" maxLength={80} required /></Field></div>)}</div>
                     </div>
                     <Field label="สถานที่"><Input value={draft.location} onChange={(_, data) => setDraft({ ...draft, location: data.value })} maxLength={255} /></Field>
-                    <Field label="กลุ่มเป้าหมาย" hint="เลือกทุกกลุ่มเพื่อให้นักศึกษาทั้งอำเภอมองเห็น"><Select value={draft.target_group} onChange={(_, data) => setDraft({ ...draft, target_group: data.value })}><option value="">ทุกกลุ่มเรียนในอำเภอ</option>{availableGroups.map((group) => <option key={group.code} value={group.code}>{group.label} · รหัส {group.code}</option>)}</Select></Field>
+                    <Field label="กลุ่มเป้าหมาย" hint={role === 'teacher' ? 'เลือกได้เฉพาะกลุ่มที่คุณรับผิดชอบ' : 'เลือกทุกกลุ่มเพื่อให้นักศึกษาทั้งอำเภอมองเห็น'} required={role === 'teacher'}><Select required={role === 'teacher'} value={draft.target_group} onChange={(_, data) => setDraft({ ...draft, target_group: data.value })}>{role !== 'teacher' && <option value="">ทุกกลุ่มเรียนในอำเภอ</option>}{availableGroups.map((group) => <option key={group.code} value={group.code}>{group.label} · รหัส {group.code}</option>)}</Select></Field>
                     <Field label="ลิงก์กิจกรรม" hint="เช่น แบบลงทะเบียน เอกสาร หรือห้องประชุมออนไลน์" className="sm:col-span-2"><Input type="url" value={draft.external_url} onChange={(_, data) => setDraft({ ...draft, external_url: data.value })} placeholder="https://example.com" maxLength={2000} /></Field>
                     <label className="sm:col-span-2"><span className="mb-1.5 block text-sm font-bold text-slate-700">รายละเอียดกิจกรรม</span><textarea value={draft.notes} onChange={(changeEvent) => setDraft({ ...draft, notes: changeEvent.target.value })} rows={4} maxLength={5000} className="w-full rounded-xl border border-slate-300 p-3 outline-none focus:border-brand-500" /></label>
                     {canFeature && <label className="flex items-start gap-3 rounded-2xl border border-amber-200 bg-amber-50 p-4 sm:col-span-2"><input type="checkbox" checked={draft.featured_on_dashboard} onChange={(changeEvent) => setDraft({ ...draft, featured_on_dashboard: changeEvent.target.checked })} className="mt-1 size-4 accent-amber-600" /><span><strong className="flex items-center gap-2 text-sm text-amber-950"><Star size={18} weight="fill" />แสดงกิจกรรมนี้บนหน้าแรกนักศึกษา</strong><span className="mt-1 block text-xs leading-5 text-amber-800">เมื่อเลือก รายการนี้จะแทนกิจกรรมที่เคยเลือกไว้ก่อนหน้าในอำเภอนี้ ถ้าไม่มีรูป หน้าแรกจะแสดงชื่อกิจกรรม</span></span></label>}
@@ -370,7 +371,7 @@ function CalendarEditor({ event, pending, error, onClose, onSubmit, availableGro
                         {currentImage && <label className="mt-3 inline-flex items-center gap-2 text-sm font-bold text-slate-700"><input type="checkbox" checked={removeImage} onChange={(changeEvent) => { setRemoveImage(changeEvent.target.checked); if (changeEvent.target.checked) setImage(null); }} />ลบรูปเดิม</label>}
                     </div>
                     {error && <p role="alert" className="rounded-xl bg-rose-50 p-3 text-sm font-bold text-rose-800 sm:col-span-2">{error.message}</p>}
-                    <div className="flex flex-wrap justify-end gap-2 border-t border-slate-100 pt-4 sm:col-span-2"><Button type="button" appearance="outline" onClick={onClose}>ยกเลิก</Button><Button type="submit" appearance="primary" disabled={pending}>{pending ? 'กำลังบันทึก' : 'บันทึกและเผยแพร่'}</Button></div>
+                    <div className="flex flex-wrap justify-end gap-2 border-t border-slate-100 pt-4 sm:col-span-2"><Button type="button" appearance="outline" onClick={onClose}>ยกเลิก</Button><Button type="submit" appearance="primary" disabled={pending || (role === 'teacher' && !draft.target_group)}>{pending ? 'กำลังบันทึก' : 'บันทึกและเผยแพร่'}</Button></div>
                 </form>
             </section>
         </div>

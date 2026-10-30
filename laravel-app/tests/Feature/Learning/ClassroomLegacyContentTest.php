@@ -81,7 +81,7 @@ final class ClassroomLegacyContentTest extends TestCase
         $this->getJson($url.'&assignment_id='.$other)->assertNotFound();
         $this->getJson($url.'&assignment_id='.$wanted)->assertOk()->assertJsonPath('data.students.0.student_code', '6650300005');
         $this->getJson('/api/v1/learning/assignments?assignment_id='.$wanted)->assertOk()
-            ->assertJsonPath('data.selected_assignment.id', (string) $wanted)->assertJsonCount(250, 'data.assignments');
+            ->assertJsonPath('data.selected_assignment.id', (string) $wanted)->assertJsonCount(1, 'data.assignments');
         $this->getJson('/api/v1/learning/assignments?assignment_id='.$foreign)->assertNotFound();
         Sanctum::actingAs($this->student());
         $this->getJson($url.'&assignment_id='.$wanted)->assertOk()->assertJsonCount(0, 'data.students')->assertJsonPath('data.selected_assignment.id', (string) $wanted);

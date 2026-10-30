@@ -1,5 +1,9 @@
 # SDL School Context
 
+## Teacher group isolation (2026-10-30)
+
+Teachers must name an assigned group when issuing tasks, authoring activities/file worksheets, or publishing library/calendar content; blank/all targets are rejected on the server and hidden in teacher forms. Student/report filters aggregate only the current assigned roster. Group access matches exact codes or exact names without automatically stripping leading zeros; teachers without groups have no implicit access. N-NET reads, summaries, metadata and writes now resolve current authoritative student identity and level rather than trusting saved result groups. Media/download/review paths recheck current group access; original creator status alone is insufficient after reassignment. District-wide N-NET schedule writes require admin/super_admin. Existing district admin scope remains intact. This change requires no new migration and does not rewrite user assignments, import data, or existing work.
+
 ## Classroom tasks and separate course navigation (2026-10-29)
 
 The classroom starts with a course chooser, then opens activities at a course-specific URL with a return action. The retired learning-home menu is removed from system/student catalogs and `/learning` redirects to the classroom. Teachers issue named tasks with deadlines to their registered course/group audience, snapshot all currently eligible activities or select specific online/file activities. Students see assigned tasks globally and per course; staff see paginated pending/in-progress/completed rosters. Existing submissions supply assessment completion; knowledge/video use explicit self acknowledgement, not watch-time proof. Assigned sources are frozen while grading remains available. Migration `2026_10_29_000042_create_classroom_tasks.php` is required. No production DB changes were made during development. See `laravel-app/docs/online-classroom.md` for deadline and retention rules.

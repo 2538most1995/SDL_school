@@ -83,6 +83,7 @@ type Assignment = {
     submitted_count: number;
     can_edit: boolean;
     content_locked?: boolean;
+    can_edit_content?: boolean;
     submission: Submission | null;
 };
 
@@ -413,8 +414,9 @@ export function AssignmentWorkspacePage({ subject, embedded = false, initialAssi
                     <header className="border-b border-slate-100 p-4 md:p-5">
                         <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
                             <div className="min-w-0"><div className="flex flex-wrap items-center gap-2"><h2 className="text-xl font-black leading-8 text-slate-950">{selected.title}</h2><StatusPill label={assignmentStatus(selected.status)} tone={selected.status === 'open' ? 'border-emerald-200 bg-emerald-50 text-emerald-800' : selected.status === 'draft' ? 'border-amber-200 bg-amber-50 text-amber-900' : 'border-slate-200 bg-slate-100 text-slate-700'} /></div><p className="mt-1 text-sm font-bold text-slate-500">{selected.subject_code} {selected.subject_name}</p></div>
-                            {canManage && selected.can_edit ? <div className="flex gap-2"><button type="button" disabled={readOnly || selected.content_locked} onClick={() => setAssignmentEditor(selected)} className="inline-flex h-10 items-center gap-2 whitespace-nowrap rounded-xl border border-slate-200 px-3.5 text-sm font-bold text-slate-700 hover:text-brand-800"><PencilSimple size={17} /> แก้ไข</button><button type="button" onClick={() => { if (window.confirm(`ยืนยันลบงาน ${selected.title}? งานที่ผู้เรียนส่งไว้จะถูกลบด้วย`)) remove.mutate(selected); }} disabled={readOnly || remove.isPending || selected.content_locked} className="inline-flex h-10 items-center gap-2 whitespace-nowrap rounded-xl border border-rose-200 px-3.5 text-sm font-bold text-rose-700 hover:bg-rose-50"><Trash size={17} /> ลบงาน</button></div> : !isStaff && canSubmitAssignment(selected, readOnly || query.isPlaceholderData) && <button type="button" onClick={() => setSubmissionEditor(selected)} className="inline-flex h-11 items-center justify-center gap-2 whitespace-nowrap rounded-xl bg-brand-700 px-5 text-sm font-bold text-white hover:bg-brand-800 active:scale-[0.98]"><UploadSimple size={18} /> {selected.submission ? 'ส่งงานอีกครั้ง' : 'ส่งงาน'}</button>}
+                            {canManage && selected.can_edit ? <div className="flex gap-2"><button type="button" disabled={readOnly || selected.content_locked || selected.can_edit_content === false} onClick={() => setAssignmentEditor(selected)} className="inline-flex h-10 items-center gap-2 whitespace-nowrap rounded-xl border border-slate-200 px-3.5 text-sm font-bold text-slate-700 hover:text-brand-800"><PencilSimple size={17} /> แก้ไข</button><button type="button" onClick={() => { if (window.confirm(`ยืนยันลบงาน ${selected.title}? งานที่ผู้เรียนส่งไว้จะถูกลบด้วย`)) remove.mutate(selected); }} disabled={readOnly || remove.isPending || selected.content_locked || selected.can_edit_content === false} className="inline-flex h-10 items-center gap-2 whitespace-nowrap rounded-xl border border-rose-200 px-3.5 text-sm font-bold text-rose-700 hover:bg-rose-50"><Trash size={17} /> ลบงาน</button></div> : !isStaff && canSubmitAssignment(selected, readOnly || query.isPlaceholderData) && <button type="button" onClick={() => setSubmissionEditor(selected)} className="inline-flex h-11 items-center justify-center gap-2 whitespace-nowrap rounded-xl bg-brand-700 px-5 text-sm font-bold text-white hover:bg-brand-800 active:scale-[0.98]"><UploadSimple size={18} /> {selected.submission ? 'ส่งงานอีกครั้ง' : 'ส่งงาน'}</button>}
                         </div>
+                        {canManage && selected.can_edit_content === false && !selected.content_locked && <p role="status" className="mt-4 text-sm font-bold text-brand-700">งานเดิมนี้ครอบคลุมหลายกลุ่ม ครูตรวจได้เฉพาะผู้เรียนในกลุ่มที่รับผิดชอบ หากต้องการแก้เนื้อหาให้สร้างงานใหม่ระบุกลุ่มของตนเอง</p>}
                         {selected.content_locked && canManage && <p role="status" className="mt-4 text-sm font-bold text-brand-700">ใบงานนี้ถูกสั่งงานแล้ว จึงล็อกเนื้อหาไว้ คุณยังตรวจงานและให้คะแนนได้</p>}
                         {selected.instructions && <p className="mt-4 max-w-3xl whitespace-pre-wrap text-sm leading-6 text-slate-700">{selected.instructions}</p>}
                         <AssignmentMaterials assignment={selected} canManage={canManage} />
@@ -516,12 +518,13 @@ function ModalShell({ title, description, onClose, children, wide = false }: { t
 }
 
 function AssignmentEditor({ assignment, term, subjects, onClose, onSaved, onBusy }: { assignment: Assignment | 'new'; term: string | null; subjects: AssignmentSubject[]; onClose: () => void; onSaved: (id: string) => void; onBusy: (busy: boolean) => void }) {
-    const initial: AssignmentDraft = assignment === 'new' ? { ...emptyDraft, subject_code: subjects[0]?.code ?? '', education_level: String(subjects[0]?.level ?? '') } : {
+    const { role } = useDemoRole();
+    const initial: AssignmentDraft = assignment === 'new' ? { ...emptyDraft, subject_code: subjects[0]?.code ?? '', education_level: String(subjects[0]?.level ?? ''), target_group: role === 'teacher' ? subjects[0]?.groups[0]?.code ?? '' : '' } : {
         title: assignment.title,
         instructions: assignment.instructions,
         subject_code: assignment.subject_code,
         education_level: String(assignment.education_level ?? ''),
-        target_group: assignment.target_group,
+        target_group: assignment.target_group || (role === 'teacher' ? subjects.find(item => item.code === assignment.subject_code && item.level === assignment.education_level)?.groups[0]?.code ?? '' : ''),
         max_score: String(assignment.max_score),
         opens_at: localDateTime(assignment.opens_at),
         due_at: localDateTime(assignment.due_at),
@@ -562,7 +565,7 @@ function AssignmentEditor({ assignment, term, subjects, onClose, onSaved, onBusy
     useEffect(() => { onBusy(save.isPending); return () => onBusy(false); }, [save.isPending, onBusy]);
     const chooseSubject = (value: string) => {
         const [level, code] = value.split('|');
-        setDraft({ ...draft, subject_code: code ?? '', education_level: level ?? '', target_group: '' });
+        setDraft({ ...draft, subject_code: code ?? '', education_level: level ?? '', target_group: role === 'teacher' ? subjects.find(item => item.code === code && item.level === Number(level))?.groups[0]?.code ?? '' : '' });
     };
     const chooseFile = (file: File | null) => {
         setClientError('');
@@ -592,13 +595,13 @@ function AssignmentEditor({ assignment, term, subjects, onClose, onSaved, onBusy
         onClose={() => { if (!save.isPending) onClose(); }}
         wide
     >
-        <form onSubmit={(event) => { event.preventDefault(); if (!clientError && draft.subject_code && draft.education_level) save.mutate(); }} className="flex max-h-[78vh] flex-col">
+        <form onSubmit={(event) => { event.preventDefault(); if (!clientError && draft.subject_code && draft.education_level && (role !== 'teacher' || draft.target_group)) save.mutate(); }} className="flex max-h-[78vh] flex-col">
             <fieldset disabled={save.isPending} className="space-y-5 overflow-y-auto p-5">
                 <section className="grid gap-4 sm:grid-cols-2" aria-labelledby="assignment-basic-heading">
                     <div className="sm:col-span-2"><h3 id="assignment-basic-heading" className="font-black text-slate-950">รายละเอียดงาน</h3><p className="mt-1 text-sm text-slate-500">ชื่อและคำชี้แจงส่วนนี้จะแสดงให้นักศึกษาอ่านก่อนส่งงาน</p></div>
                     <label className="sm:col-span-2"><span className="mb-1.5 block text-sm font-bold text-slate-700">ชื่องาน *</span><input required maxLength={220} value={draft.title} onChange={(event) => setDraft({ ...draft, title: event.target.value })} placeholder="เช่น สรุปบทเรียนหน่วยที่ 1" className="h-11 w-full rounded-xl border border-slate-300 px-3 text-slate-950 outline-none placeholder:text-slate-400 focus:border-brand-600 focus:ring-2 focus:ring-brand-100" /></label>
                     <div className="sm:col-span-2"><ChoiceButtons label="รายวิชาที่ลงทะเบียน" value={draft.education_level && draft.subject_code ? `${draft.education_level}|${draft.subject_code}` : ''} options={subjects.map(subject => [`${subject.level}|${subject.code}`, `${subject.code} ${subject.name} (${subject.level_label})`])} onChange={chooseSubject} /></div>
-                    <div className="sm:col-span-2"><ChoiceButtons label="กลุ่มเป้าหมาย" value={draft.target_group} options={[["", "ผู้เรียนทุกกลุ่มในรายวิชา"], ...(selectedSubject?.groups ?? []).map(group => [group.code, `${group.name} (${group.code})`] as [string, string])]} onChange={value => setDraft({ ...draft, target_group: value })} /></div>
+                    <div className="sm:col-span-2"><ChoiceButtons label="กลุ่มเป้าหมาย" value={draft.target_group} options={[...(role === 'teacher' ? [] : [["", "ผู้เรียนทุกกลุ่มในรายวิชา"] as [string, string]]), ...(selectedSubject?.groups ?? []).map(group => [group.code, `${group.name} (${group.code})`] as [string, string])]} onChange={value => setDraft({ ...draft, target_group: value })} /></div>
                     <label className="sm:col-span-2"><span className="mb-1.5 block text-sm font-bold text-slate-700">คำชี้แจงและสิ่งที่ต้องส่ง</span><textarea rows={5} maxLength={10000} value={draft.instructions} onChange={(event) => setDraft({ ...draft, instructions: event.target.value })} placeholder="อธิบายขั้นตอน รูปแบบงาน และเกณฑ์ที่ต้องการให้นักศึกษาทำ" className="w-full rounded-xl border border-slate-300 p-3 text-slate-950 outline-none placeholder:text-slate-400 focus:border-brand-600 focus:ring-2 focus:ring-brand-100" /></label>
                 </section>
 

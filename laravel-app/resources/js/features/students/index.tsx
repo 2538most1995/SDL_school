@@ -532,7 +532,7 @@ export function StudentsPage() {
                     </Field>
                     {canFilterGroups && <Field label="กลุ่มเรียน">
                         <Select value={group} onChange={(_, data) => setGroup(data.value)} size="large">
-                            <option value="">ทุกกลุ่มเรียน</option>
+                            <option value="">{role === 'teacher' ? 'เฉพาะกลุ่มที่รับผิดชอบ' : 'ทุกกลุ่มเรียน'}</option>
                             {retainedGroupOptions.map((option) => <option key={option.value} value={option.value}>{option.label}</option>)}
                         </Select>
                     </Field>}
@@ -1260,7 +1260,7 @@ function StaffStudentMetricPage({ kind }: { kind: MetricKind }) {
                 <FilterGrid id={`student-metric-${kind}-filters`} open={filtersOpen} columns={kind === 'kpch' ? (canFilterGroups ? 4 : 3) : (canFilterGroups ? 3 : 2)}>
                     <Field label="ค้นหา"><Input value={search} onChange={(_, data) => setSearch(data.value)} contentBefore={<MagnifyingGlass size={18} aria-hidden="true" />} placeholder="ชื่อ รหัส หรือกลุ่ม" size="large" /></Field>
                     <Field label="ระดับการศึกษา"><Select value={level} onChange={(_, data) => setLevel(data.value)} size="large"><option value="">ทุกระดับ</option><option value="1">ประถมศึกษา</option><option value="2">มัธยมศึกษาตอนต้น</option><option value="3">มัธยมศึกษาตอนปลาย</option></Select></Field>
-                    {canFilterGroups && <Field label="กลุ่มเรียน"><Select value={group} onChange={(_, data) => setGroup(data.value)} size="large"><option value="">ทุกกลุ่มเรียน</option>{retainedGroupOptions.map((option) => <option key={option.value} value={option.value}>{option.label}</option>)}</Select></Field>}
+                    {canFilterGroups && <Field label="กลุ่มเรียน"><Select value={group} onChange={(_, data) => setGroup(data.value)} size="large"><option value="">{role === 'teacher' ? 'เฉพาะกลุ่มที่รับผิดชอบ' : 'ทุกกลุ่มเรียน'}</option>{retainedGroupOptions.map((option) => <option key={option.value} value={option.value}>{option.label}</option>)}</Select></Field>}
                     {kind === 'kpch' && <Field label="ผล กพช."><Select value={kpchStatus} onChange={(_, data) => setKpchStatus(data.value)} size="large"><option value="">ทั้งหมด</option><option value="complete">ครบ 200 ชั่วโมง</option><option value="incomplete">ไม่ครบ 200 ชั่วโมง</option></Select></Field>}
                 </FilterGrid>
                 {directory.isPending && <QuerySkeleton />}
