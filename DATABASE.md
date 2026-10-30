@@ -1,5 +1,9 @@
 # Database Knowledge Base
 
+## Course activity containers (2026-10-30, migration 000043)
+
+Additive migration `2026_10_30_000043_create_classroom_units.php` creates `learning_classroom_units` with district, creator, term, course+level, explicit group/audience snapshot, title, description and draft/published status. Composite index `(district_id, academic_term, subject_code, education_level)` supports course lists. Nullable indexed `classroom_unit_id` is added to `learning_classroom_activities`, `learning_assignments`, `learning_resources` and `learning_classroom_tasks`, without foreign keys to adopted tables. NULL records remain in the virtual legacy container without data rewriting. Parent locks serialize child writes and empty-container deletion; nonempty units cannot change audience/course, and issued tasks prevent publication changes. Migration checks table/column existence; rollback intentionally retains evidence and links. Only isolated synthetic SQLite was migrated during development.
+
 ## Adopted lesson-plan compatibility (2026-10-29)
 
 Read-only production inspection found legacy `subject` VARCHAR(150) NOT NULL without a default, `level` VARCHAR(80), `semester` VARCHAR(60), `file_url` VARCHAR(500), nullable `created_by`, and title VARCHAR(180). No schema change is needed: write only aliases that exist, validate title length against the actual column (up to canonical 220), and retain complete long cloud URLs in canonical `external_url`; an oversized legacy URL alias is empty rather than truncated. Private PDF paths are never copied to `file_url`. Diagnosis did not modify production data or schema.

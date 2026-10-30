@@ -17,6 +17,7 @@ use App\Http\Controllers\Api\Integrations\StudentDataController;
 use App\Http\Controllers\Api\Learning\AssignmentWorkflowController;
 use App\Http\Controllers\Api\Learning\CalendarController;
 use App\Http\Controllers\Api\Learning\ClassroomTaskController;
+use App\Http\Controllers\Api\Learning\ClassroomUnitController;
 use App\Http\Controllers\Api\Learning\CourseRegistrationController;
 use App\Http\Controllers\Api\Learning\CourseRegistrationDocumentController;
 use App\Http\Controllers\Api\Learning\ExamAttendanceController;
@@ -137,6 +138,11 @@ Route::prefix('v1')->group(function (): void {
         Route::get('/learning', LearningOverviewController::class)->middleware('learning.schema');
         Route::prefix('learning/classroom')->middleware('learning.schema')->group(function (): void {
             Route::get('/', [OnlineClassroomController::class, 'index']);
+            Route::get('/units', [ClassroomUnitController::class, 'index']);
+            Route::post('/units', [ClassroomUnitController::class, 'store']);
+            Route::get('/units/{unit}', [ClassroomUnitController::class, 'show'])->whereNumber('unit');
+            Route::patch('/units/{unit}', [ClassroomUnitController::class, 'update'])->whereNumber('unit');
+            Route::delete('/units/{unit}', [ClassroomUnitController::class, 'destroy'])->whereNumber('unit');
             Route::get('/tasks', [ClassroomTaskController::class, 'index']);
             Route::get('/tasks/options', [ClassroomTaskController::class, 'options']);
             Route::post('/tasks', [ClassroomTaskController::class, 'store']);

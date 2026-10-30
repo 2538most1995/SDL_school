@@ -3,6 +3,7 @@
 namespace App\Http\Controllers\Api\Learning;
 
 use App\Http\Controllers\Controller;
+use App\Services\Learning\ClassroomUnitService;
 use App\Services\Learning\DistrictLearningGroupCatalog;
 use Illuminate\Database\DatabaseManager;
 use Illuminate\Database\Query\Builder;
@@ -28,6 +29,7 @@ final class ResourceFileController extends Controller
 
         $row = $query->first();
         abort_unless($row, 404);
+        app(ClassroomUnitService::class)->assertContentAccessible($viewer, $districtId, $row);
 
         $disk = (string) ($row->storage_disk ?? '');
         $path = (string) ($row->storage_path ?? '');

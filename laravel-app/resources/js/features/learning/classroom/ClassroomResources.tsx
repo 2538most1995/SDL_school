@@ -28,7 +28,9 @@ const isExternal = (type: string) => ['link', 'video', 'youtube'].includes(type)
 const errorText = (reason: unknown) => reason instanceof Error ? reason.message : 'ไม่สามารถดำเนินการได้ กรุณาลองอีกครั้ง';
 
 /** Existing private library files appear beside classroom lessons, without copying records. */
-export function ClassroomResources({ subject, kind, sharedOnly = false, onDirty, onBusy }: {
+export function ClassroomResources({ subject, kind, unitId, unitTargetGroup, sharedOnly = false, onDirty, onBusy }: {
+    unitId?: string;
+    unitTargetGroup?: string;
     subject: Subject | null;
     kind: 'video' | 'knowledge' | 'all';
     sharedOnly?: boolean;
@@ -44,12 +46,13 @@ export function ClassroomResources({ subject, kind, sharedOnly = false, onDirty,
     const [selected, setSelected] = useState<Resource | null>(null);
     const [deleting, setDeleting] = useState<Resource | null>(null);
     const params = new URLSearchParams();
+    if (unitId) params.set('unit_id', unitId);
     if (subject && !sharedOnly) { params.set('subject_code', subject.code); params.set('education_level', String(subject.level)); }
     if (sharedOnly) params.set('shared_only', '1');
     params.set('classroom_kind', kind);
     if (deferredSearch.trim()) params.set('search', deferredSearch.trim());
     const query = useQuery({
-        queryKey: ['classroom-resources', role, district, subject?.code, subject?.level, kind, sharedOnly, deferredSearch],
+        queryKey: ['classroom-resources', role, district, subject?.code, subject?.level, kind, unitId, sharedOnly, deferredSearch],
         queryFn: ({ signal }) => getFeatureData<Resource[]>(`${resourceBase}?${params}`, signal),
     });
     const rows = query.data?.data ?? [];
@@ -60,6 +63,8 @@ export function ClassroomResources({ subject, kind, sharedOnly = false, onDirty,
             client.invalidateQueries({ queryKey: ['classroom-resources'] }),
             client.invalidateQueries({ queryKey: ['learning', 'resources'] }),
             client.invalidateQueries({ queryKey: ['learning', 'overview'] }),
+            client.invalidateQueries({ queryKey: ['classroom-units'] }),
+            client.invalidateQueries({ queryKey: ['online-classroom'] }),
         ]);
     };
     const remove = useMutation({
@@ -91,7 +96,7 @@ export function ClassroomResources({ subject, kind, sharedOnly = false, onDirty,
         })}</div>
         {rows.length >= 250 && <p className="classroom-muted">แสดงสูงสุด 250 รายการ ใช้ช่องค้นหาเพื่อหาไฟล์อื่นในหมวดนี้</p>}
         {selected && <ResourceViewer key={selected.id} resource={selected} close={() => setSelected(null)} />}
-        {editing && <ResourceEditor key={editing === 'new' ? 'new' : editing.id} resource={editing === 'new' ? null : editing} subject={subject} groups={availableGroups} onDirty={onDirty} onBusy={onBusy} close={() => setEditing(null)} saved={async () => { setEditing(null); onDirty?.(false); await refresh(); }} />}
+        {editing && <ResourceEditor unitId={unitId} unitTargetGroup={unitTargetGroup} key={editing === 'new' ? 'new' : editing.id} resource={editing === 'new' ? null : editing} subject={subject} groups={availableGroups} onDirty={onDirty} onBusy={onBusy} close={() => setEditing(null)} saved={async () => { setEditing(null); onDirty?.(false); await refresh(); }} />}
         <Dialog open={Boolean(deleting)} onClose={() => { if (!remove.isPending) setDeleting(null); }} fullWidth maxWidth="xs"><DialogTitle>ลบสื่อนี้?</DialogTitle><DialogContent><p>ลบ “{deleting?.title}” และไฟล์แนบออกจากห้องเรียนทั้งหมดที่ใช้สื่อนี้</p>{remove.isError && <Alert className="mt-3" severity="error">{errorText(remove.error)}</Alert>}</DialogContent><DialogActions><Button disabled={remove.isPending} onClick={() => setDeleting(null)}>ยกเลิก</Button><Button appearance="primary" disabled={remove.isPending} onClick={() => { if (deleting) remove.mutate(deleting); }}>{remove.isPending ? 'กำลังลบ…' : 'ยืนยันลบ'}</Button></DialogActions></Dialog>
     </section>;
 }
@@ -126,11 +131,11 @@ function ResourceViewer({ resource, close }: { resource: Resource; close: () => 
     </DialogContent><DialogActions><Button onClick={close}>ปิด</Button></DialogActions></Dialog>;
 }
 
-function ResourceEditor({ resource, subject, groups, onDirty, onBusy, close, saved }: {
-    resource: Resource | null; subject: Subject | null; groups: Group[]; onDirty?: (dirty: boolean) => void; onBusy?: (busy: boolean) => void; close: () => void; saved: () => Promise<void>;
+function ResourceEditor({ unitId, unitTargetGroup, resource, subject, groups, onDirty, onBusy, close, saved }: {
+    unitId?: string; unitTargetGroup?: string; resource: Resource | null; subject: Subject | null; groups: Group[]; onDirty?: (dirty: boolean) => void; onBusy?: (busy: boolean) => void; close: () => void; saved: () => Promise<void>;
 }) {
     const { role } = useDemoRole();
-    const [draft, setDraft] = useState<ResourceDraft>(() => ({ title: resource?.title ?? '', subject: resource?.raw?.subject ?? subject?.code ?? '', description: resource?.description ?? '', resource_type: resource?.raw?.resource_type ?? resource?.type ?? 'file', url: resource?.raw?.url ?? '', level: resource?.raw?.level ?? (subject ? String(subject.level) : ''), target_group: resource?.raw?.target_group || (role === 'teacher' ? subject?.groups[0]?.code ?? groups[0]?.code ?? '' : '') }));
+    const [draft, setDraft] = useState<ResourceDraft>(() => ({ title: resource?.title ?? '', subject: resource?.raw?.subject ?? subject?.code ?? '', description: resource?.description ?? '', resource_type: resource?.raw?.resource_type ?? resource?.type ?? 'file', url: resource?.raw?.url ?? '', level: resource?.raw?.level ?? (subject ? String(subject.level) : ''), target_group: resource?.raw?.target_group || unitTargetGroup || (role === 'teacher' ? subject?.groups[0]?.code ?? groups[0]?.code ?? '' : '') }));
     const [file, setFile] = useState<File | null>(null);
     const [dirty, setDirty] = useState(false);
     const [fileError, setFileError] = useState('');
@@ -139,6 +144,7 @@ function ResourceEditor({ resource, subject, groups, onDirty, onBusy, close, sav
     const fileRequired = !external && (!resource?.file_url || initialType !== draft.resource_type);
     const save = useMutation({ mutationFn: () => {
         const payload = new FormData();
+        if (unitId) payload.append('unit_id', unitId);
         Object.entries(draft).forEach(([key, value]) => { if (key !== 'url' || external) payload.append(key, value); });
         if (!external && file) payload.append('file', file);
         if (resource) payload.append('_method', 'PATCH');
@@ -155,7 +161,7 @@ function ResourceEditor({ resource, subject, groups, onDirty, onBusy, close, sav
     }, [dirty]);
     const submit = (event: FormEvent) => { event.preventDefault(); if (!fileError && (role !== 'teacher' || draft.target_group)) save.mutate(); };
     const choices = resource ? Object.keys(typeLabels) : ['file', 'pdf'];
-    const availableGroups: Group[] = subject && !resource ? subject.groups : groups;
+    const availableGroups: Group[] = subject ? subject.groups : groups;
     const allGroups: Group[] = role !== 'teacher' && draft.target_group && !availableGroups.some(group => group.code === draft.target_group) ? [...availableGroups, { code: draft.target_group, name: draft.target_group }] : availableGroups;
     return <Dialog className="classroom-resource-dialog" open onClose={closeEditor} fullWidth maxWidth="sm"><form onSubmit={submit}><DialogTitle>{resource ? 'แก้ไขสื่อประกอบ' : 'แนบไฟล์ประกอบบทเรียน'}</DialogTitle><DialogContent><div className="space-y-5 pt-2">
         {subject && !resource ? <div className="classroom-resource-course"><BookOpenText size={23} /><div><strong>{subject.name}</strong><p>{subject.code} · {subject.level_label}</p></div></div> : <TextField fullWidth label="รหัสวิชา (เว้นว่าง = ใช้ร่วมกัน)" value={draft.subject} slotProps={{ htmlInput: { maxLength: 32 } }} disabled={save.isPending} onChange={event => update({ subject: event.target.value })} />}
@@ -164,7 +170,7 @@ function ResourceEditor({ resource, subject, groups, onDirty, onBusy, close, sav
         {external ? <TextField fullWidth required type="url" label="ลิงก์ HTTP / HTTPS" value={draft.url} disabled={save.isPending} slotProps={{ htmlInput: { maxLength: 2000 } }} onChange={event => update({ url: event.target.value })} /> : <label className="classroom-resource-upload"><FileArrowUp size={30} /><strong>{file ? file.name : resource?.file_url && !fileRequired ? 'เลือกไฟล์ใหม่เมื่อจะเปลี่ยนเอกสาร' : 'เลือกไฟล์เอกสาร'}</strong><span>PDF, Word, PowerPoint, Excel หรือ ZIP · ไม่เกิน 20 MB</span><input required={fileRequired} disabled={save.isPending} type="file" accept={draft.resource_type === 'pdf' ? '.pdf' : '.pdf,.doc,.docx,.ppt,.pptx,.xls,.xlsx,.zip'} onChange={event => { const next = event.target.files?.[0] ?? null; setFile(next); setFileError(next && next.size > 20 * 1024 * 1024 ? 'ไฟล์ต้องมีขนาดไม่เกิน 20 MB' : ''); setDirty(true); onDirty?.(true); }} /></label>}
         {fileError && <Alert severity="error">{fileError}</Alert>}
         <TextField fullWidth multiline minRows={3} label="คำอธิบาย" value={draft.description} disabled={save.isPending} slotProps={{ htmlInput: { maxLength: 5000 } }} onChange={event => update({ description: event.target.value })} />
-        <fieldset><legend className="classroom-field-label">กลุ่มเป้าหมาย</legend><div className="classroom-resource-choices">{[...(role === 'teacher' ? [] : [{ code: '', name: 'ทุกกลุ่มในขอบเขตของคุณ' }]), ...allGroups].map(group => <button type="button" key={group.code} aria-pressed={draft.target_group === group.code} disabled={save.isPending} onClick={() => update({ target_group: group.code })}>{group.name || group.label || group.code}{draft.target_group === group.code && <CheckCircle size={16} weight="fill" />}</button>)}</div></fieldset>
+        <fieldset><legend className="classroom-field-label">กลุ่มเป้าหมาย</legend><div className="classroom-resource-choices">{[...(role === 'teacher' || unitTargetGroup ? [] : [{ code: '', name: 'ทุกกลุ่มในขอบเขตของคุณ' }]), ...allGroups].map(group => <button type="button" key={group.code} aria-pressed={draft.target_group === group.code} disabled={save.isPending} onClick={() => update({ target_group: group.code })}>{group.name || group.label || group.code}{draft.target_group === group.code && <CheckCircle size={16} weight="fill" />}</button>)}</div></fieldset>
         {resource && <fieldset><legend className="classroom-field-label">ระดับการศึกษา</legend><div className="classroom-resource-choices">{[['', 'ทุกระดับ'], ['1', 'ประถม'], ['2', 'ม.ต้น'], ['3', 'ม.ปลาย']].map(([value, label]) => <button type="button" key={value} aria-pressed={draft.level === value} disabled={save.isPending} onClick={() => update({ level: value })}>{label}</button>)}</div></fieldset>}
         <Alert severity="info">ไฟล์ที่บันทึกจะเปิดให้ผู้เรียนตามระดับและกลุ่มเป้าหมายทันที</Alert>
         {save.isError && <Alert severity="error">{errorText(save.error)}</Alert>}

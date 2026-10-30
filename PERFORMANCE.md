@@ -1,5 +1,11 @@
 # Performance Audit
 
+## Course activity containers (2026-10-30)
+
+Course units use SQL pagination (50), district/term/course/level filters and the new course composite index. Content counts aggregate per unit/type across three content tables; occupancy checks batch IDs across four child tables instead of querying each card. Exact parent filters run before existing content limits/pagination. Parent authorization reuses the request course catalog when supplied and uses a scoped subquery for content lists, including legacy assignment/score reads. Existing file limits remain. MySQL query plans, live latency and large-roster throughput are Not verified.
+
+Verification: PHP 551 passed / 1 existing skip; frontend 99 passed; typecheck, production build and changed-file Pint pass. Isolated demo-browser checks cover unit create/edit/publish/delete, four categories only after opening a unit, exact task options, student acknowledgement reflected in the teacher roster, reload/deep links, draft direct-access denial, and 1440px/390px plus dark mode without horizontal overflow.
+
 ## Lesson-plan reader and missing covers (2026-10-29)
 
 PDF companions take priority on the first reader click, avoiding a provider placeholder and second action. Stored covers retain their lightweight authenticated image request. Only visible cards without a usable stored cover download the private PDF to render page one locally; these rebuilds are serialized to avoid loading multiple 20 MB PDFs concurrently, and a failed rebuild releases the queue. No PDF or cloud request is added to list queries or the application server. Browser-generated fallback covers are temporary and regenerated on remount; uploading a PDF through the editor stores a durable first-page cover.

@@ -13,19 +13,20 @@ const errorText = (error: unknown) => error instanceof Error ? error.message : '
 const dueLabel = (date: string) => new Date(date).toLocaleString('th-TH', { dateStyle: 'medium', timeStyle: 'short' });
 const statusLabels = { pending: 'ยังไม่ทำ', in_progress: 'ทำบางส่วน', completed: 'ทำครบแล้ว' };
 type Progress = { overdue?: boolean; late?: boolean; completed: number; total: number; status: keyof typeof statusLabels };
-export type TaskItem = { id: string; kind: 'activity' | 'assignment'; title: string; type: ActivityKind; target_group?: string; completed?: boolean };
-export type ClassroomTask = { id: string; title: string; instructions: string; due_at: string; subject_name?: string; subject_code: string; education_level: number; target_group: string; item_count: number; completed_count: number; student_count: number; progress: Progress | null };
+export type TaskItem = { id: string; unit_id?: string | null; kind: 'activity' | 'assignment'; title: string; type: ActivityKind; target_group?: string; completed?: boolean };
+export type ClassroomTask = { id: string; unit_id?: string | null; title: string; instructions: string; due_at: string; subject_name?: string; subject_code: string; education_level: number; target_group: string; item_count: number; completed_count: number; student_count: number; progress: Progress | null };
 type TaskDetail = ClassroomTask & { items: TaskItem[]; students: (Progress & { student_code: string; student_name: string; group_code: string; group_name: string })[]; pagination: PageInfo | null };
 type Options = { items: TaskItem[]; groups: { code: string; name: string }[] };
-type Props = { subject?: Subject; manage: boolean; role: string; district: string; readOnly: boolean; onDirty?: (dirty: boolean) => void; onBusy?: (busy: boolean) => void; onOpen: (item: TaskItem, task: ClassroomTask) => void };
+type Props = { unitId?: string; unitTargetGroup?: string; subject?: Subject; manage: boolean; role: string; district: string; readOnly: boolean; onDirty?: (dirty: boolean) => void; onBusy?: (busy: boolean) => void; onOpen: (item: TaskItem, task: ClassroomTask) => void };
 
-export function ClassroomTasks({ subject, manage, role, district, readOnly, onDirty, onBusy, onOpen }: Props) {
+export function ClassroomTasks({ subject, manage, role, district, readOnly, unitId, unitTargetGroup, onDirty, onBusy, onOpen }: Props) {
     const [page, setPage] = useState(1);
     const [selected, setSelected] = useState('');
     const [creating, setCreating] = useState(false);
     const params = new URLSearchParams({ page: String(page) });
+    if (unitId) params.set('unit_id', unitId);
     if (subject) { params.set('subject_code', subject.code); params.set('education_level', String(subject.level)); }
-    const query = useQuery({ queryKey: ['classroom-tasks', role, district, subject?.level, subject?.code, page], queryFn: ({ signal }) => getFeatureData<{ tasks: ClassroomTask[]; pagination: PageInfo }>(`${base}?${params}`, signal) });
+    const query = useQuery({ queryKey: ['classroom-tasks', role, district, subject?.level, subject?.code, unitId, page], queryFn: ({ signal }) => getFeatureData<{ tasks: ClassroomTask[]; pagination: PageInfo }>(`${base}?${params}`, signal) });
     return <section className="classroom-tasks" aria-label={manage ? 'งานที่มอบหมาย' : 'งานที่ครูสั่ง'}>
         <div className="classroom-tasks-heading"><div><span className="classroom-step"><ClipboardText size={19} /> {manage ? 'มอบหมายและติดตาม' : 'งานของฉัน'}</span><h3>{manage ? 'งานที่มอบหมาย' : 'งานที่ครูสั่ง'}</h3><p>{manage ? 'เลือกกิจกรรม กำหนดส่ง แล้วติดตามผู้เรียนรายคน' : 'เปิดงาน ดูสิ่งที่ต้องทำ แล้วทำกิจกรรมให้ครบตามที่ครูกำหนด'}</p></div>{manage && subject && <Button appearance="primary" icon={<Plus size={19} />} disabled={readOnly} onClick={() => setCreating(true)}>สั่งงาน</Button>}</div>
         {query.isPending ? <QuerySkeleton rows={2} /> : query.isError ? <QueryError message={errorText(query.error)} onRetry={() => void query.refetch()} /> : <>
@@ -41,7 +42,7 @@ export function ClassroomTasks({ subject, manage, role, district, readOnly, onDi
             })}</div>
             <TaskPager page={query.data.data.pagination} change={setPage} />
         </>}
-        {creating && subject && <TaskEditor onDirty={onDirty} onBusy={onBusy} subject={subject} role={role} district={district} close={() => setCreating(false)} saved={(id) => { setCreating(false); setSelected(id); }} />}
+        {creating && subject && <TaskEditor unitId={unitId} unitTargetGroup={unitTargetGroup} onDirty={onDirty} onBusy={onBusy} subject={subject} role={role} district={district} close={() => setCreating(false)} saved={(id) => { setCreating(false); setSelected(id); }} />}
         {selected && <TaskDialog key={`${selected}:${role}:${district}`} id={selected} manage={manage} role={role} district={district} close={() => setSelected('')} openItem={onOpen} />}
     </section>;
 }
@@ -50,20 +51,21 @@ function TaskPager({ page, change }: { page: PageInfo | null | undefined; change
     return page && page.last_page > 1 ? <nav aria-label="แบ่งหน้างาน" className="classroom-task-pagination"><Button disabled={page.current_page <= 1} onClick={() => change(page.current_page - 1)}>ก่อนหน้า</Button><span>หน้า {page.current_page}/{page.last_page} · {page.total} รายการ</span><Button disabled={page.current_page >= page.last_page} onClick={() => change(page.current_page + 1)}>ถัดไป</Button></nav> : null;
 }
 
-function TaskEditor({ subject, role, district, close, saved, onDirty, onBusy }: { onDirty?: (dirty: boolean) => void; onBusy?: (busy: boolean) => void; subject: Subject; role: string; district: string; close: () => void; saved: (id: string) => void }) {
+function TaskEditor({ subject, role, district, close, saved, onDirty, onBusy, unitId, unitTargetGroup }: { unitId?: string; unitTargetGroup?: string; onDirty?: (dirty: boolean) => void; onBusy?: (busy: boolean) => void; subject: Subject; role: string; district: string; close: () => void; saved: (id: string) => void }) {
     const client = useQueryClient();
     const [title, setTitle] = useState('');
     const [instructions, setInstructions] = useState('');
     const [due, setDue] = useState('');
-    const [group, setGroup] = useState(role === 'teacher' ? subject.groups[0]?.code ?? '' : '');
+    const [group, setGroup] = useState(unitTargetGroup || (role === 'teacher' ? subject.groups[0]?.code ?? '' : ''));
     const [mode, setMode] = useState<'all' | 'selected'>('all');
     const [checked, setChecked] = useState<string[]>([]);
     const [filter, setFilter] = useState<ActivityKind | 'all'>('all');
     const [changed, setChanged] = useState(false);
     const params = new URLSearchParams({ subject_code: subject.code, education_level: String(subject.level), target_group: group });
-    const options = useQuery({ queryKey: ['classroom-task-options', role, district, subject.level, subject.code, group], queryFn: ({ signal }) => getFeatureData<Options>(`${base}/options?${params}`, signal) });
+    if (unitId) params.set('unit_id', unitId);
+    const options = useQuery({ queryKey: ['classroom-task-options', role, district, subject.level, subject.code, unitId, group], queryFn: ({ signal }) => getFeatureData<Options>(`${base}/options?${params}`, signal) });
     const available = options.data?.data.items ?? [];
-    const save = useMutation({ mutationFn: () => sendFeatureData<{ id: string }>(base, 'POST', { subject_code: subject.code, education_level: subject.level, title: title.trim(), instructions: instructions.trim(), due_at: new Date(due).toISOString(), target_group: group, selection_mode: mode, activity_ids: available.filter(item => item.kind === 'activity' && checked.includes(`activity:${item.id}`)).map(item => item.id), assignment_ids: available.filter(item => item.kind === 'assignment' && checked.includes(`assignment:${item.id}`)).map(item => item.id) }), onSuccess: async (result) => { await client.invalidateQueries({ queryKey: ['classroom-tasks'] }); saved(result.data.id); } });
+    const save = useMutation({ mutationFn: () => sendFeatureData<{ id: string }>(base, 'POST', { ...(unitId ? { unit_id: unitId } : {}), subject_code: subject.code, education_level: subject.level, title: title.trim(), instructions: instructions.trim(), due_at: new Date(due).toISOString(), target_group: group, selection_mode: mode, activity_ids: available.filter(item => item.kind === 'activity' && checked.includes(`activity:${item.id}`)).map(item => item.id), assignment_ids: available.filter(item => item.kind === 'assignment' && checked.includes(`assignment:${item.id}`)).map(item => item.id) }), onSuccess: async (result) => { await Promise.all([client.invalidateQueries({ queryKey: ['classroom-tasks'] }), client.invalidateQueries({ queryKey: ['classroom-units'] }), client.invalidateQueries({ queryKey: ['online-classroom'] })]); saved(result.data.id); } });
     useEffect(() => { onDirty?.(changed); return () => onDirty?.(false); }, [changed, onDirty]);
     useEffect(() => { onBusy?.(save.isPending); return () => onBusy?.(false); }, [save.isPending, onBusy]);
     const requestClose = () => { if (!save.isPending && (!changed || window.confirm('ยกเลิกงานที่ยังไม่ได้บันทึกหรือไม่?'))) close(); };
@@ -73,8 +75,8 @@ function TaskEditor({ subject, role, district, close, saved, onDirty, onBusy }: 
         <TextField required fullWidth label="ชื่องาน" value={title} onChange={event => setTitle(event.target.value)} disabled={save.isPending} slotProps={{ htmlInput: { maxLength: 220 } }} />
         <TextField fullWidth multiline minRows={2} label="คำชี้แจงสำหรับผู้เรียน" value={instructions} onChange={event => setInstructions(event.target.value)} disabled={save.isPending} slotProps={{ htmlInput: { maxLength: 5000 } }} />
         <TextField required fullWidth type="datetime-local" label="กำหนดส่ง" value={due} onChange={event => setDue(event.target.value)} disabled={save.isPending} slotProps={{ inputLabel: { shrink: true } }} helperText="วันและเวลาตามอุปกรณ์ของคุณ" />
-        <fieldset disabled={save.isPending}><legend>มอบหมายให้กลุ่มเรียน</legend><div className="classroom-choice-buttons">{role !== 'teacher' && <button type="button" aria-pressed={!group} onClick={() => { setGroup(''); setChecked([]); setChanged(true); }}>ทุกกลุ่มที่รับผิดชอบ</button>}{subject.groups.map(item => <button key={item.code} type="button" aria-pressed={group === item.code} onClick={() => { setGroup(item.code); setChecked([]); setChanged(true); }}>{item.name || item.code}</button>)}</div></fieldset>
-        <fieldset disabled={save.isPending}><legend>สิ่งที่ต้องทำ</legend><div className="classroom-choice-buttons"><button type="button" aria-pressed={mode === 'all'} onClick={() => { setMode('all'); setChanged(true); }}>ทำครบทุกกิจกรรม</button><button type="button" aria-pressed={mode === 'selected'} onClick={() => { setMode('selected'); setChanged(true); }}>เลือกเฉพาะกิจกรรม</button></div><p className="classroom-muted">{mode === 'all' ? 'รวมกิจกรรมที่เผยแพร่และใบงานส่งไฟล์ที่เปิดอยู่ขณะสั่งงาน กิจกรรมที่เพิ่มภายหลังจะไม่ถูกเพิ่มในงานนี้' : 'เลือกใบงาน แบบทดสอบ หรือกิจกรรมที่ต้องการให้ผู้เรียนทำ'}</p></fieldset>
+        <fieldset disabled={save.isPending}><legend>มอบหมายให้กลุ่มเรียน</legend><div className="classroom-choice-buttons">{role !== 'teacher' && !unitTargetGroup && <button type="button" aria-pressed={!group} onClick={() => { setGroup(''); setChecked([]); setChanged(true); }}>ทุกกลุ่มที่รับผิดชอบ</button>}{subject.groups.map(item => <button key={item.code} type="button" aria-pressed={group === item.code} onClick={() => { setGroup(item.code); setChecked([]); setChanged(true); }}>{item.name || item.code}</button>)}</div></fieldset>
+        <fieldset disabled={save.isPending}><legend>สิ่งที่ต้องทำ</legend><div className="classroom-choice-buttons"><button type="button" aria-pressed={mode === 'all'} onClick={() => { setMode('all'); setChanged(true); }}>ทำครบทุกรายการ</button><button type="button" aria-pressed={mode === 'selected'} onClick={() => { setMode('selected'); setChanged(true); }}>เลือกเฉพาะรายการ</button></div><p className="classroom-muted">{mode === 'all' ? 'รวมกิจกรรมที่เผยแพร่และใบงานส่งไฟล์ที่เปิดอยู่ขณะสั่งงาน กิจกรรมที่เพิ่มภายหลังจะไม่ถูกเพิ่มในงานนี้' : 'เลือกใบงาน แบบทดสอบ หรือกิจกรรมที่ต้องการให้ผู้เรียนทำ'}</p></fieldset>
         {options.isPending ? <QuerySkeleton rows={2} /> : options.isError ? <Alert severity="error">{errorText(options.error)} <Button onClick={() => void options.refetch()}>ลองใหม่</Button></Alert> : <>
             {mode === 'selected' && <div className="classroom-choice-buttons" role="group" aria-label="กรองกิจกรรมสำหรับสั่งงาน">{(['all', 'video', 'knowledge', 'worksheet', 'quiz'] as const).map(type => <button type="button" key={type} aria-pressed={filter === type} onClick={() => setFilter(type)}>{type === 'all' ? 'ทั้งหมด' : kindLabels[type]}</button>)}</div>}
             <div className="classroom-task-options">{available.filter(item => filter === 'all' || mode === 'all' || item.type === filter).map(item => <label className="classroom-task-option" key={`${item.kind}:${item.id}`}><input type="checkbox" checked={mode === 'all' || checked.includes(`${item.kind}:${item.id}`)} disabled={mode === 'all' || save.isPending || options.isFetching} onChange={event => { const key = `${item.kind}:${item.id}`; setChecked(old => event.target.checked ? [...old, key] : old.filter(value => value !== key)); }} /><span><strong>{item.title}</strong><small>{kindLabels[item.type]}{item.kind === 'assignment' ? ' · ส่งไฟล์ / ลิงก์' : ''}{item.target_group ? ` · ${item.target_group}` : ''}</small></span></label>)}</div>

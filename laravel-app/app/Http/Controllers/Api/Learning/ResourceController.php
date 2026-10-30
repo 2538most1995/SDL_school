@@ -6,6 +6,7 @@ use App\Domain\Learning\DemoLearningPortal;
 use App\Domain\Learning\DemoQueryRules;
 use App\Domain\Learning\DemoResponseMeta;
 use App\Http\Controllers\Controller;
+use App\Services\Learning\ClassroomUnitContentScope;
 use App\Services\Learning\DistrictLearningGroupCatalog;
 use App\Services\Learning\OnlineClassroomService;
 use App\Services\Legacy\LegacyPortalReadService;
@@ -28,13 +29,14 @@ final class ResourceController extends Controller
             'search' => DemoQueryRules::search(),
             'subject_code' => ['nullable', 'required_with:education_level', 'string', 'max:32'],
             'education_level' => ['nullable', 'required_with:subject_code', 'integer', Rule::in([1, 2, 3])],
+            'unit_id' => ClassroomUnitContentScope::rules(),
             'classroom_kind' => ['nullable', Rule::in(['all', 'video', 'knowledge'])],
             'shared_only' => ['sometimes', 'boolean'],
         ]);
 
         $districtId = (int) $request->attributes->get('district_id');
         $viewer = $request->user();
-        $classroomRequest = isset($filters['subject_code']) || isset($filters['classroom_kind']) || $request->boolean('shared_only');
+        $classroomRequest = isset($filters['subject_code']) || isset($filters['classroom_kind']) || isset($filters['unit_id']) || $request->boolean('shared_only');
         if (isset($filters['subject_code'])) {
             if ($request->boolean('shared_only')) {
                 throw ValidationException::withMessages(['shared_only' => 'เลือกสื่อรายวิชาหรือสื่อส่วนกลางอย่างใดอย่างหนึ่ง']);

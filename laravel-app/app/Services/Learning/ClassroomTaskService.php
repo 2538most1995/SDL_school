@@ -49,30 +49,43 @@ final class ClassroomTaskService
         if ($viewer->role === 'teacher' && $group === '') {
             throw ValidationException::withMessages(['target_group' => 'ครูต้องเลือกกลุ่มเรียนที่รับผิดชอบ ไม่สามารถเลือกทุกกลุ่มได้']);
         }
+        $selectedUnit = app(ClassroomUnitService::class)->validateContentUnit($viewer, $districtId, $values, null, $catalog);
+        if ($selectedUnit !== null) {
+            $unit = app(ClassroomUnitService::class)->authorized($viewer, $districtId, $selectedUnit, false, $catalog);
+            abort_unless($unit->status === 'published', 422, 'เผยแพร่กิจกรรมก่อนสั่งงานให้ผู้เรียน');
+        }
         $students = array_values(array_filter($catalog['registrations'], fn ($row) => $group === '' || in_array($group, [$row['group_code'], $row['group_name']], true)));
         abort_if($students === [], 422, 'กลุ่มเรียนอยู่นอกขอบเขตรายวิชา');
         $activities = DB::table('learning_classroom_activities')->where('district_id', $districtId)
             ->where('academic_term', $catalog['term'])->where('subject_code', $subject['code'])->where('education_level', $subject['level'])
+            ->tap(function ($query) use ($viewer, $districtId, $values, $catalog): void {
+                app(ClassroomUnitContentScope::class)->apply($query, $viewer, $districtId, '', $values['unit_id'] ?? null, $catalog);
+                $this->publishedUnitOnly($query, 'learning_classroom_activities');
+            })
             ->where('status', 'published')->when($viewer->role === 'teacher', fn ($query) => $query->where('created_by', $viewer->id))
-            ->orderByDesc('id')->limit(501)->when($lock, fn ($query) => $query->lockForUpdate())->get(['id', 'title', 'type', 'target_group', 'audience_groups']);
+            ->orderByDesc('id')->limit(501)->when($lock, fn ($query) => $query->lockForUpdate())->get(['id', 'title', 'type', 'target_group', 'audience_groups', ...(Schema::hasColumn('learning_classroom_activities', 'classroom_unit_id') ? ['classroom_unit_id'] : [])]);
         $items = [];
         foreach ($activities as $activity) {
             $audienceGroups = $activity->audience_groups === null ? null : json_decode($activity->audience_groups, true);
             $eligible = array_filter($students, fn ($row) => ($activity->target_group === '' || in_array($activity->target_group, [$row['group_code'], $row['group_name']], true))
                 && ($audienceGroups === null || in_array($row['group_code'], $audienceGroups, true)));
             if (count($eligible) === count($students)) {
-                $items[] = ['id' => (string) $activity->id, 'kind' => 'activity', 'title' => $activity->title, 'type' => $activity->type, 'target_group' => $activity->target_group];
+                $items[] = ['id' => (string) $activity->id, 'kind' => 'activity', 'title' => $activity->title, 'type' => $activity->type, 'target_group' => $activity->target_group, 'unit_id' => isset($activity->classroom_unit_id) ? (string) $activity->classroom_unit_id : null];
             }
         }
         $assignments = DB::table('learning_assignments')->where('district_id', $districtId)->where('subject_code', $subject['code'])
             ->where(fn ($query) => $query->where('academic_term', $catalog['term'])->orWhereNull('academic_term'))
             ->where(fn ($query) => $query->where('education_level', $subject['level'])->orWhereNull('education_level'))
+            ->tap(function ($query) use ($viewer, $districtId, $values, $catalog): void {
+                app(ClassroomUnitContentScope::class)->apply($query, $viewer, $districtId, '', $values['unit_id'] ?? null, $catalog);
+                $this->publishedUnitOnly($query, 'learning_assignments');
+            })
             ->where('status', 'open')->when($viewer->role === 'teacher', fn ($query) => $query->where('created_by', $viewer->id))
-            ->orderByDesc('id')->limit(501)->when($lock, fn ($query) => $query->lockForUpdate())->get(['id', 'title', 'target_value']);
+            ->orderByDesc('id')->limit(501)->when($lock, fn ($query) => $query->lockForUpdate())->get(['id', 'title', 'target_value', ...(Schema::hasColumn('learning_assignments', 'classroom_unit_id') ? ['classroom_unit_id'] : [])]);
         foreach ($assignments as $assignment) {
             $target = trim((string) $assignment->target_value);
             if (count(array_filter($students, fn ($row) => $target === '' || in_array($target, [$row['group_code'], $row['group_name']], true))) === count($students)) {
-                $items[] = ['id' => (string) $assignment->id, 'kind' => 'assignment', 'title' => $assignment->title, 'type' => 'worksheet', 'target_group' => $target];
+                $items[] = ['id' => (string) $assignment->id, 'kind' => 'assignment', 'title' => $assignment->title, 'type' => 'worksheet', 'target_group' => $target, 'unit_id' => isset($assignment->classroom_unit_id) ? (string) $assignment->classroom_unit_id : null];
             }
         }
         // Do not silently issue an incomplete "all" task after truncation.
@@ -99,7 +112,8 @@ final class ClassroomTaskService
                 throw ValidationException::withMessages(['due_at' => 'กำหนดส่งต้องอยู่หลังเวลาเปิดรับใบงานที่เลือก']);
             }
 
-            $taskId = DB::table('learning_classroom_tasks')->insertGetId(['district_id' => $districtId, 'created_by' => $viewer->id,
+            $resolvedUnit = app(ClassroomUnitService::class)->validateContentUnit($viewer, $districtId, $values, null, $catalog);
+            $taskId = DB::table('learning_classroom_tasks')->insertGetId([...(array_key_exists('unit_id', $values) || $resolvedUnit !== null ? ['classroom_unit_id' => $resolvedUnit] : []), 'district_id' => $districtId, 'created_by' => $viewer->id,
                 'academic_term' => $catalog['term'], 'subject_code' => $subject['code'], 'subject_name' => $subject['name'], 'education_level' => $subject['level'],
                 'target_group' => trim((string) ($values['target_group'] ?? '')), 'audience_groups' => json_encode(array_column($subject['groups'], 'code')),
                 'title' => trim($values['title']), 'instructions' => $values['instructions'] ?? '', 'selection_mode' => $values['selection_mode'],
@@ -115,14 +129,16 @@ final class ClassroomTaskService
     {
         $catalog = empty($filters['subject_code']) ? $this->classroom->catalog($viewer, $districtId) : $this->course($viewer, $districtId, $filters)[0];
         $pairs = collect($catalog['registrations'])->unique(fn ($row) => $row['subject_code'].'|'.$row['level'].'|'.$row['group_code'].'|'.$row['group_name']);
-        $page = DB::table('learning_classroom_tasks')->when($pairs->isEmpty(), fn ($query) => $query->whereRaw('1 = 0'))->where('district_id', $districtId)->where('academic_term', $catalog['term'])
+        $taskQuery = DB::table('learning_classroom_tasks')->when($pairs->isEmpty(), fn ($query) => $query->whereRaw('1 = 0'))->where('district_id', $districtId)->where('academic_term', $catalog['term'])
             ->when(! empty($filters['subject_code']), fn ($query) => $query->where('subject_code', $filters['subject_code'])->where('education_level', $filters['education_level']))
             ->when($viewer->role === 'teacher', fn ($query) => $query->where('created_by', $viewer->id))
             ->where(function ($query) use ($pairs): void {
                 foreach ($pairs as $pair) {
                     $query->orWhere(fn ($part) => $part->where('subject_code', $pair['subject_code'])->where('education_level', $pair['level'])->whereIn('target_group', ['', $pair['group_code'], $pair['group_name']])->whereJsonContains('audience_groups', $pair['group_code']));
                 }
-            })->orderBy('due_at')->orderByDesc('id')->paginate(50, ['*'], 'page', $filters['page'] ?? 1);
+            });
+        app(ClassroomUnitContentScope::class)->apply($taskQuery, $viewer, $districtId, '', $filters['unit_id'] ?? null, $catalog);
+        $page = $taskQuery->orderBy('due_at')->orderByDesc('id')->paginate(50, ['*'], 'page', $filters['page'] ?? 1);
         $rows = $page->items();
         $evidence = $this->evidence($rows, array_column($catalog['registrations'], 'student_code'));
 
@@ -136,6 +152,8 @@ final class ClassroomTaskService
         abort_if($viewer->role === 'teacher' && (int) $row->created_by !== (int) $viewer->id, 403);
         [$catalog] = $this->course($viewer, $districtId, ['subject_code' => $row->subject_code, 'education_level' => $row->education_level]);
         abort_unless($row->academic_term === $catalog['term'] && $this->audience($catalog, $row) !== [], 404);
+
+        app(ClassroomUnitService::class)->assertContentAccessible($viewer, $districtId, $row, $catalog);
 
         return [$row, $catalog];
     }
@@ -232,6 +250,7 @@ final class ClassroomTaskService
         }
 
         return ['id' => (string) $row->id, 'title' => $row->title, 'instructions' => $row->instructions ?? '', 'subject_code' => $row->subject_code,
+            'unit_id' => isset($row->classroom_unit_id) ? (string) $row->classroom_unit_id : null,
             'subject_name' => $row->subject_name, 'education_level' => (int) $row->education_level, 'target_group' => $row->target_group,
             'selection_mode' => $row->selection_mode, 'due_at' => Carbon::parse($row->due_at)->toIso8601String(), 'item_count' => count(json_decode($row->items, true)),
             'student_count' => count($audience), 'completed_count' => $completed,
@@ -254,12 +273,24 @@ final class ClassroomTaskService
         if ($student === null) {
             return $activity->due_at;
         }
-        $due = DB::table('learning_classroom_tasks')->where('district_id', $districtId)->where('academic_term', $catalog['term'])
+        $dueQuery = DB::table('learning_classroom_tasks')->where('district_id', $districtId)->where('academic_term', $catalog['term'])
             ->where('subject_code', $activity->subject_code)->where('education_level', $activity->education_level)
             ->whereIn('target_group', ['', $student['group_code'], $student['group_name']])->whereJsonContains('audience_groups', $student['group_code'])
-            ->whereIn('id', DB::table('learning_classroom_task_items')->select('task_id')->where('kind', 'activity')->where('content_id', $activity->id))->max('due_at');
+            ->whereIn('id', DB::table('learning_classroom_task_items')->select('task_id')->where('kind', 'activity')->where('content_id', $activity->id));
+        app(ClassroomUnitContentScope::class)->apply($dueQuery, $viewer, $districtId, '', null, $catalog);
+        $due = $dueQuery->max('due_at');
 
         return $due ?? $activity->due_at;
+    }
+
+    private function publishedUnitOnly($query, string $table): void
+    {
+        if (! Schema::hasColumn($table, 'classroom_unit_id') || ! Schema::hasTable('learning_classroom_units')) {
+            return;
+        }
+        $query->where(fn ($part) => $part->whereNull($table.'.classroom_unit_id')
+            ->orWhereExists(fn ($unit) => $unit->selectRaw('1')->from('learning_classroom_units as task_unit')
+                ->whereColumn('task_unit.id', $table.'.classroom_unit_id')->where('task_unit.status', 'published')));
     }
 
     private function pagination($page): array

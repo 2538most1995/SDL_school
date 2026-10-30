@@ -1,5 +1,9 @@
 # SDL School Context
 
+## Course activity containers (2026-10-30)
+
+The online classroom now navigates course → named activity container → video / knowledge / worksheet / quiz. Teachers create, edit and delete empty containers in their own current course groups; published units are visible to registered students while drafts block direct content, image, file and submission access. Existing unbound content is presented as a virtual “บทเรียนและงานเดิม” container, retaining original IDs and evidence. Content editors and task options use an exact unit filter; task links carry parent IDs. Nonempty units cannot be deleted or retargeted, and issued work blocks parent publication changes. Migration `2026_10_30_000043_create_classroom_units.php` is required; no production DB changes were made.
+
 ## Teacher group isolation (2026-10-30)
 
 Teachers must name an assigned group when issuing tasks, authoring activities/file worksheets, or publishing library/calendar content; blank/all targets are rejected on the server and hidden in teacher forms. Student/report filters aggregate only the current assigned roster. Group access matches exact codes or exact names without automatically stripping leading zeros; teachers without groups have no implicit access. N-NET reads, summaries, metadata and writes now resolve current authoritative student identity and level rather than trusting saved result groups. Media/download/review paths recheck current group access; original creator status alone is insufficient after reassignment. District-wide N-NET schedule writes require admin/super_admin. Existing district admin scope remains intact. This change requires no new migration and does not rewrite user assignments, import data, or existing work.

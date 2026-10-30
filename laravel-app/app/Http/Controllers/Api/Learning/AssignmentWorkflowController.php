@@ -4,6 +4,7 @@ namespace App\Http\Controllers\Api\Learning;
 
 use App\Http\Controllers\Controller;
 use App\Services\Learning\AssignmentWorkflowService;
+use App\Services\Learning\ClassroomUnitContentScope;
 use Illuminate\Database\QueryException;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
@@ -17,6 +18,7 @@ final class AssignmentWorkflowController extends Controller
     {
         $filters = $request->validate([
             'assignment_id' => ['nullable', 'integer', 'min:1'],
+            'unit_id' => ClassroomUnitContentScope::rules(),
             'subject_code' => ['nullable', 'required_with:education_level', 'string', 'max:32'],
             'education_level' => ['nullable', 'required_with:subject_code', 'integer', Rule::in([1, 2, 3])],
         ]);
@@ -28,6 +30,7 @@ final class AssignmentWorkflowController extends Controller
                 isset($filters['assignment_id']) ? (int) $filters['assignment_id'] : null,
                 $filters['subject_code'] ?? null,
                 isset($filters['education_level']) ? (int) $filters['education_level'] : null,
+                $filters['unit_id'] ?? null,
             ),
             'meta' => [
                 'mode' => 'production',
@@ -235,6 +238,7 @@ final class AssignmentWorkflowController extends Controller
             'subject_code' => ['required', 'string', 'max:32'],
             'education_level' => ['required', 'integer', Rule::in([1, 2, 3])],
             'target_group' => ['nullable', 'string', 'max:120'],
+            'unit_id' => ClassroomUnitContentScope::rules(),
             'max_score' => ['required', 'numeric', 'min:0', 'max:100'],
             'opens_at' => ['nullable', 'date'],
             'due_at' => ['required', 'date', 'after:opens_at'],

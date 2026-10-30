@@ -86,6 +86,19 @@ final class OnlineClassroomService
             }
         }
         abort_if(! empty($filters['subject_code']) && $subject === null, 404);
+        $unitService = app(ClassroomUnitService::class);
+        $selectedUnit = null;
+        if (! empty($filters['unit_id'])) {
+            $unitService->ready();
+            abort_if($subject === null, 404);
+            if ($filters['unit_id'] === 'legacy') {
+                $selectedUnit = $unitService->legacyPayload($subject);
+            } else {
+                $unitRow = $unitService->authorized($viewer, $districtId, (int) $filters['unit_id'], false, $catalog);
+                abort_unless($unitRow->subject_code === $subject['code'] && (int) $unitRow->education_level === $subject['level'], 404);
+                $selectedUnit = $unitService->detail($viewer, $districtId, (int) $unitRow->id, $catalog);
+            }
+        }
         $groupPairs = collect($catalog['registrations'])->filter(fn ($item) => $subject !== null && $item['subject_code'] === $subject['code'] && (int) $item['level'] === $subject['level'])
             ->unique(fn ($item) => $item['group_code'].'|'.$item['group_name'])->values();
         $activityQuery = $subject === null ? null : DB::table('learning_classroom_activities')
@@ -101,6 +114,12 @@ final class OnlineClassroomService
                     });
                 }
             });
+        if ($activityQuery !== null) {
+            $unitService->scopeQuery($activityQuery, $viewer, $districtId, '', $catalog);
+            if (! empty($filters['unit_id'])) {
+                $filters['unit_id'] === 'legacy' ? $activityQuery->whereNull('classroom_unit_id') : $activityQuery->where('classroom_unit_id', (int) $filters['unit_id']);
+            }
+        }
         $activityCounts = ['all' => 0, 'knowledge' => 0, 'video' => 0, 'worksheet' => 0, 'quiz' => 0];
         if ($activityQuery !== null) {
             $totals = (clone $activityQuery)->selectRaw('type, COUNT(*) as total')->groupBy('type')->pluck('total', 'type');
@@ -120,6 +139,7 @@ final class OnlineClassroomService
         }
         $selected = isset($filters['activity_id']) ? $this->authorizedActivity($viewer, $districtId, (int) $filters['activity_id'], false, $catalog) : $rows->first();
         abort_if($selected !== null && ($subject === null || $selected->subject_code !== $subject['code'] || (int) $selected->education_level !== $subject['level'] || (! empty($filters['activity_type']) && $selected->type !== $filters['activity_type'])), 404);
+        abort_if($selected !== null && ! empty($filters['unit_id']) && ($filters['unit_id'] === 'legacy' ? ($selected->classroom_unit_id ?? null) !== null : (int) ($selected->classroom_unit_id ?? 0) !== (int) $filters['unit_id']), 404);
         if ($selected !== null && ! $rows->contains('id', $selected->id)) {
             $rows->push($selected);
         }
@@ -157,7 +177,7 @@ final class OnlineClassroomService
 
                 return $activity;
             })->all(),
-            'selected_activity' => $selectedPayload, 'submissions' => $submissions, 'submission_pagination' => $pagination, 'activity_counts' => $activityCounts,
+            'selected_activity' => $selectedPayload, 'selected_unit' => $selectedUnit, 'submissions' => $submissions, 'submission_pagination' => $pagination, 'activity_counts' => $activityCounts,
             'activity_pagination' => $activityPage === null ? null : ['current_page' => $activityPage->currentPage(), 'last_page' => $activityPage->lastPage(), 'total' => $activityPage->total()]];
     }
 
@@ -165,6 +185,7 @@ final class OnlineClassroomService
     {
         $row = DB::table('learning_classroom_activities')->where('district_id', $districtId)->where('id', $id)->first();
         abort_if($row === null, 404);
+        app(ClassroomUnitService::class)->assertContentAccessible($viewer, $districtId, $row, $catalog);
         if ($write || $viewer->role === 'teacher') {
             abort_unless(in_array($viewer->role, ['teacher', 'admin', 'super_admin'], true), 403);
             abort_if($viewer->role === 'teacher' && (int) $row->created_by !== (int) $viewer->id, 403);
@@ -214,9 +235,10 @@ final class OnlineClassroomService
         $catalog = $this->catalog($viewer, $districtId);
 
         return DB::transaction(function () use ($viewer, $districtId, $values, $id, $catalog) {
+            $existing = null;
             if ($id !== null) {
                 DB::table('learning_classroom_activities')->where('id', $id)->lockForUpdate()->first();
-                $this->authorizedActivity($viewer, $districtId, $id, true, $catalog);
+                $existing = $this->authorizedActivity($viewer, $districtId, $id, true, $catalog);
                 ClassroomTaskService::assertContentEditable('activity', $id);
                 if (DB::table('learning_classroom_submissions')->where('activity_id', $id)->exists()) {
                     if (array_diff(array_keys($values), ['status']) !== []) {
@@ -244,6 +266,7 @@ final class OnlineClassroomService
             if ($group !== '' && ! collect($subject['groups'])->contains(fn ($item) => in_array($group, [$item['code'], $item['name']], true))) {
                 throw ValidationException::withMessages(['target_group' => 'กลุ่มเรียนอยู่นอกขอบเขตของรายวิชา']);
             }
+            $unitId = app(ClassroomUnitService::class)->validateContentUnit($viewer, $districtId, $values, $existing, $catalog);
             $questions = $this->validatedQuestions($values['questions'] ?? [], $values['type']);
             $imageIds = array_values(array_filter(array_column($questions, 'image_id')));
             if ($imageIds !== []) {
@@ -259,6 +282,9 @@ final class OnlineClassroomService
                 'type' => $values['type'], 'title' => trim($values['title']), 'content' => $values['content'] ?? '',
                 'links' => json_encode($values['links'] ?? [], JSON_UNESCAPED_UNICODE), 'questions' => json_encode($questions, JSON_UNESCAPED_UNICODE),
                 'status' => $values['status'], 'due_at' => empty($values['due_at']) ? null : Carbon::parse($values['due_at'])->setTimezone(config('app.timezone'))->toDateTimeString(), 'updated_at' => now()];
+            if (Schema::hasColumn('learning_classroom_activities', 'classroom_unit_id')) {
+                $stored['classroom_unit_id'] = $unitId;
+            }
             if ($id === null) {
                 $id = DB::table('learning_classroom_activities')->insertGetId([...$stored, 'district_id' => $districtId, 'created_by' => $viewer->id, 'created_at' => now()]);
             } else {
@@ -410,7 +436,7 @@ final class OnlineClassroomService
         }
         unset($question);
 
-        return ['id' => (string) $row->id, 'subject_code' => $row->subject_code, 'subject_name' => $row->subject_name,
+        return ['id' => (string) $row->id, 'unit_id' => ($row->classroom_unit_id ?? null) === null ? null : (string) $row->classroom_unit_id, 'subject_code' => $row->subject_code, 'subject_name' => $row->subject_name,
             'education_level' => (int) $row->education_level, 'target_group' => $row->target_group, 'type' => $row->type,
             'title' => $row->title, 'content' => $row->content ?? '', 'links' => $this->decode($row->links), 'status' => $row->status,
             'due_at' => $row->due_at === null ? null : Carbon::parse($row->due_at)->toIso8601String(), 'questions' => $questions, 'max_score' => round(array_sum(array_column($questions, 'points')), 2),

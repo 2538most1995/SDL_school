@@ -284,8 +284,10 @@ function canSubmitAssignment(assignment: Assignment, readOnly: boolean): boolean
     return !readOnly && assignment.status === 'open' && (!assignment.opens_at || Date.parse(assignment.opens_at) <= now);
 }
 
-export function AssignmentWorkspacePage({ subject, embedded = false, initialAssignmentId = '', onDirty, onBusy }: {
+export function AssignmentWorkspacePage({ subject, unitId, unitTargetGroup, embedded = false, initialAssignmentId = '', onDirty, onBusy }: {
     subject?: Subject;
+    unitId?: string;
+    unitTargetGroup?: string;
     embedded?: boolean;
     initialAssignmentId?: string;
     onDirty?: (dirty: boolean) => void;
@@ -304,10 +306,11 @@ export function AssignmentWorkspacePage({ subject, embedded = false, initialAssi
     const [submissionEditor, setSubmissionEditor] = useState<Assignment | null>(null);
     const [reviewEditor, setReviewEditor] = useState<{ assignment: Assignment; student: AssignmentStudent } | null>(null);
     const params = new URLSearchParams();
+    if (unitId) params.set('unit_id', unitId);
     if (selectedId) params.set('assignment_id', selectedId);
     if (subject) { params.set('subject_code', subject.code); params.set('education_level', String(subject.level)); }
     const query = useQuery({
-        queryKey: ['learning', 'assignment-workspace', role, district, subject?.code ?? '', subject?.level ?? '', selectedId],
+        queryKey: ['learning', 'assignment-workspace', role, district, subject?.code ?? '', subject?.level ?? '', unitId, selectedId],
         queryFn: ({ signal }) => getFeatureDataWithDemo<AssignmentWorkspace>(
             `/api/v1/learning/assignments?${params}`,
             emptyWorkspace,
@@ -440,9 +443,9 @@ export function AssignmentWorkspacePage({ subject, embedded = false, initialAssi
 
         {canManage && !embedded && <aside className="mt-5 flex flex-col gap-3 rounded-2xl border border-brand-200 bg-brand-50 p-4 text-sm text-brand-950 sm:flex-row sm:items-center sm:justify-between"><div><p className="font-black">ข้อมูลรายวิชาและผู้เรียนเชื่อมจากระบบลงทะเบียน</p><p className="mt-1 leading-6 text-brand-800">หน้านี้แสดงเฉพาะภาคเรียนปัจจุบันและกลุ่มที่บัญชีครูรับผิดชอบ</p></div></aside>}
 
-        {assignmentEditor && <AssignmentEditor assignment={assignmentEditor} term={data.term} subjects={data.subjects} onBusy={setEditorBusy} onClose={() => closeEditor(() => setAssignmentEditor(null))} onSaved={(id) => { setAssignmentEditor(null); setSelectedId(id); void queryClient.invalidateQueries({ queryKey: ['learning', 'assignment-workspace'] }); void queryClient.invalidateQueries({ queryKey: ['classroom-tasks'] }); }} />}
-        {submissionEditor && <SubmissionEditor assignment={submissionEditor} onBusy={setEditorBusy} onClose={() => closeEditor(() => setSubmissionEditor(null))} onSaved={() => { setSubmissionEditor(null); void queryClient.invalidateQueries({ queryKey: ['learning', 'assignment-workspace'] }); void queryClient.invalidateQueries({ queryKey: ['classroom-tasks'] }); }} />}
-        {reviewEditor && <ReviewEditor assignment={reviewEditor.assignment} student={reviewEditor.student} onBusy={setEditorBusy} onClose={() => closeEditor(() => setReviewEditor(null))} onSaved={() => { setReviewEditor(null); void queryClient.invalidateQueries({ queryKey: ['learning', 'assignment-workspace'] }); void queryClient.invalidateQueries({ queryKey: ['classroom-tasks'] }); }} />}
+        {assignmentEditor && <AssignmentEditor unitId={unitId} unitTargetGroup={unitTargetGroup} assignment={assignmentEditor} term={data.term} subjects={subject ? [subject] : data.subjects} onBusy={setEditorBusy} onClose={() => closeEditor(() => setAssignmentEditor(null))} onSaved={(id) => { setAssignmentEditor(null); setSelectedId(id); void queryClient.invalidateQueries({ queryKey: ['learning', 'assignment-workspace'] }); void queryClient.invalidateQueries({ queryKey: ['classroom-tasks'] }); void queryClient.invalidateQueries({ queryKey: ['classroom-units'] }); void queryClient.invalidateQueries({ queryKey: ['online-classroom'] }); }} />}
+        {submissionEditor && <SubmissionEditor assignment={submissionEditor} onBusy={setEditorBusy} onClose={() => closeEditor(() => setSubmissionEditor(null))} onSaved={() => { setSubmissionEditor(null); void queryClient.invalidateQueries({ queryKey: ['learning', 'assignment-workspace'] }); void queryClient.invalidateQueries({ queryKey: ['classroom-tasks'] }); void queryClient.invalidateQueries({ queryKey: ['classroom-units'] }); void queryClient.invalidateQueries({ queryKey: ['online-classroom'] }); }} />}
+        {reviewEditor && <ReviewEditor assignment={reviewEditor.assignment} student={reviewEditor.student} onBusy={setEditorBusy} onClose={() => closeEditor(() => setReviewEditor(null))} onSaved={() => { setReviewEditor(null); void queryClient.invalidateQueries({ queryKey: ['learning', 'assignment-workspace'] }); void queryClient.invalidateQueries({ queryKey: ['classroom-tasks'] }); void queryClient.invalidateQueries({ queryKey: ['classroom-units'] }); void queryClient.invalidateQueries({ queryKey: ['online-classroom'] }); }} />}
     </div>;
 }
 
@@ -517,14 +520,14 @@ function ModalShell({ title, description, onClose, children, wide = false }: { t
     return <div className="fixed inset-0 z-[70] grid place-items-center overflow-y-auto bg-slate-950/55 p-3" role="dialog" aria-modal="true"><section className={`my-auto w-full overflow-hidden rounded-2xl bg-white shadow-2xl ${wide ? 'max-w-3xl' : 'max-w-2xl'}`}><header className="flex items-start justify-between gap-4 border-b border-slate-100 p-5"><div><h2 className="text-xl font-black text-slate-950">{title}</h2>{description && <p className="mt-1 text-sm leading-6 text-slate-500">{description}</p>}</div><button type="button" onClick={onClose} className="grid size-9 shrink-0 place-items-center rounded-xl text-slate-600 hover:bg-slate-100" aria-label="ปิด"><X size={20} /></button></header>{children}</section></div>;
 }
 
-function AssignmentEditor({ assignment, term, subjects, onClose, onSaved, onBusy }: { assignment: Assignment | 'new'; term: string | null; subjects: AssignmentSubject[]; onClose: () => void; onSaved: (id: string) => void; onBusy: (busy: boolean) => void }) {
+function AssignmentEditor({ unitId, unitTargetGroup, assignment, term, subjects, onClose, onSaved, onBusy }: { unitId?: string; unitTargetGroup?: string; assignment: Assignment | 'new'; term: string | null; subjects: AssignmentSubject[]; onClose: () => void; onSaved: (id: string) => void; onBusy: (busy: boolean) => void }) {
     const { role } = useDemoRole();
-    const initial: AssignmentDraft = assignment === 'new' ? { ...emptyDraft, subject_code: subjects[0]?.code ?? '', education_level: String(subjects[0]?.level ?? ''), target_group: role === 'teacher' ? subjects[0]?.groups[0]?.code ?? '' : '' } : {
+    const initial: AssignmentDraft = assignment === 'new' ? { ...emptyDraft, subject_code: subjects[0]?.code ?? '', education_level: String(subjects[0]?.level ?? ''), target_group: unitTargetGroup || (role === 'teacher' ? subjects[0]?.groups[0]?.code ?? '' : '') } : {
         title: assignment.title,
         instructions: assignment.instructions,
         subject_code: assignment.subject_code,
         education_level: String(assignment.education_level ?? ''),
-        target_group: assignment.target_group || (role === 'teacher' ? subjects.find(item => item.code === assignment.subject_code && item.level === assignment.education_level)?.groups[0]?.code ?? '' : ''),
+        target_group: assignment.target_group || unitTargetGroup || (role === 'teacher' ? subjects.find(item => item.code === assignment.subject_code && item.level === assignment.education_level)?.groups[0]?.code ?? '' : ''),
         max_score: String(assignment.max_score),
         opens_at: localDateTime(assignment.opens_at),
         due_at: localDateTime(assignment.due_at),
@@ -540,6 +543,7 @@ function AssignmentEditor({ assignment, term, subjects, onClose, onSaved, onBusy
     const save = useMutation({
         mutationFn: () => {
             const payload = new FormData();
+            if (unitId) payload.append('unit_id', unitId);
             payload.append('title', draft.title);
             payload.append('instructions', draft.instructions);
             payload.append('subject_code', draft.subject_code);
@@ -565,7 +569,7 @@ function AssignmentEditor({ assignment, term, subjects, onClose, onSaved, onBusy
     useEffect(() => { onBusy(save.isPending); return () => onBusy(false); }, [save.isPending, onBusy]);
     const chooseSubject = (value: string) => {
         const [level, code] = value.split('|');
-        setDraft({ ...draft, subject_code: code ?? '', education_level: level ?? '', target_group: role === 'teacher' ? subjects.find(item => item.code === code && item.level === Number(level))?.groups[0]?.code ?? '' : '' });
+        setDraft({ ...draft, subject_code: code ?? '', education_level: level ?? '', target_group: unitTargetGroup || (role === 'teacher' ? subjects.find(item => item.code === code && item.level === Number(level))?.groups[0]?.code ?? '' : '') });
     };
     const chooseFile = (file: File | null) => {
         setClientError('');
@@ -601,7 +605,7 @@ function AssignmentEditor({ assignment, term, subjects, onClose, onSaved, onBusy
                     <div className="sm:col-span-2"><h3 id="assignment-basic-heading" className="font-black text-slate-950">รายละเอียดงาน</h3><p className="mt-1 text-sm text-slate-500">ชื่อและคำชี้แจงส่วนนี้จะแสดงให้นักศึกษาอ่านก่อนส่งงาน</p></div>
                     <label className="sm:col-span-2"><span className="mb-1.5 block text-sm font-bold text-slate-700">ชื่องาน *</span><input required maxLength={220} value={draft.title} onChange={(event) => setDraft({ ...draft, title: event.target.value })} placeholder="เช่น สรุปบทเรียนหน่วยที่ 1" className="h-11 w-full rounded-xl border border-slate-300 px-3 text-slate-950 outline-none placeholder:text-slate-400 focus:border-brand-600 focus:ring-2 focus:ring-brand-100" /></label>
                     <div className="sm:col-span-2"><ChoiceButtons label="รายวิชาที่ลงทะเบียน" value={draft.education_level && draft.subject_code ? `${draft.education_level}|${draft.subject_code}` : ''} options={subjects.map(subject => [`${subject.level}|${subject.code}`, `${subject.code} ${subject.name} (${subject.level_label})`])} onChange={chooseSubject} /></div>
-                    <div className="sm:col-span-2"><ChoiceButtons label="กลุ่มเป้าหมาย" value={draft.target_group} options={[...(role === 'teacher' ? [] : [["", "ผู้เรียนทุกกลุ่มในรายวิชา"] as [string, string]]), ...(selectedSubject?.groups ?? []).map(group => [group.code, `${group.name} (${group.code})`] as [string, string])]} onChange={value => setDraft({ ...draft, target_group: value })} /></div>
+                    <div className="sm:col-span-2"><ChoiceButtons label="กลุ่มเป้าหมาย" value={draft.target_group} options={[...(role === 'teacher' || unitTargetGroup ? [] : [["", "ผู้เรียนทุกกลุ่มในรายวิชา"] as [string, string]]), ...(selectedSubject?.groups ?? []).map(group => [group.code, `${group.name} (${group.code})`] as [string, string])]} onChange={value => setDraft({ ...draft, target_group: value })} /></div>
                     <label className="sm:col-span-2"><span className="mb-1.5 block text-sm font-bold text-slate-700">คำชี้แจงและสิ่งที่ต้องส่ง</span><textarea rows={5} maxLength={10000} value={draft.instructions} onChange={(event) => setDraft({ ...draft, instructions: event.target.value })} placeholder="อธิบายขั้นตอน รูปแบบงาน และเกณฑ์ที่ต้องการให้นักศึกษาทำ" className="w-full rounded-xl border border-slate-300 p-3 text-slate-950 outline-none placeholder:text-slate-400 focus:border-brand-600 focus:ring-2 focus:ring-brand-100" /></label>
                 </section>
 

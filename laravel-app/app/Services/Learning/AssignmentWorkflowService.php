@@ -20,7 +20,7 @@ final readonly class AssignmentWorkflowService
     ) {}
 
     /** @return array<string, mixed> */
-    public function workspace(User $viewer, int $districtId, ?int $selectedAssignmentId = null, ?string $subjectCode = null, ?int $educationLevel = null): array
+    public function workspace(User $viewer, int $districtId, ?int $selectedAssignmentId = null, ?string $subjectCode = null, ?int $educationLevel = null, mixed $unitId = null): array
     {
         $catalog = $this->classroom->catalog($viewer, $districtId);
         $term = $catalog['term'];
@@ -50,6 +50,7 @@ final readonly class AssignmentWorkflowService
             ->when($selectedAssignmentId !== null, fn ($builder) => $builder->orderByRaw('CASE WHEN assignment.id = ? THEN 0 ELSE 1 END', [$selectedAssignmentId]))
             ->orderByDesc('assignment.created_at')
             ->limit(250);
+        app(ClassroomUnitContentScope::class)->apply($query, $viewer, $districtId, 'assignment', $unitId, $catalog);
         $assignmentRows = $query->get();
         $assignmentIds = $assignmentRows->pluck('id')->map(static fn ($id): int => (int) $id)->all();
         $lockedIds = $this->database->connection()->getSchemaBuilder()->hasTable('learning_classroom_task_items')
@@ -191,6 +192,7 @@ final readonly class AssignmentWorkflowService
             $before = $this->ownedAssignment($viewer, $districtId, $assignmentId, true);
             ClassroomTaskService::assertContentEditable('assignment', $assignmentId);
         }
+        $resolvedUnit = app(ClassroomUnitService::class)->validateContentUnit($viewer, $districtId, $values, $before, $catalog);
         $stored = [
             'academic_term' => $term,
             'subject_code' => $subject['code'],
@@ -207,6 +209,9 @@ final readonly class AssignmentWorkflowService
             'material_url' => trim((string) ($values['material_url'] ?? '')) ?: null,
             'updated_at' => now(),
         ];
+        if ($resolvedUnit !== null || array_key_exists('unit_id', $values)) {
+            $stored['classroom_unit_id'] = $resolvedUnit;
+        }
         // Older production installations used a required `subject` column.
         // Keep it populated while the normalized subject_code/subject_name
         // columns remain the source of truth for the current workflow.
@@ -225,10 +230,14 @@ final readonly class AssignmentWorkflowService
                 $stored,
                 $districtId,
                 $viewer,
+                $values,
+                $before,
+                $catalog,
                 $materialFile,
                 $removeMaterial,
                 &$newMaterialPath,
             ): int {
+                app(ClassroomUnitService::class)->validateContentUnit($viewer, $districtId, $values, $before, $catalog);
                 $savedId = $assignmentId;
                 if ($savedId === null) {
                     $savedId = (int) $connection->table('learning_assignments')->insertGetId([
@@ -509,6 +518,7 @@ final readonly class AssignmentWorkflowService
         abort_unless($submission !== null && in_array($submission->submission_type, ['pdf', 'image'], true), 404);
         if ($viewer->role === 'student') {
             app(StudentIdentityGuard::class)->assertUnambiguous($viewer);
+            $this->workspace($viewer, $districtId, $assignmentId);
             abort_unless((string) $submission->student_code === trim((string) ($viewer->student_code ?: $viewer->username)), 404);
         } elseif ($viewer->role === 'teacher') {
             abort_unless((int) $submission->created_by === (int) $viewer->id, 404);
@@ -549,6 +559,7 @@ final readonly class AssignmentWorkflowService
         abort_unless($attachment !== null, 404);
         if ($viewer->role === 'student') {
             app(StudentIdentityGuard::class)->assertUnambiguous($viewer);
+            $this->workspace($viewer, $districtId, $assignmentId);
             abort_unless((string) $attachment->student_code === trim((string) ($viewer->student_code ?: $viewer->username)), 404);
         } elseif ($viewer->role === 'teacher') {
             abort_unless((int) $attachment->created_by === (int) $viewer->id, 404);
@@ -643,6 +654,7 @@ final readonly class AssignmentWorkflowService
             'subject_name' => (string) ($assignment->subject_name ?: $assignment->subject_code),
             'education_level' => $assignment->education_level === null ? null : (int) $assignment->education_level,
             'target_group' => (string) ($assignment->target_value ?? ''),
+            'unit_id' => isset($assignment->classroom_unit_id) ? (string) $assignment->classroom_unit_id : null,
             'max_score' => (float) ($assignment->max_score ?? 0),
             'opens_at' => $assignment->opens_at,
             'due_at' => $assignment->due_at,

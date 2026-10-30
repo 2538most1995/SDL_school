@@ -3,6 +3,8 @@
 namespace App\Http\Controllers\Api\Learning;
 
 use App\Http\Controllers\Controller;
+use App\Services\Learning\ClassroomUnitContentScope;
+use App\Services\Learning\ClassroomUnitService;
 use App\Services\Learning\DistrictLearningGroupCatalog;
 use Illuminate\Database\DatabaseManager;
 use Illuminate\Http\JsonResponse;
@@ -41,6 +43,9 @@ final class LearningContentController extends Controller
 
         try {
             $id = $this->write()->transaction(function () use ($request, $kind, $values, $stored, $compatibilityValues, $actor, &$storedImagePath, &$storedResourcePath): int {
+                if (in_array($kind, ['resources', 'assignments'], true)) {
+                    app(ClassroomUnitService::class)->validateContentUnit($request->user(), $this->districtId($request), $values);
+                }
                 $id = (int) $this->write()->table($this->table($kind))->insertGetId([
                     ...$stored,
                     ...$compatibilityValues,
@@ -108,7 +113,10 @@ final class LearningContentController extends Controller
                 $kind === 'resources' && $this->usesExternalUrl($values) => ['storage_disk' => null, 'storage_path' => null],
                 default => [],
             };
-            $updated = $this->write()->transaction(function () use ($request, $kind, $content, $stored, $compatibilityValues, $media, $resourceMedia, $values): int {
+            $updated = $this->write()->transaction(function () use ($request, $kind, $content, $stored, $compatibilityValues, $media, $resourceMedia, $values, $row): int {
+                if (in_array($kind, ['resources', 'assignments'], true)) {
+                    app(ClassroomUnitService::class)->validateContentUnit($request->user(), $this->districtId($request), $values, $row);
+                }
                 $updated = $this->write()->table($this->table($kind))
                     ->where('id', $content)->where('district_id', $this->districtId($request))
                     ->when($request->user()->role === 'teacher', fn ($query) => $query->where($this->actorColumn($kind), $this->actorId($request)))
@@ -213,6 +221,9 @@ final class LearningContentController extends Controller
             ],
             default => abort(404),
         };
+        if (in_array($kind, ['resources', 'assignments'], true)) {
+            $rules['unit_id'] = ClassroomUnitContentScope::rules();
+        }
         $values = $request->validate($rules);
         if ($kind === 'resources') {
             $external = $this->usesExternalUrl($values);
@@ -258,6 +269,13 @@ final class LearningContentController extends Controller
             }
         }
 
+        if (in_array($kind, ['resources', 'assignments'], true)) {
+            $unitId = app(ClassroomUnitService::class)->validateContentUnit($request->user(), $this->districtId($request), $values, $existing);
+            if ($unitId !== null || array_key_exists('unit_id', $values)) {
+                $values['classroom_unit_id'] = $unitId;
+            }
+        }
+
         return $values;
     }
 
@@ -275,6 +293,10 @@ final class LearningContentController extends Controller
             abort_if($kind !== 'resources' && $row->target_type !== 'group', 404);
         }
 
+        if (in_array($kind, ['resources', 'assignments'], true)) {
+            app(ClassroomUnitService::class)->assertContentAccessible($request->user(), $this->districtId($request), $row);
+        }
+
         return $row;
     }
 
@@ -288,7 +310,7 @@ final class LearningContentController extends Controller
      */
     private function storedValues(string $kind, array $values): array
     {
-        return match ($kind) {
+        return [...(array_key_exists('classroom_unit_id', $values) ? ['classroom_unit_id' => $values['classroom_unit_id']] : []), ...match ($kind) {
             'assignments' => [
                 'title' => $values['title'],
                 'subject_code' => $values['subject'],
@@ -334,7 +356,7 @@ final class LearningContentController extends Controller
                     : []),
             ],
             default => abort(404),
-        };
+        }];
     }
 
     private function actorColumn(string $kind): string

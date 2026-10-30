@@ -4,6 +4,7 @@ namespace App\Services\Legacy;
 
 use App\Domain\Students\Support\AcademicTerm;
 use App\Models\User;
+use App\Services\Learning\ClassroomUnitContentScope;
 use App\Services\Learning\DistrictLearningGroupCatalog;
 use Illuminate\Database\ConnectionInterface;
 use Illuminate\Database\DatabaseManager;
@@ -28,6 +29,7 @@ final class LegacyPortalReadService
             ->where('a.district_id', $districtId);
 
         $this->scopeTargetedContent($query, $viewer, 'a');
+        app(ClassroomUnitContentScope::class)->apply($query, $viewer, $districtId, 'a');
 
         if ($viewer->role === 'student') {
             $studentCode = (string) ($viewer->student_code ?: $viewer->username);
@@ -89,6 +91,7 @@ final class LegacyPortalReadService
                     'description' => (string) ($row->instructions ?? ''), 'due_at' => $row->due_at,
                     'target_group' => (string) ($row->target_value ?? ''), 'target_mode' => (string) $row->target_type,
                     'status' => (string) $row->status,
+                    'unit_id' => isset($row->classroom_unit_id) ? (string) $row->classroom_unit_id : null,
                 ],
             ];
         })->all();
@@ -113,6 +116,7 @@ final class LegacyPortalReadService
             });
         }
         $this->scopeGroupContent($query, $viewer, 'resource', 'target_group', 'uploaded_by');
+        app(ClassroomUnitContentScope::class)->apply($query, $viewer, $districtId, 'resource', $classroomFilters['unit_id'] ?? null);
 
         if (isset($classroomFilters['subject_code'])) {
             $query->where(fn (Builder $scope) => $scope
@@ -176,6 +180,7 @@ final class LegacyPortalReadService
                     'file_extension' => in_array(strtolower(pathinfo((string) ($row->storage_path ?? ''), PATHINFO_EXTENSION)), ['pdf', 'doc', 'docx', 'ppt', 'pptx', 'xls', 'xlsx', 'zip'], true)
                         ? strtolower(pathinfo((string) $row->storage_path, PATHINFO_EXTENSION)) : '',
                     'target_group' => (string) ($row->target_group ?? ''),
+                    'unit_id' => isset($row->classroom_unit_id) ? (string) $row->classroom_unit_id : null,
                 ],
             ];
         })->all();
@@ -338,6 +343,7 @@ final class LegacyPortalReadService
                 ->where(fn (Builder $scope) => $scope->whereIn('student.group_code', $groups)->orWhereIn('student.group_name', $groups));
         }
 
+        app(ClassroomUnitContentScope::class)->apply($query, $viewer, $districtId, 'assignment');
         $rows = $query->whereIn('submission.status', ['submitted', 'reviewed'])
             ->orderByDesc('submission.created_at')->limit(250)->get();
         $courses = $rows->map(static fn (object $row): array => [

@@ -5,6 +5,7 @@ namespace App\Http\Controllers\Api\Learning;
 use App\Http\Controllers\Controller;
 use App\Services\AuditService;
 use App\Services\Learning\ClassroomTaskService;
+use App\Services\Learning\ClassroomUnitContentScope;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Validation\Rule;
@@ -16,7 +17,7 @@ final class ClassroomTaskController extends Controller
     public function index(Request $request): JsonResponse
     {
         $this->service->ready();
-        $values = $request->validate(['subject_code' => ['nullable', 'string', 'max:32'], 'education_level' => ['required_with:subject_code', 'nullable', 'integer', 'in:1,2,3'], 'page' => ['nullable', 'integer', 'min:1']]);
+        $values = $request->validate(['unit_id' => ClassroomUnitContentScope::rules(), 'subject_code' => ['nullable', 'string', 'max:32'], 'education_level' => ['required_with:subject_code', 'nullable', 'integer', 'in:1,2,3'], 'page' => ['nullable', 'integer', 'min:1']]);
 
         return $this->response($this->service->listing($request->user(), $this->district($request), $values));
     }
@@ -63,7 +64,7 @@ final class ClassroomTaskController extends Controller
 
     private function courseRules(): array
     {
-        return ['subject_code' => ['required', 'string', 'max:32'], 'education_level' => ['required', 'integer', 'in:1,2,3']];
+        return ['unit_id' => ClassroomUnitContentScope::rules(), 'subject_code' => ['required', 'string', 'max:32'], 'education_level' => ['required', 'integer', 'in:1,2,3']];
     }
 
     private function district(Request $request): int
