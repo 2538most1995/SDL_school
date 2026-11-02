@@ -61,6 +61,7 @@ final class StudentDataOmrCatalogApiTest extends TestCase
             ->assertJsonPath('data.0.code', 'TH1001')
             ->assertJsonPath('data.0.name', 'ภาษาไทย')
             ->assertJsonPath('data.0.student_count', 2)
+            ->assertJsonPath('data.0.levels', [2])
             ->assertJsonPath('meta.total', 1);
 
         $this->withHeaders($headers)

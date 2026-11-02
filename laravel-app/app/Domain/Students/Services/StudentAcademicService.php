@@ -402,8 +402,12 @@ final readonly class StudentAcademicService
                     'code' => $subjectCode,
                     'name' => trim($grade->subjectName) ?: $subjectCode,
                     '_students' => [],
+                    '_levels' => [],
                 ];
                 $subjects[$subjectCode]['_students'][$studentKey] = true;
+                if (in_array((int) $student->level, [1, 2, 3], true)) {
+                    $subjects[$subjectCode]['_levels'][(int) $student->level] = true;
+                }
 
                 $groups[$subjectCode][$groupCode] ??= [
                     'id' => $groupCode,
@@ -423,7 +427,18 @@ final readonly class StudentAcademicService
         $subjectRows = [];
         foreach ($subjects as $subject) {
             $studentCount = count($subject['_students']);
-            unset($subject['_students']);
+            $subject['levels'] = array_keys($subject['_levels']);
+            if (empty($subject['levels'])) {
+                if (preg_match('/^[a-zก-๙]{2}1\d{3,4}$/ui', $subject['code'])) {
+                    $subject['levels'] = [1];
+                } elseif (preg_match('/^[a-zก-๙]{2}2\d{3,4}$/ui', $subject['code'])) {
+                    $subject['levels'] = [2];
+                } elseif (preg_match('/^[a-zก-๙]{2}3\d{3,4}$/ui', $subject['code'])) {
+                    $subject['levels'] = [3];
+                }
+            }
+            sort($subject['levels'], SORT_NUMERIC);
+            unset($subject['_students'], $subject['_levels']);
             $subject['student_count'] = $studentCount;
             $subjectRows[] = $subject;
         }
