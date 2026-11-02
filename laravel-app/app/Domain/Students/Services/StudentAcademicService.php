@@ -429,15 +429,17 @@ final readonly class StudentAcademicService
             $studentCount = count($subject['_students']);
             $subject['levels'] = array_keys($subject['_levels']);
             if (empty($subject['levels'])) {
-                if (preg_match('/^[a-zก-๙]{2}1\d{3,4}$/ui', $subject['code'])) {
+                $cleanCode = preg_replace('/\s+/u', '', (string) $subject['code']) ?? '';
+                if (preg_match('/^[a-zก-๙]{2}1\d{3,4}$/ui', $cleanCode)) {
                     $subject['levels'] = [1];
-                } elseif (preg_match('/^[a-zก-๙]{2}2\d{3,4}$/ui', $subject['code'])) {
+                } elseif (preg_match('/^[a-zก-๙]{2}2\d{3,4}$/ui', $cleanCode)) {
                     $subject['levels'] = [2];
-                } elseif (preg_match('/^[a-zก-๙]{2}3\d{3,4}$/ui', $subject['code'])) {
+                } elseif (preg_match('/^[a-zก-๙]{2}3\d{3,4}$/ui', $cleanCode)) {
                     $subject['levels'] = [3];
                 }
             }
             sort($subject['levels'], SORT_NUMERIC);
+            $subject['level'] = count($subject['levels']) === 1 ? $subject['levels'][0] : ($subject['levels'][0] ?? null);
             unset($subject['_students'], $subject['_levels']);
             $subject['student_count'] = $studentCount;
             $subjectRows[] = $subject;
