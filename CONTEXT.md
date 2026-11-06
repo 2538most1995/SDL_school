@@ -1,5 +1,9 @@
 # SDL School Context
 
+## ZAP response-header fixes (2026-11-06)
+
+HTML now uses a fresh request nonce for Vite, Emotion/MUI, print templates and student N-NET print styles. Script event attributes are blocked; registration printing binds its click from a nonced script. SweetAlert uses its CSS-free module with the already bundled stylesheet. Inline style attributes remain explicitly permitted for Material UI positioning and dynamic CSS properties, while inline style blocks require a nonce. Security headers run before early middleware and on rendered exceptions; HTML uses private/no-store caching. App-local Apache rules cover static nosniff/HTTPS HSTS without adding CORS or a second CSP. Existing HSTS remains host-wide and includes subdomains; no parent/vhost policy is changed. Integration API authentication, district scope, routes and JSON contracts remain unchanged. The report's domain-root `/robots.txt` error and nginx-served static assets require hosting-level follow-up; source changes alone do not verify production remediation.
+
 ## Course activity containers (2026-10-30)
 
 The online classroom now navigates course → named activity container → video / knowledge / worksheet / quiz. Teachers create, edit and delete empty containers in their own current course groups; published units are visible to registered students while drafts block direct content, image, file and submission access. Existing unbound content is presented as a virtual “บทเรียนและงานเดิม” container, retaining original IDs and evidence. Content editors and task options use an exact unit filter; task links carry parent IDs. Nonempty units cannot be deleted or retargeted, and issued work blocks parent publication changes. Migration `2026_10_30_000043_create_classroom_units.php` is required; no production DB changes were made.

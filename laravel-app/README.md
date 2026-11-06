@@ -1,5 +1,15 @@
 # Sena Care School Laravel
 
+## แก้ header ตามรายงาน ZAP (6 พฤศจิกายน 2569)
+
+ใช้ CSP nonce แยกทุก response สำหรับ Vite, Material UI และหน้าพิมพ์ แทน `unsafe-inline` ใน `script-src`/`style-src` พร้อมป้องกัน inline event handler และไม่ cache หน้า HTML ที่มี nonce/CSRF ส่วน `style-src-attr 'unsafe-inline'` ยังจำเป็นสำหรับตำแหน่ง/ขนาดของ Material UI การปรับนี้ไม่เปลี่ยน Bearer token, `X-Student-Data-Token`, CORS, endpoint, query, JSON หรือสิทธิ์อำเภอของ API เชื่อมต่อเว็บไซต์อื่น ไม่เพิ่ม migration และไม่ต้องออก token ใหม่
+
+หลังดึง Git ให้ใช้ build ที่แนบใน Git แล้วรัน `php artisan optimize:clear` หาก build เองให้ใช้ `npm ci`, `npm run typecheck`, `npm run build` ตั้ง production เป็น `APP_DEBUG=false` และรักษา session cookie แบบ HttpOnly ส่วน `XSRF-TOKEN` อ่านจาก JavaScript ได้ตามกลไก CSRF ของ Laravel จึงไม่ควรเปลี่ยนเพื่อปิดคำเตือนเพียงอย่างเดียว
+
+`.htaccess` ในโครงการและ `public` เพิ่ม `X-Content-Type-Options: nosniff` และ HSTS เมื่อ HTTPS สำหรับ Apache ถ้า Plesk/nginx ส่ง static โดยไม่ผ่าน Apache ต้องตั้งสอง header นี้ใน **location ของ `/SDL_school/build/` บน HTTPS vhost** โดยรักษา alias/root และชนิด MIME เดิม ห้ามเพิ่ม CSP ทับ HTML ที่มี nonce หรือเพิ่ม CORS wildcard และห้ามคัดลอกกฎไปยัง parent ของทุกเว็บไซต์ ตรวจ `nginx -t` ก่อน reload ตามกระบวนการโฮสติ้ง HSTS เป็นนโยบายทั้ง hostname แม้ส่งจาก path ย่อย ค่า `max-age=31536000; includeSubDomains` รอบนี้คงเท่าที่แอปส่งอยู่เดิม ไม่ใช่นโยบายที่จำกัดผลได้ด้วย path
+
+รายงานยังพบ `https://krumost.com/robots.txt` ตอบ Apache 500 และ ErrorDocument ล้มซ้ำที่รากโดเมน ซึ่งอยู่นอก `/SDL_school` ต้องให้ผู้ดูแลโฮสติ้งตรวจ error log และการตั้งค่า root/ErrorDocument ของเว็บไซต์เจ้าของ path นั้น แล้วสแกนยืนยันหลัง deploy รอบนี้ไม่ได้แก้ parent/vhost, ไม่ได้รัน migration กับฐานจริง และไม่ถือว่ารายงานเดิมทุกข้อหายบน production แล้ว
+
 ## กิจกรรมรายวิชาและเนื้อหาภายใน (30 ตุลาคม 2569)
 
 ห้องเรียนออนไลน์ใช้ลำดับ **เลือกวิชา → เลือกกิจกรรม → คลิปวิดีโอ / ใบความรู้ / ใบงาน / แบบทดสอบ** ครูเพิ่ม แก้ไข และลบกิจกรรมที่ยังว่างได้เฉพาะกลุ่มตนเอง เก็บฉบับร่างก่อนเผยแพร่ได้ เนื้อหาและคะแนนเดิมอยู่ในการ์ด **บทเรียนและงานเดิม** หลังดึง Git ให้รัน `php artisan migrate --force` สำหรับ migration `2026_10_30_000043_create_classroom_units.php` และ `php artisan optimize:clear` ภายใน `laravel-app` ใช้ production build ที่แนบใน Git สำรองฐานข้อมูลตามขั้นตอน deploy ปกติก่อน migration รอบพัฒนาไม่ได้รันกับฐานข้อมูลจริง ดู [คู่มือห้องเรียนออนไลน์](docs/online-classroom.md)

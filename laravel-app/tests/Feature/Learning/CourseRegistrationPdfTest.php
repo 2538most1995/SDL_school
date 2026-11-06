@@ -2,6 +2,7 @@
 
 namespace Tests\Feature\Learning;
 
+use App\Domain\Students\Support\CurriculumCatalog;
 use App\Models\District;
 use App\Models\User;
 use Illuminate\Foundation\Testing\RefreshDatabase;
@@ -98,21 +99,27 @@ final class CourseRegistrationPdfTest extends TestCase
         $this->assertStringContainsString('รหัสประจำตัวนักศึกษา', $content);
         $this->assertStringContainsString('Facebook', $content);
         $this->assertStringContainsString('ID Line', $content);
+        $this->assertStringNotContainsString('onclick=', $content);
+        $this->assertStringContainsString('data-print-document', $content);
+        preg_match("/script-src 'self' 'nonce-([^']+)'/", $response->headers->get('Content-Security-Policy'), $nonce);
+        $this->assertNotEmpty($nonce[1] ?? null);
+        $this->assertStringContainsString('<script nonce="'.$nonce[1].'">', $content);
+        $this->assertStringContainsString('<style nonce="'.$nonce[1].'">', $content);
     }
 
     public function test_format_district_center_name_removes_duplicate_prefixes(): void
     {
         $this->assertSame(
             'ศูนย์ส่งเสริมการเรียนรู้ระดับอำเภอเสนา',
-            \App\Domain\Students\Support\CurriculumCatalog::formatDistrictCenterName('สกร.ระดับอำเภอเสนา')
+            CurriculumCatalog::formatDistrictCenterName('สกร.ระดับอำเภอเสนา')
         );
         $this->assertSame(
             'ศูนย์ส่งเสริมการเรียนรู้ระดับอำเภอเสนา',
-            \App\Domain\Students\Support\CurriculumCatalog::formatDistrictCenterName('ศูนย์ส่งเสริมการเรียนรู้ระดับอำเภอสกร.ระดับอำเภอเสนา')
+            CurriculumCatalog::formatDistrictCenterName('ศูนย์ส่งเสริมการเรียนรู้ระดับอำเภอสกร.ระดับอำเภอเสนา')
         );
         $this->assertSame(
             'ศูนย์ส่งเสริมการเรียนรู้ระดับอำเภอไพศาลี',
-            \App\Domain\Students\Support\CurriculumCatalog::formatDistrictCenterName('อำเภอไพศาลี')
+            CurriculumCatalog::formatDistrictCenterName('อำเภอไพศาลี')
         );
     }
 

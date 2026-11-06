@@ -7,6 +7,8 @@
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
     <meta name="csrf-token" content="{{ csrf_token() }}">
+    <meta name="csp-nonce" content="{{ \Illuminate\Support\Facades\Vite::cspNonce() }}" property="csp-nonce" nonce="{{ \Illuminate\Support\Facades\Vite::cspNonce() }}">
+    <meta name="emotion-insertion-point" content="">
     <meta name="app-base-path" content="{{ $appBasePath }}">
     <meta name="theme-color" content="#0c7656">
     <title>SDL School</title>

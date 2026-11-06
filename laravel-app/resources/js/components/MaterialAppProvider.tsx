@@ -1,11 +1,12 @@
 import {
     Box,
     CssBaseline,
-    StyledEngineProvider,
     ThemeProvider,
     createTheme,
     type Theme,
 } from '@mui/material';
+import { CacheProvider } from '@emotion/react';
+import createCache from '@emotion/cache';
 import { useLayoutEffect, useMemo, useState, type CSSProperties, type ReactNode } from 'react';
 import {
     APPEARANCE_CHANGE_EVENT,
@@ -14,6 +15,15 @@ import {
     type AppearanceSettings,
     type ColorScheme,
 } from '../lib/appearance';
+
+// Reuse one nonce-bearing cache, including nested public themes. Keep MUI's
+// styles before application CSS, as StyledEngineProvider injectFirst did.
+const emotionCache = createCache({
+    key: 'css',
+    nonce: document.querySelector<HTMLMetaElement>('meta[name="csp-nonce"]')?.content,
+    insertionPoint: document.querySelector<HTMLMetaElement>('meta[name="emotion-insertion-point"]') ?? undefined,
+    prepend: true,
+});
 
 const brandPalettes: Record<ColorScheme, { light: string; main: string; dark: string; contrastText: string }> = {
     blue: { light: '#dbeafe', main: '#1d4ed8', dark: '#1e3a8a', contrastText: '#ffffff' },
@@ -244,12 +254,12 @@ function MaterialThemeRoot({
     const theme = useMemo(() => buildTheme(settings, mode), [settings, mode]);
 
     return (
-        <StyledEngineProvider injectFirst>
+        <CacheProvider value={emotionCache}>
             <ThemeProvider theme={theme}>
                 <CssBaseline />
                 <Box className="sena-material-root" style={style}>{children}</Box>
             </ThemeProvider>
-        </StyledEngineProvider>
+        </CacheProvider>
     );
 }
 

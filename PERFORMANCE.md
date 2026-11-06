@@ -1,5 +1,9 @@
 # Performance Audit
 
+## ZAP response-header fixes (2026-11-06)
+
+Request nonces use 32 random bytes and request attributes; headers add no database query or external request. One shared Emotion cache retains insertion order across nested themes. SweetAlert reuses the bundled stylesheet instead of injecting a second copy. HTML is private/no-store so a nonce/session-bearing shell cannot be replayed from a shared cache; hashed JS/CSS remain served statically with their existing cache behavior. Apache static header checks passed on isolated HTTP/HTTPS listeners and a separate-site control. MySQL and production web-server timing are Not verified; no schema change or real-data migration was performed.
+
 ## Course activity containers (2026-10-30)
 
 Course units use SQL pagination (50), district/term/course/level filters and the new course composite index. Content counts aggregate per unit/type across three content tables; occupancy checks batch IDs across four child tables instead of querying each card. Exact parent filters run before existing content limits/pagination. Parent authorization reuses the request course catalog when supplied and uses a scoped subquery for content lists, including legacy assignment/score reads. Existing file limits remain. MySQL query plans, live latency and large-roster throughput are Not verified.

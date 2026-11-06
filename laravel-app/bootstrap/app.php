@@ -21,7 +21,7 @@ return Application::configure(basePath: dirname(__DIR__))
     )
     ->withMiddleware(function (Middleware $middleware): void {
         $middleware->statefulApi();
-        $middleware->append(SecurityHeaders::class);
+        $middleware->prepend(SecurityHeaders::class);
         $middleware->prependToPriorityList(ThrottleRequests::class, AuthenticateStudentDataClient::class);
         $middleware->alias([
             'active' => EnsureActiveUser::class,
@@ -32,6 +32,7 @@ return Application::configure(basePath: dirname(__DIR__))
         ]);
     })
     ->withExceptions(function (Exceptions $exceptions): void {
+        $exceptions->respond(fn ($response) => app(SecurityHeaders::class)->apply(request(), $response));
         $exceptions->shouldRenderJsonWhen(
             fn (Request $request) => $request->is('api/*') || $request->expectsJson(),
         );

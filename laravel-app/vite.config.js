@@ -35,6 +35,11 @@ function pdfRenderingAssets() {
 }
 
 export default defineConfig({
+    resolve: {
+        // CSS is already bundled by app.tsx. The all build injects an
+        // unnonced style tag at runtime, which a strict CSP correctly blocks.
+        alias: [{ find: /^sweetalert2$/, replacement: fileURLToPath(new URL('./node_modules/sweetalert2/dist/sweetalert2.esm.js', import.meta.url)) }],
+    },
     // Blade resolves entry URLs for the deployment path. Keep lazy chunks,
     // their CSS and fonts relative so the same build also works in /SDL_school/.
     base: './',

@@ -339,7 +339,7 @@ export function StudentNnetScoreView({
     return (
         <div className="space-y-6">
             {/* Print Styles */}
-            <style>{`
+            <style nonce={document.querySelector<HTMLMetaElement>('meta[name="csp-nonce"]')?.content}>{`
                 @media print {
                     @page { size: A4 portrait; margin: 12mm; }
                     body { background: white !important; color: black !important; }
