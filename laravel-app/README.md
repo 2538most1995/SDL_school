@@ -8,7 +8,7 @@
 
 `.htaccess` ในโครงการและ `public` เพิ่ม `X-Content-Type-Options: nosniff` และ HSTS เมื่อ HTTPS สำหรับ Apache ถ้า Plesk/nginx ส่ง static โดยไม่ผ่าน Apache ต้องตั้งสอง header นี้ใน **location ของ `/SDL_school/build/` บน HTTPS vhost** โดยรักษา alias/root และชนิด MIME เดิม ห้ามเพิ่ม CSP ทับ HTML ที่มี nonce หรือเพิ่ม CORS wildcard และห้ามคัดลอกกฎไปยัง parent ของทุกเว็บไซต์ ตรวจ `nginx -t` ก่อน reload ตามกระบวนการโฮสติ้ง HSTS เป็นนโยบายทั้ง hostname แม้ส่งจาก path ย่อย ค่า `max-age=31536000; includeSubDomains` รอบนี้คงเท่าที่แอปส่งอยู่เดิม ไม่ใช่นโยบายที่จำกัดผลได้ด้วย path
 
-รายงานยังพบ `https://krumost.com/robots.txt` ตอบ Apache 500 และ ErrorDocument ล้มซ้ำที่รากโดเมน ซึ่งอยู่นอก `/SDL_school` ต้องให้ผู้ดูแลโฮสติ้งตรวจ error log และการตั้งค่า root/ErrorDocument ของเว็บไซต์เจ้าของ path นั้น แล้วสแกนยืนยันหลัง deploy รอบนี้ไม่ได้แก้ parent/vhost, ไม่ได้รัน migration กับฐานจริง และไม่ถือว่ารายงานเดิมทุกข้อหายบน production แล้ว
+รายงานเดิมพบ `https://krumost.com/robots.txt` ตอบ Apache 500 และ ErrorDocument ล้มซ้ำที่รากโดเมน ซึ่งอยู่นอก `/SDL_school` แก้บนโฮสติ้งวันที่ 6 พฤศจิกายน 2569 โดยเพิ่มไฟล์ `/httpdocs/robots.txt` จริงเป็นข้อความสองบรรทัด `User-agent: *` และ `Disallow:` เช่นเดียวกับไฟล์ public ของแอป คำขอจึงไม่ตกเข้า fallback เก่าของโดเมนหลัก และตรวจได้ HTTP 200, `text/plain` แล้ว ไม่แก้ `.htaccess` รวม, vhost, API หรือฐานข้อมูล หน้าเข้าสู่ระบบ SDL School และเว็บข้างเคียงสองระบบยังตอบ 200 ส่วน API ที่ไม่มี token ยังคง 401 ไฟล์นี้อยู่นอก repository ของ SDL School จึงต้องรักษาไว้ที่ document root ของโฮสติ้ง กฎ fallback สำหรับ URL อื่นและ header ของ nginx ยังไม่ได้เปลี่ยน และยังต้องสแกนยืนยันหลัง deploy โค้ด security รอบก่อน
 
 ## กิจกรรมรายวิชาและเนื้อหาภายใน (30 ตุลาคม 2569)
 
