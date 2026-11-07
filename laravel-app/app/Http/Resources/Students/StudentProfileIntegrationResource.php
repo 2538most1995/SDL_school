@@ -29,9 +29,10 @@ final class StudentProfileIntegrationResource extends JsonResource
             'ไม่พบข้อมูลนักศึกษา',
         );
 
-        // Explicit projections at every level exclude full/masked citizen IDs,
-        // arbitrary imported columns and future internal profile additions.
+        // Only the canonical student's citizen ID is exported. Explicit
+        // projections exclude arbitrary source fields and relatives' IDs.
         $demographics = $this->fields($this->resource->demographics, ['birth_date', 'gender', 'application_date', 'last_updated']);
+        $demographics['citizen_id'] = $this->resource->citizenId;
         $demographics['age'] = StudentAge::fromBirthDate($demographics['birth_date']);
         $contact = $this->fields($this->resource->contact, ['email', 'email_masked', 'phone_masked']);
         $contact['email'] = $this->resource->email ?? $contact['email'];

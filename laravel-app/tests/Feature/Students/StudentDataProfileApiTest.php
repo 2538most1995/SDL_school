@@ -55,7 +55,7 @@ final class StudentDataProfileApiTest extends TestCase
             ...get_object_vars($this->students[0]),
             'demographics' => [
                 'birth_date' => '01/01/2550', 'age' => 99, 'gender' => 'ชาย', 'application_date' => '01/05/2568',
-                'last_updated' => '01/11/2569', 'citizen_id_masked' => '1-xxxx-xxxxx-xx-1', 'citizen_id' => '1111111111111',
+                'last_updated' => '01/11/2569', 'citizen_id_masked' => '1-xxxx-xxxxx-xx-1', 'citizen_id' => '2222222222222',
                 'raw_source' => ['cardid' => '1111111111111'],
             ],
             'contact' => ['email' => 'student@example.test', 'email_masked' => 's***@example.test', 'cardid' => '1111111111111'],
@@ -91,10 +91,11 @@ final class StudentDataProfileApiTest extends TestCase
         $this->app->instance(StudentRepository::class, $this->repository);
     }
 
-    public function test_profile_exposes_personal_contact_family_and_education_without_citizen_ids(): void
+    public function test_profile_exposes_canonical_student_citizen_id_with_personal_details(): void
     {
         $response = $this->withToken('profile-token')->getJson(self::ENDPOINT)->assertOk()
             ->assertJsonPath('data.code', 'STU001')->assertJsonPath('data.demographics.birth_date', '01/01/2550')
+            ->assertJsonPath('data.demographics.citizen_id', '1111111111111')
             ->assertJsonPath('data.demographics.age', 19)->assertJsonPath('data.contact.phone', '0899999999')
             ->assertJsonPath('data.contact.email', 'original@example.test')
             ->assertJsonPath('data.contact.registered_address', 'บ้านเลขที่ 99 ที่อยู่ทะเบียนลับ')
@@ -109,11 +110,12 @@ final class StudentDataProfileApiTest extends TestCase
             ->assertJsonPath('data.profile.prior_education.school', 'โรงเรียนทดสอบ')
             ->assertJsonPath('data.profile.prior_education.province_label', 'พระนครศรีอยุธยา')
             ->assertJsonPath('meta.data_classification', 'personal_data_sensitive')
-            ->assertJsonPath('meta.citizen_id_included', false)->assertJsonPath('meta.profile_included', true)
+            ->assertJsonPath('meta.citizen_id_included', true)->assertJsonPath('meta.profile_included', true)
             ->assertJsonPath('meta.read_only', true)->assertHeader('Vary', 'Authorization');
         self::assertStringContainsString('no-store', $response->headers->get('Cache-Control'));
         self::assertStringContainsString('private', $response->headers->get('Cache-Control'));
-        foreach (['1111111111111', '1-xxxx-xxxxx-xx-1', 'citizen_id_masked', '"citizen_id"', 'cardid', 'national_id', 'raw_source', 'password', 'token_hash'] as $value) {
+        self::assertSame(1, substr_count($response->getContent(), '1111111111111'));
+        foreach (['2222222222222', '1-xxxx-xxxxx-xx-1', 'citizen_id_masked', 'cardid', 'national_id', 'raw_source', 'password', 'token_hash'] as $value) {
             self::assertStringNotContainsString($value, $response->getContent());
         }
     }
@@ -177,10 +179,11 @@ final class StudentDataProfileApiTest extends TestCase
         $this->profile = [];
         $this->students[0] = new Student(...[
             ...get_object_vars($this->students[0]), 'demographics' => [], 'contact' => [], 'guardian' => [],
-            'phone' => null, 'currentAddress' => null, 'facebookUrl' => null, 'lineId' => null, 'email' => null,
+            'phone' => null, 'currentAddress' => null, 'facebookUrl' => null, 'lineId' => null, 'email' => null, 'citizenId' => null,
         ]);
         $this->withToken('profile-token')->getJson(self::ENDPOINT)->assertOk()
             ->assertJsonPath('data.demographics.birth_date', null)->assertJsonPath('data.demographics.age', null)
+            ->assertJsonPath('data.demographics.citizen_id', null)
             ->assertJsonPath('data.contact.phone', null)->assertJsonPath('data.contact.current_address', null)
             ->assertJsonPath('data.profile.family.father.name', null)->assertJsonPath('data.profile.prior_education.school', null);
     }

@@ -2,7 +2,7 @@
 
 API นี้เป็น read-only สำหรับให้ backend ของเว็บไซต์อื่นอ่านข้อมูลนักศึกษาจากชุดนำเข้า ZIP/DBF ล่าสุดที่สำเร็จของอำเภอหนึ่งแห่ง โดยใช้ Bearer token เฉพาะระบบปลายทาง
 
-ทุก student-data endpoint ไม่ส่งเลขบัตรประชาชนทั้งแบบเต็มและปิดบางส่วน รวมถึง raw/source payload ส่วนวันเกิด ที่อยู่ เบอร์โทร อีเมล ครอบครัวและ social profile ส่งเฉพาะ endpoint รายบุคคล `/students/{student_code}/profile` ที่เพิ่มตามคำขอเท่านั้น endpoint อื่นยังคงข้อมูลขั้นต่ำแบบเดิม
+เลขบัตรประชาชนของนักศึกษา วันเกิด ที่อยู่ เบอร์โทร อีเมล ครอบครัวและ social profile ส่งเฉพาะ endpoint รายบุคคล `/students/{student_code}/profile` ตามคำขอผู้ใช้ endpoint อื่นยังคงข้อมูลขั้นต่ำแบบเดิมและไม่ส่งเลขบัตรประชาชน ทุก endpoint ไม่ส่ง raw/source payload
 
 ชื่อ รหัสนักศึกษา และผลการเรียนยังเป็นข้อมูลส่วนบุคคลทางการศึกษา ผู้ใช้งาน API ต้องเก็บ token ใน secret manager และเรียกจาก backend เท่านั้น ห้ามฝัง token ใน JavaScript, mobile app หรือ repository สาธารณะ Request ที่มี browser `Origin` header จะถูกปฏิเสธด้วย `403`
 
@@ -75,7 +75,7 @@ curl --fail-with-body \
 | `GET` | `/students` | รายชื่อนักศึกษาปัจจุบันแบบแบ่งหน้า |
 | `GET` | `/graduates` | ผู้สำเร็จการศึกษาแยกตามภาคเรียน แบบแบ่งหน้า |
 | `GET` | `/students/{student_code}` | ข้อมูลนักศึกษาหนึ่งคน |
-| `GET` | `/students/{student_code}/profile` | ข้อมูลส่วนบุคคล ติดต่อ ครอบครัว และการศึกษาเดิม โดยไม่มีเลขบัตรประชาชน |
+| `GET` | `/students/{student_code}/profile` | ข้อมูลส่วนบุคคล ติดต่อ ครอบครัว และการศึกษาเดิม พร้อมเลขบัตรประชาชนของนักศึกษา |
 | `GET` | `/students/{student_code}/grades` | เกรดและสรุปหน่วยกิต |
 | `GET` | `/students/{student_code}/kpch` | กิจกรรม กพช. และชั่วโมงสะสม |
 | `GET` | `/students/{student_code}/moral` | ผลประเมินคุณธรรม |
@@ -83,7 +83,7 @@ curl --fail-with-body \
 
 ทุก endpoint รองรับเฉพาะ `GET`/`HEAD` และคืน `Cache-Control: private, no-store` กับ `Vary: Authorization`
 
-### ข้อมูลส่วนบุคคล โดยไม่มีเลขบัตรประชาชน
+### ข้อมูลส่วนบุคคล พร้อมเลขบัตรประชาชนของนักศึกษา
 
 ```bash
 curl --fail-with-body \
@@ -98,7 +98,7 @@ curl --fail-with-body \
 
 | กลุ่ม | ฟิลด์ |
 | --- | --- |
-| `demographics` | `birth_date`, `gender`, `age`, `application_date`, `last_updated` |
+| `demographics` | `citizen_id`, `birth_date`, `gender`, `age`, `application_date`, `last_updated` |
 | `contact` | `phone`, `phone_masked`, `email`, `email_masked`, `registered_address`, `current_address` |
 | `social` | `facebook_url`, `line_id`, `line_url` |
 | `guardian` | `name`, `phone`, `phone_masked`, `relationship` ตามข้อมูลสรุปที่มี |
@@ -114,13 +114,13 @@ metadata ของ endpoint นี้กำหนด:
 {
   "data_classification": "personal_data_sensitive",
   "sensitive_identifiers_included": true,
-  "citizen_id_included": false,
+  "citizen_id_included": true,
   "profile_included": true,
   "read_only": true
 }
 ```
 
-`sensitive_identifiers_included: true` หมายถึงข้อมูลติดต่อส่วนบุคคล เช่น โทรศัพท์/อีเมล; ไม่ได้รวมเลขบัตรประชาชน `citizen_id`, `citizen_id_masked`, `cardid` และคอลัมน์ต้นทางอื่นไม่ถูกส่งออก ทั้งข้อมูลระดับบนและข้อมูลครอบครัว ไม่มี query parameter ที่เปิดให้ขอเลขบัตรได้
+`data.demographics.citizen_id` คืนเลขบัตรประชาชนของนักศึกษาแบบเต็มจากข้อมูลหลัก `Student.citizenId` เป็น string (คงเลขศูนย์นำหน้า) หรือ `null` หากแหล่งข้อมูลไม่มีค่าที่ใช้ได้ ตามคำขอล่าสุด ไม่ต้องส่ง query parameter เพิ่ม `meta.citizen_id_included: true` ระบุว่า endpoint นี้เปิดฟิลด์เลขบัตรแล้ว ส่วน `sensitive_identifiers_included: true` ครอบคลุมทั้งเลขบัตรและข้อมูลติดต่อ เลขบัตรของญาติ/ผู้ปกครอง, `citizen_id_masked`, `cardid` และ raw/source fields ยังไม่ถูกส่งออก และ endpoint อื่นไม่เพิ่มเลขบัตรประชาชน
 
 อำเภอถูกกำหนดจาก token เสมอ รวมถึงเจ้าของ role `super_admin`; นักศึกษานอกอำเภอหรือไม่พบข้อมูลตอบ `404` ไม่รับ `district_id`/`X-District-Id` และปฏิเสธ browser `Origin` ตามเดิม รองรับ header สำรอง `X-Student-Data-Token` พร้อม expiry/revocation/owner/district checks, rate limit และ `Cache-Control: private, no-store` เช่นเดียวกับ endpoint เดิม
 

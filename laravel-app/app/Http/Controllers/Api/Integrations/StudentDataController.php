@@ -139,7 +139,7 @@ final class StudentDataController extends StudentsApiController
             'meta' => $this->integrationMeta([
                 'data_classification' => 'personal_data_sensitive',
                 'sensitive_identifiers_included' => true,
-                'citizen_id_included' => false,
+                'citizen_id_included' => true,
                 'profile_included' => true,
             ]),
         ]);

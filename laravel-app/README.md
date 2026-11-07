@@ -1,8 +1,8 @@
 # Sena Care School Laravel
 
-## API ข้อมูลส่วนบุคคลโดยไม่มีเลขบัตรประชาชน (7 พฤศจิกายน 2569)
+## API ข้อมูลส่วนบุคคลพร้อมเลขบัตรประชาชน (7 พฤศจิกายน 2569)
 
-เพิ่ม `GET /api/v1/integrations/student-data/students/{รหัสนักศึกษา}/profile` สำหรับ backend ภายนอก ใช้ token เดิมที่มี `student-data:read` และรับ `level=1|2|3` เพื่อแยกรหัสซ้ำ ส่งข้อมูลส่วนบุคคล ที่อยู่ โทรศัพท์ อีเมล social ครอบครัว และการศึกษาเดิมตามที่แหล่งข้อมูลมี โดยไม่ส่งเลขบัตรประชาชนทั้งแบบเต็มและปิดบางส่วน จำกัดอำเภอตาม token แม้เป็น super admin ไม่เพิ่ม migration และไม่ต้องออก token ใหม่ หลังดึง Git รัน `php artisan optimize:clear` ดูรายละเอียดฟิลด์/ตัวอย่างที่ [docs/student-data-api.md](docs/student-data-api.md)
+เพิ่ม `GET /api/v1/integrations/student-data/students/{รหัสนักศึกษา}/profile` สำหรับ backend ภายนอก ใช้ token เดิมที่มี `student-data:read` และรับ `level=1|2|3` เพื่อแยกรหัสซ้ำ ส่งข้อมูลส่วนบุคคล ที่อยู่ โทรศัพท์ อีเมล social ครอบครัว และการศึกษาเดิมตามที่แหล่งข้อมูลมี พร้อมเลขบัตรประชาชนของนักศึกษาแบบเต็มที่ `data.demographics.citizen_id` ตามคำขอล่าสุด คืน `null` หากไม่มีข้อมูล จำกัดอำเภอตาม token แม้เป็น super admin ไม่เพิ่ม migration และไม่ต้องออก token ใหม่ หลังดึง Git รัน `php artisan optimize:clear` ดูรายละเอียดฟิลด์/ตัวอย่างที่ [docs/student-data-api.md](docs/student-data-api.md)
 
 ## API ผู้สำเร็จการศึกษาแยกภาคเรียน (7 พฤศจิกายน 2569)
 
