@@ -801,7 +801,7 @@ function StudentGradesPage() {
         { accessorKey: 'code', header: 'รหัสวิชา', size: 100, meta: { compactSize: 72 } },
         { accessorKey: 'subject', header: 'รายวิชา', size: 280, meta: { compactSize: 168 }, cell: ({ getValue }) => <span className="font-bold text-slate-950">{getValue<string>()}</span> },
         { accessorKey: 'credits', header: 'หน่วยกิต', size: 92, meta: { compactSize: 58, compactTextAlign: 'center' } },
-        { accessorKey: 'grade', header: 'ผลการเรียน', size: 124, meta: { compactSize: 70, compactHeader: 'เกรด', compactTextAlign: 'center' }, cell: ({ getValue }) => { const value = getValue<string>(); const numeric = Number(value); const tone: StatusTone = Number.isFinite(numeric) ? (numeric >= 3 ? 'success' : numeric >= 1.5 ? 'warning' : 'danger') : 'neutral'; return <StatusBadge tone={tone}>{value || '-'}</StatusBadge>; } },
+        { accessorKey: 'grade', header: 'ผลการเรียน', size: 124, meta: { compactSize: 70, compactHeader: 'เกรด', compactTextAlign: 'center' }, cell: ({ getValue }) => { const value = getValue<string>(); const numeric = Number(value); const tone: StatusTone = value?.trim() && Number.isFinite(numeric) ? (numeric >= 3 ? 'success' : numeric >= 1.5 ? 'warning' : 'danger') : 'neutral'; return <StatusBadge tone={tone} showDot={false}>{value || '-'}</StatusBadge>; } },
         { accessorKey: 'term', header: 'ภาคเรียน', size: 104, meta: { compactSize: 68, compactTextAlign: 'center' } },
     ], []);
 
