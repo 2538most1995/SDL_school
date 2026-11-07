@@ -1,5 +1,9 @@
 # Sena Care School Laravel
 
+## API ผู้สำเร็จการศึกษาแยกภาคเรียน (7 พฤศจิกายน 2569)
+
+เพิ่ม `GET /api/v1/integrations/student-data/graduates?term=1%2F2569&page=1&per_page=100` สำหรับ backend ภายนอก ใช้ token เดิมที่มี `student-data:read` และอำเภอเดิม กรอง `level`, `group`, `search` ได้; ไม่ระบุ `term` จะใช้ภาคเรียนที่จบล่าสุดจากชุดนำเข้าสำเร็จของอำเภอ คืนรายชื่อพร้อม `graduation_term`, ตัวเลือกภาคเรียน และข้อมูลแบ่งหน้า โดยไม่ส่งเลขบัตรประชาชนหรือข้อมูลติดต่อ ไม่เพิ่ม migration และไม่ต้องออก token ใหม่ หลังอัปเดตโค้ดให้รัน `php artisan optimize:clear` ดูตัวอย่าง request/response ที่ [docs/student-data-api.md](docs/student-data-api.md)
+
 ## แก้ header ตามรายงาน ZAP (6 พฤศจิกายน 2569)
 
 ใช้ CSP nonce แยกทุก response สำหรับ Vite, Material UI และหน้าพิมพ์ แทน `unsafe-inline` ใน `script-src`/`style-src` พร้อมป้องกัน inline event handler และไม่ cache หน้า HTML ที่มี nonce/CSRF ส่วน `style-src-attr 'unsafe-inline'` ยังจำเป็นสำหรับตำแหน่ง/ขนาดของ Material UI การปรับนี้ไม่เปลี่ยน Bearer token, `X-Student-Data-Token`, CORS, endpoint, query, JSON หรือสิทธิ์อำเภอของ API เชื่อมต่อเว็บไซต์อื่น ไม่เพิ่ม migration และไม่ต้องออก token ใหม่

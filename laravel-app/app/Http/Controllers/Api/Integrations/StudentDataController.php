@@ -2,8 +2,10 @@
 
 namespace App\Http\Controllers\Api\Integrations;
 
+use App\Domain\Students\Services\LegacyStudentReportService;
 use App\Domain\Students\Services\StudentAcademicService;
 use App\Domain\Students\Services\StudentDirectoryService;
+use App\Domain\Students\Services\StudentReportService;
 use App\Http\Controllers\Api\Students\StudentsApiController;
 use App\Http\Resources\Students\GradeResource;
 use App\Http\Resources\Students\KpchActivityResource;
@@ -49,6 +51,59 @@ final class StudentDataController extends StudentsApiController
                 $result['meta'],
                 array_flip(['pagination', 'filter_options', 'summary']),
             )),
+        ]);
+    }
+
+    public function graduates(Request $request, LegacyStudentReportService $legacyReports, StudentReportService $reports): JsonResponse
+    {
+        $filters = $request->validate([
+            'term' => ['nullable', 'regex:/^[12]\/25\d{2}$/'],
+            'level' => ['nullable', 'integer', Rule::in([1, 2, 3])],
+            'group' => ['nullable', 'string', 'max:80'],
+            'search' => ['nullable', 'string', 'max:100'],
+            'page' => ['nullable', 'integer', 'min:1'],
+            'per_page' => ['nullable', 'integer', 'min:1', 'max:100'],
+        ]);
+
+        if (config('system_data.student_enabled')) {
+            $result = $legacyReports->paginateGraduates($request->user(), (int) $request->attributes->get('district_id'), $filters);
+        } else {
+            // Demo data has no imported tables; keep its existing report source.
+            $report = $reports->graduates($request->user(), $filters, includeCitizenIdInSearch: false);
+            $selectedTerm = $report['selected_term'];
+            $rows = array_values(array_filter($report['rows'], static fn (array $row): bool => $row['metric'] === $selectedTerm));
+            $page = (int) ($filters['page'] ?? 1);
+            $perPage = (int) ($filters['per_page'] ?? 25);
+            $total = count($rows);
+            $items = $page > max(1, (int) ceil($total / $perPage)) ? [] : array_slice($rows, ($page - 1) * $perPage, $perPage);
+            $result = [
+                'items' => array_map(static fn (array $row): array => [
+                    'code' => $row['student_id'],
+                    'name' => ['full_name' => $row['name']],
+                    'level' => ['id' => $row['level_id'], 'label' => $row['level']],
+                    'group' => ['code' => $row['group_code'], 'name' => $row['group_label']],
+                    'graduation_term' => $selectedTerm,
+                ], $items),
+                'terms' => $report['terms'],
+                'selected_term' => $selectedTerm,
+                'pagination' => [
+                    'current_page' => $page,
+                    'per_page' => $perPage,
+                    'total' => $total,
+                    'last_page' => max(1, (int) ceil($total / $perPage)),
+                    'from' => $items === [] ? null : (($page - 1) * $perPage) + 1,
+                    'to' => $items === [] ? null : min($page * $perPage, $total),
+                ],
+            ];
+        }
+
+        return $this->respond([
+            'data' => $result['items'],
+            'meta' => $this->integrationMeta([
+                'terms' => $result['terms'],
+                'selected_term' => $result['selected_term'],
+                'pagination' => $result['pagination'],
+            ]),
         ]);
     }
 

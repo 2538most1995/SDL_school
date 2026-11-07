@@ -75,6 +75,7 @@ Route::prefix('v1')->group(function (): void {
         Route::get('/teachers', [SenaCareTeacherController::class, 'index']);
         Route::get('/groups', [SenaCareTeacherController::class, 'groups']);
         Route::post('/teacher-authenticate', [SenaCareTeacherController::class, 'authenticate']);
+        Route::get('/graduates', [StudentDataController::class, 'graduates']);
         Route::get('/students', [StudentDataController::class, 'index']);
         Route::get('/students/{student}', [StudentDataController::class, 'show']);
         Route::get('/students/{student}/grades', [StudentDataController::class, 'grades']);

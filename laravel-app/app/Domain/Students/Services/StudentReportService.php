@@ -97,9 +97,9 @@ final readonly class StudentReportService
     /** @param array<string, mixed> $filters
      * @return array{total: int, active: int, groups: int, terms: list<string>, selected_term: ?string, rows: list<array<string, string>>}
      */
-    public function graduates(User $viewer, array $filters = []): array
+    public function graduates(User $viewer, array $filters = [], bool $includeCitizenIdInSearch = true): array
     {
-        $allStudents = $this->students($viewer, $filters);
+        $allStudents = $this->students($viewer, $filters, $includeCitizenIdInSearch);
         $graduatedStudents = array_values(array_filter(
             $allStudents,
             static fn (Student $student): bool => $student->status === 'graduated',
@@ -132,6 +132,7 @@ final readonly class StudentReportService
             'group_label' => $student->groupName,
             'gender' => (string) ($student->demographics['gender'] ?? 'ไม่ระบุ'),
             'metric' => $student->currentTerm,
+            'level_id' => $student->level,
         ], $students);
 
         return [
@@ -569,13 +570,13 @@ final readonly class StudentReportService
     /** @param array<string, mixed> $filters
      * @return list<Student>
      */
-    private function students(User $viewer, array $filters): array
+    private function students(User $viewer, array $filters, bool $includeCitizenIdInSearch = true): array
     {
         // Report terms belong to academic rows. They must not be compared with the
         // student's current term or historical reports would incorrectly be empty.
         unset($filters['term']);
 
-        return $this->directory->applyFilters($this->directory->accessibleStudents($viewer), $filters);
+        return $this->directory->applyFilters($this->directory->accessibleStudents($viewer), $filters, $includeCitizenIdInSearch);
     }
 
     /** @param array<string, mixed> $filters

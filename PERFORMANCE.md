@@ -1,5 +1,9 @@
 # Performance Audit
 
+## Graduate integration API (2026-11-07)
+
+The external `/integrations/student-data/graduates` endpoint discovers the same latest successful district batch as historical reports, then reads distinct graduation terms from at most three student tables. Filtered projections are combined with `UNION ALL`; SQL `COUNT(*)` supplies the total and a deterministic `ORDER BY` with bound `LIMIT`/`OFFSET` fetches at most 100 students. No current-roster load, grade aggregate, per-student query, index change or import write is introduced. Pages beyond the last page skip the row query. Column discovery uses the existing process-local metadata cache. Synthetic SQLite executes the term/filter/count/union/page queries with only MySQL metadata discovery emulated; live MySQL EXPLAIN, production latency and memory remain Not verified.
+
 ## ZAP response-header fixes (2026-11-06)
 
 Request nonces use 32 random bytes and request attributes; headers add no database query or external request. One shared Emotion cache retains insertion order across nested themes. SweetAlert reuses the bundled stylesheet instead of injecting a second copy. HTML is private/no-store so a nonce/session-bearing shell cannot be replayed from a shared cache; hashed JS/CSS remain served statically with their existing cache behavior. Apache static header checks passed on isolated HTTP/HTTPS listeners and a separate-site control. MySQL and production web-server timing are Not verified; no schema change or real-data migration was performed.

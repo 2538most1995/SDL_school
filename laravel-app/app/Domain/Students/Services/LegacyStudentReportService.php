@@ -156,6 +156,100 @@ final readonly class LegacyStudentReportService
         return $this->payload($rows, $allTerms, $selectedTerm, static fn (): bool => true);
     }
 
+    /**
+     * Read historical graduates without loading the full district roster.
+     *
+     * @param  array<string, mixed>  $filters
+     */
+    public function paginateGraduates(User $viewer, int $districtId, array $filters): array
+    {
+        $sets = $this->sets($districtId);
+        $terms = [];
+        foreach ($sets as $set) {
+            $termColumn = $this->firstExistingColumn($set->student, ['fin_sem', 'fin_sem2', 'finsem']);
+            $causeColumn = $this->firstExistingColumn($set->student, ['fin_cause', 'fincause']);
+            if ($termColumn === null || $causeColumn === null) {
+                continue;
+            }
+            foreach ($this->rows(
+                'SELECT DISTINCT '.$this->identifier($termColumn).' AS raw_term FROM '.$this->identifier($set->student).
+                ' WHERE TRIM('.$this->identifier($causeColumn).') = ?',
+                ['1'],
+            ) as $row) {
+                $term = AcademicTerm::normalize((string) ($row['raw_term'] ?? ''));
+                if ($term !== null) {
+                    $terms[] = $term;
+                }
+            }
+        }
+        $terms = $this->sortTerms($terms);
+        $selectedTerm = $this->selectedTerm($filters, $terms);
+        $page = (int) ($filters['page'] ?? 1);
+        $perPage = (int) ($filters['per_page'] ?? 25);
+        $queries = [];
+        $bindings = [];
+
+        foreach ($this->filteredSets($sets, $filters) as $set) {
+            $termColumn = $this->firstExistingColumn($set->student, ['fin_sem', 'fin_sem2', 'finsem']);
+            $causeColumn = $this->firstExistingColumn($set->student, ['fin_cause', 'fincause']);
+            if ($selectedTerm === null || $termColumn === null || $causeColumn === null) {
+                continue;
+            }
+            [$join, $groupName] = $this->groupJoin($set, 's');
+            [$scopeSql, $scopeBindings] = $this->scope($viewer, $set, 's', $join !== '');
+            $variants = AcademicTerm::variants($selectedTerm);
+            $conditions = [
+                $scopeSql,
+                'TRIM(s.'.$this->identifier($causeColumn).') = ?',
+                'TRIM(s.'.$this->identifier($termColumn).') IN ('.implode(',', array_fill(0, count($variants), '?')).')',
+                "TRIM(COALESCE(s._perf_id10, '')) <> ''",
+            ];
+            $queryBindings = [...$scopeBindings, '1', ...$variants];
+            $this->appendGroupAndSearchFilters($conditions, $queryBindings, $filters, $join !== '', 's', $groupName);
+            $queries[] = "SELECT s._perf_id10 AS student_code, s.prename, s.name AS first_name,
+                                s.surname AS last_name, s.grp_code AS group_code, {$groupName} AS group_name,
+                                {$set->level} AS level_id
+                         FROM ".$this->identifier($set->student)." s {$join}
+                         WHERE ".implode(' AND ', $conditions);
+            array_push($bindings, ...$queryBindings);
+        }
+
+        $total = 0;
+        $items = [];
+        if ($queries !== []) {
+            $union = implode(' UNION ALL ', $queries);
+            $total = (int) ($this->rows("SELECT COUNT(*) AS total FROM ({$union}) graduates", $bindings)[0]['total'] ?? 0);
+            if ($page <= max(1, (int) ceil($total / $perPage))) {
+                $items = $this->rows(
+                    "SELECT student_code, prename, first_name, last_name, group_code, group_name, level_id
+                     FROM ({$union}) graduates
+                     ORDER BY first_name, last_name, student_code, level_id LIMIT ? OFFSET ?",
+                    [...$bindings, $perPage, ($page - 1) * $perPage],
+                );
+            }
+        }
+
+        return [
+            'items' => array_map(fn (array $row): array => [
+                'code' => trim((string) $row['student_code']),
+                'name' => ['full_name' => $this->fullName($row)],
+                'level' => ['id' => (int) $row['level_id'], 'label' => $this->levelLabel((int) $row['level_id'])],
+                'group' => ['code' => trim((string) $row['group_code']), 'name' => $this->groupLabel($row)],
+                'graduation_term' => $selectedTerm,
+            ], $items),
+            'terms' => $terms,
+            'selected_term' => $selectedTerm,
+            'pagination' => [
+                'current_page' => $page,
+                'per_page' => $perPage,
+                'total' => $total,
+                'last_page' => max(1, (int) ceil($total / $perPage)),
+                'from' => $items === [] ? null : (($page - 1) * $perPage) + 1,
+                'to' => $items === [] ? null : min($page * $perPage, $total),
+            ],
+        ];
+    }
+
     /** @param array<string, mixed> $filters */
     public function expectedGraduates(User $viewer, int $districtId, array $filters): array
     {
