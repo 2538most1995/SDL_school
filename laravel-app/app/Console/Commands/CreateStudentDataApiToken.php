@@ -18,6 +18,7 @@ final class CreateStudentDataApiToken extends Command
         {--expires-in-days=90 : อายุ token เป็นวัน (1-365)}
         {--no-expiry : สร้าง token ที่ไม่มีวันหมดอายุ (ยังเพิกถอนได้)}
         {--sena-care : อนุญาตอ่านรายชื่อครูและตรวจสอบรหัสผ่านครูสำหรับ SENA Care}
+        {--sena-learning : อนุญาตตรวจสอบนักศึกษาสำหรับ SENA Learning}
         {--replace : เพิกถอน client ชื่อเดิมในอำเภอนี้ก่อนสร้างใหม่}';
 
     protected $description = 'Create a district-scoped, read-only Bearer token for the Student Data API';
@@ -76,9 +77,11 @@ final class CreateStudentDataApiToken extends Command
                 'user_id' => $user->id,
                 'district_id' => $district->id,
                 'token_hash' => hash('sha256', $plainToken),
-                'abilities' => $this->option('sena-care')
-                    ? ['student-data:read', 'sena-care:teachers', 'sena-care:authenticate']
-                    : ['student-data:read'],
+                'abilities' => array_merge(
+                    ['student-data:read'],
+                    $this->option('sena-care') ? ['sena-care:teachers', 'sena-care:authenticate'] : [],
+                    $this->option('sena-learning') ? ['sena-learning:authenticate'] : [],
+                ),
                 'expires_at' => $noExpiry ? null : now()->addDays($expiresInDays),
             ]);
         });

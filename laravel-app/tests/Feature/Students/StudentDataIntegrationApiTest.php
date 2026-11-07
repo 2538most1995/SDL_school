@@ -287,6 +287,24 @@ final class StudentDataIntegrationApiTest extends TestCase
             ->assertOk();
     }
 
+    public function test_learning_student_authentication_requires_explicit_permission_and_scope(): void
+    {
+        $path = '/api/v1/integrations/student-data/learning-student-authenticate';
+        $this->postJson($path, ['citizen_id' => '1111111111111'])->assertUnauthorized();
+        $this->withToken($this->token)->postJson($path, ['citizen_id' => '1111111111111'])->assertForbidden();
+        $this->client('learning-token', ['student-data:read', 'sena-learning:authenticate']);
+        $response = $this->withToken('learning-token')->postJson($path, ['citizen_id' => '1111111111111'])
+            ->assertOk()->assertJsonPath('data.student_id', 'STU001')->assertJsonMissingPath('data.citizen_id');
+        self::assertStringContainsString('no-store', (string) $response->headers->get('Cache-Control'));
+        $this->postJson($path, ['citizen_id' => '3333333333333'])->assertNotFound();
+        $this->postJson($path, ['citizen_id' => '9999999999999'])->assertNotFound();
+        $this->postJson($path, ['citizen_id' => 'bad'])->assertUnprocessable();
+        User::factory()->create(['role' => 'student', 'district_id' => $this->district->id,
+            'student_code' => 'STU001', 'disabled_at' => now()]);
+        $this->postJson($path, ['citizen_id' => '1111111111111'])->assertNotFound();
+        $this->assertGuest();
+    }
+
     /** @param list<string> $abilities */
     private function client(
         string $plainToken,

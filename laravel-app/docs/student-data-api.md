@@ -320,3 +320,7 @@ Endpoint ข้อมูลการเรียนคืน envelope เดี�
 - ไม่มี fallback ไปชุดเก่า อำเภออื่น หรือฐานข้อมูลภายนอก
 - หากรหัสนักศึกษากำกวม ระบบจะไม่เดาข้อมูลและตอบ `404`
 - Live MySQL response time และ query plan บนปริมาณข้อมูล production ยัง `Not verified`
+
+## เข้าสู่ระบบ SENA Learning
+
+`POST /api/v1/integrations/student-data/learning-student-authenticate` รับ JSON `{"citizen_id":"<13 digits>"}` ผ่าน HTTPS จาก backend เท่านั้น ใช้ Bearer token ที่ออกโดย `php artisan system:create-student-api-token <admin> --name=sena-learning --sena-learning` (super admin ระบุ `--district-code` เพิ่ม) token ต้องมี `student-data:read` และ `sena-learning:authenticate` และจำกัดนักศึกษาเฉพาะอำเภอของ token คืน `data` เฉพาะรหัสนักศึกษา ชื่อ กลุ่ม อำเภอ และระดับ โดยไม่ส่งเลขบัตรคืน ไม่สร้าง session และตอบ 404 เมื่อไม่พบ นักศึกษาไม่ได้กำลังศึกษา ข้อมูลซ้ำ หรือบัญชีถูกปิด จำกัด 60 requests ต่อนาทีต่อ client และส่ง Cache-Control private, no-store ให้ตั้ง token ที่ฝั่ง SENA Learning ใน `config/student_api.php` เป็น `sdl_auth_token` โดยไม่เปิดเผย token
