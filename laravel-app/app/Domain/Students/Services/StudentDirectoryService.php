@@ -126,7 +126,7 @@ final readonly class StudentDirectoryService
         return null;
     }
 
-    public function findAccessible(User $viewer, string $code, mixed $level = null): ?Student
+    public function findAccessible(User $viewer, string $code, mixed $level = null, bool $allowCrossDistrictFallback = true): ?Student
     {
         $code = trim($code);
         $levelInt = self::normalizeLevel($level);
@@ -155,7 +155,7 @@ final readonly class StudentDirectoryService
             }
         }
 
-        if ($viewer->role === 'super_admin') {
+        if ($viewer->role === 'super_admin' && $allowCrossDistrictFallback) {
             $student = $this->repository->find($code, null, $levelInt);
             if ($student !== null) {
                 return $student;
@@ -281,6 +281,7 @@ final readonly class StudentDirectoryService
                     currentAddress: $student->currentAddress,
                     facebookUrl: $social->facebook_url ?: $student->facebookUrl,
                     lineId: $social->line_id ?: $student->lineId,
+                    email: $student->email,
                 );
             }, $students);
         } catch (\Throwable $e) {

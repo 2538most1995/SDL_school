@@ -1,5 +1,9 @@
 # Performance Audit
 
+## Personal-profile integration API (2026-11-07)
+
+The explicit single-student `/integrations/student-data/students/{student}/profile` endpoint reuses accessible-student lookup and the optional bounded profile SELECT (`LIMIT 2`) for the authorized district/level. It does not add profile queries to lists or existing endpoints. Original email is already read during roster/historical hydration; retaining it in the domain model adds no column read, memo lookup or schema/index. Social enrichment preserves that property. Existing roster-first lookup cost remains; live MySQL EXPLAIN, production response time and memory remain Not verified. Only synthetic test fixtures are used for verification.
+
 ## Graduate integration API (2026-11-07)
 
 The external `/integrations/student-data/graduates` endpoint discovers the same latest successful district batch as historical reports, then reads distinct graduation terms from at most three student tables. Filtered projections are combined with `UNION ALL`; SQL `COUNT(*)` supplies the total and a deterministic `ORDER BY` with bound `LIMIT`/`OFFSET` fetches at most 100 students. No current-roster load, grade aggregate, per-student query, index change or import write is introduced. Pages beyond the last page skip the row query. Column discovery uses the existing process-local metadata cache. Synthetic SQLite executes the term/filter/count/union/page queries with only MySQL metadata discovery emulated; live MySQL EXPLAIN, production latency and memory remain Not verified.

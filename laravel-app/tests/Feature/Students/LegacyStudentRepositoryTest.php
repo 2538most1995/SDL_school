@@ -323,6 +323,8 @@ final class LegacyStudentRepositoryTest extends TestCase
         $this->assertSame(9.0, $student->compulsoryCreditsEarned);
         $this->assertSame('personal_data_sensitive', $student->toDetailArray()['data_classification']);
         $this->assertSame('1234567890121', $student->citizenId);
+        $this->assertSame('learner@example.test', $student->email);
+        $this->assertStringNotContainsString('learner@example.test', json_encode($student->toDetailArray(), JSON_THROW_ON_ERROR));
         $request = Request::create('/api/v1/students', 'GET');
         $viewer = new User(['role' => 'admin', 'district_id' => 1, 'assigned_groups' => []]);
         $request->setUserResolver(static fn (): User => $viewer);

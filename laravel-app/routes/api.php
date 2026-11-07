@@ -78,6 +78,7 @@ Route::prefix('v1')->group(function (): void {
         Route::get('/graduates', [StudentDataController::class, 'graduates']);
         Route::get('/students', [StudentDataController::class, 'index']);
         Route::get('/students/{student}', [StudentDataController::class, 'show']);
+        Route::get('/students/{student}/profile', [StudentDataController::class, 'profile']);
         Route::get('/students/{student}/grades', [StudentDataController::class, 'grades']);
         Route::get('/students/{student}/kpch', [StudentDataController::class, 'kpch']);
         Route::get('/students/{student}/moral', [StudentDataController::class, 'moral']);

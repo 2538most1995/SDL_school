@@ -193,6 +193,7 @@ final class LegacyStudentRepository implements StudentProfileRepository, Student
                         electiveCreditsRequired: $electiveRequired,
                         dataClassification: 'personal_data_sensitive',
                         citizenId: $this->validCitizenId((string) ($row['citizen_id'] ?? '')),
+                        email: $email === '' ? null : $email,
                         phone: $contactPhone === '' ? null : $contactPhone,
                         registeredAddress: $this->formatAddress(
                             $this->memoValue($set, $code, 'addr', (string) ($row['registered_address'] ?? '')) ?? '',
@@ -337,6 +338,7 @@ final class LegacyStudentRepository implements StudentProfileRepository, Student
                     electiveCreditsRequired: $electiveRequired,
                     dataClassification: 'personal_data_sensitive',
                     citizenId: $this->validCitizenId((string) ($row['citizen_id'] ?? '')),
+                    email: $email === '' ? null : $email,
                     phone: $contactPhone === '' ? null : $contactPhone,
                     registeredAddress: $this->formatAddress(
                         $this->memoValue($set, $code, 'addr', (string) ($row['registered_address'] ?? '')) ?? '',

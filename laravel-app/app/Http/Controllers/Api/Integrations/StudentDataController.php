@@ -12,6 +12,7 @@ use App\Http\Resources\Students\KpchActivityResource;
 use App\Http\Resources\Students\MoralAssessmentResource;
 use App\Http\Resources\Students\RegisteredSubjectResource;
 use App\Http\Resources\Students\StudentDataIntegrationResource;
+use App\Http\Resources\Students\StudentProfileIntegrationResource;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Validation\Rule;
@@ -115,6 +116,32 @@ final class StudentDataController extends StudentsApiController
         return $this->respond([
             'data' => (new StudentDataIntegrationResource($record))->resolve($request),
             'meta' => $this->integrationMeta(),
+        ]);
+    }
+
+    public function profile(Request $request, string $student): JsonResponse
+    {
+        $filters = $request->validate([
+            'level' => ['nullable', 'integer', Rule::in([1, 2, 3])],
+        ]);
+        $record = $this->directory->findAccessible($request->user(), $student, $filters['level'] ?? null, allowCrossDistrictFallback: false);
+        abort_if(
+            $record === null || $record->districtId !== (int) $request->attributes->get('district_id'),
+            404,
+            'ไม่พบข้อมูลนักศึกษา',
+        );
+
+        return $this->respond([
+            'data' => (new StudentProfileIntegrationResource(
+                $record,
+                $this->directory->profileDetails($request->user(), $record),
+            ))->resolve($request),
+            'meta' => $this->integrationMeta([
+                'data_classification' => 'personal_data_sensitive',
+                'sensitive_identifiers_included' => true,
+                'citizen_id_included' => false,
+                'profile_included' => true,
+            ]),
         ]);
     }
 

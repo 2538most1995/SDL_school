@@ -2,7 +2,7 @@
 
 API นี้เป็น read-only สำหรับให้ backend ของเว็บไซต์อื่นอ่านข้อมูลนักศึกษาจากชุดนำเข้า ZIP/DBF ล่าสุดที่สำเร็จของอำเภอหนึ่งแห่ง โดยใช้ Bearer token เฉพาะระบบปลายทาง
 
-ข้อมูลที่ไม่ส่งออกทุก endpoint ได้แก่ เลขบัตรประชาชนทั้งแบบเต็มและปิดบางส่วน วันเกิด ที่อยู่ เบอร์โทร อีเมล ผู้ปกครอง social profile และ raw/source payload
+ทุก student-data endpoint ไม่ส่งเลขบัตรประชาชนทั้งแบบเต็มและปิดบางส่วน รวมถึง raw/source payload ส่วนวันเกิด ที่อยู่ เบอร์โทร อีเมล ครอบครัวและ social profile ส่งเฉพาะ endpoint รายบุคคล `/students/{student_code}/profile` ที่เพิ่มตามคำขอเท่านั้น endpoint อื่นยังคงข้อมูลขั้นต่ำแบบเดิม
 
 ชื่อ รหัสนักศึกษา และผลการเรียนยังเป็นข้อมูลส่วนบุคคลทางการศึกษา ผู้ใช้งาน API ต้องเก็บ token ใน secret manager และเรียกจาก backend เท่านั้น ห้ามฝัง token ใน JavaScript, mobile app หรือ repository สาธารณะ Request ที่มี browser `Origin` header จะถูกปฏิเสธด้วย `403`
 
@@ -75,12 +75,54 @@ curl --fail-with-body \
 | `GET` | `/students` | รายชื่อนักศึกษาปัจจุบันแบบแบ่งหน้า |
 | `GET` | `/graduates` | ผู้สำเร็จการศึกษาแยกตามภาคเรียน แบบแบ่งหน้า |
 | `GET` | `/students/{student_code}` | ข้อมูลนักศึกษาหนึ่งคน |
+| `GET` | `/students/{student_code}/profile` | ข้อมูลส่วนบุคคล ติดต่อ ครอบครัว และการศึกษาเดิม โดยไม่มีเลขบัตรประชาชน |
 | `GET` | `/students/{student_code}/grades` | เกรดและสรุปหน่วยกิต |
 | `GET` | `/students/{student_code}/kpch` | กิจกรรม กพช. และชั่วโมงสะสม |
 | `GET` | `/students/{student_code}/moral` | ผลประเมินคุณธรรม |
 | `GET` | `/students/{student_code}/subjects` | รายวิชาที่ลงทะเบียน |
 
 ทุก endpoint รองรับเฉพาะ `GET`/`HEAD` และคืน `Cache-Control: private, no-store` กับ `Vary: Authorization`
+
+### ข้อมูลส่วนบุคคล โดยไม่มีเลขบัตรประชาชน
+
+```bash
+curl --fail-with-body \
+  -H 'Accept: application/json' \
+  -H 'Authorization: Bearer sdl_student_...' \
+  'https://example.com/SDL_school/api/v1/integrations/student-data/students/6650100001/profile?level=3'
+```
+
+ใช้ token เดิมที่มี `student-data:read` ได้ ไม่ต้องเพิ่ม migration หรือออก token ใหม่ `level` ไม่บังคับ มีค่า `1`, `2`, `3` ใช้เมื่อรหัสนักศึกษาซ้ำข้ามระดับ หากไม่ระบุแล้วพบมากกว่าหนึ่งคนจะตอบ `404` ข้อมูลผู้จบย้อนหลังเรียกได้ตามที่ยังมีอยู่ในชุดนำเข้าล่าสุด ข้อมูลทั้งหมดเป็นค่าปัจจุบันจากชุดนำเข้านั้น ไม่ใช่ snapshot ย้อนหลัง
+
+`data` ประกอบด้วยข้อมูลเดิมของ `/students/{student_code}` และฟิลด์ต่อไปนี้ โดยระบุรายการฟิลด์ที่ส่งได้ทุกระดับ ไม่คัดลอก raw object หรือ internal detail response:
+
+| กลุ่ม | ฟิลด์ |
+| --- | --- |
+| `demographics` | `birth_date`, `gender`, `age`, `application_date`, `last_updated` |
+| `contact` | `phone`, `phone_masked`, `email`, `email_masked`, `registered_address`, `current_address` |
+| `social` | `facebook_url`, `line_id`, `line_url` |
+| `guardian` | `name`, `phone`, `phone_masked`, `relationship` ตามข้อมูลสรุปที่มี |
+| `profile.personal` | `nationality_code/label`, `religion_code/label`, `occupation_code/label`, `target_group_code/label`, `height_cm`, `weight_kg` |
+| `profile.family` | `father`, `mother`, `guardian` แต่ละคนมี `name`, `occupation_code/label`, `income`, `status_code/label`; รวม `siblings`, `studying_siblings`, `marital_status_label` (สถานะสมรสบิดามารดา) |
+| `profile.prior_education` | `qualification_code/label`, `graduation_year`, `school`, `province`, `province_label` |
+
+ฟิลด์ที่ไม่มีข้อมูลคืน `null` ค่า `0` ยังคงเป็นศูนย์ ไม่แทนที่ที่อยู่ปัจจุบันด้วยที่อยู่ทะเบียน และคำนวณอายุจากวันเกิดตามกติกาเดิม ระบบอ่านอีเมลจริงจากแหล่งข้อมูลเดิมเมื่อมี ส่วน `email_masked` เป็นค่าแสดงแบบปิดบางส่วน ฟิลด์วันใช้รูปแบบเดียวกับข้อมูลภายใน เช่น `01/01/2550` ชื่อ/รหัสกลุ่มและข้อมูลติดต่อเป็นข้อมูลส่วนบุคคล ต้องเก็บ response ตามขอบเขตระบบปลายทางที่ได้รับอนุญาต
+
+metadata ของ endpoint นี้กำหนด:
+
+```json
+{
+  "data_classification": "personal_data_sensitive",
+  "sensitive_identifiers_included": true,
+  "citizen_id_included": false,
+  "profile_included": true,
+  "read_only": true
+}
+```
+
+`sensitive_identifiers_included: true` หมายถึงข้อมูลติดต่อส่วนบุคคล เช่น โทรศัพท์/อีเมล; ไม่ได้รวมเลขบัตรประชาชน `citizen_id`, `citizen_id_masked`, `cardid` และคอลัมน์ต้นทางอื่นไม่ถูกส่งออก ทั้งข้อมูลระดับบนและข้อมูลครอบครัว ไม่มี query parameter ที่เปิดให้ขอเลขบัตรได้
+
+อำเภอถูกกำหนดจาก token เสมอ รวมถึงเจ้าของ role `super_admin`; นักศึกษานอกอำเภอหรือไม่พบข้อมูลตอบ `404` ไม่รับ `district_id`/`X-District-Id` และปฏิเสธ browser `Origin` ตามเดิม รองรับ header สำรอง `X-Student-Data-Token` พร้อม expiry/revocation/owner/district checks, rate limit และ `Cache-Control: private, no-store` เช่นเดียวกับ endpoint เดิม
 
 ### ผู้สำเร็จการศึกษาแยกตามภาคเรียน
 

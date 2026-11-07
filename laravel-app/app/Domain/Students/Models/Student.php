@@ -45,6 +45,7 @@ final readonly class Student
         public ?string $currentAddress = null,
         public ?string $facebookUrl = null,
         public ?string $lineId = null,
+        public ?string $email = null,
     ) {}
 
     public function fullName(): string
