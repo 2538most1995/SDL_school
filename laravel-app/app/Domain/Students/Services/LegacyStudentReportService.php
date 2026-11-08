@@ -206,9 +206,15 @@ final readonly class LegacyStudentReportService
             ];
             $queryBindings = [...$scopeBindings, '1', ...$variants];
             $this->appendGroupAndSearchFilters($conditions, $queryBindings, $filters, $join !== '', 's', $groupName);
+            $documentColumns = [];
+            foreach (['trnseries', 'trnrun', 'trngrp', 'certnum', 'trscp_date', 'fin_date'] as $column) {
+                $existing = $this->firstExistingColumn($set->student, [$column]);
+                $documentColumns[] = ($existing === null ? 'NULL' : 's.'.$this->identifier($existing)).' AS '.$this->identifier($column);
+            }
+            $documents = implode(', ', $documentColumns);
             $queries[] = "SELECT s._perf_id10 AS student_code, s.prename, s.name AS first_name,
                                 s.surname AS last_name, s.grp_code AS group_code, {$groupName} AS group_name,
-                                {$set->level} AS level_id
+                                {$set->level} AS level_id, {$documents}
                          FROM ".$this->identifier($set->student)." s {$join}
                          WHERE ".implode(' AND ', $conditions);
             array_push($bindings, ...$queryBindings);
@@ -221,7 +227,8 @@ final readonly class LegacyStudentReportService
             $total = (int) ($this->rows("SELECT COUNT(*) AS total FROM ({$union}) graduates", $bindings)[0]['total'] ?? 0);
             if ($page <= max(1, (int) ceil($total / $perPage))) {
                 $items = $this->rows(
-                    "SELECT student_code, prename, first_name, last_name, group_code, group_name, level_id
+                    "SELECT student_code, prename, first_name, last_name, group_code, group_name, level_id,
+                            trnseries, trnrun, trngrp, certnum, trscp_date, fin_date
                      FROM ({$union}) graduates
                      ORDER BY first_name, last_name, student_code, level_id LIMIT ? OFFSET ?",
                     [...$bindings, $perPage, ($page - 1) * $perPage],
@@ -236,6 +243,12 @@ final readonly class LegacyStudentReportService
                 'level' => ['id' => (int) $row['level_id'], 'label' => $this->levelLabel((int) $row['level_id'])],
                 'group' => ['code' => trim((string) $row['group_code']), 'name' => $this->groupLabel($row)],
                 'graduation_term' => $selectedTerm,
+                'transcript_series' => $this->nullableDocumentValue($row['trnseries']),
+                'transcript_number' => $this->nullableDocumentValue($row['trnrun']),
+                'transcript_group' => $this->nullableDocumentValue($row['trngrp']),
+                'certificate_number' => $this->nullableDocumentValue($row['certnum']),
+                'transcript_date' => $this->documentDate($row['trscp_date']),
+                'graduation_date' => $this->documentDate($row['fin_date']),
             ], $items),
             'terms' => $terms,
             'selected_term' => $selectedTerm,
@@ -248,6 +261,24 @@ final readonly class LegacyStudentReportService
                 'to' => $items === [] ? null : min($page * $perPage, $total),
             ],
         ];
+    }
+
+    private function nullableDocumentValue(mixed $value): ?string
+    {
+        $value = trim((string) $value);
+
+        return $value === '' ? null : $value;
+    }
+
+    private function documentDate(mixed $value): ?string
+    {
+        $value = $this->nullableDocumentValue($value);
+        if ($value === null || ! preg_match('/^(\d{4})-?(\d{2})-?(\d{2})$/', $value, $parts)
+            || ! checkdate((int) $parts[2], (int) $parts[3], (int) $parts[1])) {
+            return null;
+        }
+
+        return "{$parts[1]}-{$parts[2]}-{$parts[3]}";
     }
 
     /** @param array<string, mixed> $filters */

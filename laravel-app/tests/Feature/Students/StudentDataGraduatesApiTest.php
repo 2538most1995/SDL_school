@@ -60,6 +60,13 @@ final class StudentDataGraduatesApiTest extends TestCase
                     $table->string($column)->nullable();
                 }
             });
+            if ($level === 1) {
+                Schema::table($student, static function (Blueprint $table): void {
+                    foreach (['trnseries', 'trnrun', 'trngrp', 'certnum', 'trscp_date', 'fin_date'] as $column) {
+                        $table->string($column)->nullable();
+                    }
+                });
+            }
             foreach ([$student, "db_{$this->batch}_{$level}_grade", "db_{$this->batch}_{$level}_subject"] as $name) {
                 DB::table('INFORMATION_SCHEMA.TABLES')->insert(['TABLE_SCHEMA' => 'main', 'TABLE_NAME' => $name]);
             }
@@ -82,12 +89,23 @@ final class StudentDataGraduatesApiTest extends TestCase
 
     public function test_latest_graduates_are_safe_and_include_all_three_levels(): void
     {
+        DB::table($this->studentTable(1))->where('_perf_id10', 'GRAD1')->update([
+            'trnseries' => ' นก ', 'trnrun' => '0023012', 'trngrp' => '00001',
+            'certnum' => '053120000212', 'trscp_date' => '20120330', 'fin_date' => '2012-03-30',
+        ]);
         $response = $this->withToken('graduates-token')->getJson(self::ENDPOINT)
             ->assertOk()->assertJsonCount(3, 'data')
             ->assertJsonPath('data.0.code', 'GRAD1')
             ->assertJsonPath('data.0.name.full_name', 'นายGraduate1 Test')
             ->assertJsonPath('data.0.group.name', 'กลุ่มหนึ่ง')
             ->assertJsonPath('data.0.graduation_term', '1/2569')
+            ->assertJsonPath('data.0.transcript_series', 'นก')
+            ->assertJsonPath('data.0.transcript_number', '0023012')
+            ->assertJsonPath('data.0.transcript_group', '00001')
+            ->assertJsonPath('data.0.certificate_number', '053120000212')
+            ->assertJsonPath('data.0.transcript_date', '2012-03-30')
+            ->assertJsonPath('data.0.graduation_date', '2012-03-30')
+            ->assertJsonPath('data.1.transcript_number', null)
             ->assertJsonPath('meta.terms', ['1/2569', '2/2568'])
             ->assertJsonPath('meta.selected_term', '1/2569')
             ->assertJsonPath('meta.pagination.total', 3)
@@ -101,6 +119,19 @@ final class StudentDataGraduatesApiTest extends TestCase
         foreach (['cardid', 'citizen_id', '1111111111111', 'phone', '0899999999', 'ACTIVE', 'TRANSFER', 'raw_term', 'fin_cause'] as $value) {
             self::assertStringNotContainsString($value, $response->getContent());
         }
+    }
+
+    public function test_missing_and_invalid_document_values_are_null(): void
+    {
+        DB::table($this->studentTable(1))->where('_perf_id10', 'GRAD1')->update([
+            'trnrun' => ' ', 'certnum' => '0', 'trscp_date' => '20120230', 'fin_date' => '00000000',
+        ]);
+        $this->withToken('graduates-token')->getJson(self::ENDPOINT)->assertOk()
+            ->assertJsonPath('data.0.transcript_number', null)
+            ->assertJsonPath('data.0.certificate_number', '0')
+            ->assertJsonPath('data.0.transcript_date', null)
+            ->assertJsonPath('data.0.graduation_date', null)
+            ->assertJsonPath('data.2.transcript_date', null);
     }
 
     public function test_historical_term_level_group_and_search_filters_use_graduation_records(): void

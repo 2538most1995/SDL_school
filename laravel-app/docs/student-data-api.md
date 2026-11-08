@@ -156,7 +156,13 @@ curl --fail-with-body \
       "name": { "full_name": "นายผู้เรียน ตัวอย่าง" },
       "level": { "id": 3, "label": "มัธยมศึกษาตอนปลาย" },
       "group": { "code": "G-01", "name": "กลุ่มตัวอย่าง" },
-      "graduation_term": "1/2569"
+      "graduation_term": "1/2569",
+      "transcript_series": "นก",
+      "transcript_number": "223012",
+      "transcript_group": "00001",
+      "certificate_number": "53120000212",
+      "transcript_date": "2012-03-30",
+      "graduation_date": "2012-03-30"
     }
   ],
   "meta": {
@@ -176,6 +182,8 @@ curl --fail-with-body \
   }
 }
 ```
+
+ฟิลด์เอกสารอ่านจากตาราง STUDENT ของ batch ล่าสุด: `transcript_series` = `trnseries`, `transcript_number` = `trnrun`, `transcript_group` = `trngrp`, `certificate_number` = `certnum`, `transcript_date` = `trscp_date` และ `graduation_date` = `fin_date` เลขเอกสารเป็น string เพื่อคงเลขศูนย์นำหน้า วันที่เป็น ค.ศ. รูปแบบ `YYYY-MM-DD` เมื่อไม่มีคอลัมน์ ไม่มีค่า หรือวันที่ไม่ถูกต้องจะคืน `null` โหมด demo คืน `null` ทั้งหกฟิลด์ ไม่อ่านตารางสำรอง `fnshstd.dbf` และไม่สร้างหรือเดาข้อมูลที่ขาด
 
 เรียงตามชื่อ นามสกุล รหัสนักศึกษา และระดับ รวมทั้งสามระดับก่อนแบ่งหน้าที่ฐานข้อมูล `meta.terms` เป็นภาคเรียนที่จบที่พบจริงทั้งหมดในชุดนำเข้าของอำเภอ ไม่เปลี่ยนตามตัวกรองระดับ/กลุ่ม/คำค้น หากไม่มีข้อมูลในภาคเรียนที่ขอจะได้ HTTP `200`, `data: []` และ `total: 0` หากไม่มีข้อมูลผู้จบเลยและไม่ส่ง `term` จะได้ `terms: []` และ `selected_term: null`
 

@@ -84,6 +84,8 @@ final class StudentDataController extends StudentsApiController
                     'level' => ['id' => $row['level_id'], 'label' => $row['level']],
                     'group' => ['code' => $row['group_code'], 'name' => $row['group_label']],
                     'graduation_term' => $selectedTerm,
+                    'transcript_series' => null, 'transcript_number' => null, 'transcript_group' => null,
+                    'certificate_number' => null, 'transcript_date' => null, 'graduation_date' => null,
                 ], $items),
                 'terms' => $report['terms'],
                 'selected_term' => $selectedTerm,
