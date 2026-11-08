@@ -324,3 +324,7 @@ Endpoint ข้อมูลการเรียนคืน envelope เดี�
 ## เข้าสู่ระบบ SENA Learning
 
 `POST /api/v1/integrations/student-data/learning-student-authenticate` รับ JSON `{"citizen_id":"<13 digits>"}` ผ่าน HTTPS จาก backend เท่านั้น ใช้ Bearer token ที่ออกโดย `php artisan system:create-student-api-token <admin> --name=sena-learning --sena-learning` (super admin ระบุ `--district-code` เพิ่ม) token ต้องมี `student-data:read` และ `sena-learning:authenticate` และจำกัดนักศึกษาเฉพาะอำเภอของ token คืน `data` เฉพาะรหัสนักศึกษา ชื่อ กลุ่ม อำเภอ และระดับ โดยไม่ส่งเลขบัตรคืน ไม่สร้าง session และตอบ 404 เมื่อไม่พบ นักศึกษาไม่ได้กำลังศึกษา ข้อมูลซ้ำ หรือบัญชีถูกปิด จำกัด 60 requests ต่อนาทีต่อ client และส่ง Cache-Control private, no-store ให้ตั้ง token ที่ฝั่ง SENA Learning ใน `config/student_api.php` เป็น `sdl_auth_token` โดยไม่เปิดเผย token
+
+### Learning login burst budget
+
+The learning authentication route now has a separate `LEARNING_AUTH_RATE_LIMIT_PER_MINUTE` budget (default6000/minute per client). Directory/export endpoints retain their original budget. Legacy student authentication uses bounded minimal identity queries and retains latest-batch/cohort, duplicate, district and disabled-user checks. The compatibility REGEXP fallback may scan the student table for formatted IDs; no index-only performance claim is made. Tests include1000sequential API requests, not a1000-concurrent-user hosting certification. Deploy with the corresponding SENA admission/backoff changes and retain source protection.

@@ -1,3 +1,7 @@
+## Learning login capacity preparation (2026-11-08)
+
+The learning auth endpoint uses an optional minimal SQL lookup capability, avoiding district-wide academic/contact hydration. A dedicated configurable login budget replaces the two shared60/minute limits for this route only. Existing APIs retain their limit. Identity eligibility and disabled-account controls remain. Production-equivalent concurrent load capacity remains unverified until measured.
+
 ## SENA Learning authentication integration (2026-11-08)
 
 POST `/api/v1/integrations/student-data/learning-student-authenticate` verifies a citizen ID against the token district and returns minimum learner identity without the ID or profile. Dedicated tokens must opt into `sena-learning:authenticate` using `--sena-learning`. Ambiguous identities, duplicate codes, non-studying records and disabled student accounts fail closed. No session or local student account is created. Existing integration endpoints are unchanged.

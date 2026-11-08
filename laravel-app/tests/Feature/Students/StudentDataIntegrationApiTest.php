@@ -305,6 +305,25 @@ final class StudentDataIntegrationApiTest extends TestCase
         $this->assertGuest();
     }
 
+    public function test_learning_login_budget_is_separate_and_can_admit_a_thousand_students(): void
+    {
+        $this->client('burst-token', ['student-data:read', 'sena-learning:authenticate']);
+        config(['system_data.student_api_rate_limit_per_minute' => 1]);
+        $this->withToken('burst-token')->getJson('/api/v1/integrations/student-data/students')->assertOk();
+        $this->getJson('/api/v1/integrations/student-data/students')->assertStatus(429);
+        for ($i = 0; $i < 1000; $i++) {
+            $this->postJson('/api/v1/integrations/student-data/learning-student-authenticate', ['citizen_id' => '1111111111111'])->assertOk();
+        }
+    }
+
+    public function test_learning_login_limit_remains_configurable(): void
+    {
+        $this->client('small-budget', ['student-data:read', 'sena-learning:authenticate']);
+        config(['system_data.learning_auth_rate_limit_per_minute' => 1]);
+        $this->withToken('small-budget')->postJson('/api/v1/integrations/student-data/learning-student-authenticate', ['citizen_id' => '1111111111111'])->assertOk();
+        $this->postJson('/api/v1/integrations/student-data/learning-student-authenticate', ['citizen_id' => '1111111111111'])->assertStatus(429);
+    }
+
     /** @param list<string> $abilities */
     private function client(
         string $plainToken,

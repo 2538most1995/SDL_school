@@ -26,7 +26,7 @@ use InvalidArgumentException;
  * physical table identifier. The configured `legacy` database user must also have
  * SELECT-only grants as defence in depth.
  */
-final class LegacyStudentRepository implements StudentProfileRepository, StudentRepository, TermStudentRepository
+final class LegacyStudentRepository implements StudentAuthenticationRepository, StudentProfileRepository, StudentRepository, TermStudentRepository
 {
     /** @var array<int, list<LegacyTableSet>> */
     private array $setsByDistrict = [];
@@ -55,6 +55,122 @@ final class LegacyStudentRepository implements StudentProfileRepository, Student
     public function students(?array $districtIds = null): array
     {
         return $this->loadStudents($districtIds);
+    }
+
+    public function findStudentForAuthentication(string $citizenId, int $districtId): ?array
+    {
+        if ($districtId < 1 || preg_match('/^[0-9]{13}$/D', $citizenId) !== 1) {
+            return null;
+        }
+        $districts = $this->activeDistricts([$districtId]);
+        if (count($districts) !== 1) {
+            return null;
+        }
+        $sets = $this->tableSetsForDistrict($districtId, (string) $districts[0]['name']);
+        $term = $this->latestTerm($sets);
+        if ($term === null) {
+            return null;
+        }
+        $matches = [];
+        foreach ($sets as $set) {
+            foreach ($this->authenticationRows($set, $term, $citizenId, null) as $row) {
+                $matches[] = [$set, $row];
+                if (count($matches) > 1) {
+                    return null;
+                }
+            }
+        }
+        if ($matches === []) {
+            return null;
+        }
+        [$set, $row] = $matches[0];
+        $code = trim((string) $row['code']);
+        [$status] = LegacyStudentStatus::resolve($row['fin_cause'] ?? '', $row['transfer_date'] ?? '');
+        if ($code === '' || $status !== 'studying' || $this->validCitizenId((string) $row['citizen_id']) !== $citizenId) {
+            return null;
+        }
+        // A local SENA account is keyed by student code, so that code must also
+        // identify exactly one current-cohort row across all education levels.
+        $codeMatches = 0;
+        foreach ($sets as $candidateSet) {
+            $codeMatches += count($this->authenticationRows($candidateSet, $term, null, $code));
+            if ($codeMatches > 1) {
+                return null;
+            }
+        }
+        if ($codeMatches !== 1) {
+            return null;
+        }
+
+        return [
+            'student_id' => $code,
+            'full_name' => trim((string) $row['prename'].(string) $row['first_name'].' '.(string) $row['last_name']),
+            'group_code' => trim((string) $row['group_code']),
+            'class_name' => trim((string) $row['group_name']),
+            'district_id' => $set->districtId,
+            'district_name' => $set->districtName,
+            'level' => $set->level,
+            'level_name' => $this->levelLabel($set->level),
+        ];
+    }
+
+    /**
+     * Read only identity fields for at most two matching current-cohort rows.
+     * No grade aggregates, contact fields, memo files or full Student objects.
+     *
+     * @return list<array<string,mixed>>
+     */
+    private function authenticationRows(LegacyTableSet $set, string $term, ?string $citizenId, ?string $code): array
+    {
+        $variants = AcademicTerm::variants($term);
+        if ($variants === []) {
+            return [];
+        }
+        $student = $this->identifier($set->student);
+        $grade = $this->identifier($set->grade);
+        $citizenSql = $this->citizenIdSql($set);
+        $groupName = 's.grp_code';
+        $groupJoin = '';
+        if ($set->group !== null) {
+            $group = $this->identifier($set->group);
+            $groupJoin = " LEFT JOIN {$group} grp ON grp._perf_grp = s._perf_grp ";
+            $groupName = "COALESCE(NULLIF(TRIM(grp.grp_name), ''), s.grp_code)";
+        }
+        $finish = $this->firstExistingColumn($set->student, ['fin_cause', 'fincause']);
+        $transfer = $this->firstExistingColumn($set->student, ['trn_date2', 'trndate2', 'trn_date']);
+        $finishSql = $finish === null ? "''" : 's.'.$this->identifier($finish);
+        $transferSql = $transfer === null ? "''" : 's.'.$this->identifier($transfer);
+        if ($citizenId !== null) {
+            // Keep compatibility with validCitizenId() for formatted legacy IDs.
+            // Canonical imported IDs have an exact indexed equality alternative.
+            $pattern = '^[^0-9]*'.implode('[^0-9]*', str_split($citizenId)).'[^0-9]*$';
+            $filter = "({$citizenSql} = ? OR {$citizenSql} REGEXP ?)";
+            $bindings = [$citizenId, $pattern];
+        } else {
+            $filter = 'TRIM(s._perf_id10) = ?';
+            $bindings = [$code];
+        }
+        $placeholders = implode(',', array_fill(0, count($variants), '?'));
+
+        return $this->rows(
+            "SELECT s._perf_id10 AS code, s.prename AS prename, s.name AS first_name,
+                    s.surname AS last_name, s.grp_code AS group_code, {$groupName} AS group_name,
+                    {$citizenSql} AS citizen_id, {$finishSql} AS fin_cause, {$transferSql} AS transfer_date
+             FROM {$student} s {$groupJoin}
+             WHERE {$filter} AND s._perf_id10 IS NOT NULL
+               AND (EXISTS (
+                    SELECT 1 FROM {$grade} active_grade
+                    WHERE active_grade._perf_std10 = s._perf_id10
+                      AND active_grade._perf_semestry IN ({$placeholders})
+               ) OR EXISTS (
+                    SELECT 1 FROM (
+                        SELECT recent_student._perf_id10 FROM {$student} recent_student
+                        WHERE recent_student._perf_id10 IS NOT NULL
+                        ORDER BY recent_student._perf_id10 DESC LIMIT 2
+                    ) latest_students WHERE latest_students._perf_id10 = s._perf_id10
+               )) LIMIT 2",
+            [...$bindings, ...$variants],
+        );
     }
 
     public function studentsForTerm(array $districtIds, string $term): array

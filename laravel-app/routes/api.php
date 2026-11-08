@@ -75,7 +75,7 @@ Route::prefix('v1')->group(function (): void {
     ])->prefix('integrations/student-data')->group(function (): void {
         Route::get('/teachers', [SenaCareTeacherController::class, 'index']);
         Route::get('/groups', [SenaCareTeacherController::class, 'groups']);
-        Route::post('/learning-student-authenticate', LearningStudentAuthController::class);
+        Route::post('/learning-student-authenticate', LearningStudentAuthController::class)->name('integration.learning-auth');
         Route::post('/teacher-authenticate', [SenaCareTeacherController::class, 'authenticate']);
         Route::get('/graduates', [StudentDataController::class, 'graduates']);
         Route::get('/students', [StudentDataController::class, 'index']);

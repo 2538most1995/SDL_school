@@ -53,8 +53,12 @@ class AppServiceProvider extends ServiceProvider
         RateLimiter::for('student-data-api', static function (Request $request): Limit {
             $clientId = (int) $request->attributes->get('student_api_client_id', 0);
 
-            return Limit::perMinute((int) config('system_data.student_api_rate_limit_per_minute', 60))
-                ->by($clientId > 0 ? "student-data-client:{$clientId}" : 'student-data-client:unauthenticated:'.$request->ip());
+            $learningAuth = $request->routeIs('integration.learning-auth');
+            $limit = (int) config($learningAuth ? 'system_data.learning_auth_rate_limit_per_minute' : 'system_data.student_api_rate_limit_per_minute', $learningAuth ? 6000 : 60);
+            $budget = $learningAuth ? 'learning-auth-client:' : 'student-data-client:';
+
+            return Limit::perMinute($limit)
+                ->by($clientId > 0 ? $budget.$clientId : 'student-data-client:unauthenticated:'.$request->ip());
         });
 
         // Production data is intentionally self-contained. Any future use of
