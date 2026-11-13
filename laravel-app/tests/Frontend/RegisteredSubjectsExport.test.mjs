@@ -14,12 +14,20 @@ const groups = [
     { subject_id: '2|A', code: 'A', name: 'ภาษาไทย', level: 'มัธยมศึกษาตอนต้น', group_code: '0003', group_name: 'กลุ่มอื่น', registered_students: 3 },
 ];
 
+test('ordinary report export retains actual counts and hides reductions until exam ordering is enabled', () => {
+    const sheets = buildRegisteredSubjectsSheets('subject', subjects, groups, { '1|A': 100 }, '1/2569');
+    assert.deepEqual(sheets[0].columns, ['ภาคเรียน', 'รหัสวิชา', 'รายวิชา', 'ระดับ', 'ผู้ลงทะเบียน']);
+    assert.deepEqual(sheets[0].rows[0], ['1/2569', 'A', 'ภาษาไทย', 'ประถมศึกษา', 119]);
+    assert.equal(sheets[1].columns.length, 7);
+    assert.equal(sheets[1].rows.filter(row => row[3] === 'ประถมศึกษา').reduce((sum, row) => sum + row[6], 0), 119);
+});
+
 test('only selected subject and level are reduced; originals stay unchanged and repeat calculations do not compound', () => {
-    const sheets = buildRegisteredSubjectsSheets('subject', subjects, groups, { '1|A': 5 }, '1/2569');
+    const sheets = buildRegisteredSubjectsSheets('subject', subjects, groups, { '1|A': 5 }, '1/2569', true);
     assert.deepEqual(sheets[0].rows[0], ['1/2569', 'A', 'ภาษาไทย', 'ประถมศึกษา', 119, 5, 6, 113]);
     assert.deepEqual(sheets[0].rows[1].slice(-4), [3, 0, 0, 3]);
     assert.equal(sheets[1].rows.filter(row => row[3] === 'ประถมศึกษา').reduce((sum, row) => sum + row[9], 0), 113);
-    assert.deepEqual(sheets, buildRegisteredSubjectsSheets('subject', subjects, groups, { '1|A': 5 }, '1/2569'));
+    assert.deepEqual(sheets, buildRegisteredSubjectsSheets('subject', subjects, groups, { '1|A': 5 }, '1/2569', true));
     assert.equal(subjects[0].registeredCount, 119);
     assert.deepEqual(groups.map(row => row.registered_students), [60, 59, 3]);
 });
@@ -37,7 +45,7 @@ test('small and fractional reductions reconcile to the subject total without neg
 });
 
 test('filtered export excludes other subjects and preserves group codes and numeric counts in real XLSX', () => {
-    const sheets = buildRegisteredSubjectsSheets('subject', subjects.slice(0, 1), groups, { '1|A': 5 }, '2/2568');
+    const sheets = buildRegisteredSubjectsSheets('subject', subjects.slice(0, 1), groups, { '1|A': 5 }, '2/2568', true);
     assert.equal(sheets[1].rows.length, 2);
     const workbook = XLSX.read(createExcelFileBytes(sheets), { type: 'array' });
     assert.deepEqual(workbook.SheetNames, ['รายวิชา', 'แยกกลุ่มเรียน']);

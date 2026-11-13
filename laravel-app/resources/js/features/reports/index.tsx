@@ -525,13 +525,26 @@ export function ReportPage({ kind }: { kind: ReportKind }) {
     const [checkedSubjects, setCheckedSubjects] = useState<string[]>([]);
     const [reductionPercent, setReductionPercent] = useState('5');
     const [subjectPercentages, setSubjectPercentages] = useState<Record<string, number>>({});
+    const [examOrderMode, setExamOrderMode] = useState(false);
     const deferredSearch = useDeferredValue(search);
     const isAcademicReport = academicReportKinds.includes(kind);
+    const isExamOrder = kind === 'registered-subjects' && viewMode === 'subject' && examOrderMode;
     const canFilterGroups = role === 'teacher' || role === 'admin' || role === 'super_admin';
     useEffect(() => {
         setCheckedSubjects([]);
         setSubjectPercentages({});
     }, [kind, term, level, group, role, districtId]);
+    useEffect(() => {
+        setExamOrderMode(false);
+        setCheckedSubjects([]);
+        setSubjectPercentages({});
+    }, [kind, role, districtId]);
+    useEffect(() => {
+        if (viewMode !== 'student') return;
+        setExamOrderMode(false);
+        setCheckedSubjects([]);
+        setSubjectPercentages({});
+    }, [viewMode]);
     useEffect(() => { if (!canFilterGroups && group !== '') setGroup(''); }, [canFilterGroups, group]);
     const directoryOptions = useQuery({
         queryKey: ['report-filter-options', kind, districtId],
@@ -565,28 +578,28 @@ export function ReportPage({ kind }: { kind: ReportKind }) {
         const data = report.data?.data.rows ?? [];
         const keyword = deferredSearch.trim().toLocaleLowerCase('th');
         const filtered = !keyword ? data : data.filter((row) => `${row.primary} ${row.secondary} ${row.group}`.toLocaleLowerCase('th').includes(keyword));
-        return kind === 'registered-subjects' && viewMode === 'subject' ? filtered.map((row) => {
+        return isExamOrder ? filtered.map((row) => {
             const percent = subjectPercentages[row.id] ?? 0;
             const removed = registrationReduction(row.registeredCount ?? 0, percent);
             return { ...row, reductionPercent: percent, removedCount: removed, remainingCount: (row.registeredCount ?? 0) - removed };
         }) : filtered;
-    }, [report.data, deferredSearch, kind, viewMode, subjectPercentages]);
+    }, [report.data, deferredSearch, isExamOrder, subjectPercentages]);
 
     const visibleCheckedSubjects = rows.filter((row) => checkedSubjects.includes(row.id));
     const validReduction = reductionPercent.trim() !== '' && Number.isFinite(Number(reductionPercent)) && Number(reductionPercent) >= 0 && Number(reductionPercent) <= 100;
     const registrationBusy = report.isFetching || search !== deferredSearch;
     const applyReduction = () => {
-        if (!validReduction || registrationBusy) return;
+        if (!isExamOrder || !validReduction || registrationBusy) return;
         setSubjectPercentages((current) => ({ ...current, ...Object.fromEntries(visibleCheckedSubjects.map((row) => [row.id, Number(reductionPercent)])) }));
     };
     const exportRegistrations = () => {
         if (registrationBusy) return;
-        downloadExcel(`วิชาลงทะเบียน-${viewMode === 'subject' ? 'รายวิชา' : 'รายคน'}-${term.replace('/', '-')}`, buildRegisteredSubjectsSheets(
-            viewMode, rows, report.data?.data.group_rows ?? [], subjectPercentages, term,
+        downloadExcel(`${isExamOrder ? 'สั่งข้อสอบ' : 'วิชาลงทะเบียน'}-${viewMode === 'subject' ? 'รายวิชา' : 'รายคน'}-${term.replace('/', '-')}`, buildRegisteredSubjectsSheets(
+            viewMode, rows, report.data?.data.group_rows ?? [], isExamOrder ? subjectPercentages : {}, term, isExamOrder,
         ));
     };
     const columns = useMemo<ColumnDef<ReportRow>[]>(() => [
-        ...(kind === 'registered-subjects' && viewMode === 'subject' ? [{
+        ...(isExamOrder ? [{
             id: 'select', size: 64, enableSorting: false, meta: { compactSize: 44 },
             header: () => <input type="checkbox" aria-label="เลือกทุกวิชาในผลลัพธ์" disabled={registrationBusy} checked={rows.length > 0 && rows.every((row) => checkedSubjects.includes(row.id))} onChange={(event) => setCheckedSubjects(event.target.checked ? rows.map((row) => row.id) : [])} />,
             cell: ({ row }: { row: { original: ReportRow } }) => <input type="checkbox" aria-label={`เลือกวิชา ${row.original.primary} ${row.original.secondary} ${row.original.group}`} disabled={registrationBusy} checked={checkedSubjects.includes(row.original.id)} onChange={(event) => setCheckedSubjects((current) => event.target.checked ? [...current, row.original.id] : current.filter((id) => id !== row.original.id))} />,
@@ -622,7 +635,7 @@ export function ReportPage({ kind }: { kind: ReportKind }) {
                 accessorKey: 'successRate', header: 'ร้อยละ', size: 105, meta: { compactSize: 62, compactTextAlign: 'center' },
                 cell: ({ getValue }: { getValue: () => unknown }) => <span className="font-bold tabular-nums text-slate-800">{Number(getValue() ?? 0).toLocaleString('th-TH', { maximumFractionDigits: 1 })}%</span>,
             } as ColumnDef<ReportRow>,
-        ] : kind === 'registered-subjects' && viewMode === 'subject' ? [
+        ] : isExamOrder ? [
             { accessorKey: 'registeredCount', header: 'ผู้ลงทะเบียนจริง', size: 150, meta: { compactSize: 80, compactTextAlign: 'center' } } as ColumnDef<ReportRow>,
             { accessorKey: 'reductionPercent', header: 'ตัด (%) / คน', size: 140, meta: { compactSize: 80, compactTextAlign: 'center' },
                 cell: ({ row }: { row: { original: ReportRow } }) => `${row.original.reductionPercent ?? 0}% / ${row.original.removedCount ?? 0} คน`,
@@ -653,7 +666,7 @@ export function ReportPage({ kind }: { kind: ReportKind }) {
                 ? <button type="button" onClick={() => setSelectedStudent(row.original)} className="responsive-table-action inline-flex items-center gap-1.5 whitespace-nowrap rounded-lg border border-teal-200/90 bg-teal-50/80 px-2.5 py-1.5 text-xs font-bold text-teal-800 shadow-2xs hover:border-teal-300 hover:bg-teal-100/90 transition active:scale-[0.98]" aria-label={`เปิดรายละเอียด ${row.original.primary}`}><EyeViewIcon size={17} className="text-teal-700" /> <span>เปิดดู</span></button>
                 : <button type="button" onClick={() => setSelectedSubject(row.original)} className="responsive-table-action inline-flex items-center gap-1.5 whitespace-nowrap rounded-lg border border-sky-200 bg-sky-50 px-2.5 py-1.5 text-xs font-bold text-sky-800 hover:bg-sky-100" aria-label={`ดูรายชื่อ ${row.original.primary}`}><UsersThree size={16} weight="bold" /> <span>ดูรายชื่อ</span></button>,
         } as ColumnDef<ReportRow>] : []),
-    ], [config, isAcademicReport, kind, viewMode, rows, checkedSubjects, subjectPercentages, registrationBusy]);
+    ], [config, isAcademicReport, kind, viewMode, rows, checkedSubjects, isExamOrder, registrationBusy]);
 
     const payload = report.data?.data;
     const activeFilterCount = [search.trim(), level, canFilterGroups ? group : '', examStatus, subjectType].filter(Boolean).length;
@@ -721,6 +734,12 @@ export function ReportPage({ kind }: { kind: ReportKind }) {
                         <button type="button" onClick={() => setViewMode('subject')} className={`inline-flex items-center gap-2 rounded-lg px-4 py-2 text-sm font-bold transition ${viewMode === 'subject' ? 'bg-brand-700 text-white' : 'text-slate-600 hover:bg-slate-100'}`}><Books size={17} /> ดูเป็นรายวิชา</button>
                         <button type="button" onClick={() => setViewMode('student')} className={`inline-flex items-center gap-2 rounded-lg px-4 py-2 text-sm font-bold transition ${viewMode === 'student' ? 'bg-brand-700 text-white' : 'text-slate-600 hover:bg-slate-100'}`}><UsersThree size={17} /> ดูเป็นรายคน</button>
                     </div>
+                    {kind === 'registered-subjects' && <button type="button" aria-pressed={isExamOrder} aria-controls="exam-order-tools" disabled={registrationBusy} onClick={() => {
+                        setViewMode('subject');
+                        setExamOrderMode(!isExamOrder);
+                        setCheckedSubjects([]);
+                        setSubjectPercentages({});
+                    }} className={`inline-flex h-10 items-center gap-2 rounded-xl px-4 text-sm font-bold transition disabled:opacity-50 ${isExamOrder ? 'border border-brand-300 bg-white text-brand-800' : 'bg-brand-700 text-white hover:bg-brand-800'}`}><Books size={18} />{isExamOrder ? 'ปิดสั่งข้อสอบ' : 'สั่งข้อสอบ'}</button>}
                 </div>}
 
                 <FilterGrid className="mb-5" columns={kind === 'expected-graduates' || kind === 'grade-threshold' ? (canFilterGroups ? 4 : 3) : (canFilterGroups ? 3 : 2)}>
@@ -754,8 +773,7 @@ export function ReportPage({ kind }: { kind: ReportKind }) {
                         </label>
                     )}
                 </FilterGrid>
-                {kind === 'registered-subjects' && <div className="mb-5 rounded-2xl border border-slate-200 bg-slate-50 p-4">
-                    {viewMode === 'subject' ? <>
+                {isExamOrder && <div id="exam-order-tools" className="mb-5 rounded-2xl border border-slate-200 bg-slate-50 p-4">
                         <div className="flex flex-wrap items-end gap-3">
                             <label><span className="mb-2 block text-sm font-bold text-slate-700">ตัดจำนวนผู้ลงทะเบียน (%)</span><input type="number" min="0" max="100" step="0.1" value={reductionPercent} onChange={(event) => setReductionPercent(event.target.value)} className="h-11 w-32 rounded-xl border border-slate-300 bg-white px-3 text-sm" /></label>
                             <button type="button" onClick={applyReduction} disabled={registrationBusy || !validReduction || visibleCheckedSubjects.length === 0} className="h-11 rounded-xl bg-brand-700 px-4 text-sm font-bold text-white disabled:cursor-not-allowed disabled:opacity-50">ตัดเปอร์เซ็นต์ ({visibleCheckedSubjects.length} วิชา)</button>
@@ -764,7 +782,6 @@ export function ReportPage({ kind }: { kind: ReportKind }) {
                         </div>
                         {!validReduction && <p role="alert" className="mt-2 text-sm text-rose-700">กรอกเปอร์เซ็นต์ตั้งแต่ 0 ถึง 100</p>}
                         <p className="mt-3 text-xs text-slate-600">ติ๊กเลือกวิชาก่อนตัด คำนวณจากยอดจริงของแต่ละวิชาและปัดจำนวนที่ตัดเป็นจำนวนเต็มใกล้ที่สุด เช่น 119 คน ตัด 5% = ตัด 6 คน เหลือ 113 คน กดซ้ำไม่ตัดทบ ยอดแยกกลุ่มรวมตรงกับยอดรายวิชา</p>
-                    </> : <p className="text-sm text-slate-700">รายคนแสดงรายชื่อและจำนวนวิชาที่ลงทะเบียนจริง หากต้องการปรับยอดผู้ลงทะเบียน ให้เลือกวิชาในมุมมองรายวิชา</p>}
                     <p className="mt-2 text-xs text-slate-600">Excel ส่งออกครบทุกหน้าตามตัวกรอง พร้อมชีตแยกกลุ่มเรียน การตัดมีผลเฉพาะยอดรายงานรายวิชาและ Excel ไม่เปลี่ยนทะเบียนหรือรายชื่อนักศึกษาจริง เปลี่ยนภาคเรียน ระดับ หรือกลุ่มเรียนจะคืนยอดเดิม</p>
                 </div>}
                 {report.isPending && <QuerySkeleton />}

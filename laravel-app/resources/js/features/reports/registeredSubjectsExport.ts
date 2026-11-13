@@ -50,7 +50,7 @@ export function reducedRegistrationGroups(groups: RegistrationGroupRow[], percen
 
 export function buildRegisteredSubjectsSheets(
     view: 'subject' | 'student', rows: RegistrationExportRow[], groups: RegistrationGroupRow[],
-    percentages: Record<string, number>, term: string,
+    percentages: Record<string, number>, term: string, includeReduction = false,
 ): ExcelSheet[] {
     if (view === 'student') {
         const columns = ['ภาคเรียน', 'รหัสนักศึกษา', 'ชื่อ - สกุล', 'ระดับชั้น', 'กลุ่มเรียน', 'รหัสกลุ่มเรียน', 'วิชาลงทะเบียน'];
@@ -62,23 +62,23 @@ export function buildRegisteredSubjectsSheets(
         ];
     }
     const ids = new Set(rows.map((row) => row.id));
-    const grouped = reducedRegistrationGroups(groups.filter((row) => ids.has(row.subject_id)), percentages)
+    const grouped = reducedRegistrationGroups(groups.filter((row) => ids.has(row.subject_id)), includeReduction ? percentages : {})
         .sort((a, b) => a.group_code.localeCompare(b.group_code, 'th') || a.level.localeCompare(b.level, 'th') || a.code.localeCompare(b.code, 'th'));
     return [
         {
             name: 'รายวิชา',
-            columns: ['ภาคเรียน', 'รหัสวิชา', 'รายวิชา', 'ระดับ', 'ผู้ลงทะเบียนจริง', 'ตัด (%)', 'จำนวนที่ตัด', 'ผู้ลงทะเบียนหลังตัด'],
+            columns: ['ภาคเรียน', 'รหัสวิชา', 'รายวิชา', 'ระดับ', ...(includeReduction ? ['ผู้ลงทะเบียนจริง', 'ตัด (%)', 'จำนวนที่ตัด', 'ผู้ลงทะเบียนหลังตัด'] : ['ผู้ลงทะเบียน'])],
             rows: rows.map((row) => {
                 const count = row.registeredCount ?? 0;
-                const percent = percentages[row.id] ?? 0;
+                const percent = includeReduction ? percentages[row.id] ?? 0 : 0;
                 const removed = registrationReduction(count, percent);
-                return [term, row.secondary, row.primary, row.group, count, percent, removed, count - removed];
+                return [term, row.secondary, row.primary, row.group, count, ...(includeReduction ? [percent, removed, count - removed] : [])];
             }),
         },
         {
             name: 'แยกกลุ่มเรียน',
-            columns: ['ภาคเรียน', 'รหัสกลุ่มเรียน', 'กลุ่มเรียน', 'ระดับ', 'รหัสวิชา', 'รายวิชา', 'ผู้ลงทะเบียนจริง', 'ตัด (%)', 'จำนวนที่ตัด', 'ผู้ลงทะเบียนหลังตัด'],
-            rows: grouped.map((row) => [term, row.group_code, row.group_name, row.level, row.code, row.name, row.registered_students, row.percent, row.removed, row.registered_students - row.removed]),
+            columns: ['ภาคเรียน', 'รหัสกลุ่มเรียน', 'กลุ่มเรียน', 'ระดับ', 'รหัสวิชา', 'รายวิชา', ...(includeReduction ? ['ผู้ลงทะเบียนจริง', 'ตัด (%)', 'จำนวนที่ตัด', 'ผู้ลงทะเบียนหลังตัด'] : ['ผู้ลงทะเบียน'])],
+            rows: grouped.map((row) => [term, row.group_code, row.group_name, row.level, row.code, row.name, row.registered_students, ...(includeReduction ? [row.percent, row.removed, row.registered_students - row.removed] : [])]),
         },
     ];
 }
