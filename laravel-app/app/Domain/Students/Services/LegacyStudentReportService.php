@@ -653,6 +653,7 @@ final readonly class LegacyStudentReportService
         }
 
         $grouped = [];
+        $groupRows = [];
         $studentCodes = [];
         foreach ($registrations as $registration) {
             $key = $registration['level'].'|'.$registration['subject_code'];
@@ -664,6 +665,17 @@ final readonly class LegacyStudentReportService
                 'count' => 0,
             ];
             $grouped[$key]['count']++;
+            $groupKey = $key.'|'.$registration['group_code'];
+            $groupRows[$groupKey] ??= [
+                'subject_id' => $key,
+                'code' => $registration['subject_code'],
+                'name' => $registration['subject_name'],
+                'level' => $this->levelLabel((int) $registration['level']),
+                'group_code' => $registration['group_code'],
+                'group_name' => $registration['group_name'],
+                'registered_students' => 0,
+            ];
+            $groupRows[$groupKey]['registered_students']++;
             $studentCodes[$registration['level'].'|'.$registration['student_code']] = true;
         }
 
@@ -673,6 +685,7 @@ final readonly class LegacyStudentReportService
             'secondary' => $row['secondary'],
             'group' => $row['group'],
             'metric' => number_format((int) $row['count']).' คน',
+            'registeredCount' => (int) $row['count'],
         ], $grouped));
         usort($rows, static fn (array $left, array $right): int => [
             $left['group'], $left['secondary'],
@@ -692,6 +705,7 @@ final readonly class LegacyStudentReportService
             'terms' => $allTerms,
             'selected_term' => $selectedTerm,
             'rows' => $rows,
+            'group_rows' => array_values($groupRows),
         ];
     }
 

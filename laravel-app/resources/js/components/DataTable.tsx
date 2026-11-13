@@ -53,6 +53,8 @@ type DataTableProps<T> = {
     exportFileName?: string;
     exportSheetName?: string;
     disableExport?: boolean;
+    onExport?: () => void;
+    exportTitle?: string;
 };
 
 const minimumWidths = {
@@ -188,6 +190,8 @@ export function DataTable<T>({
     exportFileName,
     exportSheetName,
     disableExport = false,
+    onExport,
+    exportTitle = 'ส่งออกเฉพาะข้อมูลที่แสดงตามตัวกรอง',
 }: DataTableProps<T>) {
     const exportContainer = useRef<HTMLDivElement>(null);
     const [sorting, setSorting] = useState<SortingState>([]);
@@ -268,7 +272,7 @@ export function DataTable<T>({
                         เลือกชื่อคอลัมน์เพื่อเรียงข้อมูล
                     </Typography>
                     {!disableExport && exportColumns.length > 0 && (
-                        <Button variant="outlined" size="small" startIcon={<ExcelFileIcon size={18} />} aria-label="ส่งออก Excel (ข้อมูลที่แสดง)" title="ส่งออกเฉพาะข้อมูลที่แสดงตามตัวกรอง" onClick={exportToExcel}>
+                        <Button variant="outlined" size="small" startIcon={<ExcelFileIcon size={18} />} aria-label={onExport ? 'ส่งออก Excel (ครบตามตัวกรอง แยกกลุ่มเรียน)' : 'ส่งออก Excel (ข้อมูลที่แสดง)'} title={exportTitle} onClick={onExport ?? exportToExcel}>
                             ส่งออก Excel
                         </Button>
                     )}

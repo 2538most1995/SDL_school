@@ -69,6 +69,24 @@ final class TeacherGroupIsolationTest extends TestCase
         $this->getJson('/api/v1/reports/students/exam-eligible?term=2/2568')->assertOk()->assertJsonCount(0, 'data.items');
     }
 
+    public function test_registration_group_export_keeps_teacher_scope_and_reconciles_subject_counts(): void
+    {
+        Sanctum::actingAs($this->viewer('teacher', ['SENA-M3-A']));
+        $data = $this->getJson('/api/v1/reports/registered-subjects?term=2/2568&view=subject')->assertOk()->json('data');
+        $this->assertNotEmpty($data['group_rows']);
+        $this->assertSame(['SENA-M3-A'], array_values(array_unique(array_column($data['group_rows'], 'group_code'))));
+        foreach ($data['rows'] as $subject) {
+            $this->assertSame($subject['registeredCount'], collect($data['group_rows'])->where('subject_id', $subject['id'])->sum('registered_students'));
+        }
+        $this->getJson('/api/v1/reports/registered-subjects?term=2/2568&view=subject&group=SENA-M3-B')
+            ->assertOk()->assertJsonCount(0, 'data.rows')->assertJsonCount(0, 'data.group_rows');
+        Sanctum::actingAs($this->viewer('teacher'));
+        $this->getJson('/api/v1/reports/registered-subjects?term=2/2568&view=subject')
+            ->assertOk()->assertJsonCount(0, 'data.group_rows');
+        Sanctum::actingAs($this->viewer('student'));
+        $this->getJson('/api/v1/reports/registered-subjects?view=subject')->assertForbidden();
+    }
+
     public function test_teacher_groups_use_exact_codes_or_names_without_guessing_numeric_aliases(): void
     {
         $base = (new DemoStudentRepository)->students([1])[0];

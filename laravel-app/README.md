@@ -386,3 +386,10 @@ Before using task writes, apply migration `2026_10_29_000042_create_classroom_ta
 Teachers can target only one explicitly selected assigned group when creating tasks, activities, file worksheets, resources or calendar events. Teacher report filters read only their current assigned roster; N-NET and private file/media endpoints enforce the same boundary. Empty group assignments grant no student access. Matching requires the exact group code or exact group name; numeric codes are no longer silently equated by removing leading zeros. District-wide N-NET schedule changes require an administrator.
 
 No new migration is required for this update. Deploy the included production assets and run `php artisan optimize:clear`. Existing classroom task migration 000042 must already be installed to use tasks. No real account assignment or production database was changed during development. See [docs/online-classroom.md](docs/online-classroom.md) for retained historical work and group targeting.
+## ส่งออกวิชาลงทะเบียนและตัดเปอร์เซ็นต์ (13 พฤศจิกายน 2569)
+
+หน้า **วิชาลงทะเบียน** ส่งออก Excel ได้ครบทุกหน้าตามตัวกรอง ทั้ง **ดูเป็นรายวิชา** และ **ดูเป็นรายคน** โดยเพิ่มชีต **แยกกลุ่มเรียน** ในไฟล์เดียวกัน รายวิชาจะแยกยอดตามรหัสกลุ่มและระดับ ส่วนรายคนจะจัดรายชื่อจริงตามกลุ่ม พร้อมรหัสนักศึกษา ชื่อ ระดับ และจำนวนวิชาที่ลงทะเบียน
+
+ในมุมมองรายวิชา ติ๊กเลือกวิชาที่ต้องการ ใส่เปอร์เซ็นต์ 0–100 แล้วกด **ตัดเปอร์เซ็นต์** เช่น 119 คน ตัด 5% จะปัดจำนวนที่ตัดเป็น 6 คน เหลือ 113 คน ตารางและ Excel แสดงยอดจริง เปอร์เซ็นต์ จำนวนที่ตัด และยอดหลังตัด แบ่งยอดตัดให้กลุ่มโดยยอดรวมตรงกับรายวิชา กดซ้ำจะคำนวณจากยอดจริงเสมอ กด **คืนยอดเดิม** เพื่อยกเลิก การเปลี่ยนภาคเรียน ระดับ กลุ่ม อำเภอ หรือบทบาทจะล้างการตัดเดิม การตัดเป็นค่าชั่วคราวเฉพาะรายงาน/Excel ไม่ลบทะเบียนหรือเปลี่ยนรายชื่อนักศึกษาจริง และไม่บันทึกข้ามการรีเฟรชหน้า
+
+ไม่ต้องรัน migration หรือนำเข้าใหม่ Production assets รวมใน Git แล้ว หลังดึง Git ให้รัน `php artisan optimize:clear` และรีเฟรชหน้าเว็บ สิทธิ์อำเภอและกลุ่มครูยังใช้ขอบเขตเดิม

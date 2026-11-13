@@ -300,6 +300,7 @@ final readonly class StudentReportService
         }
 
         $grouped = [];
+        $groupRows = [];
         $studentCodes = [];
         $registrationRecords = 0;
         $students = $this->students($viewer, $this->subjectViewFilters($filters));
@@ -317,6 +318,17 @@ final readonly class StudentReportService
                 $key = "{$student->level}|{$grade->term}|{$grade->subjectCode}";
                 $grouped[$key] ??= ['name' => $grade->subjectName, 'code' => $grade->subjectCode, 'level' => $student->levelLabel, 'count' => 0];
                 $grouped[$key]['count']++;
+                $groupKey = $key.'|'.$student->groupCode;
+                $groupRows[$groupKey] ??= [
+                    'subject_id' => $key,
+                    'code' => $grade->subjectCode,
+                    'name' => $grade->subjectName,
+                    'level' => $student->levelLabel,
+                    'group_code' => $student->groupCode,
+                    'group_name' => $student->groupName,
+                    'registered_students' => 0,
+                ];
+                $groupRows[$groupKey]['registered_students']++;
                 $studentCodes[$student->code] = true;
                 $registrationRecords++;
             }
@@ -327,6 +339,7 @@ final readonly class StudentReportService
             'secondary' => (string) $row['code'],
             'group' => (string) $row['level'],
             'metric' => number_format((int) $row['count']).' คน',
+            'registeredCount' => (int) $row['count'],
         ], $grouped, array_keys($grouped)));
 
         return [
@@ -341,6 +354,7 @@ final readonly class StudentReportService
             'terms' => $terms,
             'selected_term' => $selectedTerm,
             'rows' => $rows,
+            'group_rows' => array_values($groupRows),
         ];
     }
 

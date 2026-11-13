@@ -271,6 +271,13 @@ final class LegacyStudentReportServiceTest extends TestCase
         $this->assertSame('2/2568', $result['selected_term']);
         $this->assertContains('2/2568', $result['terms']);
         $this->assertSame('2 คน', collect($result['rows'])->firstWhere('secondary', 'พท11001')['metric']);
+        $this->assertSame(2, collect($result['rows'])->firstWhere('secondary', 'พท11001')['registeredCount']);
+        $this->assertCount(3, $result['group_rows']);
+        $thaiGroups = collect($result['group_rows'])->where('code', 'พท11001');
+        $this->assertSame(2, $thaiGroups->sum('registered_students'));
+        $this->assertEqualsCanonicalizing(['G-OLD', 'G-NEW'], $thaiGroups->pluck('group_code')->all());
+        $this->assertSame(['กลุ่มครู ก'], $thaiGroups->pluck('group_name')->unique()->values()->all());
+        $this->assertSame(['1|พท11001'], $thaiGroups->pluck('subject_id')->unique()->values()->all());
 
         $registrationQuery = collect($queries)->first(
             static fn (array $entry): bool => str_contains($entry['query'], 'SELECT g._id AS row_id'),
