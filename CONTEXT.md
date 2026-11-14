@@ -1,3 +1,11 @@
+## Compact online classroom (2026-11-14)
+
+The classroom uses a compact course/chapter/content flow. Courses show eight per display page without an inner scrolling area; chapters use expandable rows. Separate URL-backed tabs hold lessons, assigned tasks, documents/media and the additional library. Student home previews one pending task from the latest loaded task page, with an explicit all-tasks action. Activity types use contrasting icons, labels and action colors. Teacher add/import/template controls appear only when requested.
+
+Opening online content or a file worksheet renders its focused detail without the parent course/chapter gallery. The original activity, answers, scores, attempts, file submissions and task acknowledgement endpoints remain authoritative. Activity/type/file-mode selection is derived directly from the URL to avoid partial transitions that previously could lose course/task context when opening assigned work. Browser history restores file selection and content type. Guarded navigation retains unsaved-work confirmation; successful authorized chapter mutations use a separate completion callback so a pending mutation cannot block its own return navigation.
+
+Content displays ten rows per page over the existing fifty-record server pages; selected activities remain independently resolvable beyond the visible list. District changes remount the classroom through the shared district selector. No schema, import, authorization or production-data changes are required. Deploy the committed build and clear Laravel caches.
+
 ## Registered-subject Excel and report reductions (2026-11-13)
 
 Reduction controls, subject checkboxes and adjusted-count columns are hidden by default. Staff explicitly open the exam-order mode using the "สั่งข้อสอบ" button beside the subject/student view buttons. Closing the mode or switching to student view clears its selections and rates. Ordinary Excel exports contain only actual registration counts; exam-order exports explicitly include reductions and use an exam-order filename. Both export modes keep their group sheet.

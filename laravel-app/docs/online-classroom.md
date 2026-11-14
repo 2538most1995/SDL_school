@@ -123,3 +123,12 @@ The teacher task/activity/file/resource/calendar forms show only assigned groups
 Teacher report group filters say they cover only assigned groups. Directory, academic reports, registrations, exam attendance, score/report data and N-NET use current group scope. N-NET cannot trust stored result group names: teacher access requires an unambiguous current student identity and level. Mixed imports containing an out-of-scope identity are rejected before writes. Only district administrators may update the district-wide N-NET schedule. Admin/super_admin access remains district scoped. No migration or data rewrite is included.
 
 Verification for teacher isolation: full PHPUnit suite passed 540 tests with 1 existing skip (541 total, 4,873 assertions). Frontend suite passed 97 tests; TypeScript, changed/new PHP Pint and production build passed. Browser checks on isolated SQLite confirmed teacher forms expose only the assigned group, successful task creation lists only that group's learner, the mobile form has no horizontal overflow, and district administrators retain all-group choices. Production account assignments, production MySQL plans and high-volume performance remain Not verified.
+## หน้าห้องเรียนกระชับ (14 พฤศจิกายน 2569)
+
+หน้ารายวิชาแสดงครั้งละ 8 วิชา ใช้บทเรียน/หัวข้อแบบเปิด–พับ และแสดงเนื้อหาครั้งละ 10 รายการ ลดหัวเรื่องและภาพตกแต่งขนาดใหญ่ ประเภทเนื้อหามีชื่อ ไอคอน และปุ่มสีแยกกัน: วิดีโอสีส้ม ใบความรู้สีน้ำเงิน ใบงานสีอำพัน และแบบทดสอบสีม่วง ปุ่มหลักใช้เขียวเข้ม รองรับธีมมืดและมือถือโดยไม่ย่อข้อความเพื่อบีบรายการ
+
+แท็บบทเรียน งานที่ต้องส่ง/งานที่มอบหมาย เอกสาร/สื่อ และสื่อเพิ่มเติมแสดงเฉพาะส่วนที่เลือก นักศึกษาเห็นงานที่ยังไม่ครบหนึ่งรายการจากรายการล่าสุดบนหน้าเลือกวิชา พร้อมปุ่มดูงานทั้งหมด ครูเปิดเมนูเพิ่มเนื้อหาก่อนจึงเห็นการสร้างกิจกรรม นำเข้าข้อสอบ และดาวน์โหลดเทมเพลต
+
+เปิดเนื้อหาหรือใบงานส่งไฟล์แล้วจะแสดงรายละเอียดเฉพาะรายการ ไม่วางรายการวิชาและการ์ดเนื้อหาซ้ำเหนือหน้าเรียน ลิงก์เดิมยังเปิดได้ รวมรายการ legacy และงานที่ครูมอบหมาย สถานะกิจกรรม ประเภท และโหมดส่งไฟล์อิง URL ชุดเดียวกันเพื่อรักษารายวิชา/บทเรียน/task_id ระหว่างเปลี่ยนหน้าและใช้ Browser Back การอ่าน/ดูยังต้องยืนยันตามงานที่ครูสั่ง ไม่ถือว่าเสร็จเพียงเปิดสื่อ ข้อจำกัดจำนวนครั้งส่ง คำตอบ คะแนน กลุ่ม และสิทธิ์เดิมยังอยู่ครบ
+
+ไม่มี migration ใหม่ ไม่ต้องนำเข้าหรือย้ายงานเดิม ใช้ production build ที่รวมใน Git แล้วรัน `php artisan optimize:clear` และรีเฟรชเบราว์เซอร์

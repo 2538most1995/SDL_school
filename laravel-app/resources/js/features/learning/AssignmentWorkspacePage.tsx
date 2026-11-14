@@ -284,7 +284,7 @@ function canSubmitAssignment(assignment: Assignment, readOnly: boolean): boolean
     return !readOnly && assignment.status === 'open' && (!assignment.opens_at || Date.parse(assignment.opens_at) <= now);
 }
 
-export function AssignmentWorkspacePage({ subject, unitId, unitTargetGroup, embedded = false, initialAssignmentId = '', onDirty, onBusy }: {
+export function AssignmentWorkspacePage({ subject, unitId, unitTargetGroup, embedded = false, initialAssignmentId = '', onDirty, onBusy, onSelectionChange }: {
     subject?: Subject;
     unitId?: string;
     unitTargetGroup?: string;
@@ -292,12 +292,15 @@ export function AssignmentWorkspacePage({ subject, unitId, unitTargetGroup, embe
     initialAssignmentId?: string;
     onDirty?: (dirty: boolean) => void;
     onBusy?: (busy: boolean) => void;
+    onSelectionChange?: (id: string) => void;
 } = {}) {
     const { role } = useDemoRole();
     const queryClient = useQueryClient();
     const district = window.localStorage.getItem('sena-district-id') ?? '';
     const isStaff = role !== 'student';
-    const [selectedId, setSelectedId] = useState<string>(initialAssignmentId);
+    const [localSelectedId, setLocalSelectedId] = useState<string>(initialAssignmentId);
+    const selectedId = onSelectionChange ? initialAssignmentId : localSelectedId;
+    const setSelectedId = (id: string) => onSelectionChange ? onSelectionChange(id) : setLocalSelectedId(id);
     const [editorBusy, setEditorBusy] = useState(false);
     const detailRef = useRef<HTMLElement>(null);
     const [search, setSearch] = useState('');
@@ -376,6 +379,7 @@ export function AssignmentWorkspacePage({ subject, unitId, unitTargetGroup, embe
     return <div className={`assignment-workspace pb-6 ${embedded ? 'assignment-workspace-embedded' : ''}`}>
         {readOnly && <p role="status" className="mb-4 rounded-xl border border-amber-200 bg-amber-50 p-3 text-sm text-amber-900">ระบบอยู่ในโหมดอ่านอย่างเดียว ยังสร้างงาน ส่งงาน หรือตรวจคะแนนไม่ได้</p>}
         {query.isError && <p role="alert" className="mb-4 rounded-xl bg-amber-50 p-3 text-sm text-amber-900">โหลดข้อมูลล่าสุดไม่สำเร็จ แบบร่างยังอยู่ <button type="button" onClick={() => void query.refetch()} className="font-bold underline">ลองใหม่</button></p>}
+        {embedded && selectedId && <button type="button" className="classroom-action mb-4" onClick={() => setSelectedId('')}><CaretRight size={17} className="rotate-180" />กลับไปรายการใบงาน</button>}
         {embedded ? <div className="classroom-section-heading mb-4"><div><h3>งานส่งไฟล์ / ลิงก์</h3><p className="classroom-muted mt-1 text-sm">ส่ง PDF รูปภาพ หรือลิงก์งาน พร้อมติดตามคะแนนและคำแนะนำจากครู</p></div>{canManage && <button type="button" disabled={data.subjects.length === 0} onClick={() => setAssignmentEditor('new')} className="assignment-primary-action"><Plus size={18} /> มอบหมายงานส่งไฟล์</button>}</div> : <PageHeader
             category="learning"
             title="งานและการส่งงาน"
@@ -394,8 +398,8 @@ export function AssignmentWorkspacePage({ subject, unitId, unitTargetGroup, embe
             <button type="button" onClick={() => void query.refetch()} className="inline-flex h-11 items-center justify-center gap-2 whitespace-nowrap rounded-xl border border-slate-200 px-4 text-sm font-bold text-slate-700 hover:border-brand-300 hover:text-brand-800 active:scale-[0.98]"><ArrowsClockwise size={17} /> ดึงข้อมูลรายวิชา</button>
         </section>}
 
-        {data.subjects.length === 0 ? <section className="rounded-2xl border border-amber-200 bg-amber-50 p-8 text-center"><BookOpenText size={38} className="mx-auto text-amber-700" /><h2 className="mt-3 text-lg font-black text-amber-950">ยังไม่พบรายวิชาที่ลงทะเบียนในภาคเรียนปัจจุบัน</h2><p className="mt-2 text-sm leading-6 text-amber-900">เมื่อนำเข้าข้อมูลผู้เรียนและรายวิชาลงทะเบียนแล้ว ครูจะสามารถสร้างงานจากหน้านี้ได้</p></section> : <div className="grid gap-5 xl:grid-cols-[360px_minmax(0,1fr)]">
-            <aside className="overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm">
+        {data.subjects.length === 0 ? <section className="rounded-2xl border border-amber-200 bg-amber-50 p-8 text-center"><BookOpenText size={38} className="mx-auto text-amber-700" /><h2 className="mt-3 text-lg font-black text-amber-950">ยังไม่พบรายวิชาที่ลงทะเบียนในภาคเรียนปัจจุบัน</h2><p className="mt-2 text-sm leading-6 text-amber-900">เมื่อนำเข้าข้อมูลผู้เรียนและรายวิชาลงทะเบียนแล้ว ครูจะสามารถสร้างงานจากหน้านี้ได้</p></section> : <div className={embedded ? "grid gap-5" : "grid gap-5 xl:grid-cols-[360px_minmax(0,1fr)]"}>
+            <aside hidden={embedded && Boolean(selectedId)} className="overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm">
                 <div className="border-b border-slate-100 p-4">
                     <div className="flex items-center justify-between gap-3"><h2 className="font-black text-slate-950">งานที่มอบหมาย</h2>{canManage && !embedded && <button type="button" onClick={() => setAssignmentEditor('new')} className="inline-flex items-center gap-1.5 rounded-xl bg-brand-700 px-3 py-2 text-xs font-bold text-white active:scale-[0.98]"><Plus size={15} /> เพิ่มงาน</button>}</div>
                     <label className="relative mt-3 block"><span className="sr-only">ค้นหาชื่องาน</span><MagnifyingGlass size={18} className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" /><input value={search} onChange={(event) => setSearch(event.target.value)} placeholder="ค้นหาชื่องานหรือรายวิชา" className="h-11 w-full rounded-xl border border-slate-300 bg-white pl-10 pr-3 text-sm text-slate-900 outline-none focus:border-brand-600 focus:ring-2 focus:ring-brand-100" /></label>
@@ -412,7 +416,7 @@ export function AssignmentWorkspacePage({ subject, unitId, unitTargetGroup, embe
                 </div>
             </aside>
 
-            <main ref={detailRef} tabIndex={-1} aria-label={selected ? `รายละเอียดงาน ${selected.title}` : 'รายละเอียดงานส่งไฟล์'} className="min-w-0 scroll-mt-5 overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm">
+            <main hidden={embedded && !selectedId} ref={detailRef} tabIndex={-1} aria-label={selected ? `รายละเอียดงาน ${selected.title}` : 'รายละเอียดงานส่งไฟล์'} className="min-w-0 scroll-mt-5 overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm">
                 {!selected ? <div className="grid min-h-[440px] place-items-center p-8 text-center"><div><BookOpenText size={44} className="mx-auto text-slate-300" /><h2 className="mt-3 text-lg font-black text-slate-800">เลือกงานเพื่อดูรายละเอียด</h2></div></div> : <>
                     <header className="border-b border-slate-100 p-4 md:p-5">
                         <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">

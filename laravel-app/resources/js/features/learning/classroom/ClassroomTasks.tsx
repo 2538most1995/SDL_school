@@ -17,9 +17,9 @@ export type TaskItem = { id: string; unit_id?: string | null; kind: 'activity' |
 export type ClassroomTask = { id: string; unit_id?: string | null; title: string; instructions: string; due_at: string; subject_name?: string; subject_code: string; education_level: number; target_group: string; item_count: number; completed_count: number; student_count: number; progress: Progress | null };
 type TaskDetail = ClassroomTask & { items: TaskItem[]; students: (Progress & { student_code: string; student_name: string; group_code: string; group_name: string })[]; pagination: PageInfo | null };
 type Options = { items: TaskItem[]; groups: { code: string; name: string }[] };
-type Props = { unitId?: string; unitTargetGroup?: string; subject?: Subject; manage: boolean; role: string; district: string; readOnly: boolean; onDirty?: (dirty: boolean) => void; onBusy?: (busy: boolean) => void; onOpen: (item: TaskItem, task: ClassroomTask) => void };
+type Props = { unitId?: string; unitTargetGroup?: string; subject?: Subject; manage: boolean; role: string; district: string; readOnly: boolean; compact?: boolean; onViewAll?: () => void; onDirty?: (dirty: boolean) => void; onBusy?: (busy: boolean) => void; onOpen: (item: TaskItem, task: ClassroomTask) => void };
 
-export function ClassroomTasks({ subject, manage, role, district, readOnly, unitId, unitTargetGroup, onDirty, onBusy, onOpen }: Props) {
+export function ClassroomTasks({ subject, manage, role, district, readOnly, unitId, unitTargetGroup, compact = false, onViewAll, onDirty, onBusy, onOpen }: Props) {
     const [page, setPage] = useState(1);
     const [selected, setSelected] = useState('');
     const [creating, setCreating] = useState(false);
@@ -27,11 +27,15 @@ export function ClassroomTasks({ subject, manage, role, district, readOnly, unit
     if (unitId) params.set('unit_id', unitId);
     if (subject) { params.set('subject_code', subject.code); params.set('education_level', String(subject.level)); }
     const query = useQuery({ queryKey: ['classroom-tasks', role, district, subject?.level, subject?.code, unitId, page], queryFn: ({ signal }) => getFeatureData<{ tasks: ClassroomTask[]; pagination: PageInfo }>(`${base}?${params}`, signal) });
-    return <section className="classroom-tasks" aria-label={manage ? 'งานที่มอบหมาย' : 'งานที่ครูสั่ง'}>
+    const tasks = query.data?.data.tasks ?? [];
+    const visibleTasks = compact ? tasks.filter(task => task.progress?.status !== 'completed').slice(0, 1) : tasks;
+    return <section className={`classroom-tasks ${compact ? 'classroom-tasks-compact' : ''}`} aria-label={manage ? 'งานที่มอบหมาย' : 'งานที่ครูสั่ง'}>
         <div className="classroom-tasks-heading"><div><span className="classroom-step"><ClipboardText size={19} /> {manage ? 'มอบหมายและติดตาม' : 'งานของฉัน'}</span><h3>{manage ? 'งานที่มอบหมาย' : 'งานที่ครูสั่ง'}</h3><p>{manage ? 'เลือกกิจกรรม กำหนดส่ง แล้วติดตามผู้เรียนรายคน' : 'เปิดงาน ดูสิ่งที่ต้องทำ แล้วทำกิจกรรมให้ครบตามที่ครูกำหนด'}</p></div>{manage && subject && <Button appearance="primary" icon={<Plus size={19} />} disabled={readOnly} onClick={() => setCreating(true)}>สั่งงาน</Button>}</div>
-        {query.isPending ? <QuerySkeleton rows={2} /> : query.isError ? <QueryError message={errorText(query.error)} onRetry={() => void query.refetch()} /> : <>
+        {compact && onViewAll && <button type="button" className="classroom-action classroom-task-view-all" onClick={onViewAll}>ดูงานทั้งหมด <ArrowRight size={17} /></button>}
+        {query.isPending ? <QuerySkeleton rows={compact ? 1 : 2} /> : query.isError ? <QueryError message={errorText(query.error)} onRetry={() => void query.refetch()} /> : <>
             {query.data.data.tasks.length === 0 && <p className="classroom-muted">{manage ? 'ยังไม่มีงานที่มอบหมายในห้องเรียนนี้' : 'ยังไม่มีงานที่ครูสั่งในขณะนี้'}</p>}
-            <div className="classroom-task-list">{query.data.data.tasks.map(task => {
+            {compact && tasks.length > 0 && visibleTasks.length === 0 && <p className="classroom-muted">ไม่มีงานค้างในรายการล่าสุด เปิดดูงานทั้งหมดเพื่อตรวจรายการอื่น</p>}
+            <div className="classroom-task-list">{visibleTasks.map(task => {
                 const progress = task.progress;
                 const overdue = new Date(task.due_at).getTime() < Date.now() && progress?.status !== 'completed';
                 return <button type="button" key={task.id} className="classroom-task-card" onClick={() => setSelected(task.id)}>
@@ -40,7 +44,7 @@ export function ClassroomTasks({ subject, manage, role, district, readOnly, unit
                     <span className="classroom-task-card-bottom"><span>{progress ? `ทำแล้ว ${progress.completed}/${progress.total} กิจกรรม` : `${task.item_count} กิจกรรม · ${task.target_group || (role === 'teacher' ? 'กลุ่มที่รับผิดชอบ' : 'ทุกกลุ่มที่รับผิดชอบ')}`}</span><span>{manage ? 'ดูรายชื่อผู้เรียน' : 'ดูงาน'} <ArrowRight size={17} /></span></span>
                 </button>;
             })}</div>
-            <TaskPager page={query.data.data.pagination} change={setPage} />
+            {!compact && <TaskPager page={query.data.data.pagination} change={setPage} />}
         </>}
         {creating && subject && <TaskEditor unitId={unitId} unitTargetGroup={unitTargetGroup} onDirty={onDirty} onBusy={onBusy} subject={subject} role={role} district={district} close={() => setCreating(false)} saved={(id) => { setCreating(false); setSelected(id); }} />}
         {selected && <TaskDialog key={`${selected}:${role}:${district}`} id={selected} manage={manage} role={role} district={district} close={() => setSelected('')} openItem={onOpen} />}
