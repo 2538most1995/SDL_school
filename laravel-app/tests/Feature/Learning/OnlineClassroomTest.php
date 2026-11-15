@@ -4,8 +4,10 @@ namespace Tests\Feature\Learning;
 
 use App\Models\District;
 use App\Models\User;
+use App\Services\Learning\OnlineClassroomService;
 use App\Support\StudentDashboardMenu;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Http\Request;
 use Illuminate\Http\UploadedFile;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Schema;
@@ -352,6 +354,112 @@ final class OnlineClassroomTest extends TestCase
             ->assertOk()->assertJsonCount(0, 'data.activities')->assertJsonPath('data.selected_activity', null)
             ->assertJsonPath('data.activity_counts.all', 58);
         $this->getJson(self::BASE.'?activity_type=unknown')->assertUnprocessable();
+    }
+
+    public function test_catalog_is_reused_only_within_the_same_request_and_authorization_scope(): void
+    {
+        $original = $this->app['request'];
+        $this->app->instance('request', Request::create('/catalog'));
+        DB::enableQueryLog();
+        try {
+            $first = app(OnlineClassroomService::class)->catalog($this->teacher, $this->district->id);
+            $this->assertNotEmpty($first['subjects']);
+            $this->assertNotEmpty(DB::getQueryLog());
+            DB::flushQueryLog();
+            $this->assertSame($first, app(OnlineClassroomService::class)->catalog($this->teacher, $this->district->id));
+            $this->assertSame([], DB::getQueryLog());
+
+            $restricted = clone $this->teacher;
+            $restricted->assigned_groups = [];
+            $this->assertSame([], app(OnlineClassroomService::class)->catalog($restricted, $this->district->id)['subjects']);
+            DB::flushQueryLog();
+
+            $this->app->instance('request', Request::create('/next-catalog'));
+            $this->assertSame($first, app(OnlineClassroomService::class)->catalog($this->teacher, $this->district->id));
+            $this->assertNotEmpty(DB::getQueryLog());
+        } finally {
+            DB::disableQueryLog();
+            $this->app->instance('request', $original);
+        }
+    }
+
+    public function test_catalog_only_workspace_skips_activity_and_submission_queries(): void
+    {
+        $this->createActivity();
+        DB::enableQueryLog();
+        DB::flushQueryLog();
+        try {
+            $workspace = app(OnlineClassroomService::class)->workspace($this->teacher, $this->district->id, ['catalog_only' => true]);
+            $this->assertNotEmpty($workspace['subjects']);
+            $this->assertSame([], $workspace['activities']);
+            $this->assertNull($workspace['selected_activity']);
+            $queries = array_column(DB::getQueryLog(), 'query');
+            $this->assertSame([], array_values(array_filter($queries, fn ($query) => str_contains($query, 'learning_classroom_'))));
+        } finally {
+            DB::disableQueryLog();
+        }
+    }
+
+    public function test_catalog_only_resolves_the_authorized_requested_course(): void
+    {
+        $this->getJson(self::BASE.'?catalog_only=1&subject_code='.urlencode('พว31001').'&education_level=3')
+            ->assertOk()->assertJsonPath('data.selected_subject.code', 'พว31001')->assertJsonPath('data.activities', []);
+        $this->getJson(self::BASE.'?catalog_only=1&subject_code=not-registered&education_level=3')->assertNotFound();
+    }
+
+    public function test_summary_workspace_omits_implicit_detail_and_teacher_submission_queries(): void
+    {
+        $id = $this->createActivity();
+        $url = self::BASE.'?subject_code='.urlencode('พว31001').'&education_level=3';
+        DB::enableQueryLog();
+        DB::flushQueryLog();
+        try {
+            $this->getJson($url.'&summary_only=1')->assertOk()
+                ->assertJsonPath('data.selected_activity', null)
+                ->assertJsonPath('data.submissions', [])
+                ->assertJsonPath('data.submission_pagination', null)
+                ->assertJsonPath('data.activities.0.max_score', 2)
+                ->assertJsonMissingPath('data.activities.0.questions')
+                ->assertJsonMissingPath('data.activities.0.content');
+            $summaryQueries = count(DB::getQueryLog());
+            // Regressions previously performed over 360 queries for this same synthetic request.
+            $this->assertLessThan(100, $summaryQueries);
+            $this->assertSame([], array_values(array_filter(array_column(DB::getQueryLog(), 'query'),
+                fn ($sql) => str_contains($sql, 'learning_classroom_submissions') && str_contains($sql, 'select *'))));
+            DB::flushQueryLog();
+            $this->getJson($url)->assertOk()->assertJsonPath('data.selected_activity.id', (string) $id);
+            $this->assertGreaterThan($summaryQueries, count(DB::getQueryLog()));
+            $this->getJson($url.'&activity_id='.$id.'&summary_only=1')->assertOk()
+                ->assertJsonPath('data.selected_activity.questions.0.answer', 'ก');
+            $this->getJson($url.'&summary_only=invalid')->assertUnprocessable();
+        } finally {
+            DB::disableQueryLog();
+        }
+    }
+
+    public function test_student_summary_keeps_score_and_status_without_loading_submitted_answers(): void
+    {
+        $id = $this->createActivity();
+        Sanctum::actingAs($this->student());
+        $this->postJson(self::BASE.'/activities/'.$id.'/submit', ['answers' => ['q1' => 'ก']])->assertOk();
+        DB::enableQueryLog();
+        DB::flushQueryLog();
+        try {
+            $this->getJson(self::BASE.'?subject_code='.urlencode('พว31001').'&education_level=3&summary_only=1')->assertOk()
+                ->assertJsonPath('data.selected_activity', null)
+                ->assertJsonPath('data.activities.0.submission.status', 'reviewed')
+                ->assertJsonPath('data.activities.0.submission.score', 2)
+                ->assertJsonPath('data.activities.0.submission.answers', []);
+            $submissionQueries = array_values(array_filter(array_column(DB::getQueryLog(), 'query'), fn ($sql) => str_contains($sql, 'learning_classroom_submissions')));
+            $this->assertNotEmpty($submissionQueries);
+            foreach ($submissionQueries as $sql) {
+                $this->assertStringNotContainsString('"answers"', $sql);
+                $this->assertStringNotContainsString('select *', $sql);
+            }
+            $this->getJson($this->selected($id))->assertOk()->assertJsonPath('data.selected_activity.submission.answers.q1', 'ก');
+        } finally {
+            DB::disableQueryLog();
+        }
     }
 
     public function test_empty_classroom_has_zero_category_counts(): void

@@ -400,3 +400,7 @@ No new migration is required for this update. Deploy the included production ass
 ห้องเรียนแยกเป็นรายวิชา บทเรียน และหน้าเรียนเฉพาะรายการ พร้อมแท็บงานและเอกสาร ปุ่มหลักสีเขียวเข้ม และไอคอน/สีแยกชนิดเนื้อหา รายวิชาแสดงครั้งละ 8 วิชา เนื้อหาแสดงครั้งละ 10 รายการ เครื่องมือนำเข้าข้อสอบ/เทมเพลตอยู่ในปุ่ม **เพิ่มเนื้อหา** ของครู ลิงก์งานเดิม งานส่งไฟล์ คำตอบ คะแนน และสิทธิ์อำเภอ/กลุ่มยังใช้ระบบเดิม
 
 หลังดึง Git ให้รัน `php artisan optimize:clear` ภายใน `laravel-app` แล้วรีเฟรชหน้าเว็บ Production assets รวมแล้ว ไม่ต้องรัน migration หรือนำเข้าข้อมูลใหม่
+
+## Classroom library deployment (2026-11-15)
+
+Deploy the included production assets, then run `php artisan migrate --force` and `php artisan optimize:clear` inside `laravel-app` to enable content ordering (000044) and reusable lesson snapshots (000045). Back up private storage with the database, including classroom-library snapshots and existing assignment/resource/image files. Staff can restore historical lessons into current registered courses/groups as drafts; student evidence and old deadlines are not copied. See `docs/online-classroom.md`. Development did not migrate the deployment database.

@@ -103,3 +103,17 @@
 .classroom-v3 .classroom-tasks-compact > :not(.classroom-tasks-heading):not(.classroom-task-view-all) { grid-column:1 / -1; }
 .classroom-v3 .classroom-tasks-compact .classroom-task-card { background:var(--ui-surface); }
 .classroom-v3 .classroom-tasks-compact .classroom-task-card-bottom > span:last-child { background:var(--classroom-primary); color:white; border-radius:8px; padding:7px 11px; }
+
+.classroom-v3 .classroom-sort-row { display:flex; align-items:center; min-width:0; }
+.classroom-v3 .classroom-sort-row[data-dragging=true] { opacity:.45; }
+.classroom-v3 .classroom-sort-row:has(.classroom-sort-tools):hover { outline:1px dashed var(--classroom-accent); outline-offset:-1px; }
+.classroom-v3 .classroom-sort-row > .classroom-content-row { flex:1; }
+.classroom-v3 .classroom-sort-tools { display:flex; align-items:center; gap:2px; flex-shrink:0; }
+.classroom-v3 .classroom-drag-handle { cursor:grab; padding:8px; color:var(--ui-text-muted); }
+.classroom-v3 .classroom-drag-handle:active { cursor:grabbing; }
+@media(max-width:700px) {
+ .classroom-v3 .classroom-sort-row:has(.classroom-sort-tools) { flex-wrap:wrap; border-bottom:1px solid var(--ui-border); }
+ .classroom-v3 .classroom-sort-tools { flex-basis:100%; }
+ .classroom-v3 .classroom-sort-row > .classroom-content-row { flex-basis:100%; }
+ .classroom-v3 .classroom-list-heading { flex-wrap:wrap; }
+}

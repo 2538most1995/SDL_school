@@ -350,3 +350,11 @@ Dedicated Student Data API clients may opt in with `--sena-care` to `sena-care:t
 ### Explicit non-expiring integration credentials (2026-10-19)
 
 Student Data API clients may now have NULL `expires_at` when explicitly issued with `--no-expiry`. Authentication accepts a NULL expiry or a future timestamp, and always rejects revoked clients. An expiry at the current instant is expired. Default issuance remains 90 days (bounded option 1–365 days); combining a non-expiring flag with an explicit duration is rejected. Permanent SENA Care clients retain both teacher listing and original-password verification abilities, district/owner checks, and rate limits. Existing credentials and password storage are unchanged; making a previously issued credential permanent remains an explicit deployment operation.
+
+## Reusable classroom lessons and content order (2026-11-15)
+
+Staff can drag online content by its handle, or use accessible up/down/first controls. Saved order is shared with students and retained across pagination. Ordering does not change questions, issued work, attempts or grades. Writes retain district, teacher ownership and current registration checks; legacy groups/audience snapshots have independent ordering.
+
+The staff-only lesson library stores independent chapter snapshots including online content/questions/images, file worksheets and resources. Historical sources remain available even when their course is absent from current registrations. Restoring requires an authorized current destination course/level/group and creates a draft chapter with fresh media copies and image IDs. Student submissions, answers, grades, issued tasks and deadlines are not copied. Teachers see their own templates; administrators remain within the selected district.
+
+The gallery requests catalog-only data; chapter lists request summaries, with full activity content/answers loaded on explicit selection. Existing API clients retain the previous default response behavior.

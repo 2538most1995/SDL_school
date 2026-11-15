@@ -183,3 +183,9 @@ Migration `2026_10_29_000042_create_classroom_tasks.php` adds `learning_classroo
 ## Teacher group authorization (2026-10-30)
 
 No schema or stored-data changes. `users.assigned_groups` is the authorization source, resolved against current district student/group data with exact code/name matching; empty assignments deny access. Explicit group targeting is required for new teacher learning writes. Existing cross-group file worksheets remain gradeable only for the current authorized roster, with source mutation disabled. N-NET identity matching uses district + education level + authoritative citizen identity, falling back to a unique current student code only when the roster has no citizen identity. Saved N-NET group snapshots never grant access; unresolved or ambiguous teacher identities fail closed. Admins retain district-wide access to unmatched results.
+
+## Classroom ordering and reusable library (2026-11-15)
+
+Additive repeatable migration 000044 adds nullable unsigned learning_classroom_activities.sort_order and index (district_id, classroom_unit_id, sort_order). Null retains newest-first ordering until a teacher saves an order; saved positions precede null records. Reordering locks the scoped content set and writes bound CASE batches of at most 500 without changing student evidence.
+
+Migration 000045 creates learning_classroom_templates with district/creator, source course/term/level, title, content count, JSON snapshot and timestamps. Index (district_id, created_by, id) supports owner lists. Snapshots exclude student records and are never returned by list APIs. Private media is copied into classroom-library/{district}/{template}; restored files use existing ID-owned assignment/resource paths and fresh image records. Rollback retains order and templates. No production migration was run during development.

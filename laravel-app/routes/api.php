@@ -142,6 +142,12 @@ Route::prefix('v1')->group(function (): void {
         Route::get('/learning', LearningOverviewController::class)->middleware('learning.schema');
         Route::prefix('learning/classroom')->middleware('learning.schema')->group(function (): void {
             Route::get('/', [OnlineClassroomController::class, 'index']);
+            Route::post('/activities/{activity}/position', \App\Http\Controllers\Api\Learning\ClassroomContentOrderController::class)->whereNumber('activity');
+            Route::get('/library/sources', [\App\Http\Controllers\Api\Learning\ClassroomLibraryController::class, 'sources']);
+            Route::get('/library', [\App\Http\Controllers\Api\Learning\ClassroomLibraryController::class, 'index']);
+            Route::post('/library', [\App\Http\Controllers\Api\Learning\ClassroomLibraryController::class, 'store']);
+            Route::post('/library/{template}/restore', [\App\Http\Controllers\Api\Learning\ClassroomLibraryController::class, 'restore'])->whereNumber('template');
+            Route::delete('/library/{template}', [\App\Http\Controllers\Api\Learning\ClassroomLibraryController::class, 'destroy'])->whereNumber('template');
             Route::get('/units', [ClassroomUnitController::class, 'index']);
             Route::post('/units', [ClassroomUnitController::class, 'store']);
             Route::get('/units/{unit}', [ClassroomUnitController::class, 'show'])->whereNumber('unit');

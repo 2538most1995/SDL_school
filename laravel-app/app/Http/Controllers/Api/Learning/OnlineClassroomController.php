@@ -22,7 +22,7 @@ final class OnlineClassroomController extends Controller
         $this->service->ready();
         $filters = $request->validate(['subject_code' => ['nullable', 'string', 'max:32'], 'education_level' => ['required_with:subject_code', 'nullable', 'integer', 'in:1,2,3'],
             'unit_id' => ['nullable', 'regex:/^(legacy|[1-9][0-9]*)$/'], 'activity_id' => ['nullable', 'integer', 'min:1'], 'activity_type' => ['nullable', Rule::in(['knowledge', 'video', 'worksheet', 'quiz'])],
-            'page' => ['nullable', 'integer', 'min:1'], 'activity_page' => ['nullable', 'integer', 'min:1']]);
+            'catalog_only' => ['sometimes', 'boolean'], 'summary_only' => ['sometimes', 'boolean'], 'page' => ['nullable', 'integer', 'min:1'], 'activity_page' => ['nullable', 'integer', 'min:1']]);
 
         return response()->json(['data' => $this->service->workspace($request->user(), $this->district($request), $filters),
             'meta' => ['read_only' => ! (bool) config('system_data.write_enabled')]])->header('Cache-Control', 'private, no-store');

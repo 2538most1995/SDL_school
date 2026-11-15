@@ -18,7 +18,7 @@ export function classroomUnitParams(search: string, unitId: string): URLSearchPa
     return next;
 }
 
-export type ClassroomTab = 'lessons' | 'tasks' | 'documents' | 'library';
+export type ClassroomTab = 'lessons' | 'tasks' | 'documents' | 'library' | 'templates';
 
 /** Keep the existing 50-record API contract while rendering ten lesson rows at a time. */
 export function classroomContentPage(page: number, total = 0) {

@@ -132,3 +132,13 @@ Verification for teacher isolation: full PHPUnit suite passed 540 tests with 1 e
 เปิดเนื้อหาหรือใบงานส่งไฟล์แล้วจะแสดงรายละเอียดเฉพาะรายการ ไม่วางรายการวิชาและการ์ดเนื้อหาซ้ำเหนือหน้าเรียน ลิงก์เดิมยังเปิดได้ รวมรายการ legacy และงานที่ครูมอบหมาย สถานะกิจกรรม ประเภท และโหมดส่งไฟล์อิง URL ชุดเดียวกันเพื่อรักษารายวิชา/บทเรียน/task_id ระหว่างเปลี่ยนหน้าและใช้ Browser Back การอ่าน/ดูยังต้องยืนยันตามงานที่ครูสั่ง ไม่ถือว่าเสร็จเพียงเปิดสื่อ ข้อจำกัดจำนวนครั้งส่ง คำตอบ คะแนน กลุ่ม และสิทธิ์เดิมยังอยู่ครบ
 
 ไม่มี migration ใหม่ ไม่ต้องนำเข้าหรือย้ายงานเดิม ใช้ production build ที่รวมใน Git แล้วรัน `php artisan optimize:clear` และรีเฟรชเบราว์เซอร์
+
+## Reordering and reusing lessons (2026-11-15)
+
+Within a chapter, enable the content-order control and drag the left handle to reorder online items. Up/down buttons support keyboard and mobile users; the first-position action moves an item from a later page to the beginning. Changes save automatically and are shared with students.
+
+Open the staff lesson-library tab or save the selected chapter to the library. Choose a historical/current source, store its independent media snapshot, then restore into a currently registered course/level/group. Restored chapters start as drafts; check media, questions and new deadlines before publishing. Answers, grades, issued tasks and old deadlines are never copied. External links still depend on the provider's sharing permissions. Restored files remain available after deleting their source/template.
+
+Deployment requires php artisan migrate --force (000044 and 000045) followed by php artisan optimize:clear inside laravel-app, plus the included production build. Back up private storage together with the database, including classroom-library and assignment/resource/image directories. Development used synthetic data and did not migrate the real database.
+
+Historical source selection also includes unbound legacy course content and course-specific media without an academic term. Course/group/creator restrictions are rechecked from actual source rows; an opaque legacy selector does not grant access. These sources are saved into ordinary independent library snapshots before reuse.

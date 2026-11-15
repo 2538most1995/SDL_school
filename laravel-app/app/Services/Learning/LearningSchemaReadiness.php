@@ -86,16 +86,21 @@ final class LearningSchemaReadiness
     private function missingRequirements(Builder $schema): array
     {
         $missing = [];
+        $existing = [];
 
         foreach (self::REQUIREMENTS as $table => $columns) {
-            if (! $schema->hasTable($table)) {
+            $existing[$table] = $schema->hasTable($table);
+            if (! $existing[$table]) {
                 $missing[] = $table;
 
                 continue;
             }
 
+            // hasColumn re-reads the entire table definition for every column.
+            // One metadata query per table retains full validation without that multiplier.
+            $presentColumns = array_fill_keys(array_map('strtolower', $schema->getColumnListing($table)), true);
             foreach ($columns as $column) {
-                if (! $schema->hasColumn($table, $column)) {
+                if (! isset($presentColumns[strtolower($column)])) {
                     $missing[] = $table.'.'.$column;
                 }
             }
@@ -108,11 +113,12 @@ final class LearningSchemaReadiness
         }
 
         foreach (self::INDEX_REQUIREMENTS as $table => $indexes) {
-            if (! $schema->hasTable($table)) {
+            if (! ($existing[$table] ?? false)) {
                 continue;
             }
+            $presentIndexes = array_fill_keys(array_map('strtolower', array_column($schema->getIndexes($table), 'name')), true);
             foreach ($indexes as $index) {
-                if (! $schema->hasIndex($table, $index)) {
+                if (! isset($presentIndexes[strtolower($index)])) {
                     $missing[] = $table.'.'.$index;
                 }
             }

@@ -1,0 +1,24 @@
+.classroom-lesson-library { display: grid; gap: 1.25rem; min-width: 0; }
+.classroom-library-heading { display: flex; align-items: flex-start; justify-content: space-between; gap: 1rem; flex-wrap: wrap; }
+.classroom-library-heading h2 { display: flex; align-items: center; gap: .65rem; font-size: 1.2rem; font-weight: 800; color: var(--ui-text); margin: 0 0 .5rem; }
+.classroom-library-heading p, .classroom-library-copy p, .classroom-library-copy small { color: var(--ui-text-muted); }
+.classroom-library-search { display: flex; align-items: center; gap: .75rem; }
+.classroom-library-list { border-top: 1px solid var(--ui-border); }
+.classroom-library-row { display: flex; align-items: center; justify-content: space-between; gap: 1rem; padding: 1.25rem .25rem; border-bottom: 1px solid var(--ui-border); }
+.classroom-library-copy { min-width: 0; overflow-wrap: anywhere; }
+.classroom-library-copy h3 { margin: 0 0 .4rem; font-size: 1rem; color: var(--ui-text); font-weight: 800; }
+.classroom-library-copy p { margin: .25rem 0; }
+.classroom-library-copy small { display: block; margin-top: .4rem; }
+.classroom-library-actions { display: flex; align-items: center; gap: .5rem; flex-shrink: 0; }
+.classroom-library-empty { text-align: center; display: grid; gap: .75rem; justify-items: center; padding: 2rem 1rem; color: var(--ui-text-muted); }
+.classroom-library-empty h3 { color: var(--ui-text); font-weight: 800; }
+.classroom-library-pagination { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: .75rem; padding: .75rem 0; }
+.classroom-library-dialog-body { display: grid; gap: 1.25rem; padding-top: .5rem; }
+.classroom-library-sources { display: grid; gap: .65rem; }
+.classroom-library-source { display: flex; align-items: flex-start; gap: .75rem; padding: 1rem; border: 1px solid var(--ui-border); border-radius: .75rem; cursor: pointer; color: var(--ui-text); }
+.classroom-library-source input { margin-top: .3rem; flex-shrink: 0; }
+.classroom-library-source span { display: grid; gap: .3rem; min-width: 0; overflow-wrap: anywhere; }
+.classroom-library-source small { color: var(--ui-text-muted); line-height: 1.6; }
+.classroom-library-source[data-selected='true'] { border-color: var(--ui-accent-600); background: var(--ui-surface-muted); }
+.classroom-library-selected { color: var(--ui-text); font-weight: 700; }
+@media (max-width: 639px) { .classroom-library-row { align-items: flex-start; flex-direction: column; } .classroom-library-actions { align-self: flex-end; } .classroom-library-pagination { font-size: .875rem; } }

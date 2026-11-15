@@ -1,0 +1,1 @@
+import{ln as e,on as t}from"./IconBase.es-Bzz-nC20.js";import{t as n}from"./filterOptions-G6x7dCET.js";var r=e(t(),1);function i(e,t){let i=(0,r.useRef)(new Map);return(0,r.useEffect)(()=>{e.forEach(e=>i.current.set(e.value,e.label))},[e]),(0,r.useMemo)(()=>n(e,t,i.current.get(t)),[e,t])}export{i as t};

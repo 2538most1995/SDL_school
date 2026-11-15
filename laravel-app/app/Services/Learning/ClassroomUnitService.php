@@ -12,10 +12,15 @@ final class ClassroomUnitService
 {
     public function ready(): void
     {
+        $key = 'classroom.units.ready.'.spl_object_id(DB::connection());
+        if (request()->attributes->get($key) === true) {
+            return;
+        }
         abort_unless(Schema::hasTable('learning_classroom_units'), 503, 'กิจกรรมรายวิชายังไม่พร้อม กรุณาให้ผู้ดูแลรัน php artisan migrate --force');
         foreach (['learning_classroom_activities', 'learning_assignments', 'learning_resources', 'learning_classroom_tasks'] as $table) {
             abort_unless(Schema::hasColumn($table, 'classroom_unit_id'), 503, 'กิจกรรมรายวิชายังไม่พร้อม กรุณาให้ผู้ดูแลรัน php artisan migrate --force');
         }
+        request()->attributes->set($key, true);
     }
 
     private function catalog(User $viewer, int $districtId): array
@@ -35,7 +40,7 @@ final class ClassroomUnitService
     {
         $groups = json_decode($unit->audience_groups, true) ?? [];
 
-        return array_values(array_filter($catalog['registrations'], fn ($row) => $row['subject_code'] === $unit->subject_code
+        return array_values(array_filter($catalog['_registrations_by_subject'][$unit->education_level.'|'.$unit->subject_code] ?? $catalog['registrations'], fn ($row) => $row['subject_code'] === $unit->subject_code
             && (int) $row['level'] === (int) $unit->education_level
             && in_array($row['group_code'], $groups, true)
             && ($unit->target_group === '' || in_array($unit->target_group, [$row['group_code'], $row['group_name']], true))));

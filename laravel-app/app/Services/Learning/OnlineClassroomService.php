@@ -16,14 +16,29 @@ final class OnlineClassroomService
 
     public function ready(): void
     {
+        $key = 'classroom.activities.ready.'.spl_object_id(DB::connection());
+        if (request()->attributes->get($key) === true) {
+            return;
+        }
         foreach (['learning_classroom_activities', 'learning_classroom_submissions', 'learning_classroom_images'] as $table) {
             abort_unless(Schema::hasTable($table), 503, 'ห้องเรียนออนไลน์ยังไม่พร้อม กรุณาให้ผู้ดูแลรัน php artisan migrate --force');
         }
+        request()->attributes->set($key, true);
     }
 
     /** Merge current-term ITW and web registrations without using saved student snapshots as authority. */
     public function catalog(User $viewer, int $districtId): array
     {
+        // Request attributes expire with the HTTP request, including under long-lived workers.
+        // The authorization fingerprint prevents sharing between viewers or changed group scopes.
+        $cacheKey = 'classroom.catalog.'.hash('sha256', json_encode([
+            $viewer->id, $viewer->role, $viewer->district_id, $viewer->student_code, $viewer->username,
+            $viewer->assigned_groups, $districtId, (bool) config('system_data.student_enabled'),
+        ], JSON_THROW_ON_ERROR));
+        $request = request();
+        if ($request->attributes->has($cacheKey)) {
+            return $request->attributes->get($cacheKey);
+        }
         $source = $this->scorebooks->assignmentCatalog($viewer, $districtId);
         $students = array_values(array_filter($this->directory->accessibleStudents($viewer), fn ($student) => $student->districtId === $districtId));
         if ($viewer->role === 'student') {
@@ -72,12 +87,27 @@ final class OnlineClassroomService
         }
         unset($subject);
 
-        return ['term' => $term, 'terms' => $source['terms'], 'subjects' => array_values($subjects), 'registrations' => $rows];
+        $catalog = ['term' => $term, 'terms' => $source['terms'], 'subjects' => array_values($subjects), 'registrations' => $rows,
+            '_registrations_by_subject' => collect($rows)->groupBy(fn ($row) => $row['level'].'|'.$row['subject_code'])->map->all()->all()];
+        $request->attributes->set($cacheKey, $catalog);
+
+        return $catalog;
     }
 
     public function workspace(User $viewer, int $districtId, array $filters): array
     {
         $catalog = $this->catalog($viewer, $districtId);
+        if (! empty($filters['catalog_only'])) {
+            $selectedSubject = empty($filters['subject_code']) ? null : collect($catalog['subjects'])->first(fn ($subject) => $subject['code'] === $filters['subject_code']
+                && (int) $subject['level'] === (int) ($filters['education_level'] ?? 0));
+            abort_if(! empty($filters['subject_code']) && $selectedSubject === null, 404);
+
+            return ['term' => $catalog['term'], 'subjects' => $catalog['subjects'], 'selected_subject' => $selectedSubject,
+                'activities' => [], 'selected_activity' => null, 'selected_unit' => null, 'submissions' => [],
+                'submission_pagination' => null, 'activity_pagination' => null,
+                'activity_counts' => ['all' => 0, 'knowledge' => 0, 'video' => 0, 'worksheet' => 0, 'quiz' => 0]];
+        }
+        $summaryOnly = ! empty($filters['summary_only']) && empty($filters['activity_id']);
         $subject = null;
         foreach ($catalog['subjects'] as $item) {
             if (empty($filters['subject_code']) || ($item['code'] === $filters['subject_code'] && $item['level'] === (int) ($filters['education_level'] ?? 0))) {
@@ -130,14 +160,18 @@ final class OnlineClassroomService
                 }
             }
         }
+        // Full content and links belong to an explicitly opened detail, not the list.
+        $activityColumns = $summaryOnly ? ['id', 'district_id', 'academic_term', 'classroom_unit_id', 'created_by', 'subject_code', 'subject_name',
+            'education_level', 'target_group', 'audience_groups', 'type', 'title', 'status', 'due_at', 'questions'] : ['*'];
         $activityPage = $activityQuery?->when(! empty($filters['activity_type']), fn ($query) => $query->where('type', $filters['activity_type']))
-            ->orderByDesc('id')->paginate(50, ['*'], 'activity_page', (int) ($filters['activity_page'] ?? 1));
+            ->when(Schema::hasColumn('learning_classroom_activities', 'sort_order'), fn ($query) => $query->orderByRaw('COALESCE(sort_order, 2147483647)'))
+            ->orderByDesc('id')->paginate(50, $activityColumns, 'activity_page', (int) ($filters['activity_page'] ?? 1));
         $rows = collect($activityPage?->items() ?? []);
         $rows = $rows->filter(fn ($row) => $this->audience($catalog, $row) !== [])->values();
         if (isset($filters['activity_id']) && $viewer->role === 'teacher') {
             abort_unless(DB::table('learning_classroom_activities')->where('district_id', $districtId)->where('id', $filters['activity_id'])->where('created_by', $viewer->id)->exists(), 404);
         }
-        $selected = isset($filters['activity_id']) ? $this->authorizedActivity($viewer, $districtId, (int) $filters['activity_id'], false, $catalog) : $rows->first();
+        $selected = isset($filters['activity_id']) ? $this->authorizedActivity($viewer, $districtId, (int) $filters['activity_id'], false, $catalog) : ($summaryOnly ? null : $rows->first());
         abort_if($selected !== null && ($subject === null || $selected->subject_code !== $subject['code'] || (int) $selected->education_level !== $subject['level'] || (! empty($filters['activity_type']) && $selected->type !== $filters['activity_type'])), 404);
         abort_if($selected !== null && ! empty($filters['unit_id']) && ($filters['unit_id'] === 'legacy' ? ($selected->classroom_unit_id ?? null) !== null : (int) ($selected->classroom_unit_id ?? 0) !== (int) $filters['unit_id']), 404);
         if ($selected !== null && ! $rows->contains('id', $selected->id)) {
@@ -152,10 +186,11 @@ final class OnlineClassroomService
                     $query->orWhere(fn ($scope) => $scope->where('activity_id', $row->id)->whereIn('student_code', $codes));
                 }
             })->groupBy('activity_id')->selectRaw('activity_id, COUNT(*) as total')->pluck('total', 'activity_id') : $counts;
+        $ownColumns = $summaryOnly ? ['id', 'activity_id', 'student_code', 'student_name', 'score', 'auto_score', 'max_score', 'status', 'submitted_at'] : ['*'];
         $own = $viewer->role === 'student' ? DB::table('learning_classroom_submissions')->whereIn('activity_id', $ids)
-            ->where('student_code', $viewer->student_code ?: $viewer->username)->get()->keyBy('activity_id') : collect();
+            ->where('student_code', $viewer->student_code ?: $viewer->username)->get($ownColumns)->keyBy('activity_id') : collect();
         $lockedIds = Schema::hasTable('learning_classroom_task_items') ? DB::table('learning_classroom_task_items')->where('kind', 'activity')->whereIn('content_id', $ids)->pluck('content_id')->map(fn ($id) => (int) $id)->all() : [];
-        $payloads = $rows->map(fn ($row) => $this->activityPayload($viewer, $row, (int) ($visibleCounts[$row->id] ?? 0), $own[$row->id] ?? null, $this->canEdit($viewer, $row, $catalog), in_array((int) $row->id, $lockedIds, true), (int) ($counts[$row->id] ?? 0) > 0));
+        $payloads = $rows->map(fn ($row) => $this->activityPayload($viewer, $row, (int) ($visibleCounts[$row->id] ?? 0), $own[$row->id] ?? null, $this->canEdit($viewer, $row, $catalog), in_array((int) $row->id, $lockedIds, true), (int) ($counts[$row->id] ?? 0) > 0, $summaryOnly));
         $selectedPayload = $selected === null ? null : $payloads->firstWhere('id', (string) $selected->id);
         if ($selected !== null && $viewer->role === 'student') {
             $deadline = app(ClassroomTaskService::class)->activityDeadline($viewer, $districtId, $selected, $catalog);
@@ -214,7 +249,7 @@ final class OnlineClassroomService
         if ($row->target_group !== '') {
             return $this->audience($catalog, $row) !== [];
         }
-        $groups = array_column(array_filter($catalog['registrations'], fn ($item) => $item['subject_code'] === $row->subject_code && (int) $item['level'] === (int) $row->education_level), 'group_code');
+        $groups = array_column(array_filter($catalog['_registrations_by_subject'][$row->education_level.'|'.$row->subject_code] ?? $catalog['registrations'], fn ($item) => $item['subject_code'] === $row->subject_code && (int) $item['level'] === (int) $row->education_level), 'group_code');
 
         return $row->audience_groups !== null && array_diff($this->decode($row->audience_groups), $groups) === [];
     }
@@ -223,7 +258,7 @@ final class OnlineClassroomService
     {
         $groups = $activity->audience_groups === null ? null : $this->decode($activity->audience_groups);
 
-        return array_values(array_filter($catalog['registrations'], fn ($row) => $row['subject_code'] === $activity->subject_code
+        return array_values(array_filter($catalog['_registrations_by_subject'][$activity->education_level.'|'.$activity->subject_code] ?? $catalog['registrations'], fn ($row) => $row['subject_code'] === $activity->subject_code
             && (int) $row['level'] === (int) $activity->education_level
             && ($activity->target_group === '' || in_array($activity->target_group, [$row['group_code'], $row['group_name']], true))
             && ($groups === null || in_array($row['group_code'], $groups, true))));
@@ -425,9 +460,10 @@ final class OnlineClassroomService
         });
     }
 
-    private function activityPayload(User $viewer, object $row, int $count, ?object $submission, bool $canEdit, bool $contentLocked = false, ?bool $hasSubmissions = null): array
+    private function activityPayload(User $viewer, object $row, int $count, ?object $submission, bool $canEdit, bool $contentLocked = false, ?bool $hasSubmissions = null, bool $summaryOnly = false): array
     {
         $questions = $this->decode($row->questions);
+        $maximum = round(array_sum(array_column($questions, 'points')), 2);
         foreach ($questions as &$question) {
             $question['image_url'] = empty($question['image_id']) ? null : '/api/v1/learning/classroom/images/'.$question['image_id'];
             if ($viewer->role === 'student') {
@@ -438,8 +474,8 @@ final class OnlineClassroomService
 
         return ['id' => (string) $row->id, 'unit_id' => ($row->classroom_unit_id ?? null) === null ? null : (string) $row->classroom_unit_id, 'subject_code' => $row->subject_code, 'subject_name' => $row->subject_name,
             'education_level' => (int) $row->education_level, 'target_group' => $row->target_group, 'type' => $row->type,
-            'title' => $row->title, 'content' => $row->content ?? '', 'links' => $this->decode($row->links), 'status' => $row->status,
-            'due_at' => $row->due_at === null ? null : Carbon::parse($row->due_at)->toIso8601String(), 'questions' => $questions, 'max_score' => round(array_sum(array_column($questions, 'points')), 2),
+            'title' => $row->title, 'content' => $row->content ?? '', 'links' => $summaryOnly ? [] : $this->decode($row->links), 'status' => $row->status,
+            'due_at' => $row->due_at === null ? null : Carbon::parse($row->due_at)->toIso8601String(), 'questions' => $summaryOnly ? [] : $questions, 'max_score' => $maximum,
             'can_edit' => $canEdit, 'content_locked' => $contentLocked,
             'has_submissions' => $hasSubmissions ?? $count > 0, 'submission_count' => $count, 'submission' => $submission === null ? null : $this->submissionPayload($submission)];
     }
@@ -447,8 +483,8 @@ final class OnlineClassroomService
     private function submissionPayload(object $row): array
     {
         return ['id' => (string) $row->id, 'student_code' => $row->student_code, 'student_name' => $row->student_name,
-            'answers' => $this->decode($row->answers), 'auto_score' => (float) $row->auto_score, 'score' => $row->score === null ? null : (float) $row->score,
-            'max_score' => (float) $row->max_score, 'status' => $row->status, 'feedback' => $row->feedback, 'submitted_at' => Carbon::parse($row->submitted_at)->toIso8601String()];
+            'answers' => $this->decode($row->answers ?? null), 'auto_score' => (float) $row->auto_score, 'score' => $row->score === null ? null : (float) $row->score,
+            'max_score' => (float) $row->max_score, 'status' => $row->status, 'feedback' => $row->feedback ?? null, 'submitted_at' => Carbon::parse($row->submitted_at)->toIso8601String()];
     }
 
     private function decode(?string $value): array
