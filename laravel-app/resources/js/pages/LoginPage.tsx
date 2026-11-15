@@ -134,7 +134,7 @@ export function LoginPage() {
                                 </Field>
                             )}
 
-                            <label className="flex cursor-pointer items-start gap-3 text-sm text-slate-700">
+                            <label className="flex cursor-pointer items-start gap-3 pt-5 text-sm text-slate-700">
                                 <input type="checkbox" checked={remember} onChange={(event) => setRemember(event.target.checked)} className="mt-1 size-4 accent-blue-700" />
                                 <span><span className="font-bold">จดจำการเข้าสู่ระบบ</span><span className="block text-xs text-slate-500">เลือกใช้เฉพาะอุปกรณ์ส่วนตัว</span></span>
                             </label>
