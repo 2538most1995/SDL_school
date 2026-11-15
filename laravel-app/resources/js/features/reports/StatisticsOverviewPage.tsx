@@ -25,7 +25,7 @@ import { useNavigate } from 'react-router-dom';
 import { PageHeader } from '../../components/PageHeader';
 import { QueryError, QuerySkeleton } from '../../components/QueryState';
 import { useDemoRole } from '../../context/DemoRoleContext';
-import { apiGet } from '../../lib/api';
+import { ApiError, apiGet } from '../../lib/api';
 import { showErrorAlert, showSuccessAlert } from '../../lib/feedback';
 import type { PortalData } from '../../types';
 import { getFeatureDataWithDemo, sendFeatureData } from '../api';
@@ -37,6 +37,7 @@ import {
 import {
     buildStatisticsCrossTabSheets,
     categoriesForReport,
+    configurationForReportResult,
     createDefaultAxisConfiguration,
     genericPayloadToCrossTab,
     normalizeAxisConfiguration,
@@ -58,6 +59,7 @@ type WorkspaceRequest = {
     term: string;
     group: string;
     configuration: StatisticAxisConfiguration;
+    ageRanges: string;
 };
 type WorkspaceResponse = { crossTab: StatisticCrossTabPayload; selectedTerm: string | null };
 type CurrentUser = { districts: Array<{ id: number; name: string; code: string }> };
@@ -70,8 +72,8 @@ type StatisticsPreference = StatisticAxisConfiguration & {
 
 const emptyCrossTabPayload: StatisticCrossTabPayload = {
     categories: [],
-    row_categories: [{ key: 'level', label: 'ระดับชั้น' }],
-    column_categories: [{ key: 'group', label: 'รหัสกลุ่ม' }],
+    row_categories: [{ key: 'group', label: 'กลุ่มเรียน' }],
+    column_categories: [{ key: 'level', label: 'ระดับชั้น' }],
     terms: [],
     selected_term: null,
     summary: { registered_students: 0, row_count: 0, column_count: 0, non_zero_cells: 0, largest_cell: null },
@@ -252,7 +254,8 @@ function OverviewStudentListDialog({
     if (!cellInfo) return null;
 
     const students = cellInfo.students;
-    const showExamStatus = report?.source === 'expected-graduates';
+    const showExamStatus = ['expected-graduates', 'nnet-statistics', 'credit-pending'].includes(report?.source ?? '');
+    const showBreakdown = (report?.id ?? 0) >= 6;
     const takenCount = students.filter((s) => s.nnet === 'สอบแล้ว' || s.examStatus === 'สอบแล้ว').length;
     const eligibleCount = students.length - takenCount;
 
@@ -290,6 +293,7 @@ function OverviewStudentListDialog({
                     s.gender || 'ไม่ระบุ',
                 ];
                 if (showExamStatus) row.push(s.nnet || s.examStatus || '-');
+                if (showBreakdown) row.push(s.metric || '-');
                 return row;
             });
             const titleSanitized = cellInfo.title.replace(/[/\\?%*:|"<>]/g, '-');
@@ -304,6 +308,7 @@ function OverviewStudentListDialog({
                         'กลุ่มเรียน',
                         'เพศ',
                         ...(showExamStatus ? ['สถานะ N-Net / การสอบ'] : []),
+                        ...(showBreakdown ? ['รายละเอียดรายงาน'] : []),
                     ],
                     rows: sheetData,
                 },
@@ -410,7 +415,7 @@ function OverviewStudentListDialog({
                                                 : 'text-sky-700 hover:bg-sky-100/60'
                                         }`}
                                     >
-                                        มีสิทธิ์สอบ ({eligibleCount})
+                                        {report?.source === 'expected-graduates' ? 'มีสิทธิ์สอบ' : 'ยังไม่ได้สอบ'} ({eligibleCount})
                                     </button>
                                 </div>
                             )}
@@ -429,6 +434,7 @@ function OverviewStudentListDialog({
                             <table className="w-full border-collapse text-sm">
                                 <thead>
                                     <tr className="border-b border-slate-200 bg-slate-50 text-xs font-bold text-slate-600">
+                                        {showBreakdown && <th className="px-4 py-3 text-left">รายละเอียดรายงาน</th>}
                                         <th className="px-4 py-3 text-center">ลำดับ</th>
                                         <th className="px-4 py-3 text-left">รหัสนักศึกษา</th>
                                         <th className="px-4 py-3 text-left">ชื่อ - สกุล</th>
@@ -441,7 +447,8 @@ function OverviewStudentListDialog({
                                 </thead>
                                 <tbody className="divide-y divide-slate-100 bg-white">
                                     {filteredStudents.map((student, idx) => (
-                                        <tr key={student.student_id ?? student.secondary ?? student.id ?? idx} className="hover:bg-slate-50/80 transition-colors">
+                                        <tr key={student.id ?? student.student_id ?? student.secondary ?? idx} className="hover:bg-slate-50/80 transition-colors">
+                                            {showBreakdown && <td className="px-4 py-3 font-semibold text-slate-700">{student.metric || "-"}</td>}
                                             <td className="px-4 py-3 text-center text-xs font-bold text-slate-500">{idx + 1}</td>
                                             <td className="px-4 py-3 font-mono text-xs font-black text-slate-900">{student.student_id ?? student.secondary ?? student.id ?? '-'}</td>
                                             <td className="px-4 py-3 font-bold text-slate-950">{student.name ?? student.primary ?? '-'}</td>
@@ -554,7 +561,7 @@ function ReportFormatDialog({ report, initialConfiguration, initialOrientation, 
                     <section className="rounded-2xl border border-slate-200 bg-slate-50/60 p-4"><label className="grid gap-2 text-sm font-black text-slate-700">ประเภทข้อมูล<select value={candidate} onChange={(event) => setCandidate(event.target.value as CategoryKey)} className={inputClassName()}>{availableCategories.map((category) => <option key={category.key} value={category.key}>{category.order}. {category.label}</option>)}</select></label><div className="mt-4 grid gap-2"><ActionButton onClick={addCategory} disabled={!candidateDefinition || selected.includes(candidate) || selected.length >= 3}><SlidersHorizontal size={18} weight="bold" />เพิ่มใน{orientation === 'vertical' ? 'แกนตั้ง' : 'แกนนอน'}</ActionButton><ActionButton tone="danger" disabled={selected.length === 0} onClick={() => updateSelected((items) => items.slice(0, -1))}><Trash size={18} weight="bold" />ลบรายการล่าสุด</ActionButton><ActionButton disabled={selected.length === 0} onClick={() => updateSelected(() => [])}><Trash size={18} weight="bold" />ลบทั้งหมดเฉพาะด้านนี้</ActionButton></div><p className="mt-4 text-xs leading-5 text-slate-500">แสดงเฉพาะประเภทที่รายงานนี้มีข้อมูลต้นทางรองรับ แต่ละแกนเพิ่มได้สูงสุด 3 มิติ</p></section>
                 </div>
             </div>
-            <footer className="flex flex-col-reverse gap-2 border-t border-slate-200 bg-slate-50 px-5 py-4 sm:flex-row sm:items-center sm:justify-between sm:px-7"><p className="text-xs text-slate-500">แนวตั้ง {configuration.vertical.length} มิติ · แนวนอน {configuration.horizontal.length} มิติ{configuration.vertical.length === 0 || configuration.horizontal.length === 0 ? ' · กรุณาเลือกอย่างน้อยด้านละ 1 มิติ' : ''}</p><div className="flex flex-col-reverse gap-2 sm:flex-row"><ActionButton tone="danger" onClick={onClose}><SignOut size={18} weight="bold" />ออก</ActionButton><ActionButton tone="primary" disabled={configuration.vertical.length === 0 || configuration.horizontal.length === 0} onClick={() => onSave(configuration, orientation)}><FloppyDisk size={18} weight="bold" />บันทึก</ActionButton></div></footer>
+            <footer className="flex flex-col-reverse gap-2 border-t border-slate-200 bg-slate-50 px-5 py-4 sm:flex-row sm:items-center sm:justify-between sm:px-7"><p className="text-xs text-slate-500">แนวตั้ง {configuration.vertical.length} มิติ · แนวนอน {configuration.horizontal.length} มิติ{configuration.vertical.length === 0 || configuration.horizontal.length === 0 ? ' · กรุณาเลือกอย่างน้อยด้านละ 1 มิติ' : ''}</p><div className="flex flex-col-reverse gap-2 sm:flex-row"><ActionButton onClick={() => setConfiguration(createDefaultAxisConfiguration())}>ค่าเริ่มต้น</ActionButton><ActionButton tone="danger" onClick={onClose}><SignOut size={18} weight="bold" />ออก</ActionButton><ActionButton tone="primary" disabled={configuration.vertical.length === 0 || configuration.horizontal.length === 0} onClick={() => onSave(configuration, orientation)}><FloppyDisk size={18} weight="bold" />บันทึก</ActionButton></div></footer>
         </section>
     </div>;
 }
@@ -568,6 +575,11 @@ async function loadWorkspace(request: WorkspaceRequest, signal?: AbortSignal): P
         request.configuration.horizontal.forEach((category) => params.append('column_categories[]', category));
         const response = await getFeatureDataWithDemo<StatisticCrossTabPayload>(`/api/v1/reports/students/registration-statistics?${params.toString()}`, emptyCrossTabPayload, signal);
         return { crossTab: response.data, selectedTerm: response.data.selected_term ?? request.term };
+    }
+    if (request.report.id >= 6) {
+        if (request.report.source === 'age-statistics') params.set('age_ranges', request.ageRanges);
+        const response = await getFeatureDataWithDemo<GenericReportPayload>(`/api/v1/reports/statistics/${request.report.source}?${params.toString()}`, emptyGenericPayload, signal);
+        return { crossTab: genericPayloadToCrossTab(response.data, configurationForReportResult(request.report, request.configuration)), selectedTerm: response.data.selected_term ?? request.term };
     }
     const endpoint = request.report.source === 'new-students'
         ? '/api/v1/reports/new-students'
@@ -608,6 +620,7 @@ export function StatisticsOverviewPage() {
     const [reportId, setReportId] = useState<StatisticReportId>(1);
     const [termStart, setTermStart] = useState('');
     const [group, setGroup] = useState('');
+    const [ageRanges, setAgeRanges] = useState('0-15, 16-24, 25-39, 40-59, 60-120');
     const [axisConfiguration, setAxisConfiguration] = useState<StatisticAxisConfiguration>(() => createDefaultAxisConfiguration());
     const [orientation, setOrientation] = useState<StatisticOrientation>('vertical');
     const [request, setRequest] = useState<WorkspaceRequest | null>(null);
@@ -637,7 +650,9 @@ export function StatisticsOverviewPage() {
         meta: { notification: { success: false, error: false } },
         mutationFn: (value: StatisticsPreference) => sendFeatureData<StatisticsPreference>('/api/v1/settings/statistics-report', 'PUT', value).then((response) => response.data),
     });
-    const workspace = useQuery({ queryKey: ['statistics-workspace', request], queryFn: ({ signal }) => loadWorkspace(request!, signal), enabled: request !== null, placeholderData: keepPreviousData });
+    const workspace = useQuery({ queryKey: ['statistics-workspace', role, districtId, request], queryFn: ({ signal }) => loadWorkspace(request!, signal), enabled: request !== null, retry: (count, error) => !(error instanceof ApiError && error.status < 500) && count < 2, placeholderData: keepPreviousData });
+
+    useEffect(() => { setRequest(null); setGroup(''); setSelectedCell(null); setPreviewOpen(false); }, [role, districtId]);
 
     const historicalTerms = useMemo(() => {
         const current = portal.data?.analytics.current_term;
@@ -676,7 +691,7 @@ export function StatisticsOverviewPage() {
         const normalized = normalizeAxisConfiguration(selectedReport, axisConfiguration);
         const vertical = supportedCategoryKeys(normalized.vertical);
         const horizontal = supportedCategoryKeys(normalized.horizontal);
-        setRequest({ report: selectedReport, term: termStart, group, configuration: { vertical, horizontal } });
+        setRequest({ report: selectedReport, term: termStart, group, configuration: { vertical, horizontal }, ageRanges });
     };
 
     const exportExcel = async () => {
@@ -707,17 +722,21 @@ export function StatisticsOverviewPage() {
             <div className="grid gap-6 p-5 lg:grid-cols-[minmax(0,1.05fr)_minmax(0,0.95fr)] lg:p-6">
                 <div className="space-y-5 lg:border-r lg:border-slate-200 lg:pr-6">
                     <div><label htmlFor="statistics-report" className="mb-2 flex items-center gap-2 text-sm font-black text-slate-800"><FileText size={19} className="text-emerald-600" weight="duotone" />รายงาน</label><select id="statistics-report" value={reportId} onChange={(event) => changeReport(Number(event.target.value) as StatisticReportId)} className={inputClassName()}>{statisticReports.map((report) => <option key={report.id} value={report.id}>{report.id}. {report.label}</option>)}</select><p className="mt-2 text-xs text-slate-500">แสดงเฉพาะรายงานที่มีแหล่งข้อมูลและวิธีนับที่ระบบรองรับแล้ว</p></div>
+                    {selectedReport.source === 'age-statistics' && <label className="grid gap-2 text-sm font-black text-slate-800">กำหนดช่วงอายุ (ปี)<textarea aria-label="กำหนดช่วงอายุ" value={ageRanges} onChange={(event) => { setAgeRanges(event.target.value); clearProcessedResult(); }} rows={2} className="w-full rounded-xl border border-slate-300 bg-white px-3 py-2 text-sm font-semibold text-slate-900 focus:border-brand-600 focus:outline-none focus:ring-4 focus:ring-brand-100" /><span className="text-xs font-normal text-slate-500">พิมพ์ เช่น 0-15, 16-24 หรือแยกบรรทัด กำหนดได้สูงสุด 20 ช่วงที่ไม่ทับซ้อนกัน อายุที่อยู่นอกช่วงและไม่ระบุจะแสดงแยก ใช้อายุจากข้อมูล ITW</span></label>}
+                    {selectedReport.source === 'exam-disqualified' && <p className="text-sm text-slate-600">นับผู้ลงทะเบียนที่มีสถานะ ม หรือ มส อย่างน้อยหนึ่งวิชาในภาคเรียนที่เลือก</p>}
+                    {selectedReport.source === 'nnet-statistics' && <p className="text-sm text-slate-600">แยกสอบแล้ว / ยังไม่ได้สอบ จากหลักฐาน N-NET หรือ E-Exam ใน ITW ของผู้ลงทะเบียนภาคเรียนที่เลือก คะแนนและสถานะที่ไม่มีวันที่อ้างอิงใช้ข้อมูลนำเข้าล่าสุด</p>}
+                    {selectedReport.source === 'credit-pending' && <p className="text-sm text-slate-600">นับผู้ที่ผ่านหน่วยกิตบังคับและเลือกครบแล้วถึงภาคเรียนที่เลือก แต่ กพช. ยังไม่ครบ 200 ชั่วโมง หรือยังไม่มีหลักฐาน N-NET / E-Exam แยกตามเงื่อนไขที่ขาด</p>}
                     <div className="grid gap-3 sm:grid-cols-[190px_minmax(0,1fr)] sm:items-end"><label className="grid gap-2 text-sm font-black text-slate-800"><span className="flex items-center gap-2"><Buildings size={19} className="text-brand-700" weight="duotone" />รหัสพื้นที่/สถานศึกษา</span><div className="relative"><input readOnly value={districtCode} className={`${inputClassName(true)} pr-11`} /><MagnifyingGlass size={18} className="absolute right-3 top-1/2 -translate-y-1/2 text-brand-600" /></div></label><label className="grid gap-2 text-sm font-black text-slate-800">พื้นที่ข้อมูล<input readOnly value={districtName} className={inputClassName(true)} /></label></div>
                     <fieldset><legend id="statistics-filter-title" className="mb-3 flex items-center gap-2 text-sm font-black text-slate-800"><CalendarBlank size={19} className="text-brand-700" weight="duotone" />ตัวกรองรายงาน</legend><div className="grid gap-3 sm:grid-cols-2"><label className="grid gap-2 text-sm font-black text-slate-800">ภาคเรียนที่ต้องการประมวลผล<select aria-label="ภาคเรียนที่ต้องการประมวลผล" value={termStart} onChange={(event) => { setTermStart(event.target.value); clearProcessedResult(); }} className={inputClassName()}>{historicalTerms.map((t) => <option key={t} value={t}>ภาคเรียน {t}{t === portal.data?.analytics.current_term ? ' (ภาคเรียนปัจจุบัน)' : ''}</option>)}{termStart && !historicalTerms.includes(termStart) && <option value={termStart}>ภาคเรียน {termStart} (กำหนดเอง)</option>}</select></label><label className="grid gap-2 text-sm font-black text-slate-800">กลุ่มเรียน<select aria-label="กรองตามกลุ่มเรียน" value={group} onChange={(event) => { setGroup(event.target.value); clearProcessedResult(); }} className={inputClassName()}><option value="">{role === 'teacher' ? 'เฉพาะกลุ่มที่รับผิดชอบ' : 'ทุกกลุ่มเรียน'}</option>{groupOptions.map((option) => <option key={String(option.value)} value={String(option.value)}>{option.label}</option>)}</select></label></div><p className="mt-2 text-xs text-slate-500">ระบบประมวลผลจากข้อมูลจริงครั้งละ 1 ภาคเรียน (สามารถเลือกย้อนหลังได้ 5 ปี / 10 เทอม) และเลือกกรองเฉพาะกลุ่มได้</p></fieldset>
                 </div>
                 <div className="flex flex-col justify-between gap-6">
                     <div><h2 className="flex items-center gap-2 text-sm font-black text-slate-800"><ChartBar size={19} className="text-brand-700" weight="duotone" />ระดับการแสดงผล</h2><div className="mt-3 inline-flex items-center gap-2 rounded-full bg-emerald-50 px-3 py-1.5 text-sm font-black text-emerald-800"><span className="size-2 rounded-full bg-emerald-500" />ระดับสถานศึกษา/อำเภอ</div><p className="mt-2 text-xs text-slate-500">ใช้ข้อมูลของอำเภอที่เลือกและขอบเขตกลุ่มของผู้ใช้งาน</p><div className="mt-4 grid gap-2 rounded-xl border border-brand-100 bg-brand-50/70 px-4 py-3 text-sm text-brand-950"><p><strong className="font-black text-indigo-800">แกนตั้ง:</strong> {verticalSummary || 'ยังไม่ได้เลือก'}</p><p><strong className="font-black text-sky-800">แกนนอน:</strong> {horizontalSummary || 'ยังไม่ได้เลือก'}</p></div></div>
-                    <div><div className="grid gap-3 sm:grid-cols-3"><ActionButton tone="primary" onClick={processReport} disabled={workspace.isFetching}><Play size={19} weight="fill" />{workspace.isFetching ? 'กำลังประมวลผล...' : 'ประมวลผล'}</ActionButton><ActionButton disabled={!hasProcessedResult || crossTab.rows.length === 0} onClick={() => setPreviewOpen(true)}><FileText size={19} weight="duotone" />ตัวอย่างก่อนพิมพ์</ActionButton><ActionButton tone="success" disabled={!canExport || !hasProcessedResult || crossTab.rows.length === 0} onClick={() => void exportExcel()}><ExcelFileIcon size={19} />บันทึกเป็น Excel</ActionButton><ActionButton onClick={() => setFormatOpen(true)}><GearSix size={19} weight="duotone" />ตั้งค่ารูปแบบ</ActionButton><ActionButton disabled={!hasProcessedResult || crossTab.rows.length === 0} onClick={() => setPreviewOpen(true)}><Printer size={19} weight="duotone" />พิมพ์</ActionButton><ActionButton tone="danger" onClick={() => navigate('/app')}><SignOut size={19} weight="duotone" />ออก</ActionButton></div>{!canExport && <p className="mt-3 text-xs text-slate-500">การส่งออก Excel เปิดให้ครูและผู้ดูแลอำเภอตามนโยบายสิทธิ์เดิม ส่วนการดูและพิมพ์ยังใช้งานได้ตามปกติ</p>}</div>
+                    <div><div className="grid gap-3 sm:grid-cols-2 2xl:grid-cols-3"><ActionButton tone="primary" onClick={processReport} disabled={workspace.isFetching}><Play size={19} weight="fill" />{workspace.isFetching ? 'กำลังประมวลผล...' : 'ประมวลผล'}</ActionButton><ActionButton disabled={!hasProcessedResult || crossTab.rows.length === 0} onClick={() => setPreviewOpen(true)}><FileText size={19} weight="duotone" />ตัวอย่างก่อนพิมพ์</ActionButton><ActionButton tone="success" disabled={!canExport || !hasProcessedResult || crossTab.rows.length === 0} onClick={() => void exportExcel()}><ExcelFileIcon size={19} />บันทึกเป็น Excel</ActionButton><ActionButton onClick={() => setFormatOpen(true)}><GearSix size={19} weight="duotone" />ตั้งค่ารูปแบบ</ActionButton><ActionButton disabled={!hasProcessedResult || crossTab.rows.length === 0} onClick={() => setPreviewOpen(true)}><Printer size={19} weight="duotone" />พิมพ์</ActionButton><ActionButton tone="danger" onClick={() => navigate('/app')}><SignOut size={19} weight="duotone" />ออก</ActionButton></div>{!canExport && <p className="mt-3 text-xs text-slate-500">การส่งออก Excel เปิดให้ครูและผู้ดูแลอำเภอตามนโยบายสิทธิ์เดิม ส่วนการดูและพิมพ์ยังใช้งานได้ตามปกติ</p>}</div>
                 </div>
             </div>
         </section>
         {validationMessage && <div role="alert" className="flex items-start gap-3 rounded-2xl border border-amber-200 bg-amber-50 px-4 py-4 text-sm text-amber-950"><Info size={20} weight="fill" className="mt-0.5 shrink-0 text-amber-600" /><div><strong className="font-black">ยังประมวลผลรายงานนี้ไม่ได้</strong><p className="mt-0.5 leading-6">{validationMessage}</p></div></div>}
-        <section aria-labelledby="statistics-result-title" className="rounded-[24px] border border-slate-200 bg-white p-5 shadow-sm shadow-slate-200/60 lg:p-6"><div className="mb-5 flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between"><div><h2 id="statistics-result-title" className="flex items-center gap-2 text-lg font-black text-slate-950"><Rows size={21} className="text-brand-700" weight="duotone" />ผลการประมวลผลแบบสองแกน</h2><p className="mt-1 text-sm text-slate-500">{request ? `${processedReport.label} · ${districtName} · ภาคเรียน ${workspace.data?.selectedTerm ?? request.term}${request.group ? ` · กลุ่ม ${selectedGroupLabel}` : ''}` : 'ยังไม่มีข้อมูล กรุณาตั้งค่าทั้งสองแกนและกดปุ่มประมวลผล'}</p></div>{hasProcessedResult && crossTab.rows.length > 0 && <div className="flex flex-wrap gap-2 text-xs font-bold"><span className="rounded-full bg-indigo-50 px-3 py-1.5 text-indigo-800">{crossTab.summary.row_count} ชุดแถว × {crossTab.summary.column_count} ชุดคอลัมน์</span><span className="rounded-full bg-emerald-50 px-3 py-1.5 text-emerald-800">สูงสุด {largestCell && largestRow && largestColumn ? `${largestRow.label} × ${largestColumn.label} ${largestCell.count.toLocaleString('th-TH')} คน` : '-'}</span></div>}</div>{workspace.isFetching && <QuerySkeleton rows={6} />}{workspace.isError && <QueryError onRetry={() => workspace.refetch()} />}{!workspace.isFetching && !workspace.isError && <CrossTabResultTable crossTab={hasProcessedResult ? crossTab : unprocessedCrossTab} onSelectCell={hasProcessedResult ? setSelectedCell : undefined} />}</section>
+        <section aria-labelledby="statistics-result-title" className="rounded-[24px] border border-slate-200 bg-white p-5 shadow-sm shadow-slate-200/60 lg:p-6"><div className="mb-5 flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between"><div><h2 id="statistics-result-title" className="flex items-center gap-2 text-lg font-black text-slate-950"><Rows size={21} className="text-brand-700" weight="duotone" />ผลการประมวลผลแบบสองแกน</h2><p className="mt-1 text-sm text-slate-500">{request ? `${processedReport.label} · ${districtName} · ภาคเรียน ${workspace.data?.selectedTerm ?? request.term}${request.group ? ` · กลุ่ม ${selectedGroupLabel}` : ''}` : 'ยังไม่มีข้อมูล กรุณาตั้งค่าทั้งสองแกนและกดปุ่มประมวลผล'}</p></div>{hasProcessedResult && crossTab.rows.length > 0 && <div className="flex flex-wrap gap-2 text-xs font-bold"><span className="rounded-full bg-indigo-50 px-3 py-1.5 text-indigo-800">{crossTab.summary.row_count} ชุดแถว × {crossTab.summary.column_count} ชุดคอลัมน์</span><span className="rounded-full bg-emerald-50 px-3 py-1.5 text-emerald-800">สูงสุด {largestCell && largestRow && largestColumn ? `${largestRow.label} × ${largestColumn.label} ${largestCell.count.toLocaleString('th-TH')} คน` : '-'}</span></div>}</div>{workspace.isFetching && <QuerySkeleton rows={6} />}{workspace.isError && <><p role="alert" className="mb-3 text-sm font-semibold text-rose-700">{workspace.error instanceof ApiError ? Object.values(workspace.error.errors).flat().join(" · ") || workspace.error.message : "ไม่สามารถประมวลผลรายงานได้"}</p><QueryError onRetry={() => workspace.refetch()} /></>}{!workspace.isFetching && !workspace.isError && <CrossTabResultTable crossTab={hasProcessedResult ? crossTab : unprocessedCrossTab} onSelectCell={hasProcessedResult ? setSelectedCell : undefined} />}</section>
         {formatOpen && <ReportFormatDialog report={selectedReport} initialConfiguration={axisConfiguration} initialOrientation={orientation} onClose={() => setFormatOpen(false)} onSave={(nextConfiguration, nextOrientation) => {
             const normalized = normalizeAxisConfiguration(selectedReport, nextConfiguration);
             savePreference.mutate({ report: selectedReport.source, ...normalized, orientation: nextOrientation, saved: true }, {

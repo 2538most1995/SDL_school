@@ -4,6 +4,7 @@ namespace App\Http\Controllers\Api\Students;
 
 use App\Domain\Students\Services\LegacyStudentReportService;
 use App\Domain\Students\Services\StudentReportService;
+use App\Domain\Students\Support\ExtendedStudentStatistics;
 use App\Http\Resources\Students\StudentReportResource;
 use App\Services\AuditService;
 use Illuminate\Http\JsonResponse;
@@ -16,6 +17,20 @@ final class StudentReportController extends StudentsApiController
         private readonly StudentReportService $reports,
         private readonly LegacyStudentReportService $legacyReports,
     ) {}
+
+    public function extendedStatistics(Request $request, string $kind): JsonResponse
+    {
+        abort_unless(in_array($kind, ExtendedStudentStatistics::KINDS, true), 404);
+        $filters = $this->filters($request);
+        if ($kind === 'age-statistics') {
+            ExtendedStudentStatistics::ageRanges((string) ($filters['age_ranges'] ?? '0-15,16-24,25-39,40-59,60-120'));
+        }
+        $data = config('system_data.student_enabled')
+            ? $this->legacyReports->extendedStatistics($request->user(), (int) $request->attributes->get('district_id'), $kind, $filters)
+            : $this->reports->extendedStatistics($request->user(), $kind, $filters);
+
+        return $this->reportResponse($request, $data, false);
+    }
 
     public function overview(Request $request): JsonResponse
     {
@@ -169,6 +184,7 @@ final class StudentReportController extends StudentsApiController
             'occupation' => ['nullable', 'string', 'max:10'],
             'nationality' => ['nullable', 'string', 'max:10'],
             'age' => ['nullable', 'integer', 'min:1', 'max:120'],
+            'age_ranges' => ['sometimes', 'required', 'string', 'max:1000'],
         ]);
     }
 

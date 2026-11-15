@@ -66,6 +66,8 @@ const emptyFilters: Record<CategoryKey, string> = {
     nationality: '',
     age: '',
     nnet: '',
+    age_band: '',
+    completion_status: '',
 };
 
 const emptyPayload: RegistrationStatisticsPayload = {
@@ -73,7 +75,7 @@ const emptyPayload: RegistrationStatisticsPayload = {
     selected_category: 'target_group',
     selected_category_label: 'กลุ่มเป้าหมาย',
     filter_options: {
-        target_group: [], group: [], gender: [], level: [], occupation: [], nationality: [], age: [], nnet: [],
+        target_group: [], group: [], gender: [], level: [], occupation: [], nationality: [], age: [], nnet: [], age_band: [], completion_status: [],
     },
     applied_filters: {},
     terms: [],

@@ -1,14 +1,14 @@
 import type { ExcelSheet } from '../../lib/excel';
 import type { CategoryKey, RegistrationStatisticsPayload } from './registrationStatisticsExport';
 
-export type StatisticReportId = 1 | 2 | 3 | 4 | 5;
+export type StatisticReportId = 1 | 2 | 3 | 4 | 5 | 6 | 7 | 8 | 9 | 10;
 export type StatisticOrientation = 'vertical' | 'horizontal';
 export type StatisticAxisConfiguration = Record<StatisticOrientation, CategoryKey[]>;
 
 export type StatisticReportDefinition = {
     id: StatisticReportId;
     label: string;
-    source: 'new-students' | 'registration-statistics' | 'graduates' | 'expected-graduates' | 'transfers';
+    source: 'new-students' | 'registration-statistics' | 'graduates' | 'expected-graduates' | 'transfers' | 'gender-statistics' | 'age-statistics' | 'exam-disqualified' | 'nnet-statistics' | 'credit-pending';
 };
 
 export type StatisticCategoryDefinition = {
@@ -32,6 +32,8 @@ export type GenericReportRow = {
     group_code?: string;
     group_label?: string;
     gender?: string;
+    age_band?: string;
+    completion_status?: string;
     examStatus?: string;
     nnet?: string;
 };
@@ -111,6 +113,11 @@ export const statisticReports: StatisticReportDefinition[] = [
     { id: 3, label: 'รายงานจำนวนนักศึกษาจบการศึกษา', source: 'graduates' },
     { id: 4, label: 'รายงานจำนวนนักศึกษาคาดว่าจะจบ', source: 'expected-graduates' },
     { id: 5, label: 'รายงานจำนวนนักศึกษาที่มีรายการเทียบโอน', source: 'transfers' },
+    { id: 6, label: 'รายงานเพศ', source: 'gender-statistics' },
+    { id: 7, label: 'รายงานช่วงอายุ', source: 'age-statistics' },
+    { id: 8, label: 'รายงานตัดสิทธิ์สอบ', source: 'exam-disqualified' },
+    { id: 9, label: 'รายงาน N-NET สอบแล้ว / ยังไม่ได้สอบ', source: 'nnet-statistics' },
+    { id: 10, label: 'รายงานหน่วยกิตครบ ขาด กพช. หรือ N-NET', source: 'credit-pending' },
 ];
 
 export const statisticCategories: StatisticCategoryDefinition[] = [
@@ -122,6 +129,8 @@ export const statisticCategories: StatisticCategoryDefinition[] = [
     { order: 6, key: 'target_group', label: 'กลุ่มเป้าหมาย' },
     { order: 7, key: 'nationality', label: 'สัญชาติ' },
     { order: 8, key: 'nnet', label: 'สถานะ N-Net / E-Exam' },
+    { order: 9, key: 'age_band', label: 'ช่วงอายุ' },
+    { order: 10, key: 'completion_status', label: 'เงื่อนไขที่ยังขาด' },
 ];
 
 export function reportById(id: StatisticReportId): StatisticReportDefinition {
@@ -130,9 +139,11 @@ export function reportById(id: StatisticReportId): StatisticReportDefinition {
 
 export function categoriesForReport(report: StatisticReportDefinition): StatisticCategoryDefinition[] {
     if (report.source === 'registration-statistics') {
-        return statisticCategories.filter((category) => category.key !== 'nnet');
+        return statisticCategories.filter((category) => !['nnet', 'age_band', 'completion_status'].includes(category.key));
     }
-    if (report.source === 'expected-graduates') {
+    if (report.source === 'age-statistics') return statisticCategories.filter((category) => ['level', 'group', 'gender', 'age_band'].includes(category.key));
+    if (report.source === 'credit-pending') return statisticCategories.filter((category) => ['level', 'group', 'gender', 'nnet', 'completion_status'].includes(category.key));
+    if ((report.source === 'expected-graduates' || report.source === 'nnet-statistics')) {
         return statisticCategories.filter((category) => category.key === 'level' || category.key === 'group' || category.key === 'gender' || category.key === 'nnet');
     }
     return statisticCategories.filter((category) => category.key === 'level' || category.key === 'group' || category.key === 'gender');
@@ -153,16 +164,26 @@ export function normalizeAxisConfiguration(
         return unique.length > 0 ? unique : [fallback];
     };
     return {
-        vertical: normalize(configuration.vertical, 'level'),
-        horizontal: normalize(configuration.horizontal, 'group'),
+        vertical: normalize(configuration.vertical, 'group'),
+        horizontal: normalize(configuration.horizontal, 'level'),
     };
 }
 
 export function createDefaultAxisConfiguration(): StatisticAxisConfiguration {
     return {
-        vertical: ['level'],
-        horizontal: ['group'],
+        vertical: ['group'],
+        horizontal: ['level'],
     };
+}
+
+/** Keep the requested group/level axes and show each report's breakdown within columns. */
+export function configurationForReportResult(report: StatisticReportDefinition, configuration: StatisticAxisConfiguration): StatisticAxisConfiguration {
+    const breakdown: CategoryKey | undefined = report.source === 'gender-statistics' ? 'gender'
+        : report.source === 'age-statistics' ? 'age_band'
+        : report.source === 'nnet-statistics' ? 'nnet'
+        : report.source === 'credit-pending' ? 'completion_status' : undefined;
+    if (!breakdown || [...configuration.vertical, ...configuration.horizontal].includes(breakdown)) return configuration;
+    return { vertical: [...configuration.vertical], horizontal: [...configuration.horizontal, breakdown] };
 }
 
 export function categoriesForOrientation(
@@ -193,7 +214,7 @@ export function summarizeStatisticRows(
     };
 }
 
-function groupParts(row: GenericReportRow): { level: string; group: string; gender: string; nnet: string } {
+function groupParts(row: GenericReportRow): { level: string; group: string; gender: string; nnet: string; age_band: string; completion_status: string } {
     const nnet = row.examStatus ?? row.nnet ?? 'มีสิทธิ์สอบ';
     const gender = row.gender || 'ไม่ระบุเพศ';
     if (row.level || row.group_label || row.group_code) {
@@ -202,6 +223,8 @@ function groupParts(row: GenericReportRow): { level: string; group: string; gend
             group: row.group_label || row.group_code || 'ไม่ระบุกลุ่ม',
             gender,
             nnet,
+            age_band: row.age_band ?? 'ไม่ระบุอายุ',
+            completion_status: row.completion_status ?? 'ไม่ระบุ',
         };
     }
     const value = row.group;
@@ -211,6 +234,8 @@ function groupParts(row: GenericReportRow): { level: string; group: string; gend
         group: parts[1] ?? parts[0] ?? 'ไม่ระบุกลุ่ม',
         gender,
         nnet,
+        age_band: row.age_band ?? 'ไม่ระบุอายุ',
+        completion_status: row.completion_status ?? 'ไม่ระบุ',
     };
 }
 
@@ -218,8 +243,8 @@ function categoryLabel(category: CategoryKey): string {
     return statisticCategories.find((item) => item.key === category)?.label ?? category;
 }
 
-function genericPart(category: CategoryKey, values: { level: string; group: string; gender: string; nnet: string }): StatisticCrossTabPart {
-    const value = category === 'group' ? values.group : category === 'nnet' ? values.nnet : category === 'gender' ? values.gender : values.level;
+function genericPart(category: CategoryKey, values: { level: string; group: string; gender: string; nnet: string; age_band: string; completion_status: string }): StatisticCrossTabPart {
+    const value = category in values ? values[category as keyof typeof values] : values.level;
     return {
         category,
         category_label: categoryLabel(category),
@@ -238,11 +263,11 @@ export function genericPayloadToCrossTab(
     configuration: StatisticAxisConfiguration,
 ): StatisticCrossTabPayload {
     const usable = (categories: CategoryKey[], fallback: CategoryKey): CategoryKey[] => {
-        const filtered = categories.filter((category) => category === 'level' || category === 'group' || category === 'gender' || category === 'nnet');
+        const filtered = categories.filter((category) => ['level', 'group', 'gender', 'nnet', 'age_band', 'completion_status'].includes(category));
         return filtered.length > 0 ? filtered : [fallback];
     };
-    const rowKeys = usable(configuration.vertical, 'level');
-    const columnKeys = usable(configuration.horizontal, 'group');
+    const rowKeys = usable(configuration.vertical, 'group');
+    const columnKeys = usable(configuration.horizontal, 'level');
     const rows = new Map<string, StatisticCrossTabRow>();
     const columns = new Map<string, StatisticCrossTabColumn>();
 
@@ -317,7 +342,7 @@ export function genericPayloadToStatisticRows(
     payload: GenericReportPayload,
     categories: CategoryKey[],
 ): StatisticResultRow[] {
-    const usableCategories = categories.filter((category) => category === 'level' || category === 'group' || category === 'gender' || category === 'nnet');
+    const usableCategories = categories.filter((category) => ['level', 'group', 'gender', 'nnet', 'age_band', 'completion_status'].includes(category));
     const selectedCategories: Array<'level' | 'group' | 'gender' | 'nnet'> = usableCategories.length > 0
         ? usableCategories as Array<'level' | 'group' | 'gender' | 'nnet'>
         : ['level'];

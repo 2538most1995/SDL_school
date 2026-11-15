@@ -64,8 +64,8 @@ final class ProductionSettingsTest extends TestCase
         $this->getJson('/api/v1/settings/statistics-report?report=registration-statistics')
             ->assertOk()
             ->assertJsonPath('data.saved', false)
-            ->assertJsonPath('data.vertical.0', 'level')
-            ->assertJsonPath('data.horizontal.0', 'group');
+            ->assertJsonPath('data.vertical.0', 'group')
+            ->assertJsonPath('data.horizontal.0', 'level');
 
         $this->putJson('/api/v1/settings/statistics-report', [
             'report' => 'registration-statistics',

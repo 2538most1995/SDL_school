@@ -308,3 +308,7 @@ Drag/up/down/first actions now preview local pending moves without writes. Finis
 ## ITW import history preservation (2026-11-15)
 
 Student import makes one DBF pass instead of building a latest-by-citizen map followed by a second pass. All non-deleted student rows are inserted using existing bounded prepared batches and indexes. Storage/index size may increase as historical codes are retained. Report SQL and indexes are unchanged. Synthetic SQLite regression executes DBF import and actual report SQL, covering older/newer codes sharing an ID, multiple subjects, orphan grades, terms, teacher scope and district isolation. Live MySQL EXPLAIN, latency and production reimport remain Not verified.
+
+## Extended statistics queries (2026-11-15)
+
+New gender/age reports select minimal scoped student fields with selected-term grade EXISTS membership. Exam/N-NET/credit reports additionally read academic rows for scoped codes in chunks of at most 500, joining existing subject indexes. Credit-pending reads activity hours in the same bounded code chunks. No per-student query, persistent cache, schema/index or real-data write is added. Historical grade rows are classified in memory and repeated subjects earn credit once. Response size scales with the scoped registered roster for existing cross-tab/student-list/Excel flows. Live MySQL EXPLAIN, latency and peak memory remain Not verified; functional SQL tests use isolated synthetic SQLite.

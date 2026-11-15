@@ -6,6 +6,7 @@ import {
     buildStatisticsCrossTabSheets,
     buildStatisticsWorkspaceSheets,
     categoriesForReport,
+    configurationForReportResult,
     categoriesForOrientation,
     createDefaultAxisConfiguration,
     genericPayloadToCrossTab,
@@ -19,7 +20,7 @@ import {
 } from '../../resources/js/features/reports/statisticsWorkspace.ts';
 
 test('statistics workspace exposes only reports backed by a real source', () => {
-    assert.equal(statisticReports.length, 5);
+    assert.equal(statisticReports.length, 10);
     assert.equal(reportById(1).source, 'new-students');
     assert.equal(reportById(2).source, 'registration-statistics');
     assert.equal(reportById(3).source, 'graduates');
@@ -60,9 +61,9 @@ test('configured dimensions become real nested rows and columns in one cross-tab
 });
 
 test('report format catalog keeps only dimensions backed by imported source fields', () => {
-    assert.equal(statisticCategories.length, 8);
+    assert.equal(statisticCategories.length, 10);
     assert.deepEqual(statisticCategories.map((item) => item.label), [
-        'ระดับชั้น', 'กลุ่มเรียน', 'เพศ', 'อายุ', 'อาชีพ', 'กลุ่มเป้าหมาย', 'สัญชาติ', 'สถานะ N-Net / E-Exam',
+        'ระดับชั้น', 'กลุ่มเรียน', 'เพศ', 'อายุ', 'อาชีพ', 'กลุ่มเป้าหมาย', 'สัญชาติ', 'สถานะ N-Net / E-Exam', 'ช่วงอายุ', 'เงื่อนไขที่ยังขาด',
     ]);
     assert.deepEqual(categoriesForReport(reportById(2)).map((item) => item.key), [
         'level', 'group', 'gender', 'age', 'occupation', 'target_group', 'nationality',
@@ -72,19 +73,19 @@ test('report format catalog keeps only dimensions backed by imported source fiel
     assert.deepEqual(normalizeAxisConfiguration(reportById(3), {
         vertical: ['gender', 'level'],
         horizontal: ['age'],
-    }), { vertical: ['gender', 'level'], horizontal: ['group'] });
+    }), { vertical: ['gender', 'level'], horizontal: ['level'] });
 });
 
 test('vertical and horizontal category configurations remain independent', () => {
     const configuration = createDefaultAxisConfiguration();
     configuration.vertical.push('gender');
 
-    assert.deepEqual(categoriesForOrientation(configuration, 'vertical'), ['level', 'gender']);
-    assert.deepEqual(categoriesForOrientation(configuration, 'horizontal'), ['group']);
+    assert.deepEqual(categoriesForOrientation(configuration, 'vertical'), ['group', 'gender']);
+    assert.deepEqual(categoriesForOrientation(configuration, 'horizontal'), ['level']);
 
     const horizontal = categoriesForOrientation(configuration, 'horizontal');
     horizontal.push('age');
-    assert.deepEqual(configuration.horizontal, ['group']);
+    assert.deepEqual(configuration.horizontal, ['level']);
 });
 
 test('generic student lists are aggregated by real level and group values', () => {
@@ -152,4 +153,23 @@ test('registration dimensions remain separate and export as a valid workbook', (
     assert.match(conditionXml, /อำเภอเสนา/);
     assert.match(conditionXml, /แนวนอน/);
     assert.match(conditionXml, /รวมผู้เรียนทั้งหมด/);
+});
+
+
+test('new reports preserve group/level defaults and expose real breakdowns in tables and Excel', () => {
+    assert.deepEqual(createDefaultAxisConfiguration(), { vertical: ['group'], horizontal: ['level'] });
+    for (const [id, field, value] of [[6, 'gender', 'หญิง'], [7, 'age_band', '16-24 ปี'], [9, 'nnet', 'ยังไม่ได้สอบ'], [10, 'completion_status', 'ขาด กพช.']]) {
+        const report = reportById(id);
+        const config = configurationForReportResult(report, createDefaultAxisConfiguration());
+        assert.deepEqual(config.vertical, ['group']);
+        assert.deepEqual(config.horizontal, ['level', field]);
+        const crossTab = genericPayloadToCrossTab({ total: 1, active: 1, groups: 1, rows: [
+            { id: '1', primary: 'ทดสอบ', secondary: '1', group: '', level: 'ประถมศึกษา', group_label: 'กลุ่ม A', metric: value, [field]: value },
+        ] }, config);
+        assert.equal(crossTab.summary.registered_students, 1);
+        assert.match(crossTab.columns[0].label, new RegExp(value));
+        assert.equal(crossTab.rows[0].studentsByCell[crossTab.columns[0].key][0][field], value);
+        const files = unzipSync(createExcelFileBytes(buildStatisticsCrossTabSheets(report, '1/2569', 'เสนา', crossTab)));
+        assert.ok(strFromU8(files['xl/worksheets/sheet1.xml']).includes(value));
+    }
 });

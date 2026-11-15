@@ -4,11 +4,13 @@ namespace App\Domain\Students\Services;
 
 use App\Domain\Students\Support\AcademicTerm;
 use App\Domain\Students\Support\ExamEligibilityStatistics;
+use App\Domain\Students\Support\ExtendedStudentStatistics;
 use App\Domain\Students\Support\LegacyStudentStatus;
 use App\Domain\Students\Support\LegacyTableSet;
 use App\Domain\Students\Support\RegistrationStatistics;
 use App\Models\User;
 use Illuminate\Database\DatabaseManager;
+use Illuminate\Validation\ValidationException;
 use InvalidArgumentException;
 
 /**
@@ -21,6 +23,84 @@ use InvalidArgumentException;
 final readonly class LegacyStudentReportService
 {
     public function __construct(private DatabaseManager $database) {}
+
+    /** Additional statistics use selected-term registration membership, including historical codes. */
+    public function extendedStatistics(User $viewer, int $districtId, string $kind, array $filters): array
+    {
+        $sets = $this->filteredSets($this->sets($districtId), $filters);
+        $terms = $this->registeredSubjectTerms($viewer, $sets, $filters);
+        $term = $this->selectedTerm($filters, $terms);
+        $ranges = $kind === 'age-statistics' ? ExtendedStudentStatistics::ageRanges((string) ($filters['age_ranges'] ?? '0-15,16-24,25-39,40-59,60-120')) : [];
+        $result = [];
+        foreach ($sets as $set) {
+            if ($term === null) {
+                continue;
+            }
+            [$join, $groupName] = $this->groupJoin($set, 'st');
+            [$scope, $bindings] = $this->scope($viewer, $set, 'st', $join !== '');
+            $conditions = [$scope];
+            $this->appendGroupAndSearchFilters($conditions, $bindings, $filters, $join !== '', 'st', $groupName);
+            $studentTable = $this->identifier($set->student);
+            $gradeTable = $this->identifier($set->grade);
+            $variants = AcademicTerm::variants($term);
+            $placeholders = implode(',', array_fill(0, count($variants), '?'));
+            $conditions[] = "EXISTS (SELECT 1 FROM {$gradeTable} selected_grade WHERE selected_grade._perf_std10 = st._perf_id10 AND TRIM(selected_grade._perf_semestry) IN ({$placeholders}))";
+            array_push($bindings, ...$variants);
+            $fields = [];
+            foreach (['gender' => ['gender', 'sex'], 'age' => ['age'], 'nt_sem' => ['nt_sem'], 'nt_nosem' => ['nt_nosem'], 'nt_sara1' => ['nt_sara1'], 'nt_sara2' => ['nt_sara2'], 'nnet_flag' => ['nnet', 'n_net', 'eexam', 'e_exam', 'nnet_status', 'nnet_stat', 'exam_status']] as $alias => $candidates) {
+                $column = $this->firstExistingColumn($set->student, $candidates);
+                $fields[] = ($column === null ? "''" : 'st.'.$this->identifier($column)).' AS '.$alias;
+            }
+            $students = $this->rows("SELECT st._perf_id10 AS code, st.prename, st.name AS first_name, st.surname AS last_name, st.grp_code AS group_code, {$groupName} AS group_name, ".implode(', ', $fields)." FROM {$studentTable} st {$join} WHERE ".implode(' AND ', $conditions), $bindings);
+            $grades = [];
+            $activities = [];
+            if ($kind === 'credit-pending' && $students !== [] && $set->activity === null) {
+                throw ValidationException::withMessages(['report' => ['ไม่พบตาราง กพช. ในชุดนำเข้า จึงยังระบุเงื่อนไขที่ขาดไม่ได้ กรุณานำเข้าชุด ITW ที่มี ACTIVITY.DBF ครบ']]);
+            }
+            if (! in_array($kind, ['gender-statistics', 'age-statistics'], true)) {
+                $codes = array_values(array_unique(array_filter(array_column($students, 'code'))));
+                foreach (array_chunk($codes, 500) as $chunk) {
+                    $codePlaceholders = implode(',', array_fill(0, count($chunk), '?'));
+                    $subjectTable = $this->identifier($set->subject);
+                    foreach ($this->rows("SELECT g._perf_std10 AS code, g._perf_semestry AS term, g.grade, g.typ_code, g._perf_sub AS subject_code, sub.sub_name AS subject_name, sub.sub_type AS subject_type, sub.sub_credit AS credits FROM {$gradeTable} g LEFT JOIN {$subjectTable} sub ON sub._perf_sub = g._perf_sub WHERE g._perf_std10 IN ({$codePlaceholders}) ORDER BY g._id ASC", $chunk) as $row) {
+                        $grades[$row['code']][] = $row;
+                    }
+                    if ($kind === 'credit-pending' && $set->activity !== null) {
+                        $activityTable = $this->identifier($set->activity);
+                        foreach ($this->rows("SELECT _perf_std10 AS code, _perf_semestry AS term, hour AS hours FROM {$activityTable} WHERE _perf_std10 IN ({$codePlaceholders})", $chunk) as $row) {
+                            $activities[$row['code']][] = $row;
+                        }
+                    }
+                }
+            }
+            foreach ($students as $student) {
+                $code = trim((string) $student['code']);
+                if ($code === '') {
+                    continue;
+                }
+                $record = [
+                    ...$student,
+                    'id' => "{$districtId}-{$set->level}-{$code}",
+                    'entity_key' => "{$districtId}-{$set->level}-{$code}",
+                    'student_id' => $code,
+                    'primary' => $this->fullName($student),
+                    'secondary' => $code,
+                    'level_id' => $set->level,
+                    'level' => $this->levelLabel($set->level),
+                    'group' => $this->levelLabel($set->level).' · '.$this->groupLabel($student),
+                    'group_label' => $this->groupLabel($student),
+                    'metric' => '',
+                ];
+                $classified = ExtendedStudentStatistics::classify($kind, $record, $grades[$code] ?? [], $activities[$code] ?? [], $term, $ranges);
+                if ($classified !== null) {
+                    // Explicit report projection: no raw exam/source fields or identifiers.
+                    $result[$record['id']] = array_intersect_key($classified, array_flip(['id', 'entity_key', 'student_id', 'primary', 'secondary', 'level', 'group', 'group_code', 'group_label', 'gender', 'age_band', 'nnet', 'completion_status', 'metric', 'kpch_hours', 'credits_earned']));
+                }
+            }
+        }
+
+        return [...$this->payload(array_values($result), $terms, $term, static fn (): bool => true), 'age_ranges' => $ranges];
+    }
 
     /** @param array<string, mixed> $filters */
     public function newStudents(User $viewer, int $districtId, array $filters): array
@@ -970,7 +1050,7 @@ final readonly class LegacyStudentReportService
             if (! $this->validIdentifier($table) || preg_match("/^{$prefix}/", $table) !== 1) {
                 continue;
             }
-            if (preg_match("/^{$prefix}([123])_(student|grade|subject)$/", $table, $matches) === 1) {
+            if (preg_match("/^{$prefix}([123])_(student|grade|subject|activity)$/", $table, $matches) === 1) {
                 $tables[(int) $matches[1]][$matches[2]] = $table;
             } elseif (preg_match("/^{$prefix}([123])_group$/", $table, $matches) === 1) {
                 $levelGroups[(int) $matches[1]][] = $table;
@@ -986,7 +1066,7 @@ final readonly class LegacyStudentReportService
                 continue;
             }
             $groups = $levelGroups[$level] ?? $globalGroups;
-            $sets[] = new LegacyTableSet($districtId, '', $batchKey, $level, $levelTables['student'], $levelTables['grade'], $levelTables['subject'], null, null, count($groups) === 1 ? $groups[0] : null);
+            $sets[] = new LegacyTableSet($districtId, '', $batchKey, $level, $levelTables['student'], $levelTables['grade'], $levelTables['subject'], $levelTables['activity'] ?? null, null, count($groups) === 1 ? $groups[0] : null);
         }
 
         return $sets;

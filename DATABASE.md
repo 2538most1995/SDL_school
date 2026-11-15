@@ -193,3 +193,7 @@ Migration 000045 creates learning_classroom_templates with district/creator, sou
 ## Preserve ITW registration identities (2026-11-15)
 
 Imported STUDENT tables retain all non-deleted source records, including older student codes sharing `cardid`. Grade joins use level + `_perf_id10`/`_perf_std10`. Existing performance columns and nonunique indexes are unchanged; no migration is needed. Existing imported tables are not automatically backfilled: reimport the authoritative ZIP after deploying the importer. Current-cohort authentication continues to reject ambiguous matches.
+
+## Extended statistics sources (2026-11-15)
+
+Five additional report keys use existing `statistics_report_preferences` JSON rows; no migration is needed. Read-only sources are latest-batch STUDENT, GRADE, SUBJECT and (for pending KPCH) ACTIVITY tables. The historical report table resolver now retains the optional level activity table. Selected-term registration EXISTS queries constrain membership; existing district/batch and exact teacher-group scope apply. Projections exclude citizen IDs/contact fields. Missing ACTIVITY prevents pending-KPCH classification instead of inventing zero hours. See `laravel-app/docs/statistics-reports.md`.

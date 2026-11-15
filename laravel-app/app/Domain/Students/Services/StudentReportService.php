@@ -7,6 +7,7 @@ use App\Domain\Students\Models\Student;
 use App\Domain\Students\Repositories\StudentRepository;
 use App\Domain\Students\Support\AcademicTerm;
 use App\Domain\Students\Support\ExamEligibilityStatistics;
+use App\Domain\Students\Support\ExtendedStudentStatistics;
 use App\Domain\Students\Support\RegistrationStatistics;
 use App\Models\User;
 
@@ -16,6 +17,42 @@ final readonly class StudentReportService
         private StudentRepository $repository,
         private StudentDirectoryService $directory,
     ) {}
+
+    public function extendedStatistics(User $viewer, string $kind, array $filters): array
+    {
+        $students = $this->students($viewer, $filters);
+        $grades = $this->repository->gradesForMany($students);
+        $terms = $this->academicTerms($grades);
+        $term = $this->selectedAcademicTerm($filters, $terms);
+        $ranges = $kind === 'age-statistics' ? ExtendedStudentStatistics::ageRanges((string) ($filters['age_ranges'] ?? '0-15,16-24,25-39,40-59,60-120')) : [];
+        $rows = [];
+        foreach ($students as $student) {
+            $academic = $this->studentGrades($grades, $student);
+            if ($term === null || ! array_filter($academic, static fn (Grade $grade): bool => AcademicTerm::normalize($grade->term) === $term)) {
+                continue;
+            }
+            $row = ExtendedStudentStatistics::classify($kind, [
+                ...array_intersect_key($student->demographics, array_flip(['gender', 'age', 'nt_sem', 'nt_nosem', 'nt_sara1', 'nt_sara2'])),
+                'nnet_flag' => $student->demographics['nnet'] ?? '',
+                'id' => "{$student->districtId}-{$student->level}-{$student->code}",
+                'student_id' => $student->code,
+                'primary' => $student->fullName(), 'secondary' => $student->code,
+                'level_id' => $student->level, 'level' => $student->levelLabel,
+                'group' => $student->levelLabel.' · '.$student->groupName,
+                'group_label' => $student->groupName, 'group_code' => $student->groupCode,
+            ], array_map(static fn (Grade $grade): array => [
+                'term' => $grade->term, 'grade' => $grade->grade,
+                'subject_code' => $grade->subjectCode, 'subject_name' => $grade->subjectName,
+                'subject_type' => $grade->subjectType, 'credits' => $grade->credits,
+                'typ_code' => $grade->transferred ? '1' : '',
+            ], $academic), [['term' => $term, 'hours' => $student->kpchHours]], $term, $ranges);
+            if ($row !== null) {
+                $rows[] = array_intersect_key($row, array_flip(['id', 'student_id', 'primary', 'secondary', 'level', 'group', 'group_code', 'group_label', 'gender', 'age_band', 'nnet', 'completion_status', 'metric', 'kpch_hours', 'credits_earned']));
+            }
+        }
+
+        return ['rows' => $rows, 'total' => count($rows), 'active' => count($rows), 'groups' => count(array_unique(array_column($rows, 'group'))), 'terms' => $terms, 'selected_term' => $term, 'age_ranges' => $ranges];
+    }
 
     /** @param array<string, mixed> $filters
      * @return array<string, mixed>

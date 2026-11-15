@@ -228,6 +228,7 @@ Route::prefix('v1')->group(function (): void {
             Route::get('/reports/graduates', [StudentReportController::class, 'graduates']);
             Route::get('/reports/expected-graduates', [StudentReportController::class, 'expectedGraduates']);
             Route::get('/reports/transfers', [StudentReportController::class, 'transfers']);
+            Route::get('/reports/statistics/{kind}', [StudentReportController::class, 'extendedStatistics']);
             Route::get('/reports/registered-subjects', [StudentReportController::class, 'registeredSubjects']);
             Route::get('/reports/students/registration-statistics', [StudentReportController::class, 'registrationStatistics']);
             Route::get('/reports/students/grades-above-two', [StudentReportController::class, 'gradesAboveTwo']);

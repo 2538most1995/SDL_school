@@ -18,6 +18,11 @@ final class StatisticsReportPreferenceController extends Controller
         'graduates' => ['level', 'group', 'gender'],
         'expected-graduates' => ['level', 'group', 'gender', 'nnet'],
         'transfers' => ['level', 'group', 'gender'],
+        'gender-statistics' => ['level', 'group', 'gender'],
+        'age-statistics' => ['level', 'group', 'gender', 'age_band'],
+        'exam-disqualified' => ['level', 'group', 'gender'],
+        'nnet-statistics' => ['level', 'group', 'gender', 'nnet'],
+        'credit-pending' => ['level', 'group', 'gender', 'nnet', 'completion_status'],
     ];
 
     public function show(Request $request): JsonResponse
@@ -35,8 +40,8 @@ final class StatisticsReportPreferenceController extends Controller
         return response()->json([
             'data' => $row === null ? $this->defaults($report) : [
                 'report' => $report,
-                'vertical' => $this->decodeCategories($row->vertical_categories, $report, 'level'),
-                'horizontal' => $this->decodeCategories($row->horizontal_categories, $report, 'group'),
+                'vertical' => $this->decodeCategories($row->vertical_categories, $report, 'group'),
+                'horizontal' => $this->decodeCategories($row->horizontal_categories, $report, 'level'),
                 'orientation' => in_array($row->active_orientation, ['vertical', 'horizontal'], true)
                     ? $row->active_orientation
                     : 'vertical',
@@ -112,7 +117,7 @@ final class StatisticsReportPreferenceController extends Controller
     /** @return array{report: string, vertical: list<string>, horizontal: list<string>, orientation: string, saved: bool} */
     private function defaults(string $report): array
     {
-        return ['report' => $report, 'vertical' => ['level'], 'horizontal' => ['group'], 'orientation' => 'vertical', 'saved' => false];
+        return ['report' => $report, 'vertical' => ['group'], 'horizontal' => ['level'], 'orientation' => 'vertical', 'saved' => false];
     }
 
     /** @return list<string> */

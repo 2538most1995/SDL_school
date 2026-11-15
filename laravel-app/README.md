@@ -410,3 +410,9 @@ Deploy the included production assets, then run `php artisan migrate --force` an
 Deploy the importer and run `php artisan optimize:clear`, then reimport the authoritative ITW ZIP through the admin import screen with the intended district selected. No migration is required. Code deployment alone cannot restore student records discarded from existing imported SQL tables. Follow the normal database/private-storage backup procedure first. If web scores or registrations changed since the ZIP was created, preserve those changes through the existing SDL backup/transfer process before choosing a reimport source.
 
 For the supplied `ITW51DATA_อำเภอเสนา11.ZIP`, read-only source verification gives all-group registration counts of 794 for 1/2569 (primary 104, lower secondary 258, upper secondary 432) and 676 for 2/2568 (57, 235, 384). Verify both totals after reimport. Development has not reimported or changed the production database.
+
+## Additional statistics reports (2026-11-15)
+
+The statistics menu adds gender, editable age ranges, exam-disqualified, N-NET taken/not-taken and credits-complete with pending KPCH/N-NET reports. New defaults are group rows and education-level columns; saved formats can be reset with the default button in the format dialog. Age ranges accept text such as `0-15, 16-24`. Pending requirements include missing either KPCH or N-NET and display three separate statuses.
+
+Deploy backend and included production build, then run `php artisan optimize:clear`. These report additions need no migration or reimport if a complete ITW batch is already available. See [report rules and limitations](docs/statistics-reports.md). Source scores/statuses without dates remain latest-import evidence rather than exact historical snapshots.
