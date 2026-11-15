@@ -42,6 +42,7 @@ export function LoginPage() {
     const [loginType, setLoginType] = useState<LoginType>(DEFAULT_LOGIN_TYPE);
     const [identifier, setIdentifier] = useState('');
     const [password, setPassword] = useState('');
+    const [remember, setRemember] = useState(false);
     const [showPassword, setShowPassword] = useState(false);
     const rememberedDistrictId = window.localStorage.getItem('sena-district-id');
 
@@ -56,8 +57,8 @@ export function LoginPage() {
     const login = useMutation({
         meta: { notification: { success: false } },
         mutationFn: () => apiPost<LoginUser>('/auth/login', isCitizenIdLogin
-            ? { identifier, login_type: loginType }
-            : { identifier, password, login_type: loginType }),
+            ? { identifier, login_type: loginType, remember }
+            : { identifier, password, login_type: loginType, remember }),
         onSuccess: (response) => {
             if (response.data.district_id) {
                 window.localStorage.setItem('sena-district-id', String(response.data.district_id));
@@ -132,6 +133,11 @@ export function LoginPage() {
                                     <Input id="password" size="large" contentBefore={<LockKey size={21} aria-hidden="true" />} contentAfter={<Button type="button" appearance="transparent" size="small" icon={showPassword ? <EyeSlash size={20} /> : <Eye size={20} />} onClick={() => setShowPassword((value) => !value)} aria-label={showPassword ? 'ซ่อนรหัสผ่าน' : 'แสดงรหัสผ่าน'} />} type={showPassword ? 'text' : 'password'} value={password} onChange={(event) => setPassword(event.target.value)} autoComplete="current-password" className="login-input w-full" placeholder="กรอกรหัสผ่าน" />
                                 </Field>
                             )}
+
+                            <label className="flex cursor-pointer items-start gap-3 text-sm text-slate-700">
+                                <input type="checkbox" checked={remember} onChange={(event) => setRemember(event.target.checked)} className="mt-1 size-4 accent-blue-700" />
+                                <span><span className="font-bold">จดจำการเข้าสู่ระบบ</span><span className="block text-xs text-slate-500">เลือกใช้เฉพาะอุปกรณ์ส่วนตัว</span></span>
+                            </label>
 
                             {error && <MessageBar intent="error" role="alert"><MessageBarBody>{error}</MessageBarBody></MessageBar>}
 

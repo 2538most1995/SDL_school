@@ -51,6 +51,49 @@ class LoginTest extends TestCase
         $this->assertGuest();
     }
 
+    public function test_remember_login_issues_a_persistent_cookie_and_logout_revokes_it(): void
+    {
+        $user = User::factory()->create([
+            'username' => 'teacher.test',
+            'password' => Hash::make('Correct123!'),
+        ]);
+        $cookieName = auth()->guard('web')->getRecallerName();
+
+        $response = $this->postJson('/auth/login', [
+            'identifier' => 'teacher.test',
+            'password' => 'Correct123!',
+            'login_type' => 'staff',
+            'remember' => true,
+        ])->assertOk();
+
+        $cookie = $response->getCookie($cookieName);
+        $this->assertNotNull($cookie);
+        $this->assertGreaterThan(time(), $cookie->getExpiresTime());
+        $this->assertTrue($cookie->isHttpOnly());
+        $token = $user->fresh()->getRememberToken();
+        $this->assertNotEmpty($token);
+
+        $this->postJson('/auth/logout')->assertOk();
+        $this->assertGuest();
+        $this->assertNotSame($token, $user->fresh()->getRememberToken());
+    }
+
+    public function test_login_without_remember_does_not_issue_a_recaller_cookie(): void
+    {
+        User::factory()->create([
+            'username' => 'teacher.test',
+            'password' => Hash::make('Correct123!'),
+        ]);
+
+        $response = $this->postJson('/auth/login', [
+            'identifier' => 'teacher.test',
+            'password' => 'Correct123!',
+            'remember' => false,
+        ])->assertOk();
+
+        $this->assertNull($response->getCookie(auth()->guard('web')->getRecallerName()));
+    }
+
     public function test_public_branding_exposes_the_login_mode_needed_by_the_student_form(): void
     {
         $district = District::create(['name' => 'อำเภอเสนา', 'code' => 'sena']);
@@ -86,6 +129,7 @@ class LoginTest extends TestCase
         $this->postJson('/auth/login', [
             'identifier' => '1101700203451',
             'login_type' => 'student',
+            'remember' => true,
         ])->assertOk()
             ->assertJsonPath('data.username', '1234567890')
             ->assertJsonPath('data.role', 'student')
@@ -95,6 +139,7 @@ class LoginTest extends TestCase
 
         $user = User::query()->where('student_code', '1234567890')->firstOrFail();
         $this->assertAuthenticatedAs($user);
+        $this->assertNotEmpty($user->getRememberToken());
         $this->assertSame('นักศึกษา ทดสอบ', $user->name);
         $this->assertStringStartsWith('student-'.$district->id.'-', $user->username);
         $this->assertNotContains('1101700203451', array_map('strval', $user->getAttributes()));
