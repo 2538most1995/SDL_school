@@ -362,3 +362,7 @@ The gallery requests catalog-only data; chapter lists request summaries, with fu
 ## Classroom ordering confirmation (2026-11-15)
 
 Drag/up/down/first actions now preview local pending moves without writes. Finish ordering submits one bounded batch to POST /api/v1/learning/classroom/activities/order. All moves retain the existing access checks and run in one transaction; an invalid move rolls back the entire batch. Failure preserves the preview for retry. Cancel discards it; navigation/unload guards protect unsaved moves. Existing single-move endpoint remains compatible. No new migration is required.
+
+## Legacy classroom content deletion (2026-11-15)
+
+The virtual legacy chapter now exposes a staff delete action with explicit confirmation. POST /api/v1/learning/classroom/units/legacy/delete accepts the current subject_code/education_level and rechecks district, current registrations, teacher ownership and groups. Only eligible unbound course content is deleted; shared generic media, other teachers/groups/terms/courses and real chapters remain intact. Any issued-work reference or student submission blocks the entire transaction. Library snapshots and student evidence are preserved. No production deletion or schema migration was performed during development.

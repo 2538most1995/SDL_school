@@ -419,6 +419,8 @@ final readonly class AssignmentWorkflowService
         ];
         try {
             $submissionId = $connection->transaction(function () use ($connection, $assignmentId, $studentCode, $values, $newAttachments): int {
+                $parent = $connection->table('learning_assignments')->where('id', $assignmentId)->lockForUpdate()->first();
+                abort_unless($parent !== null && $parent->status === 'open', 422, 'งานนี้ถูกลบหรือปิดรับแล้ว');
                 $query = $connection->table('learning_submissions')
                     ->where('assignment_id', $assignmentId)->where('student_code', $studentCode);
                 $existingId = $query->value('id');

@@ -149,6 +149,7 @@ Route::prefix('v1')->group(function (): void {
             Route::post('/library', [\App\Http\Controllers\Api\Learning\ClassroomLibraryController::class, 'store']);
             Route::post('/library/{template}/restore', [\App\Http\Controllers\Api\Learning\ClassroomLibraryController::class, 'restore'])->whereNumber('template');
             Route::delete('/library/{template}', [\App\Http\Controllers\Api\Learning\ClassroomLibraryController::class, 'destroy'])->whereNumber('template');
+            Route::post('/units/legacy/delete', \App\Http\Controllers\Api\Learning\ClassroomLegacyDeleteController::class);
             Route::get('/units', [ClassroomUnitController::class, 'index']);
             Route::post('/units', [ClassroomUnitController::class, 'store']);
             Route::get('/units/{unit}', [ClassroomUnitController::class, 'show'])->whereNumber('unit');

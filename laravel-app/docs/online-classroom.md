@@ -142,3 +142,7 @@ Open the staff lesson-library tab or save the selected chapter to the library. C
 Deployment requires php artisan migrate --force (000044 and 000045) followed by php artisan optimize:clear inside laravel-app, plus the included production build. Back up private storage together with the database, including classroom-library and assignment/resource/image directories. Development used synthetic data and did not migrate the real database.
 
 Historical source selection also includes unbound legacy course content and course-specific media without an academic term. Course/group/creator restrictions are rechecked from actual source rows; an opaque legacy selector does not grant access. These sources are saved into ordinary independent library snapshots before reuse.
+
+## Delete legacy course content (2026-11-15)
+
+Staff can use the trash button beside the virtual legacy chapter and confirm deletion. This removes eligible unbound content in the selected current course, level and authorized group/ownership scope. If any selected activity/worksheet was issued as work or has student submissions, the whole operation is rejected. Shared media with no specific course/level, library snapshots and real chapters are retained. Files belonging only to deleted records are cleaned after commit. No new migration is required. Development did not delete real data.
