@@ -142,6 +142,7 @@ Route::prefix('v1')->group(function (): void {
         Route::get('/learning', LearningOverviewController::class)->middleware('learning.schema');
         Route::prefix('learning/classroom')->middleware('learning.schema')->group(function (): void {
             Route::get('/', [OnlineClassroomController::class, 'index']);
+            Route::post('/activities/order', [\App\Http\Controllers\Api\Learning\ClassroomContentOrderController::class, 'batch']);
             Route::post('/activities/{activity}/position', \App\Http\Controllers\Api\Learning\ClassroomContentOrderController::class)->whereNumber('activity');
             Route::get('/library/sources', [\App\Http\Controllers\Api\Learning\ClassroomLibraryController::class, 'sources']);
             Route::get('/library', [\App\Http\Controllers\Api\Learning\ClassroomLibraryController::class, 'index']);

@@ -83,6 +83,25 @@ final class ClassroomContentOrderTest extends TestCase
         $this->postJson($this->base.'/activities/'.$a.'/position', ['placement' => 'after', 'anchor_id' => $b])->assertUnprocessable();
     }
 
+    public function test_finishing_saves_multiple_moves_atomically_and_failure_leaves_saved_order_unchanged(): void
+    {
+        $a = $this->activity('A');
+        $b = $this->activity('B');
+        $c = $this->activity('C');
+        $this->postJson($this->base.'/activities/order', ['moves' => [
+            ['id' => $a, 'placement' => 'first'],
+            ['id' => $c, 'placement' => 'after', 'anchor_id' => $b],
+        ]])->assertOk();
+        $this->assertSame([$a, $b, $c], DB::table('learning_classroom_activities')->orderBy('sort_order')->pluck('id')->all());
+        $this->postJson($this->base.'/activities/order', ['moves' => [
+            ['id' => $c, 'placement' => 'first'],
+            ['id' => $a, 'placement' => 'before', 'anchor_id' => 999999],
+        ]])->assertNotFound();
+        $this->assertSame([$a, $b, $c], DB::table('learning_classroom_activities')->orderBy('sort_order')->pluck('id')->all());
+        Sanctum::actingAs(User::factory()->create(['role' => 'student', 'district_id' => $this->teacher->district_id, 'student_code' => '6650300005']));
+        $this->postJson($this->base.'/activities/order', ['moves' => [['id' => $c, 'placement' => 'first']]])->assertForbidden();
+    }
+
     public function test_moving_to_first_works_across_server_pages_and_migration_is_repeatable(): void
     {
         $a = $this->activity('Oldest');

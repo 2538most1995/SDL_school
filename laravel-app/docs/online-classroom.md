@@ -135,7 +135,7 @@ Verification for teacher isolation: full PHPUnit suite passed 540 tests with 1 e
 
 ## Reordering and reusing lessons (2026-11-15)
 
-Within a chapter, enable the content-order control and drag the left handle to reorder online items. Up/down buttons support keyboard and mobile users; the first-position action moves an item from a later page to the beginning. Changes save automatically and are shared with students.
+Within a chapter, enable the content-order control and drag the left handle to reorder online items. Up/down buttons support keyboard and mobile users; the first-position action moves an item from a later page to the beginning. Moves are previewed locally. Select Finish ordering to save the pending moves atomically; Cancel restores the saved order. Leaving with pending moves requires confirmation. A failed save retains the draft for retry. Saved order is shared with students.
 
 Open the staff lesson-library tab or save the selected chapter to the library. Choose a historical/current source, store its independent media snapshot, then restore into a currently registered course/level/group. Restored chapters start as drafts; check media, questions and new deadlines before publishing. Answers, grades, issued tasks and old deadlines are never copied. External links still depend on the provider's sharing permissions. Restored files remain available after deleting their source/template.
 

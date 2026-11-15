@@ -358,3 +358,7 @@ Staff can drag online content by its handle, or use accessible up/down/first con
 The staff-only lesson library stores independent chapter snapshots including online content/questions/images, file worksheets and resources. Historical sources remain available even when their course is absent from current registrations. Restoring requires an authorized current destination course/level/group and creates a draft chapter with fresh media copies and image IDs. Student submissions, answers, grades, issued tasks and deadlines are not copied. Teachers see their own templates; administrators remain within the selected district.
 
 The gallery requests catalog-only data; chapter lists request summaries, with full activity content/answers loaded on explicit selection. Existing API clients retain the previous default response behavior.
+
+## Classroom ordering confirmation (2026-11-15)
+
+Drag/up/down/first actions now preview local pending moves without writes. Finish ordering submits one bounded batch to POST /api/v1/learning/classroom/activities/order. All moves retain the existing access checks and run in one transaction; an invalid move rolls back the entire batch. Failure preserves the preview for retry. Cancel discards it; navigation/unload guards protect unsaved moves. Existing single-move endpoint remains compatible. No new migration is required.
