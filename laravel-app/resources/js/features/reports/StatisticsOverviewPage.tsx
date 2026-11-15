@@ -137,24 +137,6 @@ function InformationCard({ label, value, detail, icon: Icon, tone }: {
     </article>;
 }
 
-function ResultInformationSummary({ crossTab }: { crossTab: StatisticCrossTabPayload }) {
-    const largest = crossTab.summary.largest_cell;
-    const largestRow = largest ? crossTab.rows.find((row) => row.key === largest.row_key) : null;
-    const largestColumn = largest ? crossTab.columns.find((column) => column.key === largest.column_key) : null;
-    return <aside aria-label="สรุปสารสนเทศท้ายตาราง" className="mt-4 overflow-hidden rounded-2xl border border-brand-200 bg-gradient-to-br from-brand-50 via-white to-sky-50">
-        <div className="flex flex-col gap-1 border-b border-brand-100 px-4 py-3 sm:flex-row sm:items-center sm:justify-between">
-            <h3 className="flex items-center gap-2 text-sm font-black text-brand-950"><ChartPieSlice size={19} weight="duotone" />สรุปสารสนเทศท้ายตาราง</h3>
-            <p className="text-xs text-slate-500">สรุปจากจุดตัดของแกนตั้งและแกนนอน โดยนับผู้เรียนไม่ซ้ำ</p>
-        </div>
-        <div className="grid gap-px bg-brand-100 sm:grid-cols-2 xl:grid-cols-4">
-            <div className="bg-white/90 px-4 py-3"><p className="text-xs font-bold text-slate-500">รวมทั้งหมด</p><p className="mt-1 text-2xl font-black text-brand-800">{crossTab.summary.registered_students.toLocaleString('th-TH')} <span className="text-sm">คน</span></p></div>
-            <div className="bg-white/90 px-4 py-3"><p className="text-xs font-bold text-slate-500">ชุดข้อมูลแนวตั้ง</p><p className="mt-1 text-2xl font-black text-slate-950">{crossTab.summary.row_count.toLocaleString('th-TH')} <span className="text-sm">แถว</span></p></div>
-            <div className="bg-white/90 px-4 py-3"><p className="text-xs font-bold text-slate-500">ชุดข้อมูลแนวนอน</p><p className="mt-1 text-2xl font-black text-slate-950">{crossTab.summary.column_count.toLocaleString('th-TH')} <span className="text-sm">คอลัมน์</span></p></div>
-            <div className="bg-white/90 px-4 py-3"><p className="text-xs font-bold text-slate-500">จุดตัดสูงสุด</p><p className="mt-1 line-clamp-2 text-sm font-black text-emerald-700">{largest && largestRow && largestColumn ? `${largestRow.label} × ${largestColumn.label} · ${largest.count.toLocaleString('th-TH')} คน` : '-'}</p></div>
-        </div>
-    </aside>;
-}
-
 function CrossTabResultTable({ crossTab, onSelectCell }: { crossTab: StatisticCrossTabPayload; onSelectCell?: (cell: { title: string; subtitle: string; students: GenericReportRow[] }) => void }) {
     const hasRows = crossTab.rows.length > 0;
     return (
@@ -247,7 +229,6 @@ function CrossTabResultTable({ crossTab, onSelectCell }: { crossTab: StatisticCr
                 </table>
                 {!hasRows && <div className="grid min-h-64 place-items-center bg-white px-6 py-12 text-center"><div><span className="mx-auto grid size-16 place-items-center rounded-2xl bg-slate-100 text-slate-400"><Rows size={30} weight="duotone" /></span><h3 className="mt-4 font-black text-slate-800">ยังไม่มีข้อมูลในตาราง</h3><p className="mt-1 text-sm text-slate-500">ตั้งค่าทั้งสองแกนและกด “ประมวลผล” เพื่อสร้างตารางไขว้</p></div></div>}
             </div>
-            {hasRows && <ResultInformationSummary crossTab={crossTab} />}
         </>
     );
 }

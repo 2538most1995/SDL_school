@@ -374,3 +374,7 @@ ZIP import retains every non-deleted STUDENT.DBF record, including multiple code
 Read-only verification of the supplied Sena ZIP with the application's DBF reader found 1/2569 counts 104/258/432 (794 total) and 2/2568 counts 57/235/384 (676 total). Existing imports require reimport after deployment because the missing STUDENT rows are absent from SQL. No real import/database was modified during development.
 
 Verification: full PHP suite 610 passed with one existing skip (611 total); TypeScript, production build, changed-file Pint, PHP syntax and whitespace checks passed. Regression tests execute import-to-report SQL with synthetic DBFs, reject inaccessible teacher groups/districts, and confirm that a historical code sharing a citizen ID does not replace the current login identity while current ambiguity remains rejected. Production MySQL and post-reimport UI totals remain Not verified.
+
+## Statistics footer removal (2026-11-15)
+
+The statistics workspace no longer displays the separate information-summary card below its cross-tab tables, including print previews that reuse the table component. Table row/column totals, report data, filters and Excel exports retain their existing behavior. No backend, schema or import changes are required; deploy the included production assets.
