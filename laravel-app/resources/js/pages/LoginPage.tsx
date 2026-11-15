@@ -123,14 +123,14 @@ export function LoginPage() {
                                 : <Tab key={type} value={type} icon={<UserCircle size={20} weight="duotone" />} className="justify-center">ครูและผู้ดูแล</Tab>)}
                         </TabList>
 
-                        <form className="mt-6 space-y-5" onSubmit={(event) => { event.preventDefault(); login.mutate(); }}>
+                        <form id="login-form" method="post" action={withAppBasePath('/auth/login')} autoComplete="on" className="mt-6 space-y-5" onSubmit={(event) => { event.preventDefault(); login.mutate(); }}>
                             <Field label={isCitizenIdLogin ? 'เลขบัตรประจำตัวประชาชน (13 หลัก)' : 'ชื่อผู้ใช้'} required>
-                                <Input id="identifier" size="large" contentBefore={<IdentificationCard size={21} aria-hidden="true" />} value={identifier} onChange={(event) => setIdentifier(isCitizenIdLogin ? event.target.value.replace(/\D/g, '').slice(0, 13) : event.target.value)} autoComplete="username" inputMode={isCitizenIdLogin ? 'numeric' : undefined} maxLength={isCitizenIdLogin ? 13 : 190} className="login-input w-full" placeholder={isCitizenIdLogin ? 'เลขบัตรประชาชน' : 'กรอกชื่อผู้ใช้'} />
+                                <Input id="identifier" name="username" size="large" contentBefore={<IdentificationCard size={21} aria-hidden="true" />} value={identifier} onChange={(event) => setIdentifier(isCitizenIdLogin ? event.target.value.replace(/\D/g, '').slice(0, 13) : event.target.value)} autoComplete="username" inputMode={isCitizenIdLogin ? 'numeric' : undefined} maxLength={isCitizenIdLogin ? 13 : 190} className="login-input w-full" placeholder={isCitizenIdLogin ? 'เลขบัตรประชาชน' : 'กรอกชื่อผู้ใช้'} />
                             </Field>
 
                             {!isCitizenIdLogin && (
                                 <Field label="รหัสผ่าน" required>
-                                    <Input id="password" size="large" contentBefore={<LockKey size={21} aria-hidden="true" />} contentAfter={<Button type="button" appearance="transparent" size="small" icon={showPassword ? <EyeSlash size={20} /> : <Eye size={20} />} onClick={() => setShowPassword((value) => !value)} aria-label={showPassword ? 'ซ่อนรหัสผ่าน' : 'แสดงรหัสผ่าน'} />} type={showPassword ? 'text' : 'password'} value={password} onChange={(event) => setPassword(event.target.value)} autoComplete="current-password" className="login-input w-full" placeholder="กรอกรหัสผ่าน" />
+                                    <Input id="password" name="password" size="large" contentBefore={<LockKey size={21} aria-hidden="true" />} contentAfter={<Button type="button" appearance="transparent" size="small" icon={showPassword ? <EyeSlash size={20} /> : <Eye size={20} />} onClick={() => setShowPassword((value) => !value)} aria-label={showPassword ? 'ซ่อนรหัสผ่าน' : 'แสดงรหัสผ่าน'} />} type={showPassword ? 'text' : 'password'} value={password} onChange={(event) => setPassword(event.target.value)} autoComplete="current-password" className="login-input w-full" placeholder="กรอกรหัสผ่าน" />
                                 </Field>
                             )}
 
