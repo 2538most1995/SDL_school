@@ -2,6 +2,8 @@
 
 namespace Tests\Unit;
 
+use App\Domain\Students\Services\LegacyStudentReportService;
+use App\Models\User;
 use App\Services\Legacy\LegacyZipImportService;
 use App\Support\VisualFoxProDbfReader;
 use Illuminate\Http\UploadedFile;
@@ -68,26 +70,87 @@ final class LegacyZipImportSafetyTest extends TestCase
         );
     }
 
-    public function test_student_duplicates_are_selected_before_mysql_insert(): void
+    public function test_import_preserves_student_codes_sharing_a_citizen_id_for_historical_registrations(): void
     {
         $path = $this->workspace.'/student.dbf';
-        $fields = [
+        File::put($path, $this->dbf([
             ['name' => 'id', 'type' => 'C', 'length' => 10],
             ['name' => 'cardid', 'type' => 'C', 'length' => 13],
-        ];
-        $records = [
-            ['6650000001', '1111111111111'],
-            ['6750000001', '1111111111111'],
-            ['6750000001', '1111111111111'],
-            ['6850000002', ''],
-        ];
-        File::put($path, $this->dbf($fields, $records));
+            ['name' => 'prename', 'type' => 'C', 'length' => 8],
+            ['name' => 'name', 'type' => 'C', 'length' => 20],
+            ['name' => 'surname', 'type' => 'C', 'length' => 20],
+            ['name' => 'grp_code', 'type' => 'C', 'length' => 8],
+        ], [
+            ['6812000001', '1111111111111', 'Mr', 'Older', 'Student', 'G-OLD'],
+            ['6912000001', '1111111111111', 'Mr', 'Newer', 'Student', 'G-NEW'],
+            ['6912000002', '', 'Mr', 'NoCard', 'Student', 'G-NEW'],
+        ]));
 
-        $method = new \ReflectionMethod(LegacyZipImportService::class, 'selectedStudentRowIndexes');
-        $selected = $method->invoke(app(LegacyZipImportService::class), new VisualFoxProDbfReader($path));
+        $database = $this->workspace.'/student-history.sqlite';
+        touch($database);
+        config()->set('database.connections.student_history_test', [
+            'driver' => 'sqlite', 'database' => $database, 'prefix' => '',
+        ]);
+        config()->set('database.default', 'student_history_test');
+        DB::purge('student_history_test');
 
-        $this->assertSame([2 => true], $selected);
-        $this->assertArrayNotHasKey(3, $selected, 'Rows without a citizen ID remain importable outside the duplicate map.');
+        try {
+            $report = (new \ReflectionMethod(LegacyZipImportService::class, 'importDbf'))->invoke(
+                app(LegacyZipImportService::class), 'import_1700000097_history', '2', 'student', $path,
+            );
+            $students = DB::table($report['physical_table']);
+            $this->assertSame(3, $report['row_count']);
+            $this->assertSame(['6812000001', '6912000001', '6912000002'], $students->orderBy('_id')->pluck('_perf_id10')->all());
+            $this->assertSame(2, DB::table($report['physical_table'])->where('_perf_cardid', '1111111111111')->count());
+
+            $gradePath = $this->workspace.'/history-grade.dbf';
+            File::put($gradePath, $this->dbf([
+                ['name' => 'std_code', 'type' => 'C', 'length' => 10],
+                ['name' => 'semestry', 'type' => 'C', 'length' => 4],
+                ['name' => 'sub_code', 'type' => 'C', 'length' => 8],
+            ], [
+                ['6812000001', '68/2', 'TEST01'],
+                ['6812000001', '68/2', 'TEST02'],
+                ['6812000001', '69/1', 'TEST01'],
+                ['6912000001', '69/1', 'TEST01'],
+                ['6912000002', '69/1', 'TEST01'],
+                ['9999999999', '69/1', 'TEST01'],
+            ]));
+            $grade = (new \ReflectionMethod(LegacyZipImportService::class, 'importDbf'))->invoke(
+                app(LegacyZipImportService::class), 'import_1700000097_history', '2', 'grade', $gradePath,
+            );
+            // Run the report's real SQL over imported synthetic DBFs. Only
+            // MySQL table discovery is emulated for this isolated SQLite DB.
+            $connection = DB::connection();
+            $connection->getPdo()->sqliteCreateFunction('DATABASE', static fn () => 'main');
+            $connection->statement("ATTACH DATABASE ':memory:' AS INFORMATION_SCHEMA");
+            $connection->statement('CREATE TABLE INFORMATION_SCHEMA.TABLES (TABLE_SCHEMA TEXT, TABLE_NAME TEXT)');
+            $connection->statement('CREATE TABLE import_history (id INTEGER, batch_key TEXT, district_id INTEGER, status TEXT, created_at TEXT)');
+            $connection->statement('CREATE TABLE import_batches (batch_key TEXT, district_id INTEGER, import_history_id INTEGER, created_at TEXT)');
+            $batch = 'import_1700000097_history';
+            DB::table('import_history')->insert(['id' => 1, 'batch_key' => $batch, 'district_id' => 1, 'status' => 'success', 'created_at' => '2026-11-15']);
+            DB::table('import_batches')->insert(['batch_key' => $batch, 'district_id' => 1, 'import_history_id' => 1, 'created_at' => '2026-11-15']);
+            $subjectTable = "db_{$batch}_2_subject";
+            $connection->statement("CREATE TABLE {$subjectTable} (_perf_sub TEXT)");
+            foreach ([$report['physical_table'], $grade['physical_table'], $subjectTable] as $table) {
+                DB::table('INFORMATION_SCHEMA.TABLES')->insert(['TABLE_SCHEMA' => 'main', 'TABLE_NAME' => $table]);
+            }
+            $service = app(LegacyStudentReportService::class);
+            $admin = new User(['role' => 'admin', 'district_id' => 1]);
+            foreach (['2/2568' => 1, '1/2569' => 3] as $term => $expected) {
+                $result = $service->registrationStatistics($admin, 1, ['term' => $term, 'view' => 'student']);
+                $this->assertSame($expected, $result['summary']['unique_students']);
+                $this->assertContains('6812000001', array_column($result['items'], 'id'));
+                $this->assertNotContains('9999999999', array_column($result['items'], 'id'));
+            }
+            $teacher = new User(['role' => 'teacher', 'district_id' => 1, 'assigned_groups' => ['G-OLD']]);
+            $this->assertSame(1, $service->registrationStatistics($teacher, 1, ['term' => '1/2569', 'view' => 'student'])['total']);
+            $teacher->assigned_groups = [];
+            $this->assertSame(0, $service->registrationStatistics($teacher, 1, ['term' => '1/2569', 'view' => 'student'])['total']);
+            $this->assertSame(0, $service->registrationStatistics($admin, 2, ['term' => '1/2569', 'view' => 'student'])['total']);
+        } finally {
+            DB::purge('student_history_test');
+        }
     }
 
     public function test_student_dbf_with_memo_fields_requires_matching_fpt_file(): void

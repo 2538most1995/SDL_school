@@ -189,3 +189,7 @@ No schema or stored-data changes. `users.assigned_groups` is the authorization s
 Additive repeatable migration 000044 adds nullable unsigned learning_classroom_activities.sort_order and index (district_id, classroom_unit_id, sort_order). Null retains newest-first ordering until a teacher saves an order; saved positions precede null records. Reordering locks the scoped content set and writes bound CASE batches of at most 500 without changing student evidence.
 
 Migration 000045 creates learning_classroom_templates with district/creator, source course/term/level, title, content count, JSON snapshot and timestamps. Index (district_id, created_by, id) supports owner lists. Snapshots exclude student records and are never returned by list APIs. Private media is copied into classroom-library/{district}/{template}; restored files use existing ID-owned assignment/resource paths and fresh image records. Rollback retains order and templates. No production migration was run during development.
+
+## Preserve ITW registration identities (2026-11-15)
+
+Imported STUDENT tables retain all non-deleted source records, including older student codes sharing `cardid`. Grade joins use level + `_perf_id10`/`_perf_std10`. Existing performance columns and nonunique indexes are unchanged; no migration is needed. Existing imported tables are not automatically backfilled: reimport the authoritative ZIP after deploying the importer. Current-cohort authentication continues to reject ambiguous matches.

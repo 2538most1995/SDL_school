@@ -304,3 +304,7 @@ Final verification: PHP suite 604 passed with one existing skip (605 total), fro
 ## Classroom ordering confirmation (2026-11-15)
 
 Drag/up/down/first actions now preview local pending moves without writes. Finish ordering submits one bounded batch to POST /api/v1/learning/classroom/activities/order. All moves retain the existing access checks and run in one transaction; an invalid move rolls back the entire batch. Failure preserves the preview for retry. Cancel discards it; navigation/unload guards protect unsaved moves. Existing single-move endpoint remains compatible. No new migration is required.
+
+## ITW import history preservation (2026-11-15)
+
+Student import makes one DBF pass instead of building a latest-by-citizen map followed by a second pass. All non-deleted student rows are inserted using existing bounded prepared batches and indexes. Storage/index size may increase as historical codes are retained. Report SQL and indexes are unchanged. Synthetic SQLite regression executes DBF import and actual report SQL, covering older/newer codes sharing an ID, multiple subjects, orphan grades, terms, teacher scope and district isolation. Live MySQL EXPLAIN, latency and production reimport remain Not verified.

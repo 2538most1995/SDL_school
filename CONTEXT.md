@@ -366,3 +366,11 @@ Drag/up/down/first actions now preview local pending moves without writes. Finis
 ## Legacy classroom content deletion (2026-11-15)
 
 The virtual legacy chapter now exposes a staff delete action with explicit confirmation. POST /api/v1/learning/classroom/units/legacy/delete accepts the current subject_code/education_level and rechecks district, current registrations, teacher ownership and groups. Only eligible unbound course content is deleted; shared generic media, other teachers/groups/terms/courses and real chapters remain intact. Any issued-work reference or student submission blocks the entire transaction. Library snapshots and student evidence are preserved. No production deletion or schema migration was performed during development.
+
+## ITW historical registration preservation (2026-11-15)
+
+ZIP import retains every non-deleted STUDENT.DBF record, including multiple codes sharing a citizen ID. Selecting only the greatest code per citizen removed historical identities and caused GRADE-to-STUDENT joins to undercount. Reports count distinct level + student code for the selected term from the latest successful district batch. Current roster eligibility, ambiguous-identity authentication rejection and district/teacher-group restrictions remain enforced.
+
+Read-only verification of the supplied Sena ZIP with the application's DBF reader found 1/2569 counts 104/258/432 (794 total) and 2/2568 counts 57/235/384 (676 total). Existing imports require reimport after deployment because the missing STUDENT rows are absent from SQL. No real import/database was modified during development.
+
+Verification: full PHP suite 610 passed with one existing skip (611 total); TypeScript, production build, changed-file Pint, PHP syntax and whitespace checks passed. Regression tests execute import-to-report SQL with synthetic DBFs, reject inaccessible teacher groups/districts, and confirm that a historical code sharing a citizen ID does not replace the current login identity while current ambiguity remains rejected. Production MySQL and post-reimport UI totals remain Not verified.

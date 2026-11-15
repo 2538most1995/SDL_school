@@ -404,3 +404,9 @@ No new migration is required for this update. Deploy the included production ass
 ## Classroom library deployment (2026-11-15)
 
 Deploy the included production assets, then run `php artisan migrate --force` and `php artisan optimize:clear` inside `laravel-app` to enable content ordering (000044) and reusable lesson snapshots (000045). Back up private storage with the database, including classroom-library snapshots and existing assignment/resource/image files. Staff can restore historical lessons into current registered courses/groups as drafts; student evidence and old deadlines are not copied. See `docs/online-classroom.md`. Development did not migrate the deployment database.
+
+## ITW registration count correction (2026-11-15)
+
+Deploy the importer and run `php artisan optimize:clear`, then reimport the authoritative ITW ZIP through the admin import screen with the intended district selected. No migration is required. Code deployment alone cannot restore student records discarded from existing imported SQL tables. Follow the normal database/private-storage backup procedure first. If web scores or registrations changed since the ZIP was created, preserve those changes through the existing SDL backup/transfer process before choosing a reimport source.
+
+For the supplied `ITW51DATA_อำเภอเสนา11.ZIP`, read-only source verification gives all-group registration counts of 794 for 1/2569 (primary 104, lower secondary 258, upper secondary 432) and 676 for 2/2568 (57, 235, 384). Verify both totals after reimport. Development has not reimported or changed the production database.

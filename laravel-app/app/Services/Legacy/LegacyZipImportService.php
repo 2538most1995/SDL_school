@@ -429,11 +429,8 @@ final class LegacyZipImportService
             }
             $progress((int) floor($recordCount * min(1, $start + ((min($seen, $recordCount) / $recordCount) * $span))), $recordCount);
         };
-        $selectedStudentRows = $type === 'student' && in_array('cardid', $columns, true) && in_array('id', $columns, true)
-            ? $this->selectedStudentRowIndexes($reader, fn (int $seen): mixed => $reportTableProgress($seen, 0, 0.30))
-            : null;
-        $insertStart = $selectedStudentRows === null ? 0.0 : 0.30;
-        $insertSpan = $selectedStudentRows === null ? 0.92 : 0.62;
+        // Preserve every ITW student registration. One citizen can have several
+        // student codes; historical GRADE rows still reference those older codes.
         $rows = 0;
         $recordsSeen = 0;
         $pendingRows = [];
@@ -455,14 +452,6 @@ final class LegacyZipImportService
         try {
             foreach ($reader->records() as $recordIndex => $record) {
                 $recordsSeen = $recordIndex + 1;
-                $cardId = trim((string) ($record['cardid'] ?? ''));
-                if ($selectedStudentRows !== null && $cardId !== '' && ! isset($selectedStudentRows[$recordIndex])) {
-                    if ($recordsSeen % 1_000 === 0) {
-                        $reportTableProgress($recordsSeen, $insertStart, $insertSpan);
-                    }
-
-                    continue;
-                }
                 $values = [];
                 foreach ($columns as $column) {
                     $values[] = $record[$column] ?? null;
@@ -475,11 +464,11 @@ final class LegacyZipImportService
                 $rows++;
                 if (count($pendingRows) >= $batchSize) {
                     $flush();
-                    $reportTableProgress($recordsSeen, $insertStart, $insertSpan);
+                    $reportTableProgress($recordsSeen, 0, 0.92);
                 }
             }
             $flush();
-            $reportTableProgress($recordCount, $insertStart, $insertSpan);
+            $reportTableProgress($recordCount, 0, 0.92);
             $this->write()->commit();
         } catch (Throwable $exception) {
             $this->write()->rollBack();
@@ -520,43 +509,6 @@ final class LegacyZipImportService
         }
 
         return $this->quoteIdentifier((string) $field['name'])." VARCHAR({$length}) NULL";
-    }
-
-    /**
-     * Reproduce the legacy duplicate rule before writing to MySQL. A second DBF
-     * pass is much cheaper than inserting duplicate students and running an
-     * unindexed self-join DELETE afterwards.
-     *
-     * @return array<int, true>
-     */
-    private function selectedStudentRowIndexes(VisualFoxProDbfReader $reader, ?callable $progress = null): array
-    {
-        $latestByCard = [];
-        foreach ($reader->records() as $recordIndex => $record) {
-            if ($progress !== null && (($recordIndex + 1) % 1_000 === 0)) {
-                $progress($recordIndex + 1);
-            }
-            $cardId = trim((string) ($record['cardid'] ?? ''));
-            if ($cardId === '') {
-                continue;
-            }
-            $id = trim((string) ($record['id'] ?? ''));
-            $id10 = $id === '' ? '' : substr($id, -10);
-            $current = $latestByCard[$cardId] ?? null;
-            if ($current === null || $id10 > $current['id10'] || ($id10 === $current['id10'] && $recordIndex > $current['index'])) {
-                $latestByCard[$cardId] = ['id10' => $id10, 'index' => $recordIndex];
-            }
-        }
-
-        $selected = [];
-        foreach ($latestByCard as $record) {
-            $selected[$record['index']] = true;
-        }
-        if ($progress !== null) {
-            $progress($reader->recordCount());
-        }
-
-        return $selected;
     }
 
     /** @return array<string, array{field: string, last: int|null}> */

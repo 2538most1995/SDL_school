@@ -73,6 +73,20 @@ final class StudentAuthenticationLookupTest extends TestCase
         self::assertNull($this->repo()->findStudentForAuthentication('1111111111111', $this->district));
     }
 
+    public function test_historical_code_sharing_citizen_id_keeps_current_identity_and_rejects_current_ambiguity(): void
+    {
+        $this->student(2, '1111111111', '1111111111111', false);
+        DB::table("db_{$this->batch}_2_grade")->insert([
+            '_perf_std10' => '1111111111', '_perf_semestry' => '2/2568',
+        ]);
+        self::assertSame('1234567890', $this->repo()->findStudentForAuthentication('1111111111111', $this->district)['student_id']);
+
+        DB::table("db_{$this->batch}_2_grade")->insert([
+            '_perf_std10' => '1111111111', '_perf_semestry' => '1/2569',
+        ]);
+        self::assertNull($this->repo()->findStudentForAuthentication('1111111111111', $this->district));
+    }
+
     public function test_duplicate_code_across_levels_and_duplicate_physical_rows_fail_closed(): void
     {
         $this->student(3, '1234567890', '2222222222222');
