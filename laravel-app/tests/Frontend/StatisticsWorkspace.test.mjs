@@ -14,6 +14,8 @@ import {
     normalizeAxisConfiguration,
     registrationPayloadsToStatisticRows,
     reportById,
+    registrationStudentsToGeneric,
+    uniqueStatisticStudents,
     statisticCategories,
     statisticReports,
     summarizeStatisticRows,
@@ -61,15 +63,15 @@ test('configured dimensions become real nested rows and columns in one cross-tab
 });
 
 test('report format catalog keeps only dimensions backed by imported source fields', () => {
-    assert.equal(statisticCategories.length, 10);
+    assert.equal(statisticCategories.length, 12);
     assert.deepEqual(statisticCategories.map((item) => item.label), [
-        'ระดับชั้น', 'กลุ่มเรียน', 'เพศ', 'อายุ', 'อาชีพ', 'กลุ่มเป้าหมาย', 'สัญชาติ', 'สถานะ N-Net / E-Exam', 'ช่วงอายุ', 'เงื่อนไขที่ยังขาด',
+        'ระดับชั้น', 'กลุ่มเรียน', 'เพศ', 'อายุ', 'อาชีพ', 'กลุ่มเป้าหมาย', 'สัญชาติ', 'สถานะ N-Net / E-Exam', 'ช่วงอายุ', 'เงื่อนไขที่ยังขาด', 'พบกลุ่ม / วิธีเรียน', 'รายวิชา',
     ]);
     assert.deepEqual(categoriesForReport(reportById(2)).map((item) => item.key), [
-        'level', 'group', 'gender', 'age', 'occupation', 'target_group', 'nationality',
+        'level', 'group', 'gender', 'age', 'occupation', 'target_group', 'nationality', 'learning_method', 'subject',
     ]);
-    assert.deepEqual(categoriesForReport(reportById(3)).map((item) => item.key), ['level', 'group', 'gender']);
-    assert.deepEqual(categoriesForReport(reportById(4)).map((item) => item.key), ['level', 'group', 'gender', 'nnet']);
+    assert.deepEqual(categoriesForReport(reportById(3)).map((item) => item.key), ['level', 'group', 'gender', 'learning_method', 'subject']);
+    assert.deepEqual(categoriesForReport(reportById(4)).map((item) => item.key), ['level', 'group', 'gender', 'nnet', 'learning_method', 'subject']);
     assert.deepEqual(normalizeAxisConfiguration(reportById(3), {
         vertical: ['gender', 'level'],
         horizontal: ['age'],
@@ -172,4 +174,46 @@ test('new reports preserve group/level defaults and expose real breakdowns in ta
         const files = unzipSync(createExcelFileBytes(buildStatisticsCrossTabSheets(report, '1/2569', 'เสนา', crossTab)));
         assert.ok(strFromU8(files['xl/worksheets/sheet1.xml']).includes(value));
     }
+});
+
+
+test('registration dimensions preserve subject/method correlation and unique student totals', () => {
+    const payload = { total: 2, active: 2, groups: 1, rows: [
+        { id: '1|same-code', student_id: 'same-code', primary: 'A', secondary: 'same-code', group: 'Group A', level: 'Primary', registration_dimensions: [
+            { subject_code: 'C', subject_name: 'Core', learning_method: 'พบกลุ่ม' },
+            { subject_code: 'E', subject_name: 'Elective', learning_method: 'ทางไกล' },
+            { subject_code: 'E', subject_name: 'Elective', learning_method: 'ทางไกล' },
+        ] },
+        { id: '2|same-code', student_id: 'same-code', primary: 'B', secondary: 'same-code', group: 'Group A', level: 'Secondary', registration_dimensions: [
+            { subject_code: 'C', subject_name: 'Core', learning_method: 'ทางไกล' },
+        ] },
+    ] };
+    const crossTab = genericPayloadToCrossTab(payload, { vertical: ['group'], horizontal: ['subject', 'learning_method'] });
+    assert.equal(crossTab.summary.registered_students, 2);
+    assert.equal(crossTab.rows[0].total, 2);
+    assert.equal(crossTab.columns.length, 3);
+    assert.ok(!crossTab.columns.some((col) => col.label === 'E Elective · พบกลุ่ม'));
+    assert.equal(Object.values(crossTab.rows[0].cells).reduce((a,b) => a+b, 0), 3);
+    assert.equal(uniqueStatisticStudents(Object.values(crossTab.rows[0].studentsByCell).flat()).length, 2);
+    const bySubject = genericPayloadToCrossTab(payload, { vertical: ['subject'], horizontal: ['group'] });
+    assert.equal(bySubject.columns[0].total, 2);
+    assert.equal(bySubject.rows.find((row) => row.label === 'C Core').total, 2);
+    assert.equal(bySubject.rows.find((row) => row.label === 'E Elective').total, 1);
+    const files = unzipSync(createExcelFileBytes(buildStatisticsCrossTabSheets(reportById(7), '1/2569', 'Test', crossTab)));
+    assert.ok(strFromU8(files['xl/worksheets/sheet1.xml']).includes('E Elective'));
+    assert.ok(strFromU8(files['xl/worksheets/sheet2.xml']).includes('นับผู้เรียนไม่ซ้ำ'));
+});
+
+test('registration student adapter keeps same code in different levels and missing registrations explicit', () => {
+    const student = { code: 'same', full_name: 'Synthetic', level: { id: 1, label: 'Primary' }, group: { code: 'G1', name: 'A' } };
+    const payload = registrationStudentsToGeneric({ total: 2, active: 2, groups: 1, rows: [
+        { student, gender: 'ชาย', age: '20 ปี', occupation: 'รับจ้าง', nationality: 'ไทย', target_group: 'อื่นๆ', registration_dimensions: [] },
+        { student: { ...student, level: { id: 2, label: 'Secondary' } }, gender: 'หญิง', age: '25 ปี', occupation: '', nationality: '', target_group: '', registration_dimensions: [] },
+    ] });
+    assert.notEqual(payload.rows[0].id, payload.rows[1].id);
+    const crossTab = genericPayloadToCrossTab(payload, { vertical: ['group'], horizontal: ['subject'] });
+    assert.equal(crossTab.summary.registered_students, 2);
+    assert.equal(crossTab.columns[0].label, 'ไม่มีวิชาลงทะเบียนในภาคเรียนนี้');
+    assert.equal(uniqueStatisticStudents(payload.rows).length, 2);
+    assert.equal(genericPayloadToCrossTab(payload, { vertical: ['group'], horizontal: ['age'] }).columns[0].label, '20 ปี');
 });

@@ -17,6 +17,8 @@ export type StatisticCategoryDefinition = {
     label: string;
 };
 
+export type RegistrationDimension = { subject_code: string; subject_name: string; learning_method: string };
+
 export type GenericReportRow = {
     id: string;
     student_id?: string;
@@ -32,6 +34,11 @@ export type GenericReportRow = {
     group_code?: string;
     group_label?: string;
     gender?: string;
+    registration_dimensions?: RegistrationDimension[];
+    age?: string;
+    occupation?: string;
+    nationality?: string;
+    target_group?: string;
     age_band?: string;
     completion_status?: string;
     examStatus?: string;
@@ -131,6 +138,8 @@ export const statisticCategories: StatisticCategoryDefinition[] = [
     { order: 8, key: 'nnet', label: 'สถานะ N-Net / E-Exam' },
     { order: 9, key: 'age_band', label: 'ช่วงอายุ' },
     { order: 10, key: 'completion_status', label: 'เงื่อนไขที่ยังขาด' },
+    { order: 11, key: 'learning_method', label: 'พบกลุ่ม / วิธีเรียน' },
+    { order: 12, key: 'subject', label: 'รายวิชา' },
 ];
 
 export function reportById(id: StatisticReportId): StatisticReportDefinition {
@@ -138,15 +147,12 @@ export function reportById(id: StatisticReportId): StatisticReportDefinition {
 }
 
 export function categoriesForReport(report: StatisticReportDefinition): StatisticCategoryDefinition[] {
-    if (report.source === 'registration-statistics') {
-        return statisticCategories.filter((category) => !['nnet', 'age_band', 'completion_status'].includes(category.key));
-    }
-    if (report.source === 'age-statistics') return statisticCategories.filter((category) => ['level', 'group', 'gender', 'age_band'].includes(category.key));
-    if (report.source === 'credit-pending') return statisticCategories.filter((category) => ['level', 'group', 'gender', 'nnet', 'completion_status'].includes(category.key));
-    if ((report.source === 'expected-graduates' || report.source === 'nnet-statistics')) {
-        return statisticCategories.filter((category) => category.key === 'level' || category.key === 'group' || category.key === 'gender' || category.key === 'nnet');
-    }
-    return statisticCategories.filter((category) => category.key === 'level' || category.key === 'group' || category.key === 'gender');
+    const common = ['level', 'group', 'gender', 'learning_method', 'subject'];
+    const supported = report.source === 'registration-statistics' ? [...common, 'age', 'occupation', 'target_group', 'nationality']
+        : report.source === 'age-statistics' ? [...common, 'age_band']
+        : report.source === 'credit-pending' ? [...common, 'nnet', 'completion_status']
+        : ['expected-graduates', 'nnet-statistics'].includes(report.source) ? [...common, 'nnet'] : common;
+    return statisticCategories.filter((category) => supported.includes(category.key));
 }
 
 export function supportedCategoryKeys(keys: Array<StatisticCategoryDefinition['key']>): CategoryKey[] {
@@ -214,28 +220,18 @@ export function summarizeStatisticRows(
     };
 }
 
-function groupParts(row: GenericReportRow): { level: string; group: string; gender: string; nnet: string; age_band: string; completion_status: string } {
-    const nnet = row.examStatus ?? row.nnet ?? 'มีสิทธิ์สอบ';
-    const gender = row.gender || 'ไม่ระบุเพศ';
-    if (row.level || row.group_label || row.group_code) {
-        return {
-            level: row.level || 'ไม่ระบุระดับ',
-            group: row.group_label || row.group_code || 'ไม่ระบุกลุ่ม',
-            gender,
-            nnet,
-            age_band: row.age_band ?? 'ไม่ระบุอายุ',
-            completion_status: row.completion_status ?? 'ไม่ระบุ',
-        };
-    }
-    const value = row.group;
-    const parts = value.split('·').map((part) => part.trim()).filter(Boolean);
+function groupParts(row: GenericReportRow): Record<CategoryKey, string> {
+    const parts = row.group.split('·').map((part) => part.trim()).filter(Boolean);
     return {
-        level: parts[0] ?? 'ไม่ระบุระดับ',
-        group: parts[1] ?? parts[0] ?? 'ไม่ระบุกลุ่ม',
-        gender,
-        nnet,
+        level: row.level || parts[0] || 'ไม่ระบุระดับ',
+        group: row.group_label || row.group_code || parts[1] || parts[0] || 'ไม่ระบุกลุ่ม',
+        gender: row.gender || 'ไม่ระบุเพศ',
+        nnet: row.examStatus ?? row.nnet ?? 'มีสิทธิ์สอบ',
         age_band: row.age_band ?? 'ไม่ระบุอายุ',
         completion_status: row.completion_status ?? 'ไม่ระบุ',
+        age: row.age ?? 'ไม่ระบุอายุ', occupation: row.occupation ?? 'ไม่ระบุ',
+        nationality: row.nationality ?? 'ไม่ระบุ', target_group: row.target_group ?? 'ไม่ระบุ',
+        subject: 'ไม่มีวิชาลงทะเบียนในภาคเรียนนี้', learning_method: 'ไม่ระบุวิธีเรียน',
     };
 }
 
@@ -243,8 +239,8 @@ function categoryLabel(category: CategoryKey): string {
     return statisticCategories.find((item) => item.key === category)?.label ?? category;
 }
 
-function genericPart(category: CategoryKey, values: { level: string; group: string; gender: string; nnet: string; age_band: string; completion_status: string }): StatisticCrossTabPart {
-    const value = category in values ? values[category as keyof typeof values] : values.level;
+function genericPart(category: CategoryKey, values: Record<CategoryKey, string>): StatisticCrossTabPart {
+    const value = values[category];
     return {
         category,
         category_label: categoryLabel(category),
@@ -257,13 +253,33 @@ function tupleKey(parts: StatisticCrossTabPart[]): string {
     return JSON.stringify(parts.map((part) => [part.category, part.code]));
 }
 
+export type RegistrationStudentReportPayload = Omit<GenericReportPayload, 'rows'> & { rows: Array<{
+    student: { code: string; full_name: string; level: { id: string | number; label: string }; group: { code: string; name: string } };
+    gender: string; age: string; occupation: string; nationality: string; target_group: string;
+    registration_dimensions?: RegistrationDimension[];
+}> };
+
+export function registrationStudentsToGeneric(payload: RegistrationStudentReportPayload): GenericReportPayload {
+    return { ...payload, rows: payload.rows.map((row) => ({
+        id: `${row.student.level.id}|${row.student.code}`, student_id: row.student.code,
+        primary: row.student.full_name, secondary: row.student.code,
+        level: row.student.level.label, group: row.student.group.name, group_code: row.student.group.code, group_label: row.student.group.name,
+        gender: row.gender, age: row.age, occupation: row.occupation, nationality: row.nationality, target_group: row.target_group,
+        metric: '', registration_dimensions: row.registration_dimensions,
+    })) };
+}
+
+export function uniqueStatisticStudents(students: GenericReportRow[]): GenericReportRow[] {
+    return [...new Map(students.map((student) => [student.entity_key || `${student.level ?? ""}|${student.student_id ?? student.secondary ?? student.id}`, student])).values()];
+}
+
 /** Build the same two-axis structure for generic reports that expose level/group rows. */
 export function genericPayloadToCrossTab(
     payload: GenericReportPayload,
     configuration: StatisticAxisConfiguration,
 ): StatisticCrossTabPayload {
     const usable = (categories: CategoryKey[], fallback: CategoryKey): CategoryKey[] => {
-        const filtered = categories.filter((category) => ['level', 'group', 'gender', 'nnet', 'age_band', 'completion_status'].includes(category));
+        const filtered = categories.filter((category) => statisticCategories.some((item) => item.key === category));
         return filtered.length > 0 ? filtered : [fallback];
     };
     const rowKeys = usable(configuration.vertical, 'group');
@@ -272,43 +288,56 @@ export function genericPayloadToCrossTab(
     const columns = new Map<string, StatisticCrossTabColumn>();
 
     const sourceEntities = new Set<string>();
+    const rowEntities = new Map<string, Set<string>>();
+    const columnEntities = new Map<string, Set<string>>();
     const cellEntities = new Map<string, Set<string>>();
     payload.rows.forEach((sourceRow) => {
-        const values = groupParts(sourceRow);
+        const baseValues = groupParts(sourceRow);
         const entityKey = sourceRow.entity_key || sourceRow.id;
         sourceEntities.add(entityKey);
-        const rowParts = rowKeys.map((category) => genericPart(category, values));
-        const columnParts = columnKeys.map((category) => genericPart(category, values));
-        const rowKey = tupleKey(rowParts);
-        const columnKey = tupleKey(columnParts);
-        const row = rows.get(rowKey) ?? {
-            key: rowKey,
-            label: rowParts.map((part) => part.label).join(' · '),
-            parts: rowParts,
-            cells: {},
-            total: 0,
-            studentsByCell: {},
-        };
-        const column = columns.get(columnKey) ?? {
-            key: columnKey,
-            label: columnParts.map((part) => part.label).join(' · '),
-            parts: columnParts,
-            total: 0,
-        };
-        const cellKey = `${rowKey}\u0000${columnKey}`;
-        const entities = cellEntities.get(cellKey) ?? new Set<string>();
-        if (!entities.has(entityKey)) {
-            entities.add(entityKey);
-            row.cells[columnKey] = (row.cells[columnKey] ?? 0) + 1;
-            row.total += 1;
-            column.total += 1;
-            row.studentsByCell = row.studentsByCell ?? {};
-            row.studentsByCell[columnKey] = row.studentsByCell[columnKey] ?? [];
-            row.studentsByCell[columnKey].push(sourceRow);
-        }
-        cellEntities.set(cellKey, entities);
-        rows.set(rowKey, row);
-        columns.set(columnKey, column);
+        const useRegistrationDimensions = [...rowKeys, ...columnKeys].some((key) => key === 'subject' || key === 'learning_method');
+        const dimensions = useRegistrationDimensions && sourceRow.registration_dimensions?.length ? sourceRow.registration_dimensions : [null];
+        dimensions.forEach((registration) => {
+            const values = registration ? { ...baseValues, subject: `${registration.subject_code} ${registration.subject_name}`.trim(), learning_method: registration.learning_method } : baseValues;
+            const rowParts = rowKeys.map((category) => genericPart(category, values));
+            const columnParts = columnKeys.map((category) => genericPart(category, values));
+            const rowKey = tupleKey(rowParts);
+            const columnKey = tupleKey(columnParts);
+            const row = rows.get(rowKey) ?? {
+                key: rowKey,
+                label: rowParts.map((part) => part.label).join(' · '),
+                parts: rowParts,
+                cells: {},
+                total: 0,
+                studentsByCell: {},
+            };
+            const column = columns.get(columnKey) ?? {
+                key: columnKey,
+                label: columnParts.map((part) => part.label).join(' · '),
+                parts: columnParts,
+                total: 0,
+            };
+            const cellKey = `${rowKey}\u0000${columnKey}`;
+            const entities = cellEntities.get(cellKey) ?? new Set<string>();
+            if (!entities.has(entityKey)) {
+                entities.add(entityKey);
+                row.cells[columnKey] = (row.cells[columnKey] ?? 0) + 1;
+                const rowStudents = rowEntities.get(rowKey) ?? new Set<string>();
+                rowStudents.add(entityKey);
+                rowEntities.set(rowKey, rowStudents);
+                const columnStudents = columnEntities.get(columnKey) ?? new Set<string>();
+                columnStudents.add(entityKey);
+                columnEntities.set(columnKey, columnStudents);
+                row.total = rowStudents.size;
+                column.total = columnStudents.size;
+                row.studentsByCell = row.studentsByCell ?? {};
+                row.studentsByCell[columnKey] = row.studentsByCell[columnKey] ?? [];
+                row.studentsByCell[columnKey].push(sourceRow);
+            }
+            cellEntities.set(cellKey, entities);
+            rows.set(rowKey, row);
+            columns.set(columnKey, column);
+        });
     });
 
     const rowItems = Array.from(rows.values()).sort((left, right) => left.label.localeCompare(right.label, 'th', { numeric: true }));
@@ -342,7 +371,7 @@ export function genericPayloadToStatisticRows(
     payload: GenericReportPayload,
     categories: CategoryKey[],
 ): StatisticResultRow[] {
-    const usableCategories = categories.filter((category) => ['level', 'group', 'gender', 'nnet', 'age_band', 'completion_status'].includes(category));
+    const usableCategories = categories.filter((category) => ['level', 'group', 'gender', 'nnet'].includes(category));
     const selectedCategories: Array<'level' | 'group' | 'gender' | 'nnet'> = usableCategories.length > 0
         ? usableCategories as Array<'level' | 'group' | 'gender' | 'nnet'>
         : ['level'];
@@ -469,6 +498,7 @@ export function buildStatisticsCrossTabSheets(
                 ['ชุดคอลัมน์ที่แสดง', crossTab.summary.column_count],
                 ['ช่องข้อมูลที่มีค่า', crossTab.summary.non_zero_cells],
                 ['รวมผู้เรียนทั้งหมด (ไม่ซ้ำ)', crossTab.summary.registered_students],
+                ...([...crossTab.row_categories, ...crossTab.column_categories].some((category) => ['subject', 'learning_method'].includes(category.key)) ? [['วิธีนับ', 'นับผู้เรียนไม่ซ้ำแยกในแต่ละช่อง แถว คอลัมน์ และยอดรวม คนเดียวอาจมีหลายวิชาหรือวิธีเรียน']] : []),
             ],
         },
     ];

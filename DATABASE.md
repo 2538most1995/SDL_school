@@ -197,3 +197,5 @@ Imported STUDENT tables retain all non-deleted source records, including older s
 ## Extended statistics sources (2026-11-15)
 
 Five additional report keys use existing `statistics_report_preferences` JSON rows; no migration is needed. Read-only sources are latest-batch STUDENT, GRADE, SUBJECT and (for pending KPCH) ACTIVITY tables. The historical report table resolver now retains the optional level activity table. Selected-term registration EXISTS queries constrain membership; existing district/batch and exact teacher-group scope apply. Projections exclude citizen IDs/contact fields. Missing ACTIVITY prevents pending-KPCH classification instead of inventing zero hours. See `laravel-app/docs/statistics-reports.md`.
+
+Statistics preferences also accept `learning_method` and `subject` in their existing axis JSON arrays. Optional report-row enrichment reads GRADE.METHOD with LEARNING fallback and joins the same selected-term SUBJECT catalog. No schema/index or real import-data changes are required.

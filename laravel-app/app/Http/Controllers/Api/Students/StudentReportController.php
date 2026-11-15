@@ -185,12 +185,21 @@ final class StudentReportController extends StudentsApiController
             'nationality' => ['nullable', 'string', 'max:10'],
             'age' => ['nullable', 'integer', 'min:1', 'max:120'],
             'age_ranges' => ['sometimes', 'required', 'string', 'max:1000'],
+            'include_registration_dimensions' => ['sometimes', 'boolean'],
         ]);
     }
 
     /** @param array<string, mixed> $data */
     private function reportResponse(Request $request, array $data, bool $resource = true): JsonResponse
     {
+        if (! $resource && $request->boolean('include_registration_dimensions')) {
+            $filters = $this->filters($request);
+            $districtId = (int) $request->attributes->get('district_id');
+            $data = config('system_data.student_enabled')
+                ? $this->legacyReports->withRegistrationDimensions($request->user(), $districtId, $data, $filters)
+                : $this->reports->withRegistrationDimensions($request->user(), $districtId, $data, $filters);
+        }
+
         return response()->json([
             'data' => $resource ? (new StudentReportResource($data))->resolve($request) : $data,
             'meta' => $this->meta(['filters' => $request->query()]),

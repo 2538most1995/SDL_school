@@ -42,6 +42,9 @@ import {
     genericPayloadToCrossTab,
     normalizeAxisConfiguration,
     reportById,
+    registrationStudentsToGeneric,
+    uniqueStatisticStudents,
+    type RegistrationStudentReportPayload,
     statisticCategories,
     statisticReports,
     supportedCategoryKeys,
@@ -143,6 +146,7 @@ function CrossTabResultTable({ crossTab, onSelectCell }: { crossTab: StatisticCr
     const hasRows = crossTab.rows.length > 0;
     return (
         <>
+            {hasRows && [...crossTab.row_categories, ...crossTab.column_categories].some((category) => category.key === "subject" || category.key === "learning_method") && <p className="mb-3 text-xs leading-5 text-slate-500">นับคนไม่ซ้ำในแต่ละช่องและยอดรวม นักศึกษาหนึ่งคนอาจลงหลายวิชาหรือมีหลายวิธีเรียน จึงไม่ควรบวกยอดแต่ละช่องแทนยอดรวม</p>}
             {hasRows && <div className="mb-4 grid gap-3 rounded-xl border border-brand-200 bg-brand-50/70 px-4 py-3 sm:grid-cols-2"><div><p className="text-xs font-black text-indigo-700">แกนตั้ง · เรียงเป็นแถว</p><p className="mt-1 text-sm font-black text-slate-950">{crossTab.row_categories.map((item) => item.label).join(' › ')}</p></div><div><p className="text-xs font-black text-sky-700">แกนนอน · ขยายเป็นคอลัมน์</p><p className="mt-1 text-sm font-black text-slate-950">{crossTab.column_categories.map((item) => item.label).join(' › ')}</p></div></div>}
             <div className="overflow-x-auto rounded-2xl border border-slate-200">
                 <table className="w-full min-w-max border-collapse text-sm">
@@ -177,7 +181,7 @@ function CrossTabResultTable({ crossTab, onSelectCell }: { crossTab: StatisticCr
                                 onClick={() => onSelectCell({
                                     title: `รวมแถว: ${row.label}`,
                                     subtitle: `${row.total.toLocaleString('th-TH')} คน`,
-                                    students: Object.values(row.studentsByCell ?? {}).flat(),
+                                    students: uniqueStatisticStudents(Object.values(row.studentsByCell ?? {}).flat()),
                                 })}
                                 className="inline-flex min-h-8 min-w-8 items-center justify-center rounded-lg px-2 py-1 font-black text-brand-900 transition hover:bg-brand-100 hover:text-brand-950 active:scale-95"
                                 title={`คลิกเพื่อดูรายชื่อนักศึกษาทั้งหมดในแถวนี้ (${row.total.toLocaleString('th-TH')} คน)`}
@@ -189,7 +193,7 @@ function CrossTabResultTable({ crossTab, onSelectCell }: { crossTab: StatisticCr
                         )}
                     </td></tr>)}</tbody>
                     {hasRows && <tfoot><tr className="bg-brand-100 text-brand-950"><th className="sticky left-0 z-[2] border-t border-r border-brand-200 bg-brand-100 px-4 py-3 text-right font-black">รวมคอลัมน์</th>{crossTab.columns.map((column) => {
-                        const colStudents = crossTab.rows.flatMap((r) => r.studentsByCell?.[column.key] ?? []);
+                        const colStudents = uniqueStatisticStudents(crossTab.rows.flatMap((r) => r.studentsByCell?.[column.key] ?? []));
                         return (
                             <td key={column.key} className="border-t border-r border-brand-200 px-3 py-3 text-center font-black">
                                 {column.total > 0 && onSelectCell ? (
@@ -217,7 +221,7 @@ function CrossTabResultTable({ crossTab, onSelectCell }: { crossTab: StatisticCr
                                 onClick={() => onSelectCell({
                                     title: 'รวมนักศึกษาทั้งหมดในตาราง',
                                     subtitle: `${crossTab.summary.registered_students.toLocaleString('th-TH')} คน`,
-                                    students: crossTab.rows.flatMap((r) => Object.values(r.studentsByCell ?? {}).flat()),
+                                    students: uniqueStatisticStudents(crossTab.rows.flatMap((r) => Object.values(r.studentsByCell ?? {}).flat())),
                                 })}
                                 className="inline-flex min-h-8 min-w-8 items-center justify-center rounded-lg px-2 py-1 font-black text-brand-950 transition hover:bg-brand-300 active:scale-95"
                                 title={`คลิกเพื่อดูรายชื่อนักศึกษาทั้งหมด (${crossTab.summary.registered_students.toLocaleString('th-TH')} คน)`}
@@ -447,7 +451,7 @@ function OverviewStudentListDialog({
                                 </thead>
                                 <tbody className="divide-y divide-slate-100 bg-white">
                                     {filteredStudents.map((student, idx) => (
-                                        <tr key={student.id ?? student.student_id ?? student.secondary ?? idx} className="hover:bg-slate-50/80 transition-colors">
+                                        <tr key={`${student.level}|${student.id ?? student.student_id ?? student.secondary ?? idx}`} className="hover:bg-slate-50/80 transition-colors">
                                             {showBreakdown && <td className="px-4 py-3 font-semibold text-slate-700">{student.metric || "-"}</td>}
                                             <td className="px-4 py-3 text-center text-xs font-bold text-slate-500">{idx + 1}</td>
                                             <td className="px-4 py-3 font-mono text-xs font-black text-slate-900">{student.student_id ?? student.secondary ?? student.id ?? '-'}</td>
@@ -570,6 +574,14 @@ async function loadWorkspace(request: WorkspaceRequest, signal?: AbortSignal): P
     const params = new URLSearchParams();
     if (request.term) params.set('term', request.term);
     if (request.group) params.set('group', request.group);
+    const useRegistrationDimensions = [...request.configuration.vertical, ...request.configuration.horizontal].some((key) => key === 'subject' || key === 'learning_method');
+    if (useRegistrationDimensions) params.set('include_registration_dimensions', '1');
+    if (request.report.source === 'registration-statistics' && useRegistrationDimensions) {
+        params.set('view', 'student');
+        const response = await getFeatureDataWithDemo<RegistrationStudentReportPayload>(`/api/v1/reports/students/registration-statistics?${params.toString()}`, { ...emptyGenericPayload, rows: [] }, signal);
+        const crossTab = genericPayloadToCrossTab(registrationStudentsToGeneric(response.data), request.configuration);
+        return { crossTab, selectedTerm: response.data.selected_term ?? request.term };
+    }
     if (request.report.source === 'registration-statistics') {
         request.configuration.vertical.forEach((category) => params.append('row_categories[]', category));
         request.configuration.horizontal.forEach((category) => params.append('column_categories[]', category));

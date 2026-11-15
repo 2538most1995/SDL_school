@@ -1,6 +1,6 @@
 import type { ExcelSheet } from '../../lib/excel';
 
-export type CategoryKey = 'target_group' | 'group' | 'gender' | 'level' | 'occupation' | 'nationality' | 'age' | 'nnet' | 'age_band' | 'completion_status';
+export type CategoryKey = 'target_group' | 'group' | 'gender' | 'level' | 'occupation' | 'nationality' | 'age' | 'nnet' | 'age_band' | 'completion_status' | 'learning_method' | 'subject';
 
 export type FilterOption = {
     value: string;
@@ -33,6 +33,8 @@ export type RegistrationStatisticsPayload = {
 };
 
 const categoryLabels: Record<CategoryKey, string> = {
+    learning_method: 'พบกลุ่ม / วิธีเรียน',
+    subject: 'รายวิชา',
     age_band: 'ช่วงอายุ',
     completion_status: 'เงื่อนไขที่ยังขาด',
     target_group: 'กลุ่มเป้าหมาย',

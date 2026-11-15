@@ -13,16 +13,16 @@ final class StatisticsReportPreferenceController extends Controller
 {
     /** @var array<string, list<string>> */
     private const REPORT_CATEGORIES = [
-        'new-students' => ['level', 'group', 'gender'],
-        'registration-statistics' => ['level', 'group', 'gender', 'age', 'occupation', 'target_group', 'nationality'],
-        'graduates' => ['level', 'group', 'gender'],
-        'expected-graduates' => ['level', 'group', 'gender', 'nnet'],
-        'transfers' => ['level', 'group', 'gender'],
-        'gender-statistics' => ['level', 'group', 'gender'],
-        'age-statistics' => ['level', 'group', 'gender', 'age_band'],
-        'exam-disqualified' => ['level', 'group', 'gender'],
-        'nnet-statistics' => ['level', 'group', 'gender', 'nnet'],
-        'credit-pending' => ['level', 'group', 'gender', 'nnet', 'completion_status'],
+        'new-students' => ['level', 'group', 'gender', 'learning_method', 'subject'],
+        'registration-statistics' => ['level', 'group', 'gender', 'age', 'occupation', 'target_group', 'nationality', 'learning_method', 'subject'],
+        'graduates' => ['level', 'group', 'gender', 'learning_method', 'subject'],
+        'expected-graduates' => ['level', 'group', 'gender', 'nnet', 'learning_method', 'subject'],
+        'transfers' => ['level', 'group', 'gender', 'learning_method', 'subject'],
+        'gender-statistics' => ['level', 'group', 'gender', 'learning_method', 'subject'],
+        'age-statistics' => ['level', 'group', 'gender', 'age_band', 'learning_method', 'subject'],
+        'exam-disqualified' => ['level', 'group', 'gender', 'learning_method', 'subject'],
+        'nnet-statistics' => ['level', 'group', 'gender', 'nnet', 'learning_method', 'subject'],
+        'credit-pending' => ['level', 'group', 'gender', 'nnet', 'completion_status', 'learning_method', 'subject'],
     ];
 
     public function show(Request $request): JsonResponse

@@ -40,7 +40,7 @@ final class ExtendedStatisticsTest extends TestCase
         foreach ([1, 2, 3] as $level) {
             $tables = [
                 'student' => '_perf_id10 TEXT, _perf_grp TEXT, prename TEXT, name TEXT, surname TEXT, grp_code TEXT, gender TEXT, age TEXT, nt_sem TEXT, nt_nosem TEXT, nt_sara1 TEXT, nt_sara2 TEXT, nnet TEXT',
-                'grade' => '_id INTEGER PRIMARY KEY AUTOINCREMENT, _perf_std10 TEXT, _perf_semestry TEXT, _perf_sub TEXT, grade TEXT, typ_code TEXT',
+                'grade' => '_id INTEGER PRIMARY KEY AUTOINCREMENT, _perf_std10 TEXT, _perf_semestry TEXT, _perf_sub TEXT, grade TEXT, typ_code TEXT, method TEXT, learning TEXT',
                 'subject' => '_perf_sub TEXT, sub_name TEXT, sub_type TEXT, sub_credit TEXT',
                 'activity' => '_perf_std10 TEXT, _perf_semestry TEXT, hour TEXT',
             ];
@@ -170,6 +170,56 @@ final class ExtendedStatisticsTest extends TestCase
         foreach (ExtendedStudentStatistics::KINDS as $kind) {
             $this->report($kind)->assertForbidden();
         }
+    }
+
+    public function test_subjects_and_learning_methods_are_correlated_scoped_and_term_specific(): void
+    {
+        $this->student(1, '1000000001', ['grp_code' => '001']);
+        $this->grade(1, '1000000001', 'E', '4');
+        $this->grade(1, '1000000001', 'E', '4'); // duplicate source registration
+        DB::table($this->table(1, 'grade'))->where('_perf_sub', 'C')->update(['method' => '1']);
+        DB::table($this->table(1, 'grade'))->where('_perf_sub', 'E')->update(['method' => '', 'learning' => '2']);
+        $this->grade(1, '1000000001', 'FUTURE', '4', '69/2');
+        $this->student(2, '1000000001', ['grp_code' => '1']); // same code, another level
+        DB::table($this->table(2, 'grade'))->update(['method' => '3']);
+
+        $this->report('age-statistics')->assertOk()->assertJsonMissingPath('data.rows.0.registration_dimensions');
+        $rows = $this->report('age-statistics', '&include_registration_dimensions=1')->assertOk()->json('data.rows');
+        self::assertSame([
+            ['subject_code' => 'C', 'subject_name' => 'C', 'learning_method' => 'พบกลุ่ม'],
+            ['subject_code' => 'E', 'subject_name' => 'E', 'learning_method' => 'ทางไกล'],
+        ], $rows[0]['registration_dimensions']);
+        self::assertSame('ทางไกลพิเศษ', $rows[1]['registration_dimensions'][0]['learning_method']);
+        $this->getJson('/api/v1/reports/students/registration-statistics?term=1/2569&view=student&include_registration_dimensions=1')
+            ->assertOk()->assertJsonPath('data.rows.0.registration_dimensions.0.learning_method', 'พบกลุ่ม');
+        DB::table($this->table(1, 'grade'))->where('_perf_sub', 'C')->update(['typ_code' => '1']);
+        $this->getJson('/api/v1/reports/transfers?term=1/2569&include_registration_dimensions=1')
+            ->assertOk()->assertJsonCount(1, 'data.rows.0.registration_dimensions')
+            ->assertJsonPath('data.rows.0.registration_dimensions.0.subject_code', 'C');
+
+        $teacher = User::factory()->create(['role' => 'teacher', 'district_id' => $this->districtId, 'assigned_groups' => ['001']]);
+        Sanctum::actingAs($teacher);
+        $this->report('age-statistics', '&include_registration_dimensions=1')
+            ->assertJsonCount(1, 'data.rows')->assertJsonCount(2, 'data.rows.0.registration_dimensions');
+        $this->report('age-statistics', '&include_registration_dimensions=1&group=1')->assertJsonPath('data.total', 0);
+    }
+
+    public function test_dimensions_can_be_saved_for_every_statistics_report(): void
+    {
+        foreach (['new-students', 'registration-statistics', 'graduates', 'expected-graduates', 'transfers', ...ExtendedStudentStatistics::KINDS] as $report) {
+            $this->putJson('/api/v1/settings/statistics-report', [
+                'report' => $report, 'vertical' => ['group', 'learning_method'], 'horizontal' => ['level', 'subject'], 'orientation' => 'vertical',
+            ])->assertOk()->assertJsonPath('data.horizontal', ['level', 'subject']);
+        }
+    }
+
+    public function test_missing_method_columns_remain_unknown_without_using_a_different_students_method(): void
+    {
+        $this->student(1, '1000000001');
+        DB::statement('ALTER TABLE '.$this->table(1, 'grade').' DROP COLUMN method');
+        DB::statement('ALTER TABLE '.$this->table(1, 'grade').' DROP COLUMN learning');
+        $this->report('gender-statistics', '&include_registration_dimensions=1')->assertOk()
+            ->assertJsonPath('data.rows.0.registration_dimensions.0.learning_method', 'ไม่ระบุวิธีเรียน');
     }
 
     private function table(int $level, string $type): string

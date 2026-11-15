@@ -8,6 +8,7 @@ use App\Domain\Students\Support\ExtendedStudentStatistics;
 use App\Domain\Students\Support\LegacyStudentStatus;
 use App\Domain\Students\Support\LegacyTableSet;
 use App\Domain\Students\Support\RegistrationStatistics;
+use App\Domain\Students\Support\StudentRegistrationDimensions;
 use App\Models\User;
 use Illuminate\Database\DatabaseManager;
 use Illuminate\Validation\ValidationException;
@@ -23,6 +24,21 @@ use InvalidArgumentException;
 final readonly class LegacyStudentReportService
 {
     public function __construct(private DatabaseManager $database) {}
+
+    public function withRegistrationDimensions(User $viewer, int $districtId, array $data, array $filters): array
+    {
+        $term = AcademicTerm::normalize($data['selected_term'] ?? null);
+        $byStudent = [];
+        if ($term !== null && ($data['rows'] ?? $data['items'] ?? []) !== []) {
+            $filters['view'] = 'student';
+            foreach ($this->registeredSubjectRows($viewer, $this->filteredSets($this->sets($districtId), $filters), $filters, $term, true) as $row) {
+                $key = $districtId.'-'.$row['level'].'-'.$row['student_code'];
+                $byStudent[$key][] = StudentRegistrationDimensions::entry($row['subject_code'], $row['subject_name'], $row['learning_method'] ?? null);
+            }
+        }
+
+        return StudentRegistrationDimensions::attach($data, $byStudent, $districtId);
+    }
 
     /** Additional statistics use selected-term registration membership, including historical codes. */
     public function extendedStatistics(User $viewer, int $districtId, string $kind, array $filters): array
@@ -1231,7 +1247,7 @@ final readonly class LegacyStudentReportService
      * @param  array<string, mixed>  $filters
      * @return list<array<string, mixed>>
      */
-    private function registeredSubjectRows(User $viewer, array $sets, array $filters, string $selectedTerm): array
+    private function registeredSubjectRows(User $viewer, array $sets, array $filters, string $selectedTerm, bool $includeMethod = false): array
     {
         $candidates = [];
         $view = (string) ($filters['view'] ?? 'subject');
@@ -1269,6 +1285,17 @@ final readonly class LegacyStudentReportService
             $grade = $this->identifier($set->grade);
             $student = $this->identifier($set->student);
             $subject = $this->identifier($set->subject);
+            $methodSelect = '';
+            if ($includeMethod) {
+                $methodValues = [];
+                foreach ([['method', 'learning_method', 'learn_method'], ['learning']] as $aliases) {
+                    $column = $this->firstExistingColumn($set->grade, $aliases);
+                    if ($column !== null) {
+                        $methodValues[] = 'NULLIF(TRIM(g.'.$this->identifier($column)."), '')";
+                    }
+                }
+                $methodSelect = $methodValues === [] ? ', NULL AS learning_method_value' : ', COALESCE('.implode(', ', [...$methodValues, 'NULL']).') AS learning_method_value';
+            }
             foreach ($this->rows(
                 "SELECT g._id AS row_id, g._perf_std10 AS student_code,
                         g._perf_sub AS subject_code, g._perf_semestry AS raw_term,
@@ -1276,7 +1303,7 @@ final readonly class LegacyStudentReportService
                         sub.sub_name AS subject_name, sub.sub_credit AS subject_credit,
                         sub.sub_type AS subject_type, st.prename,
                         st.name AS first_name, st.surname AS last_name,
-                        st.grp_code AS group_code, {$groupName} AS group_name
+                        st.grp_code AS group_code, {$groupName} AS group_name {$methodSelect}
                  FROM {$grade} g
                  INNER JOIN {$student} st ON st._perf_id10 = g._perf_std10
                  LEFT JOIN {$subject} sub ON sub._perf_sub = g._perf_sub
@@ -1304,6 +1331,7 @@ final readonly class LegacyStudentReportService
                     'subject_name' => trim((string) ($row['subject_name'] ?? '')) ?: 'ไม่พบชื่อรายวิชา',
                     'subject_credit' => (float) ($row['subject_credit'] ?? 0),
                     'subject_type' => trim((string) ($row['subject_type'] ?? '')) === '1' ? 'compulsory' : 'elective',
+                    ...($includeMethod ? ['learning_method' => $row['learning_method_value'] ?? null] : []),
                     'grade_value' => $gradeValue === '' || $gradeValue === '-' ? null : $gradeValue,
                     'transferred' => trim((string) ($row['typ_code'] ?? '')) === '1',
                     'exam_attended' => ! in_array($gradeValue, ['', '-', 'ข', 'ม'], true),

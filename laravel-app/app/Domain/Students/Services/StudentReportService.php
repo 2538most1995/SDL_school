@@ -9,6 +9,7 @@ use App\Domain\Students\Support\AcademicTerm;
 use App\Domain\Students\Support\ExamEligibilityStatistics;
 use App\Domain\Students\Support\ExtendedStudentStatistics;
 use App\Domain\Students\Support\RegistrationStatistics;
+use App\Domain\Students\Support\StudentRegistrationDimensions;
 use App\Models\User;
 
 final readonly class StudentReportService
@@ -17,6 +18,27 @@ final readonly class StudentReportService
         private StudentRepository $repository,
         private StudentDirectoryService $directory,
     ) {}
+
+    public function withRegistrationDimensions(User $viewer, int $districtId, array $data, array $filters): array
+    {
+        $students = $this->students($viewer, $filters);
+        $grades = $this->repository->gradesForMany($students);
+        $term = AcademicTerm::normalize($data['selected_term'] ?? null);
+        $byStudent = [];
+        foreach ($students as $student) {
+            $key = "{$student->districtId}-{$student->level}-{$student->code}";
+            $seen = [];
+            foreach ($this->studentGrades($grades, $student) as $grade) {
+                if ($term === null || AcademicTerm::normalize($grade->term) !== $term || isset($seen[$grade->subjectCode])) {
+                    continue;
+                }
+                $seen[$grade->subjectCode] = true;
+                $byStudent[$key][] = StudentRegistrationDimensions::entry($grade->subjectCode, $grade->subjectName, $grade->learningMethod);
+            }
+        }
+
+        return StudentRegistrationDimensions::attach($data, $byStudent, $districtId);
+    }
 
     public function extendedStatistics(User $viewer, string $kind, array $filters): array
     {
