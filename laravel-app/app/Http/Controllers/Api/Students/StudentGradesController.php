@@ -28,6 +28,7 @@ final class StudentGradesController extends StudentsApiController
             $student,
             $filters['term'] ?? null,
             $filters['level'] ?? null,
+            directoryContext: true,
         );
         abort_if($result === null, 404, 'ไม่พบข้อมูลนักศึกษา');
 

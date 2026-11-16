@@ -26,8 +26,10 @@ use InvalidArgumentException;
  * physical table identifier. The configured `legacy` database user must also have
  * SELECT-only grants as defence in depth.
  */
-final class LegacyStudentRepository implements StudentAuthenticationRepository, StudentProfileRepository, StudentRepository, TermStudentRepository
+final class LegacyStudentRepository implements PaginatedStudentRepository, StudentAuthenticationRepository, StudentProfileRepository, StudentRepository, TermStudentRepository
 {
+    use QueriesStudentDirectory;
+
     /** @var array<int, list<LegacyTableSet>> */
     private array $setsByDistrict = [];
 
@@ -1037,7 +1039,7 @@ final class LegacyStudentRepository implements StudentAuthenticationRepository, 
                 {$gpasemSql},
                 CASE
                     WHEN CHAR_LENGTH(TRIM(COALESCE({$citizenId}, ''))) = 13
-                    THEN CONCAT(LEFT(TRIM({$citizenId}), 1), '-xxxx-xxxxx-xx-', RIGHT(TRIM({$citizenId}), 1))
+                    THEN CONCAT(SUBSTR(TRIM({$citizenId}), 1, 1), '-xxxx-xxxxx-xx-', SUBSTR(TRIM({$citizenId}), -1))
                     ELSE NULL
                 END AS citizen_id_masked,
                 {$citizenId} AS citizen_id,

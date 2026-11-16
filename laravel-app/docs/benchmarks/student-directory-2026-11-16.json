@@ -1,0 +1,55 @@
+{
+    "engine": "isolated SQLite; synthetic data; not production MySQL",
+    "students": 1500,
+    "grade_rows": 120000,
+    "page_size": 25,
+    "milliseconds_cold_then_five_warm": {
+        "old_roster": [
+            170.18,
+            15.36,
+            15.7,
+            16.75,
+            15.69,
+            16.12
+        ],
+        "sql_page": [
+            276.7,
+            4.23,
+            4.24,
+            4.19,
+            4.17,
+            4.17
+        ]
+    },
+    "page_query_plan": [
+        "MERGE (UNION ALL)",
+        "LEFT",
+        "MERGE (UNION ALL)",
+        "LEFT",
+        "SCAN s USING INDEX db_import_SYNTHETIC_1_student_code",
+        "CORRELATED SCALAR SUBQUERY 1",
+        "SEARCH identity_row USING COVERING INDEX db_import_SYNTHETIC_1_student_code (_perf_id10=?)",
+        "SEARCH registration EXISTS USING COVERING INDEX db_import_SYNTHETIC_1_grade_student_term (_perf_std10=? AND _perf_semestry=?)",
+        "USE TEMP B-TREE FOR LAST 2 TERMS OF ORDER BY",
+        "RIGHT",
+        "SCAN s USING INDEX db_import_SYNTHETIC_2_student_code",
+        "CORRELATED SCALAR SUBQUERY 4",
+        "SEARCH identity_row USING COVERING INDEX db_import_SYNTHETIC_2_student_code (_perf_id10=?)",
+        "SEARCH registration EXISTS USING COVERING INDEX db_import_SYNTHETIC_2_grade_student_term (_perf_std10=? AND _perf_semestry=?)",
+        "USE TEMP B-TREE FOR LAST 2 TERMS OF ORDER BY",
+        "RIGHT",
+        "SCAN s USING INDEX db_import_SYNTHETIC_3_student_code",
+        "CORRELATED SCALAR SUBQUERY 7",
+        "SEARCH identity_row USING COVERING INDEX db_import_SYNTHETIC_3_student_code (_perf_id10=?)",
+        "SEARCH registration EXISTS USING COVERING INDEX db_import_SYNTHETIC_3_grade_student_term (_perf_std10=? AND _perf_semestry=?)",
+        "USE TEMP B-TREE FOR LAST 2 TERMS OF ORDER BY"
+    ],
+    "api_milliseconds_cold_then_five_warm": [
+        281.28,
+        5.17,
+        5.07,
+        5.01,
+        5.02,
+        4.99
+    ]
+}

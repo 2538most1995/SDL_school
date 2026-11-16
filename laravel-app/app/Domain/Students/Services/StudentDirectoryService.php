@@ -3,6 +3,7 @@
 namespace App\Domain\Students\Services;
 
 use App\Domain\Students\Models\Student;
+use App\Domain\Students\Repositories\PaginatedStudentRepository;
 use App\Domain\Students\Repositories\StudentProfileRepository;
 use App\Domain\Students\Repositories\StudentRepository;
 use App\Domain\Students\Repositories\TermStudentRepository;
@@ -30,6 +31,13 @@ final readonly class StudentDirectoryService
         bool $clampPage = true,
         bool $selectAcademicTerm = false,
     ): array {
+        if ($selectAcademicTerm && $includeCitizenIdInSearch && $clampPage && $this->repository instanceof PaginatedStudentRepository) {
+            $result = $this->repository->directoryPage($viewer, $filters);
+            $districtId = $viewer->relationLoaded('selectedDistrictContext') ? (int) $viewer->getRelation('selectedDistrictContext') : (int) $viewer->district_id;
+            $result['items'] = $this->enrichWithSocialProfiles($districtId, $result['items']);
+
+            return $result;
+        }
         $terms = [];
         $currentTerm = null;
         if ($selectAcademicTerm) {
@@ -163,6 +171,24 @@ final readonly class StudentDirectoryService
         }
 
         return null;
+    }
+
+    public function findForDirectory(User $viewer, string $code, mixed $level = null, ?string $term = null): ?Student
+    {
+        $level = self::normalizeLevel($level);
+        if ($this->repository instanceof PaginatedStudentRepository) {
+            $student = $this->repository->directoryStudent($viewer, trim($code), $level, $term);
+
+            return $student === null ? null : $this->enrichWithSocialProfiles($student->districtId, [$student])[0];
+        }
+        $student = $this->findAccessible($viewer, $code, $level);
+        if ($student !== null && $term !== null) {
+            $registered = array_filter($this->repository->gradesFor($student), static fn ($grade) => AcademicTerm::normalize($grade->term) === $term);
+
+            return $registered === [] ? null : new Student(...[...get_object_vars($student), 'currentTerm' => $term]);
+        }
+
+        return $student;
     }
 
     /** @return array<string, mixed> */

@@ -418,3 +418,9 @@ The statistics menu adds gender, editable age ranges, exam-disqualified, N-NET t
 Deploy backend and included production build, then run `php artisan optimize:clear`. These report additions need no migration or reimport if a complete ITW batch is already available. See [report rules and limitations](docs/statistics-reports.md). Source scores/statuses without dates remain latest-import evidence rather than exact historical snapshots.
 
 Statistics report formats now also offer **พบกลุ่ม / วิธีเรียน** and **รายวิชา** for either axis. Learning methods use ITW METHOD/LEARNING (พบกลุ่ม/ทางไกล); subjects use registrations in the selected semester. A student registered in multiple subjects counts once in each cell and once in independent row/column/grand totals. Both screen and Excel explain why individual subject counts may exceed the unique-student total. Deploy backend/build together and clear Laravel caches; no migration or reimport is needed for these axis additions.
+
+## ข้อมูลนักศึกษาย้อนหลังและการแบ่งหน้าด้วย SQL (16 พฤศจิกายน 2569)
+
+เลือกภาคเรียนในหน้าข้อมูลนักศึกษาเพื่อดูผู้ลงทะเบียนของเทอมนั้น กดเปิดรายคนจะคงเทอมและระดับชั้นไว้ พร้อมปุ่มดูผลการเรียน/กพช. เมื่อกลับหน้ารายชื่อจะคงตัวกรองและหน้าเดิม คะแนน หน่วยกิต และ กพช. สะสมตัดข้อมูลหลังเทอมที่เลือกออก ส่วนชื่อ ที่อยู่ กลุ่มเรียน และสถานะทะเบียนอ้างอิงชุด ITW ล่าสุด โดยมีข้อความแจ้งบนหน้าจอ
+
+ระบบกรองสิทธิ์และแบ่งหน้าที่ฐานข้อมูล โหลดรายละเอียดเฉพาะหน้าที่เปิด และแคชเฉพาะยอดสรุป/ตัวเลือกตามขอบเขตผู้ใช้ หลังอัปเดตโค้ดพร้อมไฟล์ build ให้รัน `php artisan optimize:clear` แล้วรีเฟรช ไม่ต้องรัน migration หรือนำเข้าใหม่เฉพาะงานนี้ หากชุดนำเข้าเดิมยังขาดทะเบียนรหัสเก่า ให้ใช้ขั้นตอนนำเข้า ITW ที่แก้ไขแล้วตามหัวข้อก่อนหน้า ดู [กติกาและหลักฐานวัดประสิทธิภาพ](docs/student-directory-history.md) โดยเวลาบนเซิร์ฟเวอร์จริงยังต้องตรวจเพิ่มเติม

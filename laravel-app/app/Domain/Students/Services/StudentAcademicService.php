@@ -21,9 +21,9 @@ final readonly class StudentAcademicService
     ) {}
 
     /** @return array{student: Student, items: list<Grade>, summary: array<string, mixed>}|null */
-    public function grades(User $viewer, string $code, ?string $term = null, mixed $level = null): ?array
+    public function grades(User $viewer, string $code, ?string $term = null, mixed $level = null, bool $directoryContext = false): ?array
     {
-        $student = $this->directory->findAccessible($viewer, $code, $level);
+        $student = $directoryContext ? $this->directory->findForDirectory($viewer, $code, $level, $term) : $this->directory->findAccessible($viewer, $code, $level);
 
         if ($student === null) {
             return null;
@@ -288,9 +288,9 @@ final readonly class StudentAcademicService
     }
 
     /** @return array{student: Student, items: list<KpchActivity>, summary: array<string, mixed>}|null */
-    public function kpch(User $viewer, string $code, ?string $term = null, mixed $level = null): ?array
+    public function kpch(User $viewer, string $code, ?string $term = null, mixed $level = null, bool $directoryContext = false): ?array
     {
-        $student = $this->directory->findAccessible($viewer, $code, $level);
+        $student = $directoryContext ? $this->directory->findForDirectory($viewer, $code, $level, $term) : $this->directory->findAccessible($viewer, $code, $level);
 
         if ($student === null) {
             return null;

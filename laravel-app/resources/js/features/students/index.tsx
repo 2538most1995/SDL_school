@@ -25,8 +25,8 @@ import {
 import { keepPreviousData, useQuery, useQueryClient } from '@tanstack/react-query';
 import type { ColumnDef } from '@tanstack/react-table';
 import { Button, Field, Input, Select } from '../../components/MaterialUI';
-import { useDeferredValue, useEffect, useMemo, useState, type ReactNode } from 'react';
-import { Link, useParams } from 'react-router-dom';
+import { useDeferredValue, useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
+import { Link, useParams, useSearchParams } from 'react-router-dom';
 import { DataTable } from '../../components/DataTable';
 import { EllipsisText } from '../../components/EllipsisText';
 import { PageHeader } from '../../components/PageHeader';
@@ -75,6 +75,7 @@ export type StudentSocial = {
 };
 
 type StudentRow = {
+    levelId?: number;
     id: number | string;
     code: string;
     name: string;
@@ -294,6 +295,7 @@ function shortEducationLevel(level: string): string {
 type FilterOption = { value: string | number; label: string };
 type StudentDirectoryMeta = {
     mode?: string;
+    snapshot_note?: string;
     current_term?: string | null;
     selected_term?: string | null;
     pagination: { current_page: number; per_page: number; total: number; last_page: number; from: number | null; to: number | null };
@@ -303,19 +305,27 @@ type StudentDirectoryMeta = {
 
 export function StudentsPage() {
     const { role } = useDemoRole();
-    const [search, setSearch] = useState('');
-    const [level, setLevel] = useState('');
-    const [group, setGroup] = useState('');
-    const [term, setTerm] = useState('');
-    const [page, setPage] = useState(1);
-    const [perPage, setPerPage] = useState(25);
+    const [urlFilters, setUrlFilters] = useSearchParams();
+    const districtId = window.localStorage.getItem('sena-district-id');
+    const [search, setSearch] = useState(() => urlFilters.get('search') ?? '');
+    const [level, setLevel] = useState(() => urlFilters.get('level') ?? '');
+    const [group, setGroup] = useState(() => urlFilters.get('group') ?? '');
+    const [term, setTerm] = useState(() => urlFilters.get('term') ?? '');
+    const [page, setPage] = useState(() => Math.max(1, Number(urlFilters.get('page')) || 1));
+    const [perPage, setPerPage] = useState(() => Math.min(1000, Math.max(1, Number(urlFilters.get('per_page')) || 25)));
     const [filtersOpen, setFiltersOpen] = useState(true);
     const [editingSocialStudent, setEditingSocialStudent] = useState<{ code: string; name: string; social?: StudentSocial } | null>(null);
-    const deferredSearch = useDeferredValue(search);
+    const [deferredSearch, setDeferredSearch] = useState(search);
+    useEffect(() => { const timer = window.setTimeout(() => setDeferredSearch(search), 250); return () => window.clearTimeout(timer); }, [search]);
     const canFilterGroups = role === 'teacher' || role === 'admin' || role === 'super_admin';
     const canEditSocial = role === 'teacher' || role === 'admin' || role === 'super_admin';
+    const scope = `${role}|${districtId}`;
+    const previousScope = useRef(scope);
+    useEffect(() => {
+        if (previousScope.current !== scope) { previousScope.current = scope; setTerm(''); setGroup(''); setLevel(''); setSearch(''); setPage(1); }
+    }, [scope]);
 
-    useEffect(() => setPage(1), [deferredSearch, level, group, term, perPage]);
+
     useEffect(() => { if (!canFilterGroups && group !== '') setGroup(''); }, [canFilterGroups, group]);
 
     const queryString = useMemo(() => {
@@ -328,8 +338,11 @@ export function StudentsPage() {
         return params.toString();
     }, [canFilterGroups, deferredSearch, group, level, term, page, perPage]);
 
+    useEffect(() => { setUrlFilters(new URLSearchParams(queryString), { replace: true }); }, [queryString, setUrlFilters]);
+
+
     const students = useQuery({
-        queryKey: ['students', { search: deferredSearch, level, group, term, page, perPage }],
+        queryKey: ['students', role, districtId, { search: deferredSearch, level, group, term, page, perPage }],
         queryFn: async ({ signal }) => {
             type StudentApi = {
                 code: string;
@@ -344,7 +357,8 @@ export function StudentsPage() {
             };
             const response = await getFeatureData<StudentRow[] | StudentApi[]>(`/api/v1/students?${queryString}`, signal);
             const data = response.data.map((student): StudentRow => 'full_name' in student ? {
-                id: student.code,
+                id: `${student.level.id}|${student.code}`,
+                levelId: student.level.id,
                 code: student.code,
                 name: student.full_name,
                 level: student.level.label,
@@ -363,7 +377,7 @@ export function StudentsPage() {
             } : student);
             return { ...response, data, meta: response.meta as unknown as StudentDirectoryMeta };
         },
-        placeholderData: keepPreviousData,
+        placeholderData: (previous, previousQuery) => previousQuery?.queryKey[1] === role && previousQuery?.queryKey[2] === districtId ? previous : undefined,
     });
 
     const rows = students.data?.data ?? [];
@@ -371,7 +385,8 @@ export function StudentsPage() {
     const pagination = meta?.pagination;
     const summary = meta?.summary;
     const selectedTerm = term || meta?.selected_term || '';
-    const isHistoricalTerm = Boolean(term && term !== meta?.current_term);
+    const isHistoricalTerm = Boolean(selectedTerm && meta?.current_term && selectedTerm !== meta.current_term);
+    const profileUrl = (row: StudentRow) => `/students/${encodeURIComponent(row.code)}?${new URLSearchParams({ term: selectedTerm, ...(row.levelId ? { level: String(row.levelId) } : {}), return: `/students?${queryString}` })}`;
     const retainedGroupOptions = useRetainedFilterOptions(
         (meta?.filter_options.groups ?? []).map((option) => ({ value: String(option.value), label: option.label })),
         group,
@@ -390,7 +405,7 @@ export function StudentsPage() {
             size: 195,
             cell: ({ row }) => (
                 <div className="min-w-0">
-                    <Link to={`/students/${row.original.id}`} className="block min-w-0 text-sm font-semibold leading-6 text-slate-950 hover:text-brand-700"><EllipsisText title={row.original.name}>{row.original.name}</EllipsisText></Link>
+                    <Link to={profileUrl(row.original)} className="block min-w-0 text-sm font-semibold leading-6 text-slate-950 hover:text-brand-700"><EllipsisText title={row.original.name}>{row.original.name}</EllipsisText></Link>
                 </div>
             ),
         },
@@ -423,7 +438,7 @@ export function StudentsPage() {
             cell: ({ row }) => (
                 <div className="student-directory-actions flex flex-nowrap items-center justify-center gap-1.5 whitespace-nowrap">
                     <Link
-                        to={`/students/${encodeURIComponent(String(row.original.id))}`}
+                        to={profileUrl(row.original)}
                         className="responsive-table-action inline-flex shrink-0 items-center gap-1.5 rounded-lg border border-teal-200/90 bg-teal-50/80 px-2.5 py-1.5 text-xs font-bold text-teal-800 shadow-2xs hover:border-teal-300 hover:bg-teal-100/90 active:scale-[0.98] transition"
                         aria-label={`เปิดรายละเอียด ${row.original.name}`}
                     >
@@ -483,7 +498,7 @@ export function StudentsPage() {
                 </div>
             ),
         },
-    ], [canEditSocial]);
+    ], [canEditSocial, selectedTerm, queryString]);
 
     const resetFilters = () => {
         setSearch('');
@@ -501,14 +516,15 @@ export function StudentsPage() {
                 description="เลือกดูข้อมูลนักศึกษาตามภาคเรียน ระดับชั้น และกลุ่มเรียน"
                 icon={UsersThree}
                 illustration
-                actions={<StatusBadge tone="success">{meta?.selected_term ? `ภาคเรียน ${meta.selected_term}${meta.selected_term === meta.current_term ? ' (ปัจจุบัน)' : ''}` : 'ข้อมูลภาคเรียนปัจจุบัน'}</StatusBadge>}
+                actions={<StatusBadge tone={isHistoricalTerm ? "warning" : "success"}>{meta?.selected_term ? `ภาคเรียน ${meta.selected_term}${meta.selected_term === meta.current_term ? ' (ปัจจุบัน)' : ' (ย้อนหลัง)'}` : 'ข้อมูลภาคเรียนปัจจุบัน'}</StatusBadge>}
             />
 
+            {isHistoricalTerm && <p role="status" className="mb-4 rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-900">กำลังดูภาคเรียน {selectedTerm} · {meta?.snapshot_note ?? 'ชื่อและข้อมูลส่วนตัวเป็นข้อมูลจากชุด ITW ล่าสุด'}</p>}
             <StatGrid>
                 <StatTile label="นักศึกษาที่พบ" value={pagination?.total ?? 0} unit="คน" detail="ครบทุกหน้าตามตัวกรอง" icon={Student} tone="sky" />
                 <StatTile label="กลุ่มเรียน" value={summary?.groups ?? 0} unit="กลุ่ม" detail="กลุ่มในผลลัพธ์ปัจจุบัน" icon={GraduationCap} tone="emerald" />
                 <StatTile label="ชาย / หญิง" value={`${summary?.male ?? 0} / ${summary?.female ?? 0}`} unit="คน" detail="ตามข้อมูลที่มีในระบบ" icon={UsersThree} tone="amber" />
-                <StatTile label="GPAX เฉลี่ย" value={summary?.average_gpax ?? '-'} detail="จากคะแนนเต็ม 4.00" icon={ChartLineUp} tone="violet" />
+                <StatTile label="GPAX เฉลี่ย" value={summary?.average_gpax ?? '-'} detail={isHistoricalTerm ? `สะสมถึงภาคเรียน ${selectedTerm}` : "จากคะแนนเต็ม 4.00"} icon={ChartLineUp} tone="violet" />
             </StatGrid>
 
             <Panel title="รายชื่อนักศึกษา" icon={UsersThree} description={pagination ? `แสดง ${pagination.from ?? 0}-${pagination.to ?? 0} จากทั้งหมด ${pagination.total} คน` : 'ข้อมูลส่วนบุคคลละเอียดจะแสดงตามสิทธิ์ของผู้ใช้งาน'} action={<div className="flex flex-wrap items-center gap-2"><FilterToggle expanded={filtersOpen} controls="student-directory-filters" activeCount={[search, level, group, isHistoricalTerm].filter(Boolean).length} onToggle={() => setFiltersOpen((open) => !open)} />{(search || level || group || isHistoricalTerm) && <Button type="button" appearance="subtle" icon={<X size={15} />} onClick={resetFilters}>ล้างตัวกรองทั้งหมด</Button>}</div>}>
@@ -520,10 +536,10 @@ export function StudentsPage() {
                         </Select>
                     </Field>
                     <Field label="ค้นหา">
-                        <Input value={search} onChange={(_, data) => setSearch(data.value)} contentBefore={<MagnifyingGlass size={18} aria-hidden="true" />} placeholder="ชื่อ รหัส หรือกลุ่ม" size="large" />
+                        <Input value={search} onChange={(_, data) => { setSearch(data.value); setPage(1); }} contentBefore={<MagnifyingGlass size={18} aria-hidden="true" />} placeholder="ชื่อ รหัส หรือกลุ่ม" size="large" />
                     </Field>
                     <Field label="ระดับการศึกษา">
-                        <Select value={level} onChange={(_, data) => setLevel(data.value)} size="large">
+                        <Select value={level} onChange={(_, data) => { setLevel(data.value); setGroup(''); setPage(1); }} size="large">
                             <option value="">ทั้งหมด</option>
                             <option value="1">ประถมศึกษา</option>
                             <option value="2">มัธยมศึกษาตอนต้น</option>
@@ -531,7 +547,7 @@ export function StudentsPage() {
                         </Select>
                     </Field>
                     {canFilterGroups && <Field label="กลุ่มเรียน">
-                        <Select value={group} onChange={(_, data) => setGroup(data.value)} size="large">
+                        <Select value={group} onChange={(_, data) => { setGroup(data.value); setPage(1); }} size="large">
                             <option value="">{role === 'teacher' ? 'เฉพาะกลุ่มที่รับผิดชอบ' : 'ทุกกลุ่มเรียน'}</option>
                             {retainedGroupOptions.map((option) => <option key={option.value} value={option.value}>{option.label}</option>)}
                         </Select>
@@ -650,10 +666,21 @@ export function StudentDetailPage() {
     const { studentId = '1' } = useParams();
     const { role } = useDemoRole();
     const [editingSocial, setEditingSocial] = useState(false);
+    const [academicDialog, setAcademicDialog] = useState<'grades' | 'kpch' | null>(null);
     const canEditSocial = role === 'teacher' || role === 'admin' || role === 'super_admin';
 
+    const [detailParams] = useSearchParams();
+    const detailTerm = detailParams.get('term') ?? '';
+    const detailLevel = detailParams.get('level') ?? '';
+    const detailQuery = new URLSearchParams();
+    if (detailTerm) detailQuery.set('term', detailTerm);
+    if (detailLevel) detailQuery.set('level', detailLevel);
+    const returnPath = detailParams.get('return') ?? '/students';
+    const backPath = /^\/students(?:\?|$)/.test(returnPath) ? returnPath : '/students';
+    const detailDistrict = window.localStorage.getItem('sena-district-id');
+
     const student = useQuery({
-        queryKey: ['student', studentId],
+        queryKey: ['student', role, detailDistrict, studentId, detailTerm, detailLevel],
         queryFn: async ({ signal }) => {
             type StudentDetailApi = {
                 code: string; full_name?: string; name?: { full_name: string }; level: { label: string }; group: { code: string; name: string }; district: { name: string };
@@ -672,7 +699,7 @@ export function StudentDetailPage() {
                     elective: { earned: number; required: number; remaining: number };
                 };
             };
-            const response = await getFeatureData<StudentDetail | StudentDetailApi>(`/api/v1/students/${encodeURIComponent(studentId)}`, signal);
+            const response = await getFeatureData<StudentDetail | StudentDetailApi>(`/api/v1/students/${encodeURIComponent(studentId)}?${detailQuery.toString()}`, signal);
             if ('academic' in response.data) {
                 const api = response.data;
                 const data: StudentDetail = {
@@ -705,11 +732,14 @@ export function StudentDetailPage() {
     const data = student.data.data;
     return (
         <div>
-            <Link to="/students" className="mb-4 inline-flex items-center gap-2 text-sm font-bold text-brand-700 hover:text-brand-900">
+            <Link to={backPath} className="mb-4 inline-flex items-center gap-2 text-sm font-bold text-brand-700 hover:text-brand-900">
                 <ArrowLeft size={17} weight="bold" /> กลับไปรายชื่อนักศึกษา
             </Link>
             <PageHeader category={data.code} title={data.name} description={`${data.level} · ${data.group}`} icon={IdentificationCard} />
-            <StudentProfileTabs key={studentId} student={data} addressContent={
+            {detailTerm && <p role="status" className="mb-4 rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-900">ภาคเรียนที่เลือก {detailTerm} · คะแนน หน่วยกิต และ กพช. สะสมถึงเทอมนี้ ข้อมูลส่วนตัวและกลุ่มเรียนจากชุด ITW ล่าสุด</p>}
+            <div className="mb-4 flex flex-wrap gap-2"><Button appearance="outline" onClick={() => setAcademicDialog('grades')}>ดูผลการเรียน{detailTerm ? ` ${detailTerm}` : ''}</Button><Button appearance="outline" onClick={() => setAcademicDialog('kpch')}>ดูกิจกรรม กพช.{detailTerm ? ` ${detailTerm}` : ''}</Button></div>
+            {academicDialog && <StaffAcademicDetailDialog kind={academicDialog} student={{ code: data.code, name: data.name, level: data.level, levelId: detailLevel || undefined, group: data.group, groupCode: data.groupCode, gpax: data.gpax, creditsEarned: data.creditsEarned, creditsRequired: data.creditsRequired, kpchHours: data.activityHours, moralResult: data.moralResult }} term={detailTerm} onClose={() => setAcademicDialog(null)} />}
+            <StudentProfileTabs key={`${studentId}-${detailTerm}-${detailLevel}`} student={data} academicTerm={detailTerm || undefined} addressContent={
                 <Panel title="ที่อยู่และข้อมูลติดต่อ" description="ที่อยู่ตามทะเบียน ที่อยู่ปัจจุบัน และช่องทางติดต่อ">
                     <div className="mb-4 flex justify-end">
                         {canEditSocial && (
@@ -1066,6 +1096,7 @@ type StaffMetricStudent = {
     code: string;
     name: string;
     level: string;
+    levelId?: string;
     group: string;
     groupCode: string;
     gpax: number;
@@ -1075,21 +1106,23 @@ type StaffMetricStudent = {
     moralResult: string;
 };
 
-function StaffAcademicDetailDialog({ kind, student, onClose }: { kind: MetricKind; student: StaffMetricStudent; onClose: () => void }) {
-    const [gradeTerm, setGradeTerm] = useState('');
+function StaffAcademicDetailDialog({ kind, student, term = '', onClose }: { kind: MetricKind; student: StaffMetricStudent; term?: string; onClose: () => void }) {
+    const context = new URLSearchParams({ level: student.levelId || student.level, ...(term ? { term } : {}) }).toString();
+    const district = window.localStorage.getItem('sena-district-id');
+    const [gradeTerm, setGradeTerm] = useState(term);
     const grades = useQuery({
-        queryKey: ['staff-student-grades', student.code],
-        queryFn: ({ signal }) => getFeatureDataWithDemo<{ items: StaffGradeDetailRow[]; summary: StaffGradeSummary }>(`/api/v1/students/${encodeURIComponent(student.code)}/grades`, { items: [], summary: { gpax: null, earned_credits: 0, compulsory_credits: 0, elective_credits: 0, graded_credits: 0, registered_subjects: 0, passed_subjects: 0, term_summaries: [] } }, signal),
+        queryKey: ['staff-student-grades', district, student.code, student.level, term],
+        queryFn: ({ signal }) => getFeatureDataWithDemo<{ items: StaffGradeDetailRow[]; summary: StaffGradeSummary }>(`/api/v1/students/${encodeURIComponent(student.code)}/grades?${context}`, { items: [], summary: { gpax: null, earned_credits: 0, compulsory_credits: 0, elective_credits: 0, graded_credits: 0, registered_subjects: 0, passed_subjects: 0, term_summaries: [] } }, signal),
         enabled: kind === 'grades',
     });
     const kpch = useQuery({
-        queryKey: ['staff-student-kpch', student.code],
-        queryFn: ({ signal }) => getFeatureDataWithDemo<{ items: KpchDetailRow[]; summary: { total_hours: number; target_hours: number; remaining_hours: number; activity_count: number } }>(`/api/v1/students/${encodeURIComponent(student.code)}/kpch`, { items: [], summary: { total_hours: 0, target_hours: 200, remaining_hours: 200, activity_count: 0 } }, signal),
+        queryKey: ['staff-student-kpch', district, student.code, student.level, term],
+        queryFn: ({ signal }) => getFeatureDataWithDemo<{ items: KpchDetailRow[]; summary: { total_hours: number; target_hours: number; remaining_hours: number; activity_count: number } }>(`/api/v1/students/${encodeURIComponent(student.code)}/kpch?${context}`, { items: [], summary: { total_hours: 0, target_hours: 200, remaining_hours: 200, activity_count: 0 } }, signal),
         enabled: kind === 'kpch',
     });
     const moral = useQuery({
-        queryKey: ['staff-student-moral', student.code],
-        queryFn: ({ signal }) => getFeatureDataWithDemo<{ items: MoralDetailAssessment[]; summary: { latest_result: string | null; latest_term: string | null; latest_score: number | null } }>(`/api/v1/students/${encodeURIComponent(student.code)}/moral`, { items: [], summary: { latest_result: null, latest_term: null, latest_score: null } }, signal),
+        queryKey: ['staff-student-moral', district, student.code, student.level, term],
+        queryFn: ({ signal }) => getFeatureDataWithDemo<{ items: MoralDetailAssessment[]; summary: { latest_result: string | null; latest_term: string | null; latest_score: number | null } }>(`/api/v1/students/${encodeURIComponent(student.code)}/moral?${context}`, { items: [], summary: { latest_result: null, latest_term: null, latest_score: null } }, signal),
         enabled: kind === 'moral',
     });
     const moralRows = useMemo<MoralDetailRow[]>(() => (moral.data?.data.items ?? []).flatMap((assessment) => assessment.categories.flatMap((category) => category.items.map((item, index) => ({
@@ -1150,12 +1183,12 @@ function StaffAcademicDetailDialog({ kind, student, onClose }: { kind: MetricKin
                 {query.isError && <QueryError onRetry={() => query.refetch()} />}
                 {kind === 'grades' && grades.data && <>
                     <div className="mb-4 grid grid-cols-2 gap-2 sm:grid-cols-3 lg:grid-cols-6" aria-label="สรุปผลการเรียน">
-                        <div className="rounded-xl bg-brand-50 px-3 py-2.5"><p className="text-[10px] font-bold text-brand-700">เกรดเฉลี่ยสะสม (GPAX)</p><p className="mt-0.5 text-xl font-black tabular-nums text-brand-950">{grades.data.data.summary.gpax === null ? '-' : Number(grades.data.data.summary.gpax).toFixed(2)}</p></div>
+                        <div className="rounded-xl bg-brand-50 px-3 py-2.5"><p className="text-[10px] font-bold text-brand-700">{term ? `GPA ภาคเรียน ${term}` : "เกรดเฉลี่ยสะสม (GPAX)"}</p><p className="mt-0.5 text-xl font-black tabular-nums text-brand-950">{grades.data.data.summary.gpax === null ? '-' : Number(grades.data.data.summary.gpax).toFixed(2)}</p></div>
                         <div className="rounded-xl bg-sky-50 px-3 py-2.5"><p className="text-[10px] font-bold text-sky-700">วิชาที่ผ่าน</p><p className="mt-0.5 text-xl font-black tabular-nums text-sky-950">{grades.data.data.summary.passed_subjects}<span className="ml-1 text-xs font-bold text-sky-700">/ {grades.data.data.summary.registered_subjects}</span></p></div>
                         <div className="rounded-xl bg-amber-50 px-3 py-2.5"><p className="text-[10px] font-bold text-amber-700">หน่วยกิตที่ผ่าน</p><p className="mt-0.5 text-xl font-black tabular-nums text-amber-950">{grades.data.data.summary.earned_credits}</p></div>
                         <div className="rounded-xl bg-teal-50 px-3 py-2.5"><p className="text-[10px] font-bold text-teal-700">หน่วยกิตวิชาบังคับ</p><p className="mt-0.5 text-xl font-black tabular-nums text-teal-950">{grades.data.data.summary.compulsory_credits}</p></div>
                         <div className="rounded-xl bg-rose-50 px-3 py-2.5"><p className="text-[10px] font-bold text-rose-700">หน่วยกิตวิชาเลือก</p><p className="mt-0.5 text-xl font-black tabular-nums text-rose-950">{grades.data.data.summary.elective_credits}</p></div>
-                        <div className="rounded-xl bg-slate-100 px-3 py-2.5"><p className="text-[10px] font-bold text-slate-600">หน่วยกิตคำนวณ GPAX</p><p className="mt-0.5 text-xl font-black tabular-nums text-slate-950">{grades.data.data.summary.graded_credits}</p></div>
+                        <div className="rounded-xl bg-slate-100 px-3 py-2.5"><p className="text-[10px] font-bold text-slate-600">{term ? "หน่วยกิตคำนวณ GPA" : "หน่วยกิตคำนวณ GPAX"}</p><p className="mt-0.5 text-xl font-black tabular-nums text-slate-950">{grades.data.data.summary.graded_credits}</p></div>
                     </div>
                     {grades.data.data.summary.term_summaries.length > 0 && <div className="mb-4 rounded-2xl border border-slate-200 bg-slate-50 p-4">
                         <div className="mb-3 flex flex-wrap items-center justify-between gap-3">

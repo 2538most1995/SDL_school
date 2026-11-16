@@ -40,12 +40,13 @@ final class StudentDirectoryController extends StudentsApiController
 
     public function show(Request $request, string $student): JsonResponse
     {
-        $record = $this->directory->findAccessible($request->user(), $student);
+        $filters = $request->validate(['term' => ['nullable', 'regex:/^[12]\/25\d{2}$/'], 'level' => ['nullable', 'integer', Rule::in([1, 2, 3])]]);
+        $record = $this->directory->findForDirectory($request->user(), $student, $filters['level'] ?? null, $filters['term'] ?? null);
         abort_if($record === null, 404, 'ไม่พบข้อมูลนักศึกษา');
 
         return response()->json([
             'data' => (new StudentDetailResource($record, $this->directory->profileDetails($request->user(), $record)))->resolve($request),
-            'meta' => $this->meta(),
+            'meta' => $this->meta(['selected_term' => $filters['term'] ?? null, 'snapshot_note' => 'ผลการเรียนและ กพช. สะสมถึงภาคเรียนที่เลือก ข้อมูลส่วนตัวและกลุ่มเรียนจากชุด ITW ล่าสุด']),
         ])->header('Cache-Control', 'private, no-store');
     }
 }

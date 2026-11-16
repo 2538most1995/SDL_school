@@ -45,7 +45,7 @@ const profileTabs = [
     { value: 'education', label: 'วุฒิการศึกษาเดิม', description: 'ประวัติและสถานศึกษาเดิม', icon: GraduationCap },
 ] as const;
 
-export function StudentProfileTabs({ student, addressContent }: { student: ProfileStudent; addressContent: ReactNode }) {
+export function StudentProfileTabs({ student, addressContent, academicTerm }: { student: ProfileStudent; addressContent: ReactNode; academicTerm?: string }) {
     const [activeTab, setActiveTab] = useState('personal');
     const id = useId();
     const personal = student.profile?.personal;
@@ -80,10 +80,10 @@ export function StudentProfileTabs({ student, addressContent }: { student: Profi
                         ['ส่วนสูง', personal?.height_cm, 'ซม.'], ['น้ำหนัก', personal?.weight_kg, 'กก.'],
                     ]} />
                 </Panel>
-                <Panel title="ข้อมูลการศึกษาปัจจุบัน" icon={GraduationCap}>
+                <Panel title={academicTerm ? `ข้อมูลการศึกษา ณ ภาคเรียน ${academicTerm}` : "ข้อมูลการศึกษาปัจจุบัน"} icon={GraduationCap}>
                     <ProfileFields fields={[
                         ['ระดับการศึกษา', student.level], ['กลุ่มเรียน', student.group], ['รหัสกลุ่มเรียน', student.groupCode],
-                        ['ภาคเรียนปัจจุบัน', student.currentTerm], ['ภาคเรียนที่เข้าเรียน', student.enrollmentTerm], ['พื้นที่', student.district],
+                        [academicTerm ? 'ภาคเรียนที่เลือก' : 'ภาคเรียนปัจจุบัน', student.currentTerm], ['ภาคเรียนที่เข้าเรียน', student.enrollmentTerm], ['พื้นที่', student.district],
                         ['GPAX สะสม', student.gpax], ['หน่วยกิตสะสม', student.creditsEarned, 'หน่วยกิต'], ['หน่วยกิตที่ต้องเรียน', student.creditsRequired, 'หน่วยกิต'],
                         ['กิจกรรม กพช.', student.activityHours, 'ชั่วโมง'], ['ผลประเมินคุณธรรม', student.moralResult],
                         ['วันที่สมัคร', formatThaiDisplayDate(student.applicationDate)], ['ปรับปรุงข้อมูลล่าสุด', formatThaiDisplayDate(student.lastUpdated)],
