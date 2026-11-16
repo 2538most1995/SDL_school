@@ -3102,28 +3102,61 @@ textarea {
     place-items: center;
     padding: 1rem;
     pointer-events: none;
+    background: rgb(244 248 250 / 0.74);
+    -webkit-backdrop-filter: blur(2px);
+    backdrop-filter: blur(2px);
 }
 
-.data-loading-badge.MuiPaper-root {
+[data-ui-mode='dark'] .data-loading-overlay {
+    background: rgb(8 15 30 / 0.74);
+}
+
+.data-loading-indicator {
     display: flex;
     flex-direction: column;
     align-items: center;
-    gap: 0.75rem;
-    padding: 1.25rem 1.5rem;
-    border: 1px solid color-mix(in srgb, currentColor 14%, transparent);
-    border-radius: 1rem;
-    box-shadow: 0 8px 32px rgb(15 23 42 / 0.1);
+    gap: 1.5rem;
+    color: var(--ui-text);
+    font-size: clamp(0.875rem, 1.2vw, 1rem);
+    text-align: center;
 }
 
 .data-loading-ring {
+    --loading-ring-size: 2.5rem;
+    --loading-ring-stroke: 3px;
+    position: relative;
     display: inline-block;
     flex-shrink: 0;
-    width: 1.75rem;
-    height: 1.75rem;
-    border: 2px solid color-mix(in srgb, currentColor 18%, transparent);
-    border-top-color: currentColor;
+    width: var(--loading-ring-size);
+    height: var(--loading-ring-size);
+    animation: data-loading-spin 480ms linear infinite;
+}
+
+.data-loading-indicator .data-loading-ring {
+    --loading-ring-size: clamp(4.5rem, 7vw, 6rem);
+    --loading-ring-stroke: 6px;
+}
+
+.data-loading-ring::before {
+    content: '';
+    position: absolute;
+    inset: 0;
     border-radius: 50%;
-    animation: data-loading-spin 700ms linear infinite;
+    background: conic-gradient(from 0deg, transparent 35deg, color-mix(in srgb, currentColor 10%, transparent) 75deg, currentColor 330deg);
+    -webkit-mask: radial-gradient(farthest-side, transparent calc(100% - var(--loading-ring-stroke)), #000 calc(100% - var(--loading-ring-stroke) + 1px));
+    mask: radial-gradient(farthest-side, transparent calc(100% - var(--loading-ring-stroke)), #000 calc(100% - var(--loading-ring-stroke) + 1px));
+}
+
+.data-loading-ring::after {
+    content: '';
+    position: absolute;
+    top: 0;
+    left: 50%;
+    width: var(--loading-ring-stroke);
+    height: var(--loading-ring-stroke);
+    border-radius: 50%;
+    background: currentColor;
+    transform: translateX(-50%);
 }
 
 @keyframes data-loading-spin {

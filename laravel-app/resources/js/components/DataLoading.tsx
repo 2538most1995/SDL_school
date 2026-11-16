@@ -1,7 +1,6 @@
 import { useEffect, useState, useSyncExternalStore } from 'react';
 import type { ReactNode } from 'react';
 import { createPortal } from 'react-dom';
-import { Paper } from '@mui/material';
 import { useIsFetching, useIsMutating } from '@tanstack/react-query';
 import { useLocalLoadingIndicator } from '../hooks/useDataLoading';
 import { localLoadingActivity, manualDataLoadingActivity } from '../lib/loadingActivity';
@@ -46,10 +45,10 @@ export function GlobalQueryLoading() {
 
     return createPortal(
         <div className="data-loading-overlay" data-global-query-loading role="status" aria-live="polite" aria-atomic="true">
-            <Paper elevation={0} className="data-loading-badge data-loading-feedback" sx={{ bgcolor: 'background.paper' }}>
+            <div className="data-loading-indicator">
                 <LoadingGlyph />
-                <span className="text-sm font-medium">กำลังโหลดข้อมูล</span>
-            </Paper>
+                <span className="font-medium">กำลังโหลดข้อมูล</span>
+            </div>
         </div>,
         document.body,
     );

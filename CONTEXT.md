@@ -404,3 +404,12 @@ Verification: PHP suite 628 passed (630 total, two skips: existing opt-in test p
 ## Missing data-loading feedback (2026-11-16)
 
 Added a single minimal centered query-loading fallback for active observed reads, including directory term/filter/page changes and dependent options. Existing Spinner, custom skeleton and mutation feedback take precedence through reference-counted activity registration; import-job polling retains its existing progress UI. Manual export, attachment and document preparation waits opt in without additional API calls. The overlay respects theme/reduced motion and does not intercept input. Frontend tests: 117 passed, TypeScript and production build passed; synthetic browser checks cover initial deduplication, desktop/mobile centering, reduced motion and success/error/navigation cleanup. No backend, schema, permissions or real data changed. See `laravel-app/docs/data-loading.md`.
+
+The user subsequently requested a larger, faster spinner and faded surroundings.
+The shared overlay now uses a 72–96 px rounded-head ring with a fading trail,
+480 ms rotation and a translucent, softly blurred light/dark backdrop, without
+the old card. Loading selection, deduplication and request behavior are unchanged.
+Verification: TypeScript/build, 117 frontend tests and 628 PHP tests passed (2
+skipped). Synthetic browser checks confirmed dimensions, speed, faded backdrops,
+reduced motion and existing-loader suppression. Repository-wide Pint reports 9
+pre-existing violations in untouched PHP files; none were changed in this task.
