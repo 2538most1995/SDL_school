@@ -6,6 +6,7 @@ import { Button, Card, Spinner } from './components/MaterialUI';
 import { BrowserRouter, Navigate, Route, Routes } from 'react-router-dom';
 import 'sweetalert2/dist/sweetalert2.min.css';
 import { GlobalMutationLoading } from './components/GlobalMutationLoading';
+import { GlobalQueryLoading } from './components/DataLoading';
 import { MaterialAppProvider, PublicLightMaterialProvider } from './components/MaterialAppProvider';
 import { DemoRoleContext, useDemoRole, type DemoRole } from './context/DemoRoleContext';
 import { featureRouteCatalog } from './features';
@@ -102,6 +103,7 @@ createRoot(document.getElementById('app')!).render(
         <QueryClientProvider client={queryClient}>
             <MaterialAppProvider>
                 <GlobalMutationLoading />
+                <GlobalQueryLoading />
                 <BrowserRouter basename={APP_BASE_PATH || undefined}>
                     <AppErrorBoundary>
                         <App />

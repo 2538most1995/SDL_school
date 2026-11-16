@@ -1,3 +1,4 @@
+import { useDataLoading } from '../../hooks/useDataLoading';
 import { PdfFileIcon } from '../../components/FileTypeIcon';
 import {
     ArrowSquareOut,
@@ -203,6 +204,7 @@ function AuthenticatedAttachment({
     compact?: boolean;
 }) {
     const [opening, setOpening] = useState(false);
+    useDataLoading(opening);
     const [error, setError] = useState('');
     const [previewUrl, setPreviewUrl] = useState<string | null>(null);
     const isInAppBrowser = typeof navigator !== 'undefined' && /(Line\/|FBAN|FBAV|Instagram|MicroMessenger)/i.test(navigator.userAgent);

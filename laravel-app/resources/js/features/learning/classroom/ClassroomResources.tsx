@@ -1,3 +1,4 @@
+import { CenteredDataLoading } from '../../../components/DataLoading';
 import { Alert, Dialog, DialogActions, DialogContent, DialogTitle, TextField } from '@mui/material';
 import { ArrowSquareOut, BookOpenText, CheckCircle, DownloadSimple, FileArrowUp, FileText, MagnifyingGlass, PencilSimple, Play, Trash } from '@phosphor-icons/react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
@@ -124,7 +125,7 @@ function ResourceViewer({ resource, close }: { resource: Resource; close: () => 
     const filename = `${resource.title}${extension ? `.${extension}` : ''}`;
     return <Dialog className="classroom-resource-dialog" open onClose={close} fullWidth maxWidth="md"><DialogTitle>{resource.title}</DialogTitle><DialogContent>
         {resource.description && <p className="mb-4 whitespace-pre-wrap break-words">{resource.description}</p>}
-        {downloadable ? error ? <Alert severity="error">{error}</Alert> : !blobUrl ? <p role="status">กำลังเปิดไฟล์…</p> : <>
+        {downloadable ? error ? <Alert severity="error">{error}</Alert> : !blobUrl ? <CenteredDataLoading label="กำลังเปิดไฟล์" /> : <>
             {mime.split(';')[0] === 'application/pdf' ? <iframe className="classroom-resource-preview" title={`เอกสาร ${resource.title}`} src={blobUrl} /> : <div className="classroom-resource-empty"><DownloadSimple size={35} /><p>ดาวน์โหลดไฟล์นี้แล้วเปิดด้วยแอปที่รองรับบนอุปกรณ์ของคุณ</p></div>}
             <Button as="a" appearance="primary" icon={<DownloadSimple />} href={blobUrl} download={filename}>ดาวน์โหลดไฟล์</Button>
         </> : safe ? <>{embed && <iframe className="mb-4 aspect-video w-full rounded-xl" src={embed} title={resource.title} referrerPolicy="strict-origin-when-cross-origin" allow="accelerometer; autoplay; encrypted-media; picture-in-picture; fullscreen" allowFullScreen />}<Button as="a" appearance="outline" icon={<ArrowSquareOut />} href={safe} target="_blank" rel="noopener noreferrer">เปิดสื่อในแท็บใหม่</Button></> : <Alert severity="warning">สื่อนี้ยังไม่มีไฟล์หรือลิงก์ที่เปิดได้ กรุณาแจ้งครูเจ้าของสื่อ</Alert>}

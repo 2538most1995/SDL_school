@@ -1,3 +1,4 @@
+import { useDataLoading } from '../../hooks/useDataLoading';
 import { ExcelFileIcon } from '../../components/FileTypeIcon';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import {
@@ -130,7 +131,9 @@ export function NnetReportPage() {
     const [page, setPage] = useState(1);
     const [pageSize, setPageSize] = useState(50);
     const [isExporting, setIsExporting] = useState(false);
+    useDataLoading(isExporting);
     const [isSaving, setIsSaving] = useState(false);
+    useDataLoading(isSaving);
     useEffect(() => { setPage(1); }, [isStudent, level, year, round, statusFilter, group, search, pageSize]);
 
     const recordsPath = (requestedPage: number, size: number) => {

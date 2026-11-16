@@ -1,3 +1,4 @@
+import { useDataLoading } from '../../hooks/useDataLoading';
 import { ExcelFileIcon } from '../../components/FileTypeIcon';
 import { Books, CalendarBlank, ChartBar, FunnelSimple, MagnifyingGlass, StackSimple, Trophy, UsersThree, X } from '@phosphor-icons/react';
 import { keepPreviousData, useQuery } from '@tanstack/react-query';
@@ -118,6 +119,7 @@ function RegistrationStudentListDialog({
 }) {
     const [searchTerm, setSearchTerm] = useState('');
     const [isExporting, setIsExporting] = useState(false);
+    useDataLoading(isExporting);
     const [subjectStudent, setSubjectStudent] = useState<{ code: string; name: string; level: string; group: string } | null>(null);
 
     const queryKey = [
@@ -394,6 +396,7 @@ export function RegistrationStatisticsPage() {
     const [filters, setFilters] = useState<Record<CategoryKey, string>>(emptyFilters);
     const [selectedItem, setSelectedItem] = useState<StatisticItem | null>(null);
     const [isExporting, setIsExporting] = useState(false);
+    useDataLoading(isExporting);
     const filterOptionLabels = useRef(new Map<string, string>());
     const filterKey = categoryOptions.map((option) => `${option.key}:${filters[option.key]}`).join('|');
     const statistics = useQuery({

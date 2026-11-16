@@ -1,3 +1,4 @@
+import { useLocalLoadingIndicator } from '../../hooks/useDataLoading';
 import {
     Archive,
     Buildings,
@@ -313,6 +314,7 @@ export function AdminImportsPage() {
         onError: () => setUploadProgress(0),
     });
     const importJob = useQuery({
+        meta: { loadingIndicator: 'silent' }, // The import progress panel already owns this polling feedback.
         queryKey: ['admin', 'imports', 'job', jobId],
         queryFn: ({ signal }) => getFeatureData<ImportJob>(`/api/v1/admin/imports/jobs/${jobId}`, signal),
         enabled: jobId !== null,
@@ -323,6 +325,7 @@ export function AdminImportsPage() {
     const jobStatus = importJob.data?.data.status;
     const jobRunning = jobId !== null && jobStatus !== 'completed' && jobStatus !== 'failed';
     const loading = upload.isPending || jobRunning;
+    useLocalLoadingIndicator(loading);
     const currentProgress = upload.isPending ? uploadProgress : Math.max(0, Math.min(100, importJob.data?.data.progress ?? 0));
     const exportZip = useMutation({
         meta: { notification: { success: false } },

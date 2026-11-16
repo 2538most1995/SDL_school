@@ -1,3 +1,4 @@
+import { LocalLoadingIndicator } from '../../components/DataLoading';
 import { useQuery } from '@tanstack/react-query';
 import { ArrowRight, Image as ImageIcon, Newspaper, X } from '@phosphor-icons/react';
 import { useState } from 'react';
@@ -38,9 +39,9 @@ export function PublicRelationsPage() {
             />
 
             {posts.isPending && (
-                <div className="grid animate-pulse gap-4 md:grid-cols-2" aria-label="กำลังโหลดข่าวประชาสัมพันธ์">
+                <LocalLoadingIndicator><div className="grid animate-pulse gap-4 md:grid-cols-2" aria-label="กำลังโหลดข่าวประชาสัมพันธ์">
                     {[1, 2, 3, 4].map((item) => <div key={item} className="h-80 rounded-3xl bg-slate-200" />)}
-                </div>
+                </div></LocalLoadingIndicator>
             )}
             {posts.isError && <QueryError onRetry={() => posts.refetch()} />}
             {posts.data && posts.data.length === 0 && (

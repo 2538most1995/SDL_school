@@ -3086,7 +3086,57 @@ textarea {
     }
 }
 
+.data-loading-feedback {
+    color: var(--ui-accent-700);
+}
+
+[data-ui-mode='dark'] .data-loading-feedback {
+    color: var(--ui-accent-200);
+}
+
+.data-loading-overlay {
+    position: fixed;
+    inset: 0;
+    z-index: 1500;
+    display: grid;
+    place-items: center;
+    padding: 1rem;
+    pointer-events: none;
+}
+
+.data-loading-badge.MuiPaper-root {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 0.75rem;
+    padding: 1.25rem 1.5rem;
+    border: 1px solid color-mix(in srgb, currentColor 14%, transparent);
+    border-radius: 1rem;
+    box-shadow: 0 8px 32px rgb(15 23 42 / 0.1);
+}
+
+.data-loading-ring {
+    display: inline-block;
+    flex-shrink: 0;
+    width: 1.75rem;
+    height: 1.75rem;
+    border: 2px solid color-mix(in srgb, currentColor 18%, transparent);
+    border-top-color: currentColor;
+    border-radius: 50%;
+    animation: data-loading-spin 700ms linear infinite;
+}
+
+@keyframes data-loading-spin {
+    to { transform: rotate(360deg); }
+}
+
+@media print {
+    .data-loading-overlay { display: none !important; }
+}
+
 @media (prefers-reduced-motion: reduce) {
+    .data-loading-ring { animation: none !important; }
+
     *,
     *::before,
     *::after {

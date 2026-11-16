@@ -24,6 +24,7 @@ import type {
     SelectChangeEvent,
 } from '@mui/material';
 import { cloneElement, isValidElement } from 'react';
+import { useLocalLoadingIndicator } from '../hooks/useDataLoading';
 import type {
     ChangeEvent,
     ComponentProps,
@@ -201,6 +202,7 @@ export function Spinner({
     className?: string;
 }) {
     const pixels = size === 'tiny' ? 16 : size === 'small' ? 20 : size === 'huge' ? 44 : size === 'large' ? 36 : 28;
+    useLocalLoadingIndicator();
 
     return (
         <span className={`inline-flex items-center gap-2.5 ${className ?? ''}`} role="status">

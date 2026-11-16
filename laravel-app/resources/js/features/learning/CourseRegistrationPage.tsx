@@ -1,3 +1,4 @@
+import { useDataLoading } from '../../hooks/useDataLoading';
 import { PdfFileIcon } from '../../components/FileTypeIcon';
 import {
     ArrowLeft,
@@ -409,8 +410,13 @@ function StaffCourseRegistrationPage() {
         },
     });
 
+    const [printOpening, setPrintOpening] = useState(false);
+    useDataLoading(printOpening);
+
     // PDF generation trigger
     const openPrintDocument = async (options: { scope: 'student' | 'group' | 'blank'; student?: string; level?: string }) => {
+        if (printOpening) return;
+        setPrintOpening(true);
         try {
             const q = new URLSearchParams({ scope: options.scope });
             if (options.scope === 'student' && options.student) {
@@ -439,6 +445,8 @@ function StaffCourseRegistrationPage() {
             }
         } catch (err: any) {
             showErrorAlert(err?.message || 'เกิดข้อผิดพลาดในการเปิดเอกสาร');
+        } finally {
+            setPrintOpening(false);
         }
     };
 

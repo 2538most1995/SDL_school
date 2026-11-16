@@ -1,3 +1,4 @@
+import { useDataLoading } from '../../hooks/useDataLoading';
 import { ExcelFileIcon } from '../../components/FileTypeIcon';
 import { keepPreviousData, useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import {
@@ -253,6 +254,7 @@ function OverviewStudentListDialog({
     const [searchTerm, setSearchTerm] = useState('');
     const [examFilter, setExamFilter] = useState<'all' | 'taken' | 'eligible'>('all');
     const [isExporting, setIsExporting] = useState(false);
+    useDataLoading(isExporting);
     const [subjectStudent, setSubjectStudent] = useState<{ code: string; name: string; level: string; group: string } | null>(null);
 
     if (!cellInfo) return null;

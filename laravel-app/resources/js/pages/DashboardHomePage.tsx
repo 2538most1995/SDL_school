@@ -1,3 +1,5 @@
+import { LocalLoadingIndicator } from '../components/DataLoading';
+import { useLocalLoadingIndicator } from '../hooks/useDataLoading';
 import { useQuery } from '@tanstack/react-query';
 import {
     ArrowRight,
@@ -136,6 +138,7 @@ const shortLevelLabel = (label: string) => ({
 }[label] ?? label);
 
 function DashboardSkeleton() {
+    useLocalLoadingIndicator();
     return (
         <div className="animate-pulse space-y-5" aria-label="กำลังโหลดข้อมูล">
             <div className="h-44 rounded-[18px] bg-slate-200" />
@@ -233,7 +236,7 @@ function StudentFeaturedNews({ item, loading }: { item?: PublicRelationsPost; lo
                 </Link>
             </div>
             {loading ? (
-                <div className="mt-5 aspect-[16/9] animate-pulse rounded-[16px] bg-slate-100" />
+                <LocalLoadingIndicator><div className="mt-5 aspect-[16/9] animate-pulse rounded-[16px] bg-slate-100" /></LocalLoadingIndicator>
             ) : item && imageUrl ? (
                 <Link to="/public-relations" className="student-feature__media group mt-5 text-left" aria-label={`อ่านข่าว ${item.title}`}>
                     <img src={imageUrl} alt={`ภาพข่าว ${item.title}`} className="size-full object-cover" />
@@ -688,14 +691,14 @@ export function DashboardHomePage() {
                     <div className="grid items-stretch gap-5 md:grid-cols-2">
                         <DashboardPanel title="กิจกรรมล่าสุด" description="กิจกรรมและวันพบกลุ่มจากปฏิทิน" icon={CalendarBlank} tone="blue">
                             {calendar.isPending
-                                ? <div className="mt-5 h-44 animate-pulse rounded-[16px] bg-slate-100" />
+                                ? <LocalLoadingIndicator><div className="mt-5 h-44 animate-pulse rounded-[16px] bg-slate-100" /></LocalLoadingIndicator>
                                 : <EventRows items={activityEvents} emptyText="ยังไม่มีกิจกรรมในปฏิทิน" />}
                             <Link to="/learning/calendar" className="mt-4 inline-flex items-center gap-2 text-sm font-black text-brand-700 hover:text-brand-800">ดูปฏิทินทั้งหมด <ArrowRight size={16} /></Link>
                         </DashboardPanel>
 
                         <DashboardPanel title="ประกาศและแจ้งเตือน" description="งานและกำหนดสอบที่ต้องติดตาม" icon={Bell} tone="rose">
                             {calendar.isPending
-                                ? <div className="mt-5 h-44 animate-pulse rounded-[16px] bg-slate-100" />
+                                ? <LocalLoadingIndicator><div className="mt-5 h-44 animate-pulse rounded-[16px] bg-slate-100" /></LocalLoadingIndicator>
                                 : <EventRows items={noticeEvents} emptyText="ยังไม่มีรายการที่ต้องติดตาม" />}
                             <Link to="/learning/classroom?section=worksheet&mode=files" className="mt-4 inline-flex items-center gap-2 text-sm font-black text-brand-700 hover:text-brand-800">ดูงานทั้งหมด <ArrowRight size={16} /></Link>
                         </DashboardPanel>

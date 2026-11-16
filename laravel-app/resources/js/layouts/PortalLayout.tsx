@@ -1,3 +1,4 @@
+import { useLocalLoadingIndicator } from '../hooks/useDataLoading';
 import { useEffect, useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { Avatar, Button, Card, Input, Select, Spinner, Text } from '../components/MaterialUI';
@@ -137,6 +138,7 @@ const studentPrimaryNavigation = [
 const studentBottomNavigation = studentPrimaryNavigation;
 
 function SidebarSkeleton() {
+    useLocalLoadingIndicator();
     return (
         <div className="animate-pulse space-y-3 px-2 py-3">
             {[1, 2, 3].map((group) => (

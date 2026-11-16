@@ -1,4 +1,5 @@
 import { ExcelFileIcon } from '../../components/FileTypeIcon';
+import { useDataLoading } from '../../hooks/useDataLoading';
 import { useState, useRef, type ChangeEvent, type DragEvent } from 'react';
 import { useNavigate, Link } from 'react-router-dom';
 import * as XLSX from 'xlsx';
@@ -59,6 +60,8 @@ export function NnetImportPage() {
     const [parsedRows, setParsedRows] = useState<ParsedNnetRow[]>([]);
     const [isDragOver, setIsDragOver] = useState<boolean>(false);
     const [isImporting, setIsImporting] = useState<boolean>(false);
+    const [importRequestPending, setImportRequestPending] = useState(false);
+    useDataLoading(importRequestPending);
     const [validationMessage, setValidationMessage] = useState<{ type: 'warn' | 'success' | 'error'; text: string } | null>(null);
 
     const detectLevelFromRows = (rows: any[][]): string => {
@@ -245,13 +248,14 @@ export function NnetImportPage() {
                 })),
             };
 
+            setImportRequestPending(true);
             const response = await sendFeatureData<{
                 total_processed: number;
                 imported: number;
                 updated: number;
                 matched_students: number;
                 unmatched_students: number;
-            }>('/api/v1/nnet/import', 'POST', payload);
+            }>('/api/v1/nnet/import', 'POST', payload).finally(() => setImportRequestPending(false));
 
             const data = response.data;
 

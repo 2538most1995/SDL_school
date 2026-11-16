@@ -1,3 +1,4 @@
+import { useDataLoading } from '../../hooks/useDataLoading';
 import { ExcelFileIcon } from '../../components/FileTypeIcon';
 import { useEffect, useMemo, useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
@@ -69,6 +70,7 @@ export function StudentSubjectsDialog({
     const [searchTerm, setSearchTerm] = useState('');
     const [selectedTerm, setSelectedTerm] = useState<string>(term);
     const [isExporting, setIsExporting] = useState(false);
+    useDataLoading(isExporting);
 
     useEffect(() => {
         if (isOpen) {

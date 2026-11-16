@@ -1,3 +1,4 @@
+import { CenteredDataLoading } from '../../components/DataLoading';
 import { Alert, Dialog, DialogActions, DialogContent, DialogTitle, TextField } from '@mui/material';
 import { Books, Plus, PencilSimple, Trash, ArrowSquareOut, UploadSimple, CheckCircle, Play, BookOpenText, NotePencil, Lightning, ArrowRight, ArrowLeft, GraduationCap, RocketLaunch, Student, SquaresFour, Clock, MagnifyingGlass, ClipboardText, Files, CaretRight, Archive, DotsSixVertical, ArrowUp, ArrowDown } from '@phosphor-icons/react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
@@ -42,7 +43,7 @@ function PrivateImage({ url }: { url: string }) {
         }).catch(() => { if (active) setFailed(true); });
         return () => { active = false; if (objectUrl) URL.revokeObjectURL(objectUrl); };
     }, [url]);
-    return failed ? <Alert severity="warning">โหลดภาพไม่ได้ กรุณารีเฟรชหน้าอีกครั้ง</Alert> : src ? <img src={src} alt="ภาพประกอบโจทย์" className="max-h-80 max-w-full rounded-xl object-contain" /> : <p role="status">กำลังโหลดภาพ…</p>;
+    return failed ? <Alert severity="warning">โหลดภาพไม่ได้ กรุณารีเฟรชหน้าอีกครั้ง</Alert> : src ? <img src={src} alt="ภาพประกอบโจทย์" className="max-h-80 max-w-full rounded-xl object-contain" /> : <CenteredDataLoading label="กำลังโหลดภาพ" />;
 }
 
 function Pager({ page, change }: { page: PageInfo | null; change: (page: number) => void }) {
