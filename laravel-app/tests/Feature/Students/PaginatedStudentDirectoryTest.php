@@ -4,6 +4,7 @@ namespace Tests\Feature\Students;
 
 use App\Domain\Students\Repositories\LegacyStudentRepository;
 use App\Domain\Students\Repositories\StudentRepository;
+use App\Domain\Students\Services\CourseRegistrationExportService;
 use App\Domain\Students\Services\StudentAcademicService;
 use App\Domain\Students\Services\StudentDirectoryService;
 use App\Models\District;
@@ -91,6 +92,66 @@ final class PaginatedStudentDirectoryTest extends TestCase
     private function grade(int $level, string $code, string $term, string $subject, string $grade): void
     {
         DB::table($this->table($level, 'grade'))->insert(['_perf_std10' => $code, '_perf_semestry' => $term, '_perf_sub' => $subject, 'grade' => $grade, 'typ_code' => '']);
+    }
+
+    public function test_g_identifiers_display_in_current_and_historical_lists_profiles_and_rosters(): void
+    {
+        $this->student(1, '1000000001');
+        $this->grade(1, '1000000001', '68/2', 'C', '3');
+        $this->student(2, '2000000001');
+        DB::table($this->table(1, 'student'))->where('_perf_id10', '1000000001')->update(['_perf_cardid' => 'G123456789012']);
+
+        foreach (['1/2569', '2/2568'] as $term) {
+            $this->getJson('/api/v1/students?term='.$term.'&search=G123456789012')->assertOk()
+                ->assertJsonCount(1, 'data')
+                ->assertJsonPath('data.0.code', '1000000001')
+                ->assertJsonPath('data.0.demographics.citizen_id', 'G123456789012')
+                ->assertJsonPath('data.0.demographics.citizen_id_masked', 'G-xxxx-xxxxx-xx-2');
+            $this->getJson('/api/v1/students/1000000001?term='.$term.'&level=1')->assertOk()
+                ->assertJsonPath('data.demographics.citizen_id', 'G123456789012');
+        }
+        $this->getJson('/api/v1/students/1000000001?level=1')->assertOk()
+            ->assertJsonPath('data.demographics.citizen_id', 'G123456789012');
+        $this->getJson('/api/v1/students?search=1111111111111')->assertOk()
+            ->assertJsonCount(1, 'data')->assertJsonPath('data.0.demographics.citizen_id', '1111111111111');
+
+        // The non-paginated repository path is still used by other modules.
+        $repository = $this->bindRepository();
+        foreach ([$repository->students([$this->districtId]), $repository->studentsForTerm([$this->districtId], '2/2568')] as $roster) {
+            $student = array_values(array_filter($roster, static fn ($row) => $row->code === '1000000001'))[0];
+            self::assertSame('G123456789012', $student->citizenId);
+            self::assertStringNotContainsString('G123456789012', json_encode($student->toSummaryArray(), JSON_THROW_ON_ERROR));
+            self::assertSame('G-xxxx-xxxxx-xx-2', $student->demographics['citizen_id_masked']);
+        }
+
+        // Printing uses the same identifier; its 13 boxes must keep the G too.
+        $print = $this->app->make(CourseRegistrationExportService::class)->build($this->admin, [
+            'scope' => 'student', 'student' => '1000000001', 'term' => '1/2569',
+        ]);
+        self::assertSame(str_split('G123456789012'), $print['documents'][0]['student']['citizen_digits']);
+        $numericPrint = $this->app->make(CourseRegistrationExportService::class)->build($this->admin, [
+            'scope' => 'student', 'student' => '2000000001', 'term' => '1/2569',
+        ]);
+        self::assertSame(str_split('1111111111111'), $numericPrint['documents'][0]['student']['citizen_digits']);
+    }
+
+    public function test_g_identifiers_remain_scoped_to_the_teachers_group_and_district(): void
+    {
+        $this->student(1, '1000000001');
+        DB::table($this->table(1, 'student'))->update(['_perf_cardid' => 'G123456789012']);
+        $teacher = User::factory()->create(['role' => 'teacher', 'district_id' => $this->districtId, 'assigned_groups' => ['001']]);
+        Sanctum::actingAs($teacher);
+        $this->getJson('/api/v1/students?search=G123456789012')->assertOk()
+            ->assertJsonPath('data.0.demographics.citizen_id', 'G123456789012');
+        $teacher->assigned_groups = ['002'];
+        $teacher->save();
+        $this->getJson('/api/v1/students?search=G123456789012')->assertOk()->assertJsonCount(0, 'data');
+        $this->getJson('/api/v1/students/1000000001?level=1')->assertNotFound();
+
+        $other = District::create(['name' => 'Other', 'code' => 'g-code-other']);
+        Sanctum::actingAs(User::factory()->create(['role' => 'admin', 'district_id' => $other->id]));
+        $this->getJson('/api/v1/students?search=G123456789012&district_id='.$this->districtId)->assertOk()->assertJsonCount(0, 'data');
+        $this->getJson('/api/v1/students/1000000001?level=1')->assertNotFound();
     }
 
     public function test_historical_pagination_and_summary_are_sql_scoped_and_exclude_future_metrics(): void

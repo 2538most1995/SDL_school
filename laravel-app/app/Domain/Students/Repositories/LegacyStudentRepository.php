@@ -1549,6 +1549,13 @@ final class LegacyStudentRepository implements PaginatedStudentRepository, Stude
 
     private function validCitizenId(string $value): ?string
     {
+        // ITW CARDID also stores G + 12 digits. Preserve the prefix rather than
+        // discarding the identifier or coercing a malformed G code into a number.
+        $identifier = strtoupper(trim($value));
+        if (str_starts_with($identifier, 'G')) {
+            return preg_match('/^G[0-9]{12}$/D', $identifier) === 1 ? $identifier : null;
+        }
+
         $digits = preg_replace('/\D+/', '', trim($value)) ?? '';
 
         return strlen($digits) === 13 ? $digits : null;

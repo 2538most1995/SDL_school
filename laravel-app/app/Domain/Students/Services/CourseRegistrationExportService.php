@@ -130,7 +130,9 @@ final readonly class CourseRegistrationExportService
         }
 
         $citizenRaw = (string) ($info['citizen_id'] ?? ($st['citizen_id_raw'] ?: $st['citizen_id']));
-        $citizenDigits = $this->boxDigits($citizenRaw, 13);
+        $citizenDigits = preg_match('/^G[0-9]{12}$/iD', trim($citizenRaw)) === 1
+            ? str_split(strtoupper(trim($citizenRaw)))
+            : $this->boxDigits($citizenRaw, 13);
 
         $studentCodeRaw = (string) ($info['code'] ?? $st['code']);
         $studentCodeDigits = $this->boxDigits($studentCodeRaw, 10);

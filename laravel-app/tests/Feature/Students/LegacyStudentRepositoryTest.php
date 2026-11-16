@@ -17,6 +17,26 @@ use Tests\TestCase;
 
 final class LegacyStudentRepositoryTest extends TestCase
 {
+    public function test_itw_g_identifiers_keep_their_prefix_and_cannot_be_coerced_into_numeric_ids(): void
+    {
+        $repository = new LegacyStudentRepository(Mockery::mock(ConnectionInterface::class));
+        $normalize = new \ReflectionMethod($repository, 'validCitizenId');
+        foreach ([
+            'G123456789012' => 'G123456789012',
+            ' g123456789012 ' => 'G123456789012',
+            'G000000000001' => 'G000000000001',
+            '1234567890121' => '1234567890121',
+            '1-2345-67890-12-1' => '1234567890121',
+            'G12345678901' => null,
+            'G1234567890123' => null,
+            'G12345678901X' => null,
+            'G-xxxx-xxxxx-xx-2' => null,
+            '' => null,
+        ] as $value => $expected) {
+            self::assertSame($expected, $normalize->invoke($repository, (string) $value));
+        }
+    }
+
     public function test_remedial_label_uses_the_selected_itw_registration_type_not_the_numeric_grade(): void
     {
         $repository = new LegacyStudentRepository(Mockery::mock(ConnectionInterface::class));

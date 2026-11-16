@@ -203,3 +203,8 @@ Statistics preferences also accept `learning_method` and `subject` in their exis
 ## Directory history read path (2026-11-16)
 
 `PaginatedStudentRepository`/`QueriesStudentDirectory` use the existing latest-successful district batch and nonunique imported performance indexes. Exact role/group predicates, registration EXISTS membership and ambiguous-identity rejection precede SQL paging. Summary and options cache only aggregate/filter metadata under scope/batch/term/revision keys. Single-profile reads hydrate contact/memo fields only for a bounded identity. No schema/index migration or source-table mutation is introduced. Historical names/groups/status remain latest-source values; no old batch is activated. See `laravel-app/docs/student-directory-history.md`.
+
+ITW `CARDID` / `_perf_cardid` remains a string: valid imported identifiers include
+13-digit numeric values and `G` followed by 12 digits. Repository hydration now
+preserves the G prefix and leading zeros for authorized display; masking and
+access rules remain in place. This needs no column/index change or reimport.

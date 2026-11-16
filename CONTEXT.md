@@ -413,3 +413,22 @@ Verification: TypeScript/build, 117 frontend tests and 628 PHP tests passed (2
 skipped). Synthetic browser checks confirmed dimensions, speed, faded backdrops,
 reduced motion and existing-loader suppression. Repository-wide Pint reports 9
 pre-existing violations in untouched PHP files; none were changed in this task.
+
+## ITW G-code display (2026-11-16)
+
+Fixed `LegacyStudentRepository` identifier hydration: ITW CARDID values of G plus
+12 digits were being stripped to 12 numeric digits and rejected, leaving paginated
+ID cells blank and full profile identifiers unavailable. Valid G codes preserve their prefix and
+leading zeros, with uppercase normalization. Existing authorized full-ID and
+masked-resource contracts, group/district scoping and numeric login validation
+remain intact. No query/schema/import changes are needed. The supplied ZIP was
+read only to confirm G-code shape; tests use synthetic identifiers. See
+`laravel-app/docs/student-directory-history.md` for evidence and deployment notes.
+The registration print payload also keeps G in the first ID box; numeric IDs
+keep their existing boxes. No PDF layout or other printed fields are changed.
+Verification: PHP 632 passed (634 total, 2 existing skips), frontend 117 passed,
+TypeScript/build and changed-file syntax checks passed. Repository/test Pint
+checks passed; the full-project check reports the same pre-existing formatting
+issues in 9 files, including old formatting elsewhere in the export service.
+Synthetic browser checks confirmed visible G codes in current/historical lists,
+profiles and mobile cards. Production data was not changed or queried.

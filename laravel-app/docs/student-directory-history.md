@@ -19,3 +19,37 @@ The main profile API validates optional `term` and `level`. The standard grade/K
 The opt-in test `SDL_DIRECTORY_BENCHMARK=1 php artisan test --filter=test_synthetic_benchmark_when_explicitly_enabled` creates only isolated synthetic SQLite data: 1,500 students, 120,000 grade rows, 25 students per page. See [recorded results](benchmarks/student-directory-2026-11-16.json). The old repository path hydrates the entire roster before slicing; the new normal page hydrates only 25. New summary computation adds a cold-load cost; warm page requests reuse summaries. These workloads also differ in temporal filtering/credit deduplication, so the measurements are not a claim that every query is faster.
 
 SQLite EXPLAIN confirms indexed identity and term-registration lookups; the page still scans/order-merges candidate student identities. No speculative indexes were added. Measurements exclude network/production MySQL effects; native MySQL EXPLAIN, production latency, load capacity and exact production roster counts remain Not verified. Functional tests exercise actual SQL over synthetic imports, including cache invalidation, future results, duplicate subjects/levels, scope rejection and historical detail navigation.
+
+## ITW G identifiers (2026-11-16)
+
+ITW `CARDID` / `_perf_cardid` can contain `G` followed by 12 digits, as well as a
+13-digit numeric citizen ID. Previously numeric-only hydration discarded the
+prefix and produced `null`, so the paginated list displayed a dash and full
+identifiers were unavailable in profiles.
+Hydration now preserves valid G identifiers, including leading zeros, and
+normalizes a lowercase prefix to uppercase. Invalid G-prefixed values are not
+coerced into numeric IDs. Formatted numeric IDs retain their existing behavior.
+
+Authorized directory/profile resources keep the identifier at
+`demographics.citizen_id`; masked outputs remain masked, for example
+`G-xxxx-xxxxx-xx-2`. Teacher-group/district access checks and numeric-only login
+validation retain their existing rules. No SQL, index, schema or real import
+data is changed; no reimport is needed. Deploy the backend, clear Laravel/OPcache
+as appropriate for the server and refresh the browser.
+
+The registration print payload also preserves `G` in the first of its 13 ID boxes;
+numeric IDs retain the same box values. This prevents the shared read-model fix
+from passing G codes to a digits-only printer that would discard the prefix.
+
+The user-supplied ZIP was inspected read-only: its primary STUDENT table contains
+15 G-prefixed values, all 13 characters (`G` plus 12 digits). No source identities
+were logged or committed. Synthetic SQL/API regression tests cover current and
+historical lists, search, bounded profiles, non-paginated rosters, masking,
+cross-group/district rejection and unchanged numeric login behavior. Production
+database output and latency remain Not verified.
+
+Validation: PHP 632 passed with 2 existing skips (634 total), frontend 117 passed,
+TypeScript/build and changed-file syntax checks passed. Synthetic browser checks
+confirmed G-code display in current/historical lists, profiles and mobile cards.
+Full-project Pint retains its existing formatting findings in 9 files; repository
+and regression-test formatting checks pass. No formatting cleanup is included.

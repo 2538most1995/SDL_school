@@ -73,6 +73,14 @@ final class StudentAuthenticationLookupTest extends TestCase
         self::assertNull($this->repo()->findStudentForAuthentication('1111111111111', $this->district));
     }
 
+    public function test_displaying_g_codes_does_not_create_a_numeric_login_alias(): void
+    {
+        $this->student(1, '1000000001', 'G123456789012');
+        self::assertNull($this->repo()->findStudentForAuthentication('G123456789012', $this->district));
+        self::assertNull($this->repo()->findStudentForAuthentication('0123456789012', $this->district));
+        self::assertNotNull($this->repo()->findStudentForAuthentication('1111111111111', $this->district));
+    }
+
     public function test_historical_code_sharing_citizen_id_keeps_current_identity_and_rejects_current_ambiguity(): void
     {
         $this->student(2, '1111111111', '1111111111111', false);
