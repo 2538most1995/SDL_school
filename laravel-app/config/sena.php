@@ -29,6 +29,7 @@ return [
             'color' => 'coral',
             'items' => [
                 ['key' => 'statistics-overview', 'label' => 'รายงานสถิติ', 'description' => 'สารสนเทศรวม ตัวเลือกรายงาน การประมวลผล และส่งออกในหน้าเดียว', 'route' => '/reports/overview', 'icon' => 'information', 'roles' => ['teacher', 'admin', 'super_admin']],
+                ['key' => 'moral-report', 'label' => 'รายงานคุณธรรม', 'description' => 'สรุปจำนวนผู้เรียนตามผลประเมินคุณธรรมรายภาคเรียน', 'route' => '/reports/moral', 'icon' => 'heart', 'roles' => ['teacher', 'admin', 'super_admin']],
             ],
         ],
         [

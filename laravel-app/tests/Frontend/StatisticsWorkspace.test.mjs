@@ -70,8 +70,8 @@ test('report format catalog keeps only dimensions backed by imported source fiel
     assert.deepEqual(categoriesForReport(reportById(2)).map((item) => item.key), [
         'level', 'group', 'gender', 'age', 'occupation', 'target_group', 'nationality', 'learning_method', 'subject',
     ]);
-    assert.deepEqual(categoriesForReport(reportById(3)).map((item) => item.key), ['level', 'group', 'gender', 'learning_method', 'subject']);
-    assert.deepEqual(categoriesForReport(reportById(4)).map((item) => item.key), ['level', 'group', 'gender', 'nnet', 'learning_method', 'subject']);
+    assert.deepEqual(categoriesForReport(reportById(3)).map((item) => item.key), ['level', 'group', 'gender', 'target_group', 'learning_method', 'subject']);
+    assert.deepEqual(categoriesForReport(reportById(4)).map((item) => item.key), ['level', 'group', 'gender', 'target_group', 'nnet', 'learning_method', 'subject']);
     assert.deepEqual(normalizeAxisConfiguration(reportById(3), {
         vertical: ['gender', 'level'],
         horizontal: ['age'],

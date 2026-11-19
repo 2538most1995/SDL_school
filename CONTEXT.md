@@ -432,3 +432,9 @@ checks passed; the full-project check reports the same pre-existing formatting
 issues in 9 files, including old formatting elsewhere in the export service.
 Synthetic browser checks confirmed visible G codes in current/historical lists,
 profiles and mobile cards. Production data was not changed or queried.
+
+## Moral report and target-group statistics (2026-11-19)
+
+Staff can open **สถิติ → รายงานคุณธรรม** to see four ITW51 assessment outcomes by education level and term, filter by group and export to Excel with the existing teacher/admin export policy. The report uses the recorded `VIRTUE.SUMLEVEL`: 0 ปรับปรุง, 1 พอใช้, 2 ดี, 3 ดีมาก. It counts one result per student code and level using the last valid imported row for duplicate results in the same normalized semester. Blank and unrecognized results are excluded. ปวช. is displayed as unavailable because the import supports only levels 1–3.
+
+All existing reports in **รายงานสถิติ** can select **กลุ่มเป้าหมาย** as a row or column dimension. The dimension uses the latest authorized import's `STUDENT.OCCTYP` and the same codebook as registration statistics, including in historical views and alongside subject/learning-method axes.

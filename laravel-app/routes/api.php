@@ -224,6 +224,7 @@ Route::prefix('v1')->group(function (): void {
             ->middleware('role:teacher,admin');
         Route::middleware('role:teacher,admin,super_admin')->group(function (): void {
             Route::get('/reports/students/overview', [StudentReportController::class, 'overview']);
+            Route::get('/reports/moral', [StudentReportController::class, 'moralStatistics']);
             Route::get('/reports/new-students', [StudentReportController::class, 'newStudents']);
             Route::get('/reports/graduates', [StudentReportController::class, 'graduates']);
             Route::get('/reports/expected-graduates', [StudentReportController::class, 'expectedGraduates']);

@@ -61,7 +61,8 @@ class SystemCatalogTest extends TestCase
         $resultReports = collect($response->json('data.groups'))->firstWhere('key', 'result-reports');
         $this->assertSame('statistics-overview', $statistics['items'][0]['key']);
         $this->assertSame('รายงานสถิติ', $statistics['items'][0]['label']);
-        $this->assertCount(1, $statistics['items']);
+        $this->assertCount(2, $statistics['items']);
+        $this->assertTrue(collect($statistics['items'])->contains('route', '/reports/moral'));
         $this->assertFalse(collect($statistics['items'])->contains('key', 'exam-attendance-check'));
         $this->assertTrue(collect($resultReports['items'])->contains('key', 'exam-attendance-check'));
     }

@@ -39,10 +39,11 @@ final class ExtendedStatisticsTest extends TestCase
         $db->statement('CREATE TABLE IF NOT EXISTS INFORMATION_SCHEMA.TABLES (TABLE_SCHEMA TEXT, TABLE_NAME TEXT)');
         foreach ([1, 2, 3] as $level) {
             $tables = [
-                'student' => '_perf_id10 TEXT, _perf_grp TEXT, prename TEXT, name TEXT, surname TEXT, grp_code TEXT, gender TEXT, age TEXT, nt_sem TEXT, nt_nosem TEXT, nt_sara1 TEXT, nt_sara2 TEXT, nnet TEXT',
+                'student' => '_perf_id10 TEXT, _perf_grp TEXT, prename TEXT, name TEXT, surname TEXT, grp_code TEXT, gender TEXT, occtyp TEXT, age TEXT, nt_sem TEXT, nt_nosem TEXT, nt_sara1 TEXT, nt_sara2 TEXT, nnet TEXT, fin_cause TEXT',
                 'grade' => '_id INTEGER PRIMARY KEY AUTOINCREMENT, _perf_std10 TEXT, _perf_semestry TEXT, _perf_sub TEXT, grade TEXT, typ_code TEXT, method TEXT, learning TEXT',
-                'subject' => '_perf_sub TEXT, sub_name TEXT, sub_type TEXT, sub_credit TEXT',
+                'subject' => '_perf_sub TEXT, sub_code TEXT, sub_name TEXT, sub_type TEXT, sub_credit TEXT',
                 'activity' => '_perf_std10 TEXT, _perf_semestry TEXT, hour TEXT',
+                'virtue' => '_id INTEGER PRIMARY KEY AUTOINCREMENT, _perf_std10 TEXT, _perf_semester TEXT, sumlevel TEXT',
             ];
             foreach ($tables as $type => $columns) {
                 $table = $this->table($level, $type);
@@ -70,6 +71,68 @@ final class ExtendedStatisticsTest extends TestCase
         self::assertSame(['0-15 ปี' => 6, '16-24 ปี' => 6, 'อยู่นอกช่วงที่กำหนด' => 3, 'ไม่ระบุอายุ' => 3], $counts);
         $this->report('gender-statistics')->assertOk()->assertJsonPath('data.total', 18);
         $this->report('gender-statistics', '&term=2/2568')->assertJsonPath('data.total', 0);
+    }
+
+    public function test_moral_report_counts_recorded_results_once_per_level_and_term_with_staff_scope(): void
+    {
+        foreach ([
+            [1, '1000000001', '001', '69/1', '1'],
+            [1, '1000000001', '001', '1-2569', '3'], // Latest valid result for the same student and term.
+            [1, '1000000001', '001', '1/2569', ''],
+            [1, '1000000001', '001', '68/2', '2'],
+            [1, '1000000002', '1', '69/1', '2'],
+            [2, '1000000001', '001', '69/1', '1'], // Same code in another level.
+            [3, '3000000001', '001', '69/1', '0'],
+            [3, '3999999999', null, '69/2', '3'], // No matching student.
+        ] as [$level, $code, $group, $term, $result]) {
+            $students = DB::table($this->table($level, 'student'));
+            if ($group !== null && ! $students->where('_perf_id10', $code)->exists()) {
+                $students->insert(['_perf_id10' => $code, 'grp_code' => $group]);
+            }
+            DB::table($this->table($level, 'virtue'))->insert(['_perf_std10' => $code, '_perf_semester' => $term, 'sumlevel' => $result]);
+        }
+
+        $url = '/api/v1/reports/moral';
+        $this->getJson($url)->assertOk()
+            ->assertJsonPath('data.terms', ['1/2569', '2/2568'])
+            ->assertJsonPath('data.selected_term', '1/2569')
+            ->assertJsonPath('data.rows.0.counts', [0, 0, 1, 1])
+            ->assertJsonPath('data.rows.1.counts', [0, 1, 0, 0])
+            ->assertJsonPath('data.rows.2.counts', [1, 0, 0, 0])
+            ->assertJsonPath('data.rows.3.counts', null)
+            ->assertJsonMissing(['student_code' => '1000000001']);
+        $this->getJson($url.'?term=2/2568')->assertOk()->assertJsonPath('data.rows.0.counts', [0, 0, 1, 0]);
+        $this->getJson($url.'?term=bad')->assertUnprocessable();
+
+        Sanctum::actingAs(User::factory()->create(['role' => 'teacher', 'district_id' => $this->districtId, 'assigned_groups' => ['001']]));
+        $this->getJson($url)->assertOk()->assertJsonPath('data.rows.0.counts', [0, 0, 0, 1]);
+        $this->getJson($url.'?term=1/2569&group=1')->assertOk()->assertJsonPath('data.rows.0.counts', [0, 0, 0, 0]);
+
+        $other = District::create(['name' => 'Other moral district', 'code' => 'other-moral']);
+        Sanctum::actingAs(User::factory()->create(['role' => 'admin', 'district_id' => $other->id]));
+        $this->getJson($url)->assertOk()->assertJsonPath('data.rows.0.counts', null);
+        Sanctum::actingAs(User::factory()->create(['role' => 'student', 'district_id' => $this->districtId]));
+        $this->getJson($url)->assertForbidden();
+    }
+
+    public function test_target_group_uses_occtyp_alongside_expected_graduation_and_registration_dimensions(): void
+    {
+        $this->student(1, '6910000001', ['occtyp' => ' 1 ', 'grp_code' => '001']);
+        $this->student(1, '6910000002', ['occtyp' => '03', 'grp_code' => '1']);
+        $this->grade(1, '6910000001', 'E', '4');
+        $this->grade(1, '6910000002', 'E', '4');
+        $this->report('gender-statistics')->assertOk()->assertJsonPath('data.rows.1.target_group', 'ผู้สูงอายุ');
+
+        $this->putJson('/api/v1/settings/statistics-report', [
+            'report' => 'expected-graduates', 'vertical' => ['target_group'], 'horizontal' => ['nnet', 'subject'], 'orientation' => 'vertical',
+        ])->assertOk()->assertJsonPath('data.vertical', ['target_group']);
+        Sanctum::actingAs(User::factory()->create(['role' => 'teacher', 'district_id' => $this->districtId, 'assigned_groups' => ['001']]));
+        $this->getJson('/api/v1/reports/expected-graduates?term=1/2569&include_registration_dimensions=1')
+            ->assertOk()->assertJsonPath('data.total', 1)
+            ->assertJsonPath('data.rows.0.target_group', 'เด็กด้อยโอกาส')
+            ->assertJsonPath('data.rows.0.nnet', 'มีสิทธิ์สอบ')
+            ->assertJsonCount(2, 'data.rows.0.registration_dimensions')
+            ->assertJsonMissingPath('data.rows.0.target_group_code');
     }
 
     public function test_invalid_age_ranges_and_unknown_reports_are_rejected(): void

@@ -147,8 +147,8 @@ export function reportById(id: StatisticReportId): StatisticReportDefinition {
 }
 
 export function categoriesForReport(report: StatisticReportDefinition): StatisticCategoryDefinition[] {
-    const common = ['level', 'group', 'gender', 'learning_method', 'subject'];
-    const supported = report.source === 'registration-statistics' ? [...common, 'age', 'occupation', 'target_group', 'nationality']
+    const common = ['level', 'group', 'gender', 'target_group', 'learning_method', 'subject'];
+    const supported = report.source === 'registration-statistics' ? [...common, 'age', 'occupation', 'nationality']
         : report.source === 'age-statistics' ? [...common, 'age_band']
         : report.source === 'credit-pending' ? [...common, 'nnet', 'completion_status']
         : ['expected-graduates', 'nnet-statistics'].includes(report.source) ? [...common, 'nnet'] : common;

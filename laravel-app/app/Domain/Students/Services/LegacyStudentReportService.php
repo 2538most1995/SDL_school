@@ -25,6 +25,73 @@ final readonly class LegacyStudentReportService
 {
     public function __construct(private DatabaseManager $database) {}
 
+    /** Count each assessed student once per level in the selected term. */
+    public function moralStatistics(User $viewer, int $districtId, array $filters): array
+    {
+        $sources = [];
+        $terms = [];
+        $sets = config('system_data.student_enabled') ? $this->sets($districtId) : [];
+        foreach ($sets as $set) {
+            if ($set->virtue === null || $this->firstExistingColumn($set->virtue, ['sumlevel']) === null) {
+                continue;
+            }
+            [$join, $groupName] = $this->groupJoin($set, 'st');
+            [$scope, $bindings] = $this->scope($viewer, $set, 'st', $join !== '');
+            $student = $this->identifier($set->student);
+            $virtue = $this->identifier($set->virtue);
+            $conditions = ['st._perf_id10 = v._perf_std10', $scope];
+            $this->appendGroupAndSearchFilters($conditions, $bindings, $filters, $join !== '', 'st', $groupName);
+            $from = "FROM {$virtue} v WHERE EXISTS (
+                SELECT 1 FROM {$student} st {$join} WHERE ".implode(' AND ', $conditions)."
+            ) AND v._perf_std10 <> '' AND TRIM(v.sumlevel) IN ('0', '1', '2', '3')";
+            $sourceTerms = [];
+            foreach ($this->rows("SELECT DISTINCT v._perf_semester AS raw_term {$from}", $bindings) as $row) {
+                $term = AcademicTerm::normalize((string) $row['raw_term']);
+                if ($term !== null) {
+                    $terms[] = $term;
+                    $sourceTerms[$term][] = (string) $row['raw_term'];
+                }
+            }
+
+            $sources[$set->level] = [$virtue, $from, $bindings, $sourceTerms];
+        }
+
+        $terms = $this->sortTerms($terms);
+        $term = $this->selectedTerm($filters, $terms);
+        $levels = [];
+        foreach ($sources as $level => [$virtue, $from, $bindings, $sourceTerms]) {
+            $counts = array_fill(0, 4, 0);
+            $variants = $sourceTerms[$term] ?? [];
+            if ($variants !== []) {
+                $placeholders = implode(', ', array_fill(0, count($variants), '?'));
+                foreach ($this->rows(
+                    "SELECT TRIM(assessment.sumlevel) AS result, COUNT(*) AS student_count
+                     FROM {$virtue} assessment
+                     INNER JOIN (
+                         SELECT MAX(v._id) AS assessment_id
+                         {$from} AND v._perf_semester IN ({$placeholders})
+                         GROUP BY v._perf_std10
+                     ) latest ON latest.assessment_id = assessment._id
+                     GROUP BY TRIM(assessment.sumlevel)",
+                    [...$bindings, ...$variants],
+                ) as $row) {
+                    $counts[(int) $row['result']] = (int) $row['student_count'];
+                }
+            }
+            $levels[$level] = $counts;
+        }
+
+        return [
+            'terms' => $terms,
+            'selected_term' => $term,
+            'rows' => array_map(fn (int $level): array => [
+                'level' => $level,
+                'label' => $level === 4 ? 'ปวช.' : $this->levelLabel($level),
+                'counts' => $levels[$level] ?? null,
+            ], [1, 2, 3, 4]),
+        ];
+    }
+
     public function withRegistrationDimensions(User $viewer, int $districtId, array $data, array $filters): array
     {
         $term = AcademicTerm::normalize($data['selected_term'] ?? null);
@@ -67,7 +134,8 @@ final readonly class LegacyStudentReportService
                 $column = $this->firstExistingColumn($set->student, $candidates);
                 $fields[] = ($column === null ? "''" : 'st.'.$this->identifier($column)).' AS '.$alias;
             }
-            $students = $this->rows("SELECT st._perf_id10 AS code, st.prename, st.name AS first_name, st.surname AS last_name, st.grp_code AS group_code, {$groupName} AS group_name, ".implode(', ', $fields)." FROM {$studentTable} st {$join} WHERE ".implode(' AND ', $conditions), $bindings);
+            $targetGroup = $this->targetGroupSelect($set, 'st');
+            $students = $this->rows("SELECT st._perf_id10 AS code, st.prename, st.name AS first_name, st.surname AS last_name, st.grp_code AS group_code, {$groupName} AS group_name {$targetGroup}, ".implode(', ', $fields)." FROM {$studentTable} st {$join} WHERE ".implode(' AND ', $conditions), $bindings);
             $grades = [];
             $activities = [];
             if ($kind === 'credit-pending' && $students !== [] && $set->activity === null) {
@@ -110,7 +178,7 @@ final readonly class LegacyStudentReportService
                 $classified = ExtendedStudentStatistics::classify($kind, $record, $grades[$code] ?? [], $activities[$code] ?? [], $term, $ranges);
                 if ($classified !== null) {
                     // Explicit report projection: no raw exam/source fields or identifiers.
-                    $result[$record['id']] = array_intersect_key($classified, array_flip(['id', 'entity_key', 'student_id', 'primary', 'secondary', 'level', 'group', 'group_code', 'group_label', 'gender', 'age_band', 'nnet', 'completion_status', 'metric', 'kpch_hours', 'credits_earned']));
+                    $result[$record['id']] = array_intersect_key($classified, array_flip(['id', 'entity_key', 'student_id', 'primary', 'secondary', 'level', 'group', 'group_code', 'group_label', 'gender', 'target_group_code', 'age_band', 'nnet', 'completion_status', 'metric', 'kpch_hours', 'credits_earned']));
                 }
             }
         }
@@ -144,11 +212,12 @@ final readonly class LegacyStudentReportService
 
             $student = $this->identifier($set->student);
             $genderCol = $this->firstExistingColumn($set->student, ['gender', 'sex']);
+            $targetGroup = $this->targetGroupSelect($set, 's');
             $genderSql = $genderCol !== null ? ", s.{$this->identifier($genderCol)} AS gender" : ", '' AS gender";
             foreach ($this->rows(
                 "SELECT s._perf_id10 AS student_code, s.prename, s.name AS first_name,
                         s.surname AS last_name, s.grp_code AS group_code, {$groupName} AS group_name,
-                        s.dep_sem AS raw_term, s.fin_cause, s.trn_date2 AS transfer_date {$genderSql}
+                        s.dep_sem AS raw_term, s.fin_cause, s.trn_date2 AS transfer_date {$genderSql} {$targetGroup}
                  FROM {$student} s {$join}
                  WHERE ".implode(' AND ', array_filter($conditions)).'
                  ORDER BY s.name ASC, s.surname ASC, s._perf_id10 ASC',
@@ -173,6 +242,7 @@ final readonly class LegacyStudentReportService
                     'group_code' => trim((string) ($row['group_code'] ?? '')),
                     'group_label' => $this->groupLabel($row),
                     'gender' => $genderLabel,
+                    'target_group_code' => $row['target_group_code'] ?? null,
                     'metric' => 'ภาคเรียน '.$term,
                     '_active' => $status === 'studying',
                 ];
@@ -216,11 +286,12 @@ final readonly class LegacyStudentReportService
 
             $student = $this->identifier($set->student);
             $genderCol = $this->firstExistingColumn($set->student, ['gender', 'sex']);
+            $targetGroup = $this->targetGroupSelect($set, 's');
             $genderSql = $genderCol !== null ? ", s.{$this->identifier($genderCol)} AS gender" : ", '' AS gender";
             foreach ($this->rows(
                 "SELECT s._perf_id10 AS student_code, s.prename, s.name AS first_name,
                         s.surname AS last_name, s.grp_code AS group_code, {$groupName} AS group_name,
-                        s.{$this->identifier($finSemCol)} AS raw_term {$finDateSql} {$genderSql}
+                        s.{$this->identifier($finSemCol)} AS raw_term {$finDateSql} {$genderSql} {$targetGroup}
                  FROM {$student} s {$join}
                  WHERE ".implode(' AND ', array_filter($conditions)).'
                  ORDER BY s.name ASC, s.surname ASC, s._perf_id10 ASC',
@@ -244,6 +315,7 @@ final readonly class LegacyStudentReportService
                     'group_code' => trim((string) ($row['group_code'] ?? '')),
                     'group_label' => $this->groupLabel($row),
                     'gender' => $genderLabel,
+                    'target_group_code' => $row['target_group_code'] ?? null,
                     'metric' => 'ภาคเรียน '.$term,
                 ];
             }
@@ -452,12 +524,13 @@ final readonly class LegacyStudentReportService
             $ntSql2 = $ntSara2Col !== null ? ", s.{$this->identifier($ntSara2Col)} AS nt_sara2_val" : ", '' AS nt_sara2_val";
             $ntSemSql = $ntSemCol !== null ? ", s.{$this->identifier($ntSemCol)} AS nt_sem_val" : ", '' AS nt_sem_val";
             $ntNosemSql = $ntNosemCol !== null ? ", s.{$this->identifier($ntNosemCol)} AS nt_nosem_val" : ", '' AS nt_nosem_val";
+            $targetGroup = $this->targetGroupSelect($set, 's');
             $genderSql = $genderCol !== null ? ", s.{$this->identifier($genderCol)} AS gender" : ", '' AS gender";
             $nnetSql = $nnetCol !== null ? ", s.{$this->identifier($nnetCol)} AS nnet_val" : ", '' AS nnet_val";
 
             $studentsSql = "SELECT s._perf_id10 AS student_code, s.prename, s.name AS first_name,
                                    s.surname AS last_name, s.grp_code AS group_code, {$groupName} AS group_name
-                                   {$finCauseSql} {$finSemSql} {$finSem2Sql} {$expFlagSql} {$expSemSql} {$ntSql1} {$ntSql2} {$ntSemSql} {$ntNosemSql} {$genderSql} {$nnetSql}
+                                   {$finCauseSql} {$finSemSql} {$finSem2Sql} {$expFlagSql} {$expSemSql} {$ntSql1} {$ntSql2} {$ntSemSql} {$ntNosemSql} {$genderSql} {$targetGroup} {$nnetSql}
                             FROM {$student} s {$join}
                             WHERE ".implode(' AND ', array_filter($conditions)).'
                             ORDER BY s.name ASC, s.surname ASC, s._perf_id10 ASC';
@@ -634,6 +707,7 @@ final readonly class LegacyStudentReportService
                         'group_code' => trim((string) ($sRow['group_code'] ?? '')),
                         'group_label' => $this->groupLabel($sRow),
                         'gender' => $genderLabel,
+                        'target_group_code' => $sRow['target_group_code'] ?? null,
                         'metric' => number_format($grandTotal, 0).'/'.number_format($reqTotal, 0).' หน่วยกิต (บังคับ '.number_format($compTotal, 0).' / เลือก '.number_format($elecTotal, 0).')',
                         'examStatus' => $examStatus,
                         'nnet' => $examStatus,
@@ -673,12 +747,13 @@ final readonly class LegacyStudentReportService
             $grade = $this->identifier($set->grade);
             $subject = $this->identifier($set->subject);
             $genderCol = $this->firstExistingColumn($set->student, ['gender', 'sex']);
+            $targetGroup = $this->targetGroupSelect($set, 'st');
             $genderSql = $genderCol !== null ? ", st.{$this->identifier($genderCol)} AS gender" : ", '' AS gender";
             foreach ($this->rows(
                 "SELECT g._id AS row_id, g._perf_std10 AS student_code, g._perf_sub AS subject_code,
                         g._perf_semestry AS raw_term, sub.sub_name AS subject_name,
                         sub.sub_credit AS subject_credit, st.prename, st.name AS first_name,
-                        st.surname AS last_name, st.grp_code AS group_code, {$groupName} AS group_name {$genderSql}
+                        st.surname AS last_name, st.grp_code AS group_code, {$groupName} AS group_name {$genderSql} {$targetGroup}
                  FROM {$grade} g
                  INNER JOIN {$student} st ON st._perf_id10 = g._perf_std10
                  LEFT JOIN {$subject} sub ON sub._perf_sub = g._perf_sub
@@ -710,6 +785,7 @@ final readonly class LegacyStudentReportService
                     'group_code' => trim((string) ($row['group_code'] ?? '')),
                     'group_label' => $this->groupLabel($row),
                     'gender' => $genderLabel,
+                    'target_group_code' => $row['target_group_code'] ?? null,
                     'metric' => "วิชาเทียบโอน: {$subjectCode} {$subjectName} (".number_format($credits, 1).' นก.)',
                     'subject_code' => $subjectCode,
                     'subject_name' => $subjectName,
@@ -1066,7 +1142,7 @@ final readonly class LegacyStudentReportService
             if (! $this->validIdentifier($table) || preg_match("/^{$prefix}/", $table) !== 1) {
                 continue;
             }
-            if (preg_match("/^{$prefix}([123])_(student|grade|subject|activity)$/", $table, $matches) === 1) {
+            if (preg_match("/^{$prefix}([123])_(student|grade|subject|activity|virtue)$/", $table, $matches) === 1) {
                 $tables[(int) $matches[1]][$matches[2]] = $table;
             } elseif (preg_match("/^{$prefix}([123])_group$/", $table, $matches) === 1) {
                 $levelGroups[(int) $matches[1]][] = $table;
@@ -1082,7 +1158,7 @@ final readonly class LegacyStudentReportService
                 continue;
             }
             $groups = $levelGroups[$level] ?? $globalGroups;
-            $sets[] = new LegacyTableSet($districtId, '', $batchKey, $level, $levelTables['student'], $levelTables['grade'], $levelTables['subject'], $levelTables['activity'] ?? null, null, count($groups) === 1 ? $groups[0] : null);
+            $sets[] = new LegacyTableSet($districtId, '', $batchKey, $level, $levelTables['student'], $levelTables['grade'], $levelTables['subject'], $levelTables['activity'] ?? null, $levelTables['virtue'] ?? null, count($groups) === 1 ? $groups[0] : null);
         }
 
         return $sets;
@@ -1734,11 +1810,23 @@ final readonly class LegacyStudentReportService
         };
     }
 
+    private function targetGroupSelect(LegacyTableSet $set, string $alias): string
+    {
+        $column = $this->firstExistingColumn($set->student, ['occtyp']);
+        $value = $column === null ? 'NULL' : $alias.'.'.$this->identifier($column);
+
+        return ", {$value} AS target_group_code";
+    }
+
     /** @param list<array<string, string>> $rows @param list<string> $terms */
     private function payload(array $rows, array $terms, ?string $selectedTerm, callable $active): array
     {
         $activeCount = count(array_filter($rows, $active));
         $rows = array_map(static function (array $row): array {
+            if (array_key_exists('target_group_code', $row)) {
+                $row['target_group'] = RegistrationStatistics::itemLabel('target_group', (string) $row['target_group_code']);
+                unset($row['target_group_code']);
+            }
             unset($row['_active']);
 
             return $row;

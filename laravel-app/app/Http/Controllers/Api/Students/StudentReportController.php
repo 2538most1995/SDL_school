@@ -37,6 +37,17 @@ final class StudentReportController extends StudentsApiController
         return $this->reportResponse($request, $this->reports->overview($request->user(), $this->filters($request)));
     }
 
+    public function moralStatistics(Request $request): JsonResponse
+    {
+        $filters = $request->validate([
+            'term' => ['nullable', 'regex:/^[1-4]\/2[5-9]\d{2}$/'],
+            'group' => ['nullable', 'string', 'max:180'],
+        ]);
+        $data = $this->legacyReports->moralStatistics($request->user(), (int) $request->attributes->get('district_id'), $filters);
+
+        return response()->json(['data' => $data])->header('Cache-Control', 'no-store, private');
+    }
+
     public function gradesAboveTwo(Request $request): JsonResponse
     {
         $filters = $this->filters($request);

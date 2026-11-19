@@ -13,6 +13,7 @@ const GradesPage = lazyWithReload(async () => ({ default: (await import('./stude
 const AchievementPage = lazyWithReload(async () => ({ default: (await import('./students')).AchievementPage }));
 const ReportPage = lazyWithReload(async () => ({ default: (await import('./reports')).ReportPage }));
 const StatisticsOverviewPage = lazyWithReload(async () => ({ default: (await import('./reports/StatisticsOverviewPage')).StatisticsOverviewPage }));
+const MoralReportPage = lazyWithReload(async () => ({ default: (await import('./reports/MoralReportPage')).MoralReportPage }));
 const RegistrationStatisticsPage = lazyWithReload(async () => ({ default: (await import('./reports/RegistrationStatisticsPage')).RegistrationStatisticsPage }));
 const ExamEligibleStudentsPage = lazyWithReload(async () => ({ default: (await import('./reports/ExamEligibleStudentsPage')).ExamEligibleStudentsPage }));
 const ExamAttendanceCheckPage = lazyWithReload(async () => ({ default: (await import('./learning/ExamAttendanceCheckPage')).ExamAttendanceCheckPage }));
@@ -55,6 +56,7 @@ export const featureRouteCatalog: FeatureRoute[] = [
     { path: '/public-relations', label: 'ข่าวประชาสัมพันธ์', roles: ['student'], element: <PublicRelationsPage /> },
 
     { path: '/reports/overview', label: 'รายงานสถิติ', roles: ['teacher', 'admin', 'super_admin'], element: <StatisticsOverviewPage /> },
+    { path: '/reports/moral', label: 'รายงานคุณธรรม', roles: ['teacher', 'admin', 'super_admin'], element: <MoralReportPage /> },
     { path: '/reports/registration-statistics', label: 'สถิตินักศึกษาลงทะเบียน', roles: ['teacher', 'admin', 'super_admin'], element: <RegistrationStatisticsPage /> },
     { path: '/reports/new-students', label: 'นักศึกษาใหม่', roles: ['teacher', 'admin', 'super_admin'], element: <ReportPage kind="new-students" /> },
     { path: '/reports/graduates', label: 'ผู้จบหลักสูตร', roles: ['teacher', 'admin', 'super_admin'], element: <ReportPage kind="graduates" /> },
