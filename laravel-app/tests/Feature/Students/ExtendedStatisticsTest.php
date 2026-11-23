@@ -128,7 +128,7 @@ final class ExtendedStatisticsTest extends TestCase
             [1, '1000000004', '001', ['fin_cause' => '1', 'fin_sem' => '68/2'], [['69/1', '3']]],
             [1, '1000000005', '1', ['fin_cause' => '1', 'fin_sem' => '69/1'], [['68/2', '1']]],
             [1, '1000000006', '001', ['fin_cause' => '1', 'fin_sem' => '69/1'], [['69/1', '9'], ['69/2', '2']]],
-            [2, '1000000001', '001', ['fincause' => '1', 'fin_sem2' => '69/1'], [['68/2', '0']]],
+            [2, '1000000001', '001', ['fincause' => '1', 'fin_sem2' => '69/1'], [['68/2', '0'], ['69/2', '3']]],
             [3, '3000000001', '001', ['fin_sem' => '69/1'], [['69/1', '3']]],
         ] as [$level, $code, $group, $graduation, $assessments]) {
             DB::table($this->table($level, 'student'))->insert(['_perf_id10' => $code, 'grp_code' => $group, ...$graduation]);
@@ -139,10 +139,15 @@ final class ExtendedStatisticsTest extends TestCase
 
         $url = '/api/v1/reports/moral';
         $this->getJson($url.'?graduated_only=0&term=1/2569')->assertOk()
-            ->assertJsonPath('data.rows.0.counts', [1, 0, 1, 1])
+            ->assertJsonPath('data.rows.0.counts', [1, 0, 1, 0])
             ->assertJsonPath('data.rows.2.counts', [0, 0, 0, 1]);
+        $this->getJson($url)->assertOk()
+            ->assertJsonPath('data.selected_term', '2/2569')
+            ->assertJsonPath('data.rows.0.counts', [0, 0, 0, 0])
+            ->assertJsonPath('data.rows.1.counts', [0, 0, 0, 0]);
+        DB::table($this->table(1, 'virtue'))->insert(['_perf_std10' => '1000000003', '_perf_semester' => '69/2', 'sumlevel' => '1']);
         $this->getJson($url.'?graduated_only=0&term=2/2569')->assertOk()
-            ->assertJsonPath('data.rows.0.counts', [1, 0, 1, 1]);
+            ->assertJsonPath('data.rows.0.counts', [0, 1, 0, 0]);
         $this->getJson($url.'?graduated_only=1')->assertOk()
             ->assertJsonPath('data.terms', ['1/2569', '2/2568'])
             ->assertJsonPath('data.selected_term', '1/2569')

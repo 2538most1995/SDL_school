@@ -69,27 +69,29 @@ final readonly class LegacyStudentReportService
                 }
             }
 
-            $sources[$set->level] = [$virtue, "{$from} AND EXISTS ({$roster})", $bindings, $sourceTerms];
+            $sources[$set->level] = [$set, $virtue, $from, $roster, $bindings, $sourceTerms];
         }
 
         $terms = $this->sortTerms($terms);
         $term = $this->selectedTerm($filters, $terms);
         $levels = [];
-        foreach ($sources as $level => [$virtue, $from, $bindings, $sourceTerms]) {
+        foreach ($sources as $level => [$set, $virtue, $from, $roster, $bindings, $sourceTerms]) {
             $counts = array_fill(0, 4, 0);
             $variants = $sourceTerms[$term] ?? [];
             if ($variants !== []) {
+                [$graduationCutoff, $cutoffBindings] = $this->moralGraduationCutoff($set, $term);
                 $placeholders = implode(', ', array_fill(0, count($variants), '?'));
                 foreach ($this->rows(
                     "SELECT TRIM(assessment.sumlevel) AS result, COUNT(*) AS student_count
                      FROM {$virtue} assessment
                      INNER JOIN (
                          SELECT MAX(v._id) AS assessment_id
-                         {$from} AND v._perf_semester IN ({$placeholders})
+                         {$from} AND EXISTS ({$roster}{$graduationCutoff})
+                         AND v._perf_semester IN ({$placeholders})
                          GROUP BY v._perf_std10
                      ) latest ON latest.assessment_id = assessment._id
                      GROUP BY TRIM(assessment.sumlevel)",
-                    [...$bindings, ...$variants],
+                    [...$bindings, ...$cutoffBindings, ...$variants],
                 ) as $row) {
                     $counts[(int) $row['result']] = (int) $row['student_count'];
                 }
@@ -98,6 +100,35 @@ final readonly class LegacyStudentReportService
         }
 
         return [$terms, $term, $levels];
+    }
+
+    /** @return array{string, list<string>} */
+    private function moralGraduationCutoff(LegacyTableSet $set, string $assessmentTerm): array
+    {
+        $cause = $this->firstExistingColumn($set->student, ['fin_cause', 'fincause']);
+        $graduationTerm = $this->firstExistingColumn($set->student, ['fin_sem', 'fin_sem2', 'finsem']);
+        if ($cause === null || $graduationTerm === null) {
+            return ['', []];
+        }
+
+        $student = $this->identifier($set->student);
+        $graduated = 'COALESCE(TRIM(st.'.$this->identifier($cause)."), '') = ?";
+        $termColumn = 'st.'.$this->identifier($graduationTerm);
+        $priorTerms = [];
+        foreach ($this->rows("SELECT DISTINCT {$termColumn} AS raw_term FROM {$student} st WHERE {$graduated}", ['1']) as $row) {
+            $term = AcademicTerm::normalize($row['raw_term']);
+            if ($term !== null && AcademicTerm::compare($term, $assessmentTerm) < 0) {
+                $priorTerms[] = (string) $row['raw_term'];
+            }
+        }
+
+        if ($priorTerms === []) {
+            return ['', []];
+        }
+
+        $placeholders = implode(', ', array_fill(0, count($priorTerms), '?'));
+
+        return [" AND NOT ({$graduated} AND COALESCE({$termColumn}, '') IN ({$placeholders}))", ['1', ...$priorTerms]];
     }
 
     /** Use the latest valid assessment at or before the student's graduation term. */
