@@ -41,11 +41,10 @@ final readonly class LegacyStudentReportService
             $virtue = $this->identifier($set->virtue);
             $conditions = ['st._perf_id10 = v._perf_std10', $scope];
             $this->appendGroupAndSearchFilters($conditions, $bindings, $filters, $join !== '', 'st', $groupName);
-            $from = "FROM {$virtue} v WHERE EXISTS (
-                SELECT 1 FROM {$student} st {$join} WHERE ".implode(' AND ', $conditions)."
-            ) AND v._perf_std10 <> '' AND TRIM(v.sumlevel) IN ('0', '1', '2', '3')";
+            $roster = "SELECT 1 FROM {$student} st {$join} WHERE ".implode(' AND ', $conditions);
+            $from = "FROM {$virtue} v WHERE v._perf_std10 <> '' AND TRIM(v.sumlevel) IN ('0', '1', '2', '3')";
             $sourceTerms = [];
-            foreach ($this->rows("SELECT DISTINCT v._perf_semester AS raw_term {$from}", $bindings) as $row) {
+            foreach ($this->rows("SELECT DISTINCT v._perf_semester AS raw_term {$from} AND EXISTS ({$roster})", $bindings) as $row) {
                 $term = AcademicTerm::normalize((string) $row['raw_term']);
                 if ($term !== null) {
                     $terms[] = $term;
@@ -53,7 +52,17 @@ final readonly class LegacyStudentReportService
                 }
             }
 
-            $sources[$set->level] = [$virtue, $from, $bindings, $sourceTerms];
+            // Keep the term selector tied to the assessment dates for both populations.
+            if ((bool) ($filters['graduated_only'] ?? false)) {
+                $cause = $this->firstExistingColumn($set->student, ['fin_cause', 'fincause']);
+                if ($cause === null) {
+                    continue;
+                }
+                $roster .= ' AND TRIM(st.'.$this->identifier($cause).') = ?';
+                $bindings[] = '1';
+            }
+
+            $sources[$set->level] = [$virtue, "{$from} AND EXISTS ({$roster})", $bindings, $sourceTerms];
         }
 
         $terms = $this->sortTerms($terms);

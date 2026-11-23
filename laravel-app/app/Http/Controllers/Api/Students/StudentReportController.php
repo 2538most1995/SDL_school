@@ -42,6 +42,7 @@ final class StudentReportController extends StudentsApiController
         $filters = $request->validate([
             'term' => ['nullable', 'regex:/^[1-4]\/2[5-9]\d{2}$/'],
             'group' => ['nullable', 'string', 'max:180'],
+            'graduated_only' => ['sometimes', 'boolean'],
         ]);
         $data = $this->legacyReports->moralStatistics($request->user(), (int) $request->attributes->get('district_id'), $filters);
 

@@ -19,6 +19,8 @@ type MoralReportData = {
 type GroupOption = { value: string | number; label: string };
 
 const results = ['ปรับปรุง', 'พอใช้', 'ดี', 'ดีมาก'];
+const allStatusesLabel = 'ทุกสถานะ';
+const graduatesOnlyLabel = 'เฉพาะผู้สำเร็จการศึกษา';
 const selectClass = 'min-h-11 w-full rounded-xl border border-slate-300 bg-white px-3 text-sm text-slate-900 focus:border-brand-600 focus:outline-none focus:ring-2 focus:ring-brand-200';
 const formatCount = (value: number) => value.toLocaleString('th-TH');
 
@@ -32,17 +34,19 @@ export function MoralReportPage() {
 function MoralReport({ districtId, role }: { districtId: string | null; role: DemoRole }) {
     const [term, setTerm] = useState('');
     const [group, setGroup] = useState('');
+    const [graduatedOnly, setGraduatedOnly] = useState(false);
     const groups = useQuery({
         queryKey: ['moral-report-groups', districtId, role],
         queryFn: ({ signal }) => apiGet<unknown[]>('/api/v1/students?per_page=1', signal),
         staleTime: 60_000,
     });
     const report = useQuery({
-        queryKey: ['moral-report', districtId, role, term, group],
+        queryKey: ['moral-report', districtId, role, term, group, graduatedOnly],
         queryFn: ({ signal }) => {
             const query = new URLSearchParams();
             if (term) query.set('term', term);
             if (group) query.set('group', group);
+            if (graduatedOnly) query.set('graduated_only', '1');
             return apiGet<MoralReportData>(`/api/v1/reports/moral?${query}`, signal).then((response) => response.data);
         },
     });
@@ -70,7 +74,11 @@ function MoralReport({ districtId, role }: { districtId: string | null; role: De
                 {
                     name: 'เงื่อนไขรายงาน',
                     columns: ['รายการ', 'ค่าที่ใช้'],
-                    rows: [['ภาคเรียน', data.selected_term], ['กลุ่มเรียน', groupLabel ?? (role === 'teacher' ? 'กลุ่มที่รับผิดชอบ' : 'ทุกกลุ่มเรียน')]],
+                    rows: [
+                        ['ภาคเรียน', data.selected_term],
+                        ['กลุ่มเรียน', groupLabel ?? (role === 'teacher' ? 'กลุ่มที่รับผิดชอบ' : 'ทุกกลุ่มเรียน')],
+                        ['สถานะนักศึกษา', graduatedOnly ? graduatesOnlyLabel : allStatusesLabel],
+                    ],
                 },
             ]);
         } catch (error) {
@@ -82,7 +90,7 @@ function MoralReport({ districtId, role }: { districtId: string | null; role: De
         <PageHeader title="รายงานคุณธรรม" category="สถิติ" description="จำนวนผู้เรียนตามผลประเมินคุณธรรมจาก ITW51 แยกตามระดับชั้นและภาคเรียน" icon={Heart}
             actions={canExportRegistrationStatistics(role) && <Button icon={<ExcelFileIcon size={18} />} disabled={!hasSource || !data?.selected_term || report.isFetching} onClick={() => void exportExcel()}>บันทึกเป็น Excel</Button>} />
         <section className="space-y-4 rounded-2xl border border-slate-200 bg-white p-4 sm:p-5" aria-label="สรุปผลประเมินคุณธรรม">
-            <div className="grid gap-3 sm:max-w-2xl sm:grid-cols-2">
+            <div className="grid gap-3 sm:grid-cols-2 lg:max-w-5xl lg:grid-cols-3">
                 <label className="grid gap-2 text-sm font-bold text-slate-800">ภาคเรียน
                     <select value={term} onChange={(event) => setTerm(event.target.value)} className={selectClass}>
                         <option value="">ล่าสุด{!term && data?.selected_term ? ` (${data.selected_term})` : ''}</option>
@@ -93,6 +101,12 @@ function MoralReport({ districtId, role }: { districtId: string | null; role: De
                     <select value={group} onChange={(event) => setGroup(event.target.value)} className={selectClass} disabled={groups.isPending || groups.isError}>
                         <option value="">{role === 'teacher' ? 'กลุ่มที่รับผิดชอบ' : 'ทุกกลุ่มเรียน'}</option>
                         {options.map((option) => <option key={option.value} value={option.value}>{option.label}</option>)}
+                    </select>
+                </label>
+                <label className="grid gap-2 text-sm font-bold text-slate-800">สถานะนักศึกษา
+                    <select value={graduatedOnly ? '1' : '0'} onChange={(event) => setGraduatedOnly(event.target.value === '1')} className={selectClass}>
+                        <option value="0">{allStatusesLabel}</option>
+                        <option value="1">{graduatesOnlyLabel}</option>
                     </select>
                 </label>
             </div>

@@ -115,6 +115,44 @@ final class ExtendedStatisticsTest extends TestCase
         $this->getJson($url)->assertForbidden();
     }
 
+    public function test_moral_report_can_filter_actual_graduates_without_changing_assessment_terms(): void
+    {
+        DB::statement('ALTER TABLE '.$this->table(2, 'student').' RENAME COLUMN fin_cause TO fincause');
+        DB::statement('ALTER TABLE '.$this->table(3, 'student').' DROP COLUMN fin_cause');
+
+        foreach ([
+            [1, '1000000001', '001', ['fin_cause' => ' 1 '], '68/2', '3'],
+            [1, '1000000002', '001', ['fin_cause' => '0'], '69/1', '1'],
+            [1, '1000000003', '001', ['fin_cause' => '2'], '68/2', '2'],
+            [1, '1000000004', '1', ['fin_cause' => '1'], '68/2', '2'],
+            [2, '2000000001', '001', ['fincause' => '1'], '68/2', '0'],
+            [3, '3000000001', '001', [], '68/2', '3'],
+        ] as [$level, $code, $group, $status, $term, $result]) {
+            DB::table($this->table($level, 'student'))->insert(['_perf_id10' => $code, 'grp_code' => $group, ...$status]);
+            DB::table($this->table($level, 'virtue'))->insert(['_perf_std10' => $code, '_perf_semester' => $term, 'sumlevel' => $result]);
+        }
+
+        $url = '/api/v1/reports/moral';
+        $this->getJson($url.'?graduated_only=0&term=2/2568')->assertOk()
+            ->assertJsonPath('data.rows.0.counts', [0, 0, 2, 1])
+            ->assertJsonPath('data.rows.2.counts', [0, 0, 0, 1]);
+        $this->getJson($url.'?graduated_only=1')->assertOk()
+            ->assertJsonPath('data.terms', ['1/2569', '2/2568'])
+            ->assertJsonPath('data.selected_term', '1/2569')
+            ->assertJsonPath('data.rows.0.counts', [0, 0, 0, 0]);
+        $this->getJson($url.'?graduated_only=1&term=2/2568')->assertOk()
+            ->assertJsonPath('data.rows.0.counts', [0, 0, 1, 1])
+            ->assertJsonPath('data.rows.1.counts', [1, 0, 0, 0])
+            ->assertJsonPath('data.rows.2.counts', null);
+        $this->getJson($url.'?graduated_only=all')->assertUnprocessable()->assertJsonValidationErrors('graduated_only');
+
+        Sanctum::actingAs(User::factory()->create(['role' => 'teacher', 'district_id' => $this->districtId, 'assigned_groups' => ['001']]));
+        $this->getJson($url.'?graduated_only=1&term=2/2568&group=001')->assertOk()
+            ->assertJsonPath('data.rows.0.counts', [0, 0, 0, 1]);
+        $this->getJson($url.'?graduated_only=1&term=2/2568&group=1')->assertOk()
+            ->assertJsonPath('data.rows.0.counts', [0, 0, 0, 0]);
+    }
+
     public function test_target_group_uses_occtyp_alongside_expected_graduation_and_registration_dimensions(): void
     {
         $this->student(1, '6910000001', ['occtyp' => ' 1 ', 'grp_code' => '001']);
