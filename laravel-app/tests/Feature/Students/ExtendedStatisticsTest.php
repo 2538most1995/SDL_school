@@ -39,7 +39,7 @@ final class ExtendedStatisticsTest extends TestCase
         $db->statement('CREATE TABLE IF NOT EXISTS INFORMATION_SCHEMA.TABLES (TABLE_SCHEMA TEXT, TABLE_NAME TEXT)');
         foreach ([1, 2, 3] as $level) {
             $tables = [
-                'student' => '_perf_id10 TEXT, _perf_grp TEXT, prename TEXT, name TEXT, surname TEXT, grp_code TEXT, gender TEXT, occtyp TEXT, age TEXT, nt_sem TEXT, nt_nosem TEXT, nt_sara1 TEXT, nt_sara2 TEXT, nnet TEXT, fin_cause TEXT',
+                'student' => '_perf_id10 TEXT, _perf_grp TEXT, prename TEXT, name TEXT, surname TEXT, grp_code TEXT, gender TEXT, occtyp TEXT, age TEXT, nt_sem TEXT, nt_nosem TEXT, nt_sara1 TEXT, nt_sara2 TEXT, nnet TEXT, fin_cause TEXT, fin_sem TEXT',
                 'grade' => '_id INTEGER PRIMARY KEY AUTOINCREMENT, _perf_std10 TEXT, _perf_semestry TEXT, _perf_sub TEXT, grade TEXT, typ_code TEXT, method TEXT, learning TEXT',
                 'subject' => '_perf_sub TEXT, sub_code TEXT, sub_name TEXT, sub_type TEXT, sub_credit TEXT',
                 'activity' => '_perf_std10 TEXT, _perf_semestry TEXT, hour TEXT',
@@ -115,41 +115,48 @@ final class ExtendedStatisticsTest extends TestCase
         $this->getJson($url)->assertForbidden();
     }
 
-    public function test_moral_report_can_filter_actual_graduates_without_changing_assessment_terms(): void
+    public function test_moral_report_uses_graduation_cohort_and_latest_valid_fallback(): void
     {
         DB::statement('ALTER TABLE '.$this->table(2, 'student').' RENAME COLUMN fin_cause TO fincause');
+        DB::statement('ALTER TABLE '.$this->table(2, 'student').' RENAME COLUMN fin_sem TO fin_sem2');
         DB::statement('ALTER TABLE '.$this->table(3, 'student').' DROP COLUMN fin_cause');
 
         foreach ([
-            [1, '1000000001', '001', ['fin_cause' => ' 1 '], '68/2', '3'],
-            [1, '1000000002', '001', ['fin_cause' => '0'], '69/1', '1'],
-            [1, '1000000003', '001', ['fin_cause' => '2'], '68/2', '2'],
-            [1, '1000000004', '1', ['fin_cause' => '1'], '68/2', '2'],
-            [2, '2000000001', '001', ['fincause' => '1'], '68/2', '0'],
-            [3, '3000000001', '001', [], '68/2', '3'],
-        ] as [$level, $code, $group, $status, $term, $result]) {
-            DB::table($this->table($level, 'student'))->insert(['_perf_id10' => $code, 'grp_code' => $group, ...$status]);
-            DB::table($this->table($level, 'virtue'))->insert(['_perf_std10' => $code, '_perf_semester' => $term, 'sumlevel' => $result]);
+            [1, '1000000001', '001', ['fin_cause' => ' 1 ', 'fin_sem' => '69/1'], [['69/1', '1'], ['1-2569', '2'], ['69/2', '0']]],
+            [1, '1000000002', '001', ['fin_cause' => '1', 'fin_sem' => '1-2569'], [['69/2', '3'], ['68/2', '1'], ['69/2', ''], ['bad', '2']]],
+            [1, '1000000003', '001', ['fin_cause' => '0', 'fin_sem' => '69/1'], [['69/1', '0']]],
+            [1, '1000000004', '001', ['fin_cause' => '1', 'fin_sem' => '68/2'], [['69/1', '3']]],
+            [1, '1000000005', '1', ['fin_cause' => '1', 'fin_sem' => '69/1'], [['68/2', '1']]],
+            [1, '1000000006', '001', ['fin_cause' => '1', 'fin_sem' => '69/1'], [['69/1', '9']]],
+            [2, '1000000001', '001', ['fincause' => '1', 'fin_sem2' => '69/1'], [['68/2', '0']]],
+            [3, '3000000001', '001', ['fin_sem' => '69/1'], [['69/1', '3']]],
+        ] as [$level, $code, $group, $graduation, $assessments]) {
+            DB::table($this->table($level, 'student'))->insert(['_perf_id10' => $code, 'grp_code' => $group, ...$graduation]);
+            foreach ($assessments as [$term, $result]) {
+                DB::table($this->table($level, 'virtue'))->insert(['_perf_std10' => $code, '_perf_semester' => $term, 'sumlevel' => $result]);
+            }
         }
 
         $url = '/api/v1/reports/moral';
-        $this->getJson($url.'?graduated_only=0&term=2/2568')->assertOk()
-            ->assertJsonPath('data.rows.0.counts', [0, 0, 2, 1])
+        $this->getJson($url.'?graduated_only=0&term=1/2569')->assertOk()
+            ->assertJsonPath('data.rows.0.counts', [1, 0, 1, 1])
             ->assertJsonPath('data.rows.2.counts', [0, 0, 0, 1]);
         $this->getJson($url.'?graduated_only=1')->assertOk()
             ->assertJsonPath('data.terms', ['1/2569', '2/2568'])
             ->assertJsonPath('data.selected_term', '1/2569')
-            ->assertJsonPath('data.rows.0.counts', [0, 0, 0, 0]);
-        $this->getJson($url.'?graduated_only=1&term=2/2568')->assertOk()
-            ->assertJsonPath('data.rows.0.counts', [0, 0, 1, 1])
+            ->assertJsonPath('data.rows.0.counts', [0, 1, 1, 1])
             ->assertJsonPath('data.rows.1.counts', [1, 0, 0, 0])
-            ->assertJsonPath('data.rows.2.counts', null);
+            ->assertJsonPath('data.rows.2.counts', null)
+            ->assertJsonMissing(['student_code' => '1000000001']);
+        $this->getJson($url.'?graduated_only=1&term=2/2568')->assertOk()
+            ->assertJsonPath('data.rows.0.counts', [0, 0, 0, 1])
+            ->assertJsonPath('data.rows.1.counts', [0, 0, 0, 0]);
         $this->getJson($url.'?graduated_only=all')->assertUnprocessable()->assertJsonValidationErrors('graduated_only');
 
         Sanctum::actingAs(User::factory()->create(['role' => 'teacher', 'district_id' => $this->districtId, 'assigned_groups' => ['001']]));
-        $this->getJson($url.'?graduated_only=1&term=2/2568&group=001')->assertOk()
-            ->assertJsonPath('data.rows.0.counts', [0, 0, 0, 1]);
-        $this->getJson($url.'?graduated_only=1&term=2/2568&group=1')->assertOk()
+        $this->getJson($url.'?graduated_only=1&term=1/2569&group=001')->assertOk()
+            ->assertJsonPath('data.rows.0.counts', [0, 0, 1, 1]);
+        $this->getJson($url.'?graduated_only=1&term=1/2569&group=1')->assertOk()
             ->assertJsonPath('data.rows.0.counts', [0, 0, 0, 0]);
     }
 

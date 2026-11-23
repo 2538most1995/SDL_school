@@ -21,6 +21,7 @@ type GroupOption = { value: string | number; label: string };
 const results = ['ปรับปรุง', 'พอใช้', 'ดี', 'ดีมาก'];
 const allStatusesLabel = 'ทุกสถานะ';
 const graduatesOnlyLabel = 'เฉพาะผู้สำเร็จการศึกษา';
+const graduateAssessmentRule = 'ใช้ผลในภาคเรียนที่จบ หากไม่มีให้ใช้ผลล่าสุดที่บันทึกไว้';
 const selectClass = 'min-h-11 w-full rounded-xl border border-slate-300 bg-white px-3 text-sm text-slate-900 focus:border-brand-600 focus:outline-none focus:ring-2 focus:ring-brand-200';
 const formatCount = (value: number) => value.toLocaleString('th-TH');
 
@@ -57,6 +58,7 @@ function MoralReport({ districtId, role }: { districtId: string | null; role: De
     const totals = results.map((_, index) => data?.rows.reduce((sum, row) => sum + (row.counts?.[index] ?? 0), 0) ?? 0);
     const assessed = totals.reduce((sum, count) => sum + count, 0);
     const hasSource = data?.rows.some((row) => row.counts !== null);
+    const termLabel = graduatedOnly ? 'ภาคเรียนที่จบ' : 'ภาคเรียน';
 
     async function exportExcel() {
         if (!data?.selected_term) return;
@@ -75,9 +77,10 @@ function MoralReport({ districtId, role }: { districtId: string | null; role: De
                     name: 'เงื่อนไขรายงาน',
                     columns: ['รายการ', 'ค่าที่ใช้'],
                     rows: [
-                        ['ภาคเรียน', data.selected_term],
+                        [termLabel, data.selected_term],
                         ['กลุ่มเรียน', groupLabel ?? (role === 'teacher' ? 'กลุ่มที่รับผิดชอบ' : 'ทุกกลุ่มเรียน')],
                         ['สถานะนักศึกษา', graduatedOnly ? graduatesOnlyLabel : allStatusesLabel],
+                        ...(graduatedOnly ? [['วิธีเลือกผลประเมิน', graduateAssessmentRule]] : []),
                     ],
                 },
             ]);
@@ -91,7 +94,7 @@ function MoralReport({ districtId, role }: { districtId: string | null; role: De
             actions={canExportRegistrationStatistics(role) && <Button icon={<ExcelFileIcon size={18} />} disabled={!hasSource || !data?.selected_term || report.isFetching} onClick={() => void exportExcel()}>บันทึกเป็น Excel</Button>} />
         <section className="space-y-4 rounded-2xl border border-slate-200 bg-white p-4 sm:p-5" aria-label="สรุปผลประเมินคุณธรรม">
             <div className="grid gap-3 sm:grid-cols-2 lg:max-w-5xl lg:grid-cols-3">
-                <label className="grid gap-2 text-sm font-bold text-slate-800">ภาคเรียน
+                <label className="grid gap-2 text-sm font-bold text-slate-800">{termLabel}
                     <select value={term} onChange={(event) => setTerm(event.target.value)} className={selectClass}>
                         <option value="">ล่าสุด{!term && data?.selected_term ? ` (${data.selected_term})` : ''}</option>
                         {terms.map((option) => <option key={option} value={option}>{option}</option>)}
@@ -115,7 +118,7 @@ function MoralReport({ districtId, role }: { districtId: string | null; role: De
             {report.isError && <QueryError onRetry={() => void report.refetch()} />}
             {data && !report.isError && <>
                 <div className="flex flex-wrap items-baseline justify-between gap-2">
-                    <h2 className="font-bold text-slate-950">{data.selected_term ? `ผลประเมินภาคเรียน ${data.selected_term}` : 'ผลประเมินตามระดับชั้น'}</h2>
+                    <h2 className="font-bold text-slate-950">{data.selected_term ? `${graduatedOnly ? 'ผู้สำเร็จการศึกษาภาคเรียน' : 'ผลประเมินภาคเรียน'} ${data.selected_term}` : 'ผลประเมินตามระดับชั้น'}</h2>
                     {hasSource && <p className="text-sm tabular-nums text-slate-600">ผู้มีผลประเมิน {formatCount(assessed)} คน</p>}
                 </div>
                 <div role="region" aria-label="ตารางผลประเมินคุณธรรม" tabIndex={0} className="overflow-x-auto rounded-xl border border-slate-200">
@@ -137,6 +140,7 @@ function MoralReport({ districtId, role }: { districtId: string | null; role: De
                         </tfoot>
                     </table>
                 </div>
+                {graduatedOnly && hasSource && <p className="text-sm text-slate-600">{graduateAssessmentRule}</p>}
                 {Boolean(hasSource) && assessed === 0 && <p className="text-sm text-slate-600">ไม่พบผลประเมินตามเงื่อนไขที่เลือก</p>}
             </>}
         </section>

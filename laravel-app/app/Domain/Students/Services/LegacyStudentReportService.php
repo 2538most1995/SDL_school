@@ -25,12 +25,29 @@ final readonly class LegacyStudentReportService
 {
     public function __construct(private DatabaseManager $database) {}
 
-    /** Count each assessed student once per level in the selected term. */
     public function moralStatistics(User $viewer, int $districtId, array $filters): array
+    {
+        $sets = config('system_data.student_enabled') ? $this->sets($districtId) : [];
+        [$terms, $term, $levels] = ($filters['graduated_only'] ?? false)
+            ? $this->graduateMoralCounts($viewer, $sets, $filters)
+            : $this->termMoralCounts($viewer, $sets, $filters);
+
+        return [
+            'terms' => $terms,
+            'selected_term' => $term,
+            'rows' => array_map(fn (int $level): array => [
+                'level' => $level,
+                'label' => $level === 4 ? 'ปวช.' : $this->levelLabel($level),
+                'counts' => $levels[$level] ?? null,
+            ], [1, 2, 3, 4]),
+        ];
+    }
+
+    /** Count each assessed student once per level in the selected assessment term. */
+    private function termMoralCounts(User $viewer, array $sets, array $filters): array
     {
         $sources = [];
         $terms = [];
-        $sets = config('system_data.student_enabled') ? $this->sets($districtId) : [];
         foreach ($sets as $set) {
             if ($set->virtue === null || $this->firstExistingColumn($set->virtue, ['sumlevel']) === null) {
                 continue;
@@ -50,16 +67,6 @@ final readonly class LegacyStudentReportService
                     $terms[] = $term;
                     $sourceTerms[$term][] = (string) $row['raw_term'];
                 }
-            }
-
-            // Keep the term selector tied to the assessment dates for both populations.
-            if ((bool) ($filters['graduated_only'] ?? false)) {
-                $cause = $this->firstExistingColumn($set->student, ['fin_cause', 'fincause']);
-                if ($cause === null) {
-                    continue;
-                }
-                $roster .= ' AND TRIM(st.'.$this->identifier($cause).') = ?';
-                $bindings[] = '1';
             }
 
             $sources[$set->level] = [$virtue, "{$from} AND EXISTS ({$roster})", $bindings, $sourceTerms];
@@ -90,15 +97,77 @@ final readonly class LegacyStudentReportService
             $levels[$level] = $counts;
         }
 
-        return [
-            'terms' => $terms,
-            'selected_term' => $term,
-            'rows' => array_map(fn (int $level): array => [
-                'level' => $level,
-                'label' => $level === 4 ? 'ปวช.' : $this->levelLabel($level),
-                'counts' => $levels[$level] ?? null,
-            ], [1, 2, 3, 4]),
-        ];
+        return [$terms, $term, $levels];
+    }
+
+    /** Prefer the graduation term's result, then the latest valid recorded term. */
+    private function graduateMoralCounts(User $viewer, array $sets, array $filters): array
+    {
+        $sources = [];
+        $terms = [];
+        foreach ($sets as $set) {
+            $cause = $this->firstExistingColumn($set->student, ['fin_cause', 'fincause']);
+            $graduationTerm = $this->firstExistingColumn($set->student, ['fin_sem', 'fin_sem2', 'finsem']);
+            if ($cause === null || $graduationTerm === null) {
+                continue;
+            }
+            [$join, $groupName] = $this->groupJoin($set, 'st');
+            [$scope, $bindings] = $this->scope($viewer, $set, 'st', $join !== '');
+            $conditions = [$scope, 'TRIM(st.'.$this->identifier($cause).') = ?', "st._perf_id10 <> ''"];
+            $bindings[] = '1';
+            $this->appendGroupAndSearchFilters($conditions, $bindings, $filters, $join !== '', 'st', $groupName);
+            $termColumn = 'st.'.$this->identifier($graduationTerm);
+            $from = 'FROM '.$this->identifier($set->student)." st {$join} WHERE ".implode(' AND ', $conditions);
+            $sourceTerms = [];
+            foreach ($this->rows("SELECT DISTINCT {$termColumn} AS raw_term {$from}", $bindings) as $row) {
+                $term = AcademicTerm::normalize($row['raw_term']);
+                if ($term !== null) {
+                    $terms[] = $term;
+                    $sourceTerms[$term][] = $row['raw_term'];
+                }
+            }
+            if ($set->virtue !== null && $this->firstExistingColumn($set->virtue, ['sumlevel']) !== null) {
+                $sources[$set->level] = [$this->identifier($set->virtue), $from, $bindings, $termColumn, $sourceTerms];
+            }
+        }
+
+        $terms = $this->sortTerms($terms);
+        $term = $this->selectedTerm($filters, $terms);
+        $levels = [];
+        foreach ($sources as $level => [$virtue, $from, $bindings, $termColumn, $sourceTerms]) {
+            $counts = array_fill(0, 4, 0);
+            $variants = $sourceTerms[$term] ?? [];
+            $assessments = [];
+            if ($variants !== []) {
+                $placeholders = implode(', ', array_fill(0, count($variants), '?'));
+                foreach ($this->rows(
+                    "SELECT graduates.student_code, v._perf_semester AS raw_term, TRIM(v.sumlevel) AS result
+                     FROM (SELECT DISTINCT st._perf_id10 AS student_code
+                           {$from} AND {$termColumn} IN ({$placeholders})) graduates
+                     INNER JOIN {$virtue} v ON v._perf_std10 = graduates.student_code
+                     WHERE TRIM(v.sumlevel) IN ('0', '1', '2', '3')
+                     ORDER BY v._id DESC",
+                    [...$bindings, ...$variants],
+                ) as $row) {
+                    $assessmentTerm = AcademicTerm::normalize($row['raw_term']);
+                    if ($assessmentTerm === null) {
+                        continue;
+                    }
+                    $code = $row['student_code'];
+                    $previousTerm = $assessments[$code]['term'] ?? null;
+                    if ($previousTerm === null || ($previousTerm !== $term
+                        && ($assessmentTerm === $term || AcademicTerm::compare($assessmentTerm, $previousTerm) > 0))) {
+                        $assessments[$code] = ['term' => $assessmentTerm, 'result' => (int) $row['result']];
+                    }
+                }
+            }
+            foreach ($assessments as $assessment) {
+                $counts[$assessment['result']]++;
+            }
+            $levels[$level] = $counts;
+        }
+
+        return [$terms, $term, $levels];
     }
 
     public function withRegistrationDimensions(User $viewer, int $districtId, array $data, array $filters): array
