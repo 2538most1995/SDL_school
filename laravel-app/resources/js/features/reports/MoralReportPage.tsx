@@ -21,7 +21,7 @@ type GroupOption = { value: string | number; label: string };
 const results = ['ปรับปรุง', 'พอใช้', 'ดี', 'ดีมาก'];
 const allStatusesLabel = 'ทุกสถานะ';
 const graduatesOnlyLabel = 'เฉพาะผู้สำเร็จการศึกษา';
-const graduateAssessmentRule = 'ใช้ผลในภาคเรียนที่จบ หากไม่มีให้ใช้ผลล่าสุดที่บันทึกไว้';
+const graduateAssessmentRule = 'ใช้ผลในภาคเรียนที่จบ หากไม่มีให้ใช้ผลล่าสุดจากภาคเรียนก่อนจบ';
 const selectClass = 'min-h-11 w-full rounded-xl border border-slate-300 bg-white px-3 text-sm text-slate-900 focus:border-brand-600 focus:outline-none focus:ring-2 focus:ring-brand-200';
 const formatCount = (value: number) => value.toLocaleString('th-TH');
 

@@ -100,7 +100,7 @@ final readonly class LegacyStudentReportService
         return [$terms, $term, $levels];
     }
 
-    /** Prefer the graduation term's result, then the latest valid recorded term. */
+    /** Use the latest valid assessment at or before the student's graduation term. */
     private function graduateMoralCounts(User $viewer, array $sets, array $filters): array
     {
         $sources = [];
@@ -150,13 +150,12 @@ final readonly class LegacyStudentReportService
                     [...$bindings, ...$variants],
                 ) as $row) {
                     $assessmentTerm = AcademicTerm::normalize($row['raw_term']);
-                    if ($assessmentTerm === null) {
+                    if ($assessmentTerm === null || AcademicTerm::compare($assessmentTerm, $term) > 0) {
                         continue;
                     }
                     $code = $row['student_code'];
                     $previousTerm = $assessments[$code]['term'] ?? null;
-                    if ($previousTerm === null || ($previousTerm !== $term
-                        && ($assessmentTerm === $term || AcademicTerm::compare($assessmentTerm, $previousTerm) > 0))) {
+                    if ($previousTerm === null || AcademicTerm::compare($assessmentTerm, $previousTerm) > 0) {
                         $assessments[$code] = ['term' => $assessmentTerm, 'result' => (int) $row['result']];
                     }
                 }
