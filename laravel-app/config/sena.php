@@ -19,6 +19,7 @@ return [
                 ['key' => 'students', 'label' => 'ข้อมูลนักศึกษา', 'description' => 'ค้นหา กรอง และดูข้อมูลนักศึกษา', 'route' => '/students', 'icon' => 'students', 'roles' => ['teacher', 'admin', 'super_admin']],
                 ['key' => 'my-learning', 'label' => 'ข้อมูลการเรียนของฉัน', 'description' => 'ข้อมูลประจำตัวและสถานะการศึกษา', 'route' => '/my-learning', 'icon' => 'student', 'roles' => ['student']],
                 ['key' => 'grades', 'label' => 'ผลการเรียน', 'description' => 'รายวิชา เกรด GPAX และหน่วยกิต', 'route' => '/grades', 'icon' => 'chart', 'roles' => ['student', 'teacher', 'admin', 'super_admin']],
+                ['key' => 'semester-gpa', 'label' => 'ผลการเรียนเฉลี่ยรายภาคเรียน', 'description' => 'เลือกภาคเรียนเพื่อดู GPA และผลการเรียนรายคน', 'route' => '/semester-gpa', 'icon' => 'trend', 'roles' => ['teacher', 'admin', 'super_admin']],
                 ['key' => 'kpch', 'label' => 'กิจกรรม กพช.', 'description' => 'ชั่วโมงกิจกรรมและเกณฑ์ผ่าน', 'route' => '/kpch', 'icon' => 'sparkle', 'roles' => ['student', 'teacher', 'admin', 'super_admin']],
                 ['key' => 'moral', 'label' => 'คุณธรรม', 'description' => 'ผลประเมินคุณธรรมรายภาคเรียน', 'route' => '/moral', 'icon' => 'heart', 'roles' => ['student', 'teacher', 'admin', 'super_admin']],
             ],

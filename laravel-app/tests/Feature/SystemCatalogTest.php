@@ -57,6 +57,9 @@ class SystemCatalogTest extends TestCase
         $this->assertTrue($items->contains('key', 'exam-eligible'));
         $this->assertTrue($items->contains('route', '/reports/exam-eligible'));
         $this->assertTrue($items->contains('key', 'exam-attendance-check'));
+        $basicItems = collect($response->json('data.groups'))->firstWhere('key', 'basic-information')['items'];
+        $this->assertSame('/grades', collect($basicItems)->firstWhere('key', 'grades')['route']);
+        $this->assertSame('/semester-gpa', collect($basicItems)->firstWhere('key', 'semester-gpa')['route']);
         $statistics = collect($response->json('data.groups'))->firstWhere('key', 'statistics');
         $resultReports = collect($response->json('data.groups'))->firstWhere('key', 'result-reports');
         $this->assertSame('statistics-overview', $statistics['items'][0]['key']);
@@ -80,6 +83,7 @@ class SystemCatalogTest extends TestCase
         $this->assertTrue(collect($response->json('data.groups'))->flatMap(fn (array $group) => $group['items'])->contains('key', 'statistics-overview'));
         $this->assertTrue(collect($response->json('data.groups'))->flatMap(fn (array $group) => $group['items'])->contains('key', 'exam-eligible'));
         $this->assertTrue(collect($response->json('data.groups'))->flatMap(fn (array $group) => $group['items'])->contains('key', 'exam-attendance-check'));
+        $this->assertTrue(collect($response->json('data.groups'))->flatMap(fn (array $group) => $group['items'])->contains('key', 'semester-gpa'));
     }
 
     public function test_super_admin_catalog_includes_district_registry(): void
@@ -92,6 +96,7 @@ class SystemCatalogTest extends TestCase
         $this->assertTrue($items->contains('key', 'districts'));
         $this->assertTrue($items->contains('route', '/super-admin/districts'));
         $this->assertTrue($items->contains('key', 'announcements'));
+        $this->assertTrue($items->contains('key', 'semester-gpa'));
     }
 
     public function test_query_string_cannot_escalate_catalog_role(): void

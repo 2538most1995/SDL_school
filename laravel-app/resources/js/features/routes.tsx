@@ -10,6 +10,7 @@ const StudentsPage = lazyWithReload(async () => ({ default: (await import('./stu
 const StudentDetailPage = lazyWithReload(async () => ({ default: (await import('./students')).StudentDetailPage }));
 const MyLearningPage = lazyWithReload(async () => ({ default: (await import('./students')).MyLearningPage }));
 const GradesPage = lazyWithReload(async () => ({ default: (await import('./students')).GradesPage }));
+const SemesterGpaPage = lazyWithReload(async () => ({ default: (await import('./students')).SemesterGpaPage }));
 const AchievementPage = lazyWithReload(async () => ({ default: (await import('./students')).AchievementPage }));
 const ReportPage = lazyWithReload(async () => ({ default: (await import('./reports')).ReportPage }));
 const StatisticsOverviewPage = lazyWithReload(async () => ({ default: (await import('./reports/StatisticsOverviewPage')).StatisticsOverviewPage }));
@@ -51,6 +52,7 @@ export const featureRouteCatalog: FeatureRoute[] = [
     { path: '/students/:studentId', label: 'รายละเอียดนักศึกษา', roles: ['teacher', 'admin', 'super_admin'], element: <StudentDetailPage /> },
     { path: '/my-learning', label: 'ข้อมูลการเรียนของฉัน', roles: ['student'], element: <MyLearningPage /> },
     { path: '/grades', label: 'ผลการเรียน', roles: ['student', 'teacher', 'admin', 'super_admin'], element: <GradesPage /> },
+    { path: '/semester-gpa', label: 'ผลการเรียนเฉลี่ยรายภาคเรียน', roles: ['teacher', 'admin', 'super_admin'], element: <SemesterGpaPage /> },
     { path: '/kpch', label: 'กิจกรรม กพช.', roles: ['student', 'teacher', 'admin', 'super_admin'], element: <AchievementPage kind="kpch" /> },
     { path: '/moral', label: 'คุณธรรม', roles: ['student', 'teacher', 'admin', 'super_admin'], element: <AchievementPage kind="moral" /> },
     { path: '/public-relations', label: 'ข่าวประชาสัมพันธ์', roles: ['student'], element: <PublicRelationsPage /> },

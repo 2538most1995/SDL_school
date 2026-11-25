@@ -2,7 +2,7 @@
 
 ## Selected-term GPA and registration modes (2026-11-25)
 
-The optional directory GPA reads grade history only for authorized rows on the current page, batched by imported grade table in chunks of at most 500 students. It reuses detail-grade normalization, duplicate selection and credit weighting. The SQLite regression checks that a single-level page reads grades in one batched query and passes only the visible code. Registration types filter the existing historical report rows after duplicate selection and before row, summary and group totals are built. The report uses the existing imports and indexes. Live MySQL query plans and production latency remain unverified.
+The staff semester GPA page at `/semester-gpa` requests the optional directory GPA. Grade history is read only for authorized rows on the current page, batched by imported grade table in chunks of at most 500 students. It reuses detail-grade normalization, duplicate selection and credit weighting. The SQLite regression checks that a single-level page reads grades in one batched query and passes only the visible code. The original `/grades` staff list uses the standard directory query. Registration types filter the existing historical report rows after duplicate selection and before row, summary and group totals are built. The report uses the existing imports and indexes. Live MySQL query plans and production latency remain unverified.
 
 ## Personal-profile integration API (2026-11-07)
 
