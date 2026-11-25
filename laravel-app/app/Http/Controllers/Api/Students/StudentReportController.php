@@ -5,6 +5,7 @@ namespace App\Http\Controllers\Api\Students;
 use App\Domain\Students\Services\LegacyStudentReportService;
 use App\Domain\Students\Services\StudentReportService;
 use App\Domain\Students\Support\ExtendedStudentStatistics;
+use App\Domain\Students\Support\RegistrationType;
 use App\Http\Resources\Students\StudentReportResource;
 use App\Services\AuditService;
 use Illuminate\Http\JsonResponse;
@@ -183,6 +184,7 @@ final class StudentReportController extends StudentsApiController
             'search' => ['nullable', 'string', 'max:100'],
             'subject' => ['nullable', 'string', 'max:30'],
             'subject_type' => ['nullable', Rule::in(['compulsory', 'elective'])],
+            'registration_type' => ['nullable', Rule::enum(RegistrationType::class)],
             'view' => ['nullable', Rule::in(['subject', 'student'])],
             'exam_status' => ['nullable', 'string', Rule::in(['taken', 'eligible'])],
             'category' => ['nullable', Rule::in(['target_group', 'group', 'gender', 'level', 'occupation', 'nationality', 'age'])],

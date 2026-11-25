@@ -10,6 +10,7 @@ use App\Domain\Students\Models\Student;
 use App\Domain\Students\Repositories\StudentRepository;
 use App\Domain\Students\Support\AcademicTerm;
 use App\Domain\Students\Support\ImportedScoreCalculationAudit;
+use App\Domain\Students\Support\RegistrationType;
 use App\Domain\Students\Support\StudentGroupOptions;
 use App\Models\User;
 
@@ -46,6 +47,8 @@ final readonly class StudentAcademicService
                 'term' => $academicTerm,
                 'gpa' => $termSummary['gpax'],
                 'earned_credits' => $termSummary['earned_credits'],
+                'compulsory_credits' => $termSummary['compulsory_credits'],
+                'elective_credits' => $termSummary['elective_credits'],
                 'graded_credits' => $termSummary['graded_credits'],
                 'registered_subjects' => $termSummary['registered_subjects'],
                 'passed_subjects' => $termSummary['passed_subjects'],
@@ -66,6 +69,23 @@ final readonly class StudentAcademicService
             'items' => $items,
             'summary' => $summary,
         ];
+    }
+
+    /**
+     * @param  list<Student>  $students  The already authorized directory page.
+     * @return array<string, ?float>
+     */
+    public function termGpas(array $students, string $term): array
+    {
+        $gpas = [];
+        foreach (array_chunk($students, 500) as $page) {
+            foreach ($this->repository->gradesForMany($page) as $key => $grades) {
+                $termGrades = array_filter($grades, static fn (Grade $grade): bool => $grade->term === $term);
+                $gpas[$key] = $this->summarizeGrades($termGrades)['gpax'];
+            }
+        }
+
+        return $gpas;
     }
 
     /**
@@ -345,9 +365,11 @@ final readonly class StudentAcademicService
     }
 
     /** @return array{student: Student, items: list<RegisteredSubject>, summary: array<string, mixed>}|null */
-    public function subjects(User $viewer, string $code, ?string $term = null, mixed $level = null): ?array
+    public function subjects(User $viewer, string $code, ?string $term = null, mixed $level = null, ?RegistrationType $registrationType = null): ?array
     {
-        $student = $this->directory->findAccessible($viewer, $code, $level);
+        $student = $registrationType === null
+            ? $this->directory->findAccessible($viewer, $code, $level)
+            : $this->directory->findForDirectory($viewer, $code, $level, $term);
 
         if ($student === null) {
             return null;
@@ -355,7 +377,8 @@ final readonly class StudentAcademicService
 
         $items = array_values(array_filter(
             $this->repository->subjectsFor($student),
-            static fn (RegisteredSubject $subject): bool => $term === null || $subject->term === $term,
+            static fn (RegisteredSubject $subject): bool => ($term === null || $subject->term === $term)
+                && ($registrationType?->matches($subject->transferred) ?? true),
         ));
 
         return [

@@ -7,12 +7,13 @@ use App\Domain\Students\Models\KpchActivity;
 use App\Domain\Students\Models\MoralAssessment;
 use App\Domain\Students\Models\RegisteredSubject;
 use App\Domain\Students\Models\Student;
+use App\Domain\Students\Support\AcademicTerm;
 
 /**
  * Canonical synthetic dataset used while legacy DBF imports are being migrated.
  * No query in this repository connects to the production or import databases.
  */
-final class DemoStudentRepository implements StudentProfileRepository, StudentRepository
+final class DemoStudentRepository implements StudentProfileRepository, StudentRepository, TermStudentRepository
 {
     /** @param list<int>|null $districtIds
      * @return list<Student>
@@ -32,6 +33,32 @@ final class DemoStudentRepository implements StudentProfileRepository, StudentRe
             $students,
             static fn (Student $student): bool => in_array($student->districtId, $districtIds, true),
         ));
+    }
+
+    public function availableTerms(array $districtIds): array
+    {
+        $terms = [];
+        foreach ($this->students($districtIds) as $student) {
+            foreach ($this->academicRows($student) as $row) {
+                $terms[$row['term']] = true;
+            }
+        }
+        $values = array_keys($terms);
+        usort($values, static fn (string $left, string $right): int => AcademicTerm::compare($right, $left));
+
+        return $values;
+    }
+
+    public function studentsForTerm(array $districtIds, string $term): array
+    {
+        $students = [];
+        foreach ($this->students($districtIds) as $student) {
+            if (in_array($term, array_column($this->academicRows($student), 'term'), true)) {
+                $students[] = new Student(...[...get_object_vars($student), 'currentTerm' => $term]);
+            }
+        }
+
+        return $students;
     }
 
     public function find(string $code, ?int $districtId = null, ?int $level = null): ?Student

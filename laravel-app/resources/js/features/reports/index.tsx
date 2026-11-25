@@ -18,7 +18,7 @@ import {
     UsersThree,
     X,
 } from '@phosphor-icons/react';
-import { keepPreviousData, useQuery } from '@tanstack/react-query';
+import { useQuery } from '@tanstack/react-query';
 import type { ColumnDef } from '@tanstack/react-table';
 import { useDeferredValue, useEffect, useMemo, useState } from 'react';
 import { DataTable } from '../../components/DataTable';
@@ -42,6 +42,7 @@ type ReportRow = {
     group: string;
     metric: string;
     level?: string;
+    level_id?: number;
     group_label?: string;
     group_code?: string;
     examStatus?: string;
@@ -52,6 +53,7 @@ type ReportRow = {
     grade?: string | null;
     meetsGradeThreshold?: boolean;
     subjectType?: 'compulsory' | 'elective';
+    transferred?: boolean;
     reductionPercent?: number;
     removedCount?: number;
     remainingCount?: number;
@@ -70,6 +72,12 @@ type ReportPayload = {
 
 type ViewMode = 'subject' | 'student';
 type SubjectTypeFilter = '' | 'compulsory' | 'elective';
+const registrationTypeLabels = {
+    regular: 'เฉพาะลงทะเบียนปกติ',
+    all: 'รวมลงทะเบียนปกติและเทียบโอน',
+    transfer: 'เฉพาะเทียบโอน',
+};
+type RegistrationType = keyof typeof registrationTypeLabels;
 type FilterOption = { value: string | number; label: string };
 type AcademicSubjectRow = {
     id: string;
@@ -79,6 +87,7 @@ type AcademicSubjectRow = {
     type: 'compulsory' | 'elective';
     grade: string | null;
     attended: boolean;
+    transferred: boolean;
 };
 
 function compareAcademicTermsDescending(left: string, right: string): number {
@@ -199,11 +208,12 @@ function normalizeReportPayload(kind: ReportKind, payload: unknown, fallback: Re
             const successful = Number(kind === 'exam-attendance' ? item.attended_subjects : kind === 'grade-threshold' ? item.grade_two_or_above : registered);
             const grade = item.grade === null || item.grade === undefined ? null : String(item.grade);
             return {
-                id: String(student.code ?? index),
+                id: `${String(studentLevel.id ?? '')}|${String(student.code ?? index)}`,
                 primary: String(student.full_name ?? 'ไม่พบชื่อนักศึกษา'),
                 secondary: String(student.code ?? ''),
                 group: `${String(studentLevel.label ?? '-')} · ${String(studentGroup.name ?? studentGroup.code ?? '-')}`,
                 level: String(studentLevel.label ?? ''),
+                level_id: typeof studentLevel.id === 'number' ? studentLevel.id : undefined,
                 group_label: String(studentGroup.name ?? studentGroup.code ?? ''),
                 group_code: String(studentGroup.code ?? ''),
                 metric: kind === 'registered-subjects'
@@ -214,6 +224,7 @@ function normalizeReportPayload(kind: ReportKind, payload: unknown, fallback: Re
                 successRate: Number(item.success_rate ?? 0),
                 absentCount: Number(item.absent_subjects ?? 0),
                 grade,
+                transferred: typeof item.is_transferred === 'boolean' ? item.is_transferred : undefined,
                 meetsGradeThreshold: typeof item.meets_grade_threshold === 'boolean'
                     ? item.meets_grade_threshold
                     : grade !== null && !Number.isNaN(Number(grade)) && Number(grade) >= 2,
@@ -330,12 +341,15 @@ function academicStatCards(kind: ReportKind, viewMode: ViewMode, payload: Report
     ];
 }
 
-function AcademicStudentDetailDialog({ kind, student, term, subjectType, onClose }: { kind: ReportKind; student: ReportRow; term: string; subjectType: SubjectTypeFilter; onClose: () => void }) {
-    const endpoint = kind === 'registered-subjects'
-        ? `/api/v1/students/${encodeURIComponent(student.secondary)}/subjects?term=${encodeURIComponent(term)}`
-        : `/api/v1/students/${encodeURIComponent(student.secondary)}/grades?term=${encodeURIComponent(term)}`;
+function AcademicStudentDetailDialog({ kind, student, term, subjectType, registrationType, onClose }: { kind: ReportKind; student: ReportRow; term: string; subjectType: SubjectTypeFilter; registrationType: RegistrationType; onClose: () => void }) {
+    const district = useSelectedDistrictId();
+    const params = new URLSearchParams({ term });
+    if (student.level_id) params.set('level', String(student.level_id));
+    const isRegistration = kind === 'registered-subjects';
+    if (isRegistration) params.set('registration_type', registrationType);
+    const endpoint = `/api/v1/students/${encodeURIComponent(student.secondary)}/${isRegistration ? 'subjects' : 'grades'}?${params}`;
     const detail = useQuery({
-        queryKey: ['report-student-subjects', kind, student.secondary, term],
+        queryKey: ['report-student-subjects', district, endpoint],
         queryFn: ({ signal }) => getFeatureDataWithDemo<{ items: Array<Record<string, unknown>>; summary?: Record<string, unknown> }>(endpoint, { items: [] }, signal),
     });
     const subjectRows = useMemo<AcademicSubjectRow[]>(() => (detail.data?.data.items ?? []).map((item, index) => {
@@ -353,6 +367,7 @@ function AcademicStudentDetailDialog({ kind, student, term, subjectType, onClose
             type: isElective ? 'elective' as const : 'compulsory' as const,
             grade,
             attended: Boolean(item.exam_attended),
+            transferred: item.is_transferred === true,
         };
     }).filter((row) => subjectType === '' || row.type === subjectType), [detail.data, subjectType, term]);
 
@@ -391,7 +406,9 @@ function AcademicStudentDetailDialog({ kind, student, term, subjectType, onClose
             },
         },
         { accessorKey: 'credits', header: 'หน่วยกิต', size: 85, meta: { compactSize: 54, compactTextAlign: 'center' }, cell: ({ getValue }) => Number(getValue<number>()).toFixed(0) },
-        ...(kind === 'registered-subjects' ? [] : [{ accessorKey: 'grade', header: 'ผลการเรียน', size: 120, meta: { compactSize: 74, compactTextAlign: 'center' }, cell: ({ getValue }) => getValue<string | null>() ?? 'รอผล' } as ColumnDef<AcademicSubjectRow>]),
+        ...(kind === 'registered-subjects' ? [{
+            id: 'registration_type', header: 'การลงทะเบียน', size: 120, meta: { compactSize: 76 }, accessorFn: (row) => row.transferred ? 'เทียบโอน' : 'ปกติ',
+        } as ColumnDef<AcademicSubjectRow>] : [{ accessorKey: 'grade', header: 'ผลการเรียน', size: 120, meta: { compactSize: 74, compactTextAlign: 'center' }, cell: ({ getValue }) => getValue<string | null>() ?? 'รอผล' } as ColumnDef<AcademicSubjectRow>]),
         ...(kind === 'grade-threshold' ? [{
             id: 'grade_result', header: 'ผลเกณฑ์เกรด 2', size: 170, meta: { compactSize: 92, compactTextAlign: 'center' }, cell: ({ row }: { row: { original: AcademicSubjectRow } }) => {
                 const numeric = row.original.grade !== null && !Number.isNaN(Number(row.original.grade)) ? Number(row.original.grade) : null;
@@ -442,20 +459,24 @@ function AcademicStudentDetailDialog({ kind, student, term, subjectType, onClose
     </div>;
 }
 
-function AcademicSubjectStudentsDialog({ kind, subject, term, level, group, endpoint, onClose }: {
+function AcademicSubjectStudentsDialog({ kind, subject, term, level, group, endpoint, registrationType, onClose }: {
     kind: ReportKind;
     subject: ReportRow;
     term: string;
     level: string;
     group: string;
     endpoint: string;
+    registrationType: RegistrationType;
     onClose: () => void;
 }) {
+    const district = useSelectedDistrictId();
     const params = new URLSearchParams({ term, view: 'student', subject: subject.secondary });
-    if (level) params.set('level', level);
+    const subjectLevel = subject.level_id ? String(subject.level_id) : level;
+    if (subjectLevel) params.set('level', subjectLevel);
     if (group) params.set('group', group);
+    if (kind === 'registered-subjects') params.set('registration_type', registrationType);
     const students = useQuery({
-        queryKey: ['report-subject-students', kind, subject.secondary, term, level, group],
+        queryKey: ['report-subject-students', district, kind, params.toString()],
         queryFn: async ({ signal }) => {
             const response = await getFeatureDataWithDemo<unknown>(`${endpoint}?${params.toString()}`, { items: [], summary: {} }, signal);
             return normalizeReportPayload(kind, response.data, { total: 0, active: 0, groups: 0, rows: [] }, 'student');
@@ -481,7 +502,7 @@ function AcademicSubjectStudentsDialog({ kind, subject, term, level, group, endp
                 ),
             } as ColumnDef<ReportRow>,
         ] : [{
-            accessorKey: 'metric', header: kind === 'registered-subjects' ? 'การลงทะเบียน' : 'การเข้าสอบ', size: 170, meta: { compactSize: 88, compactTextAlign: 'center' },
+            id: 'metric', accessorFn: (row) => kind === 'registered-subjects' ? (row.transferred ? 'เทียบโอน' : 'ปกติ') : row.metric, header: kind === 'registered-subjects' ? 'การลงทะเบียน' : 'การเข้าสอบ', size: 170, meta: { compactSize: 88, compactTextAlign: 'center' },
         } as ColumnDef<ReportRow>]),
     ], [kind]);
 
@@ -519,6 +540,7 @@ export function ReportPage({ kind }: { kind: ReportKind }) {
     const [group, setGroup] = useState('');
     const [examStatus, setExamStatus] = useState('');
     const [subjectType, setSubjectType] = useState<SubjectTypeFilter>('');
+    const [registrationType, setRegistrationType] = useState<RegistrationType>('regular');
     const [viewMode, setViewMode] = useState<ViewMode>('student');
     const [selectedStudent, setSelectedStudent] = useState<ReportRow | null>(null);
     const [selectedSubject, setSelectedSubject] = useState<ReportRow | null>(null);
@@ -529,11 +551,12 @@ export function ReportPage({ kind }: { kind: ReportKind }) {
     const deferredSearch = useDeferredValue(search);
     const isAcademicReport = academicReportKinds.includes(kind);
     const isExamOrder = kind === 'registered-subjects' && viewMode === 'subject' && examOrderMode;
+    const effectiveRegistrationType = isExamOrder ? 'regular' : registrationType;
     const canFilterGroups = role === 'teacher' || role === 'admin' || role === 'super_admin';
     useEffect(() => {
         setCheckedSubjects([]);
         setSubjectPercentages({});
-    }, [kind, term, level, group, role, districtId]);
+    }, [kind, term, level, group, role, districtId, effectiveRegistrationType]);
     useEffect(() => {
         setExamOrderMode(false);
         setCheckedSubjects([]);
@@ -557,7 +580,7 @@ export function ReportPage({ kind }: { kind: ReportKind }) {
         return { groups: meta?.filter_options?.groups ?? [] };
     }, [directoryOptions.data]);
     const report = useQuery({
-        queryKey: ['report', kind, districtId, term, deferredSearch, level, canFilterGroups ? group : '', viewMode, examStatus, subjectType],
+        queryKey: ['report', kind, districtId, role, effectiveRegistrationType, viewMode, term, deferredSearch, level, canFilterGroups ? group : '', examStatus, subjectType],
         queryFn: async ({ signal }) => {
             const params = new URLSearchParams({ search: deferredSearch });
             if (term) params.set('term', term);
@@ -568,10 +591,14 @@ export function ReportPage({ kind }: { kind: ReportKind }) {
             if (canFilterGroups && group) params.set('group', group);
             if (kind === 'expected-graduates' && examStatus) params.set('exam_status', examStatus);
             if (kind === 'grade-threshold' && subjectType) params.set('subject_type', subjectType);
+            if (kind === 'registered-subjects') params.set('registration_type', effectiveRegistrationType);
             const response = await getFeatureDataWithDemo<unknown>(`${config.endpoint}?${params.toString()}`, config.demo, signal);
             return { ...response, data: normalizeReportPayload(kind, response.data, { total: 0, active: 0, groups: 0, rows: [] }, viewMode) };
         },
-        placeholderData: keepPreviousData,
+        placeholderData: (previous, previousQuery) => {
+            const [, previousKind, previousDistrict, previousRole, previousType, previousView] = previousQuery?.queryKey ?? [];
+            return previousKind === kind && previousDistrict === districtId && previousRole === role && previousType === effectiveRegistrationType && previousView === viewMode ? previous : undefined;
+        },
     });
 
     const rows = useMemo(() => {
@@ -594,7 +621,8 @@ export function ReportPage({ kind }: { kind: ReportKind }) {
     };
     const exportRegistrations = () => {
         if (registrationBusy) return;
-        downloadExcel(`${isExamOrder ? 'สั่งข้อสอบ' : 'วิชาลงทะเบียน'}-${viewMode === 'subject' ? 'รายวิชา' : 'รายคน'}-${term.replace('/', '-')}`, buildRegisteredSubjectsSheets(
+        const reportName = isExamOrder ? 'สั่งข้อสอบ' : `วิชาลงทะเบียน-${registrationTypeLabels[effectiveRegistrationType]}`;
+        downloadExcel(`${reportName}-${viewMode === 'subject' ? 'รายวิชา' : 'รายคน'}-${term.replace('/', '-')}`, buildRegisteredSubjectsSheets(
             viewMode, rows, report.data?.data.group_rows ?? [], isExamOrder ? subjectPercentages : {}, term, isExamOrder,
         ));
     };
@@ -663,19 +691,20 @@ export function ReportPage({ kind }: { kind: ReportKind }) {
         ...(isAcademicReport ? [{
             id: 'details', header: 'รายละเอียด', size: 145, meta: { compactSize: 52, compactTextAlign: 'center' }, enableSorting: false,
             cell: ({ row }: { row: { original: ReportRow } }) => viewMode === 'student'
-                ? <button type="button" onClick={() => setSelectedStudent(row.original)} className="responsive-table-action inline-flex items-center gap-1.5 whitespace-nowrap rounded-lg border border-teal-200/90 bg-teal-50/80 px-2.5 py-1.5 text-xs font-bold text-teal-800 shadow-2xs hover:border-teal-300 hover:bg-teal-100/90 transition active:scale-[0.98]" aria-label={`เปิดรายละเอียด ${row.original.primary}`}><EyeViewIcon size={17} className="text-teal-700" /> <span>เปิดดู</span></button>
-                : <button type="button" onClick={() => setSelectedSubject(row.original)} className="responsive-table-action inline-flex items-center gap-1.5 whitespace-nowrap rounded-lg border border-sky-200 bg-sky-50 px-2.5 py-1.5 text-xs font-bold text-sky-800 hover:bg-sky-100" aria-label={`ดูรายชื่อ ${row.original.primary}`}><UsersThree size={16} weight="bold" /> <span>ดูรายชื่อ</span></button>,
+                ? <button type="button" disabled={kind === 'registered-subjects' && registrationBusy} onClick={() => setSelectedStudent(row.original)} className="responsive-table-action inline-flex items-center gap-1.5 whitespace-nowrap rounded-lg border border-teal-200/90 bg-teal-50/80 px-2.5 py-1.5 text-xs font-bold text-teal-800 shadow-2xs hover:border-teal-300 hover:bg-teal-100/90 transition active:scale-[0.98]" aria-label={`เปิดรายละเอียด ${row.original.primary}`}><EyeViewIcon size={17} className="text-teal-700" /> <span>เปิดดู</span></button>
+                : <button type="button" disabled={kind === 'registered-subjects' && registrationBusy} onClick={() => setSelectedSubject(row.original)} className="responsive-table-action inline-flex items-center gap-1.5 whitespace-nowrap rounded-lg border border-sky-200 bg-sky-50 px-2.5 py-1.5 text-xs font-bold text-sky-800 hover:bg-sky-100" aria-label={`ดูรายชื่อ ${row.original.primary}`}><UsersThree size={16} weight="bold" /> <span>ดูรายชื่อ</span></button>,
         } as ColumnDef<ReportRow>] : []),
     ], [config, isAcademicReport, kind, viewMode, rows, checkedSubjects, isExamOrder, registrationBusy]);
 
     const payload = report.data?.data;
-    const activeFilterCount = [search.trim(), level, canFilterGroups ? group : '', examStatus, subjectType].filter(Boolean).length;
+    const activeFilterCount = [search.trim(), level, canFilterGroups ? group : '', examStatus, subjectType, kind === 'registered-subjects' && effectiveRegistrationType !== 'regular'].filter(Boolean).length;
     const clearFilters = () => {
         setSearch('');
         setLevel('');
         setGroup('');
         setExamStatus('');
         setSubjectType('');
+        if (!isExamOrder) setRegistrationType('regular');
     };
     const termOptions = useMemo(() => {
         const available = payload?.terms?.filter(Boolean) ?? [];
@@ -742,7 +771,7 @@ export function ReportPage({ kind }: { kind: ReportKind }) {
                     }} className={`inline-flex h-10 items-center gap-2 rounded-xl px-4 text-sm font-bold transition disabled:opacity-50 ${isExamOrder ? 'border border-brand-300 bg-white text-brand-800' : 'bg-brand-700 text-white hover:bg-brand-800'}`}><Books size={18} />{isExamOrder ? 'ปิดสั่งข้อสอบ' : 'สั่งข้อสอบ'}</button>}
                 </div>}
 
-                <FilterGrid className="mb-5" columns={kind === 'expected-graduates' || kind === 'grade-threshold' ? (canFilterGroups ? 4 : 3) : (canFilterGroups ? 3 : 2)}>
+                <FilterGrid className="mb-5" columns={kind === 'registered-subjects' || kind === 'expected-graduates' || kind === 'grade-threshold' ? (canFilterGroups ? 4 : 3) : (canFilterGroups ? 3 : 2)}>
                     <label>
                         <span className="mb-2 block text-sm font-bold text-slate-700">ค้นหาในรายงาน</span>
                         <span className="relative block">
@@ -752,6 +781,12 @@ export function ReportPage({ kind }: { kind: ReportKind }) {
                     </label>
                     <label><span className="mb-2 block text-sm font-bold text-slate-700">ระดับการศึกษา</span><select value={level} onChange={(event) => setLevel(event.target.value)} className="h-11 w-full rounded-xl border border-slate-300 bg-white px-3 text-sm"><option value="">ทุกระดับ</option><option value="1">ประถมศึกษา</option><option value="2">มัธยมศึกษาตอนต้น</option><option value="3">มัธยมศึกษาตอนปลาย</option></select></label>
                     {canFilterGroups && <label><span className="mb-2 block text-sm font-bold text-slate-700">กลุ่มเรียน</span><select value={group} onChange={(event) => setGroup(event.target.value)} className="h-11 w-full rounded-xl border border-slate-300 bg-white px-3 text-sm"><option value="">{role === 'teacher' ? 'เฉพาะกลุ่มที่รับผิดชอบ' : 'ทุกกลุ่มเรียน'}</option>{filterOptions.groups.map((option) => <option key={String(option.value)} value={String(option.value)}>{option.label}</option>)}</select></label>}
+                    {kind === 'registered-subjects' && <label>
+                        <span className="mb-2 block text-sm font-bold text-slate-700">ประเภทการลงทะเบียน</span>
+                        <select value={effectiveRegistrationType} disabled={isExamOrder} onChange={(event) => setRegistrationType(event.target.value as RegistrationType)} className="h-11 w-full rounded-xl border border-slate-300 bg-white px-3 text-sm disabled:bg-slate-100">
+                            {Object.entries(registrationTypeLabels).map(([value, label]) => <option key={value} value={value}>{label}</option>)}
+                        </select>
+                    </label>}
                     {kind === 'grade-threshold' && (
                         <label>
                             <span className="mb-2 block text-sm font-bold text-slate-700">ประเภทวิชา</span>
@@ -788,8 +823,8 @@ export function ReportPage({ kind }: { kind: ReportKind }) {
                 {report.isError && <QueryError onRetry={() => report.refetch()} />}
                 {payload && <DataTable data={rows} columns={columns} onExport={kind === 'registered-subjects' ? exportRegistrations : undefined} disableExport={kind === 'registered-subjects' && registrationBusy} exportTitle={kind === 'registered-subjects' ? 'ส่งออกครบทุกหน้าตามตัวกรอง พร้อมชีตแยกกลุ่มเรียน' : undefined} minWidth={isAcademicReport ? 'wide' : 'default'} emptyTitle="ไม่พบข้อมูลในรายงาน" emptyDescription="ลองเปลี่ยนภาคเรียน ระดับ กลุ่มเรียน ประเภทวิชา หรือคำค้นหา" />}
             </Panel>
-            {selectedStudent && <AcademicStudentDetailDialog kind={kind} student={selectedStudent} term={term} subjectType={kind === 'grade-threshold' ? subjectType : ''} onClose={() => setSelectedStudent(null)} />}
-            {selectedSubject && <AcademicSubjectStudentsDialog kind={kind} subject={selectedSubject} term={term} level={level} group={canFilterGroups ? group : ''} endpoint={config.endpoint} onClose={() => setSelectedSubject(null)} />}
+            {selectedStudent && <AcademicStudentDetailDialog kind={kind} student={selectedStudent} term={term} subjectType={kind === 'grade-threshold' ? subjectType : ''} registrationType={effectiveRegistrationType} onClose={() => setSelectedStudent(null)} />}
+            {selectedSubject && <AcademicSubjectStudentsDialog kind={kind} subject={selectedSubject} term={term} level={level} group={canFilterGroups ? group : ''} endpoint={config.endpoint} registrationType={effectiveRegistrationType} onClose={() => setSelectedSubject(null)} />}
         </div>
     );
 }

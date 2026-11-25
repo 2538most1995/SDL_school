@@ -89,9 +89,90 @@ final class PaginatedStudentDirectoryTest extends TestCase
         $this->grade($level, $code, $term, 'C', '3');
     }
 
-    private function grade(int $level, string $code, string $term, string $subject, string $grade): void
+    private function grade(int $level, string $code, string $term, string $subject, string $grade, string $type = ''): void
     {
-        DB::table($this->table($level, 'grade'))->insert(['_perf_std10' => $code, '_perf_semestry' => $term, '_perf_sub' => $subject, 'grade' => $grade, 'typ_code' => '']);
+        DB::table($this->table($level, 'grade'))->insert(['_perf_std10' => $code, '_perf_semestry' => $term, '_perf_sub' => $subject, 'grade' => $grade, 'typ_code' => $type]);
+    }
+
+    public function test_term_gpa_matches_student_detail_and_only_reads_the_authorized_page(): void
+    {
+        $this->student(1, '1000000001', '68/2');
+        $this->grade(1, '1000000001', '2/2568', 'E', '4');
+        $this->grade(1, '1000000001', '69/1', 'C', '2');
+        $this->grade(1, '1000000001', '69/1', 'E', '0');
+        $this->student(1, '1000000002', '68/2');
+        DB::table($this->table(1, 'grade'))->where('_perf_std10', '1000000002')->update(['grade' => '']);
+        $this->student(1, '1000000003', '68/2', '002');
+        Sanctum::actingAs(User::factory()->create(['role' => 'teacher', 'district_id' => $this->districtId, 'assigned_groups' => ['001']]));
+
+        $reads = [];
+        DB::listen(static function ($query) use (&$reads): void {
+            if (str_contains($query->sql, 'AS raw_term') && str_contains($query->sql, 'AS row_id')) {
+                $reads[] = $query->bindings;
+            }
+        });
+
+        $this->getJson('/api/v1/students?term=2/2568&per_page=1&include_term_gpa=1')->assertOk()
+            ->assertJsonPath('meta.pagination.total', 2)
+            ->assertJsonPath('data.0.code', '1000000001')
+            ->assertJsonPath('data.0.academic.term_gpa', 3.4);
+        self::assertSame([['1000000001', '1000000001']], $reads);
+        $this->getJson('/api/v1/students?term=2/2568&per_page=1&page=2&include_term_gpa=1')->assertOk()
+            ->assertJsonPath('data.0.code', '1000000002')
+            ->assertJsonPath('data.0.academic.term_gpa', null);
+        $this->getJson('/api/v1/students?term=1/2569&search=1000000001&include_term_gpa=1')->assertOk()
+            ->assertJsonPath('data.0.academic.term_gpa', 2)
+            ->assertJsonPath('data.0.academic.gpax', 2.88);
+        $this->getJson('/api/v1/students/1000000001/grades?level=1')->assertOk()
+            ->assertJsonPath('data.summary.term_summaries.1.term', '2/2568')
+            ->assertJsonPath('data.summary.term_summaries.1.gpa', 3.4)
+            ->assertJsonPath('data.summary.term_summaries.1.compulsory_credits', 3)
+            ->assertJsonPath('data.summary.term_summaries.1.elective_credits', 2);
+        $this->getJson('/api/v1/students?term=2/2568')->assertOk()->assertJsonMissingPath('data.0.academic.term_gpa');
+        $this->getJson('/api/v1/students/1000000003/grades?level=1')->assertNotFound();
+    }
+
+    public function test_registration_types_filter_historical_counts_group_rows_and_both_drilldowns(): void
+    {
+        config()->set('system_data.student_enabled', true);
+        $this->student(1, '1000000001', '68/2');
+        $this->grade(1, '1000000001', '2/2568', 'E', '4', '1');
+        $this->grade(1, '1000000001', '68/2', 'C', '1', '1'); // Lower duplicate does not change the registration type.
+        $this->student(1, '1000000002', '68/2');
+        DB::table($this->table(1, 'grade'))->where('_perf_std10', '1000000002')->update(['typ_code' => '1']);
+        $this->grade(1, '1000000002', '68/2', 'E', '1', '7');
+        $this->student(1, '1000000003', '68/2', '002');
+        $this->grade(1, '1000000003', '68/2', 'E', '4', '1');
+        $this->grade(1, '1000000001', '69/1', 'E', '4', '1');
+        Sanctum::actingAs(User::factory()->create(['role' => 'teacher', 'district_id' => $this->districtId, 'assigned_groups' => ['001']]));
+
+        $report = '/api/v1/reports/registered-subjects?term=2/2568&level=1';
+        foreach (['regular' => 2, 'transfer' => 2, 'all' => 4] as $type => $count) {
+            $subjects = $this->getJson($report.'&view=subject&registration_type='.$type)->assertOk()
+                ->assertJsonPath('data.summary.registered_records', $count)
+                ->assertJsonPath('data.summary.unique_students', 2)
+                ->assertJsonPath('data.rows.0.level_id', 1);
+            self::assertSame($count, array_sum(array_column($subjects->json('data.group_rows'), 'registered_students')));
+            $students = $this->getJson($report.'&view=student&registration_type='.$type)->assertOk()
+                ->assertJsonCount(2, 'data.items')->assertJsonPath('data.summary.registered_records', $count);
+            self::assertSame([$count / 2], array_values(array_unique(array_column($students->json('data.items'), 'registered_subjects'))));
+        }
+
+        $this->getJson($report.'&view=student&subject=C&registration_type=transfer')->assertOk()
+            ->assertJsonCount(1, 'data.items')
+            ->assertJsonPath('data.items.0.student.code', '1000000002')
+            ->assertJsonPath('data.items.0.is_transferred', true);
+        $this->getJson('/api/v1/students/1000000001/subjects?term=2/2568&level=1&registration_type=transfer')->assertOk()
+            ->assertJsonCount(1, 'data.items')->assertJsonPath('data.items.0.code', 'E');
+        $this->getJson('/api/v1/students/1000000001/subjects?term=2/2568&level=1&registration_type=regular')->assertOk()
+            ->assertJsonCount(1, 'data.items')->assertJsonPath('data.items.0.code', 'C');
+        $this->getJson('/api/v1/students/1000000003/subjects?term=2/2568&level=1&registration_type=transfer')->assertNotFound();
+        $this->getJson($report.'&registration_type=unknown')->assertUnprocessable()->assertJsonValidationErrors('registration_type');
+
+        $otherDistrict = District::create(['name' => 'Other District', 'code' => 'other-registration-test']);
+        Sanctum::actingAs(User::factory()->create(['role' => 'admin', 'district_id' => $otherDistrict->id]));
+        $this->getJson($report.'&registration_type=transfer')->assertOk()->assertJsonCount(0, 'data.rows');
+        $this->getJson('/api/v1/students/1000000001/subjects?term=2/2568&level=1&registration_type=transfer')->assertNotFound();
     }
 
     public function test_g_identifiers_display_in_current_and_historical_lists_profiles_and_rosters(): void

@@ -22,7 +22,7 @@ import {
     UsersThree,
     X,
 } from '@phosphor-icons/react';
-import { keepPreviousData, useQuery, useQueryClient } from '@tanstack/react-query';
+import { useQuery, useQueryClient } from '@tanstack/react-query';
 import type { ColumnDef } from '@tanstack/react-table';
 import { Button, Field, Input, Select } from '../../components/MaterialUI';
 import { useDeferredValue, useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
@@ -46,6 +46,7 @@ import { useRetainedFilterOptions } from '../../lib/useRetainedFilterOptions';
 import { summarizeGradeRows, summarizeGradesByTerm } from './gradeSummary';
 import { StudentProfileTabs, type StudentProfileDetails } from './StudentProfileTabs';
 import { formatThaiDisplayDate } from '../../lib/thaiDate';
+import { useSelectedDistrictId } from '../../lib/districtSelection';
 
 export function EyeViewIcon({ size = 18, className = '' }: { size?: number; className?: string }) {
     return <Eye size={size} weight="bold" className={className} aria-hidden="true" />;
@@ -644,22 +645,18 @@ type StaffGradeDetailRow = {
     learning_method?: string | null;
 };
 
-type StaffGradeSummary = {
-    gpax: number | null;
+type StaffGradeTotals = {
     earned_credits: number;
     compulsory_credits: number;
     elective_credits: number;
     graded_credits: number;
     registered_subjects: number;
     passed_subjects: number;
-    term_summaries: Array<{
-        term: string;
-        gpa: number | null;
-        earned_credits: number;
-        graded_credits: number;
-        registered_subjects: number;
-        passed_subjects: number;
-    }>;
+};
+
+type StaffGradeSummary = StaffGradeTotals & {
+    gpax: number | null;
+    term_summaries: Array<StaffGradeTotals & { term: string; gpa: number | null }>;
 };
 
 export function StudentDetailPage() {
@@ -1100,6 +1097,7 @@ type StaffMetricStudent = {
     group: string;
     groupCode: string;
     gpax: number;
+    termGpa?: number | null;
     creditsEarned: number;
     creditsRequired: number;
     kpchHours: number;
@@ -1107,12 +1105,14 @@ type StaffMetricStudent = {
 };
 
 function StaffAcademicDetailDialog({ kind, student, term = '', onClose }: { kind: MetricKind; student: StaffMetricStudent; term?: string; onClose: () => void }) {
-    const context = new URLSearchParams({ level: student.levelId || student.level, ...(term ? { term } : {}) }).toString();
-    const district = window.localStorage.getItem('sena-district-id');
+    const gradeContext = new URLSearchParams({ level: student.levelId || student.level });
+    const context = new URLSearchParams(gradeContext);
+    if (term) context.set('term', term);
+    const district = useSelectedDistrictId();
     const [gradeTerm, setGradeTerm] = useState(term);
     const grades = useQuery({
-        queryKey: ['staff-student-grades', district, student.code, student.level, term],
-        queryFn: ({ signal }) => getFeatureDataWithDemo<{ items: StaffGradeDetailRow[]; summary: StaffGradeSummary }>(`/api/v1/students/${encodeURIComponent(student.code)}/grades?${context}`, { items: [], summary: { gpax: null, earned_credits: 0, compulsory_credits: 0, elective_credits: 0, graded_credits: 0, registered_subjects: 0, passed_subjects: 0, term_summaries: [] } }, signal),
+        queryKey: ['staff-student-grades', district, student.code, gradeContext.toString()],
+        queryFn: ({ signal }) => getFeatureDataWithDemo<{ items: StaffGradeDetailRow[]; summary: StaffGradeSummary }>(`/api/v1/students/${encodeURIComponent(student.code)}/grades?${gradeContext}`, { items: [], summary: { gpax: null, earned_credits: 0, compulsory_credits: 0, elective_credits: 0, graded_credits: 0, registered_subjects: 0, passed_subjects: 0, term_summaries: [] } }, signal),
         enabled: kind === 'grades',
     });
     const kpch = useQuery({
@@ -1136,6 +1136,10 @@ function StaffAcademicDetailDialog({ kind, student, term = '', onClose }: { kind
     })))), [moral.data]);
     const gradeRows = grades.data?.data.items ?? [];
     const filteredGradeRows = useMemo(() => gradeTerm === '' ? gradeRows : gradeRows.filter((row) => row.term === gradeTerm), [gradeRows, gradeTerm]);
+    const cumulative = grades.data?.data.summary;
+    const selected = cumulative?.term_summaries.find((item) => item.term === gradeTerm);
+    const gradeTotals = gradeTerm ? selected : cumulative;
+    const gradeAverage = gradeTerm ? selected?.gpa : cumulative?.gpax;
     const subjectColumns = useMemo<ColumnDef<StaffGradeDetailRow>[]>(() => [
         { id: 'code', accessorFn: (row) => row.subject.code, header: 'รหัสวิชา', size: 100, meta: { compactSize: 72 } },
         { id: 'name', accessorFn: (row) => row.subject.name, header: 'รายวิชา', size: 280, meta: { compactSize: 150 }, cell: ({ getValue }) => <span className="font-bold text-slate-950">{getValue<string>()}</span> },
@@ -1183,17 +1187,17 @@ function StaffAcademicDetailDialog({ kind, student, term = '', onClose }: { kind
                 {query.isError && <QueryError onRetry={() => query.refetch()} />}
                 {kind === 'grades' && grades.data && <>
                     <div className="mb-4 grid grid-cols-2 gap-2 sm:grid-cols-3 lg:grid-cols-6" aria-label="สรุปผลการเรียน">
-                        <div className="rounded-xl bg-brand-50 px-3 py-2.5"><p className="text-[10px] font-bold text-brand-700">{term ? `GPA ภาคเรียน ${term}` : "เกรดเฉลี่ยสะสม (GPAX)"}</p><p className="mt-0.5 text-xl font-black tabular-nums text-brand-950">{grades.data.data.summary.gpax === null ? '-' : Number(grades.data.data.summary.gpax).toFixed(2)}</p></div>
-                        <div className="rounded-xl bg-sky-50 px-3 py-2.5"><p className="text-[10px] font-bold text-sky-700">วิชาที่ผ่าน</p><p className="mt-0.5 text-xl font-black tabular-nums text-sky-950">{grades.data.data.summary.passed_subjects}<span className="ml-1 text-xs font-bold text-sky-700">/ {grades.data.data.summary.registered_subjects}</span></p></div>
-                        <div className="rounded-xl bg-amber-50 px-3 py-2.5"><p className="text-[10px] font-bold text-amber-700">หน่วยกิตที่ผ่าน</p><p className="mt-0.5 text-xl font-black tabular-nums text-amber-950">{grades.data.data.summary.earned_credits}</p></div>
-                        <div className="rounded-xl bg-teal-50 px-3 py-2.5"><p className="text-[10px] font-bold text-teal-700">หน่วยกิตวิชาบังคับ</p><p className="mt-0.5 text-xl font-black tabular-nums text-teal-950">{grades.data.data.summary.compulsory_credits}</p></div>
-                        <div className="rounded-xl bg-rose-50 px-3 py-2.5"><p className="text-[10px] font-bold text-rose-700">หน่วยกิตวิชาเลือก</p><p className="mt-0.5 text-xl font-black tabular-nums text-rose-950">{grades.data.data.summary.elective_credits}</p></div>
-                        <div className="rounded-xl bg-slate-100 px-3 py-2.5"><p className="text-[10px] font-bold text-slate-600">{term ? "หน่วยกิตคำนวณ GPA" : "หน่วยกิตคำนวณ GPAX"}</p><p className="mt-0.5 text-xl font-black tabular-nums text-slate-950">{grades.data.data.summary.graded_credits}</p></div>
+                        <div className="rounded-xl bg-brand-50 px-3 py-2.5"><p className="text-[10px] font-bold text-brand-700">{gradeTerm ? `GPA ภาคเรียน ${gradeTerm}` : 'เกรดเฉลี่ยสะสม (GPAX)'}</p><p className="mt-0.5 text-xl font-black tabular-nums text-brand-950">{gradeAverage?.toFixed(2) ?? '-'}</p></div>
+                        <div className="rounded-xl bg-sky-50 px-3 py-2.5"><p className="text-[10px] font-bold text-sky-700">วิชาที่ผ่าน</p><p className="mt-0.5 text-xl font-black tabular-nums text-sky-950">{gradeTotals?.passed_subjects ?? 0}<span className="ml-1 text-xs font-bold text-sky-700">/ {gradeTotals?.registered_subjects ?? 0}</span></p></div>
+                        <div className="rounded-xl bg-amber-50 px-3 py-2.5"><p className="text-[10px] font-bold text-amber-700">หน่วยกิตที่ผ่าน</p><p className="mt-0.5 text-xl font-black tabular-nums text-amber-950">{gradeTotals?.earned_credits ?? 0}</p></div>
+                        <div className="rounded-xl bg-teal-50 px-3 py-2.5"><p className="text-[10px] font-bold text-teal-700">หน่วยกิตวิชาบังคับ</p><p className="mt-0.5 text-xl font-black tabular-nums text-teal-950">{gradeTotals?.compulsory_credits ?? 0}</p></div>
+                        <div className="rounded-xl bg-rose-50 px-3 py-2.5"><p className="text-[10px] font-bold text-rose-700">หน่วยกิตวิชาเลือก</p><p className="mt-0.5 text-xl font-black tabular-nums text-rose-950">{gradeTotals?.elective_credits ?? 0}</p></div>
+                        <div className="rounded-xl bg-slate-100 px-3 py-2.5"><p className="text-[10px] font-bold text-slate-600">{gradeTerm ? 'หน่วยกิตคำนวณ GPA' : 'หน่วยกิตคำนวณ GPAX'}</p><p className="mt-0.5 text-xl font-black tabular-nums text-slate-950">{gradeTotals?.graded_credits ?? 0}</p></div>
                     </div>
                     {grades.data.data.summary.term_summaries.length > 0 && <div className="mb-4 rounded-2xl border border-slate-200 bg-slate-50 p-4">
                         <div className="mb-3 flex flex-wrap items-center justify-between gap-3">
-                            <div><p className="font-black text-slate-950">GPA รายภาคเรียน</p><p className="text-xs text-slate-500">เลือกภาคเรียนเพื่อกรองรายวิชาในตาราง</p></div>
-                            <label className="flex items-center gap-2 text-sm font-bold text-slate-700"><span>ภาคเรียน</span><select value={gradeTerm} onChange={(event) => setGradeTerm(event.target.value)} className="h-10 rounded-xl border border-slate-300 bg-white px-3 text-sm"><option value="">ทุกภาคเรียน</option>{grades.data.data.summary.term_summaries.map((item) => <option key={item.term} value={item.term}>{item.term}</option>)}</select></label>
+                            <p className="font-black text-slate-950">GPA รายภาคเรียน</p>
+                            <label className="flex items-center gap-2 text-sm font-bold text-slate-700"><span>ภาคเรียน</span><select value={gradeTerm} onChange={(event) => setGradeTerm(event.target.value)} className="h-10 rounded-xl border border-slate-300 bg-white px-3 text-sm"><option value="">ทุกภาคเรียน</option>{gradeTerm && !selected && <option value={gradeTerm}>{gradeTerm}</option>}{grades.data.data.summary.term_summaries.map((item) => <option key={item.term} value={item.term}>{item.term}</option>)}</select></label>
                         </div>
                         <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-4">
                             {grades.data.data.summary.term_summaries.map((item) => <button key={item.term} type="button" onClick={() => setGradeTerm(item.term)} className={`rounded-xl border px-3 py-3 text-left transition ${gradeTerm === item.term ? 'border-brand-400 bg-brand-50 ring-2 ring-brand-100' : 'border-slate-200 bg-white hover:border-brand-300'}`}><p className="text-xs font-bold text-slate-500">{item.term}</p><p className="mt-0.5 text-xl font-black tabular-nums text-brand-900">GPA {item.gpa === null ? '-' : Number(item.gpa).toFixed(2)}</p><p className="mt-1 text-[11px] text-slate-500">ผ่าน {item.passed_subjects}/{item.registered_subjects} วิชา · {item.earned_credits} หน่วยกิต</p></button>)}
@@ -1210,9 +1214,11 @@ function StaffAcademicDetailDialog({ kind, student, term = '', onClose }: { kind
 
 function StaffStudentMetricPage({ kind }: { kind: MetricKind }) {
     const { role } = useDemoRole();
+    const district = useSelectedDistrictId();
     const [search, setSearch] = useState('');
     const [level, setLevel] = useState('');
     const [group, setGroup] = useState('');
+    const [term, setTerm] = useState('');
     const [kpchStatus, setKpchStatus] = useState('');
     const [page, setPage] = useState(1);
     const [perPage, setPerPage] = useState(25);
@@ -1228,40 +1234,46 @@ function StaffStudentMetricPage({ kind }: { kind: MetricKind }) {
         if (level) query.set('level', level);
         if (canFilterGroups && group) query.set('group', group);
         if (kind === 'kpch' && kpchStatus) query.set('kpch_status', kpchStatus);
+        if (kind === 'grades') {
+            query.set('include_term_gpa', '1');
+            if (term) query.set('term', term);
+        }
         return query.toString();
-    }, [canFilterGroups, deferredSearch, group, kind, kpchStatus, level, page, perPage]);
+    }, [canFilterGroups, deferredSearch, group, kind, kpchStatus, level, page, perPage, term]);
     const directory = useQuery({
-        queryKey: ['student-metric-directory', kind, deferredSearch, level, group, kpchStatus, page, perPage],
+        queryKey: ['student-metric-directory', role, district, kind, params],
         queryFn: async ({ signal }) => {
             type ApiStudent = {
-                code: string; full_name: string; level: { label: string }; group: { code: string; name: string };
-                academic: { gpax: number; credits_earned: number; credits_required: number; kpch_hours: number; moral_result: string };
+                code: string; full_name: string; level: { id: number; label: string }; group: { code: string; name: string };
+                academic: { gpax: number; term_gpa?: number | null; credits_earned: number; credits_required: number; kpch_hours: number; moral_result: string };
             };
             const response = await getFeatureDataWithDemo<ApiStudent[]>(`/api/v1/students?${params}`, [], signal);
             const data: StaffMetricStudent[] = response.data.map((student) => ({
-                code: student.code, name: student.full_name, level: student.level.label, group: student.group.name, groupCode: student.group.code,
-                gpax: student.academic.gpax, creditsEarned: student.academic.credits_earned,
+                code: student.code, name: student.full_name, level: student.level.label, levelId: String(student.level.id), group: student.group.name, groupCode: student.group.code,
+                gpax: student.academic.gpax, termGpa: student.academic.term_gpa, creditsEarned: student.academic.credits_earned,
                 creditsRequired: student.academic.credits_required, kpchHours: student.academic.kpch_hours, moralResult: student.academic.moral_result,
             }));
             return { data, meta: response.meta as unknown as StudentDirectoryMeta };
         },
-        placeholderData: keepPreviousData,
+        placeholderData: (previous, previousQuery) => previousQuery?.queryKey[1] === role && previousQuery?.queryKey[2] === district ? previous : undefined,
     });
     const pageRows = directory.data?.data ?? [];
     const meta = directory.data?.meta;
+    const selectedTerm = kind === 'grades' ? meta?.selected_term ?? '' : '';
     const retainedGroupOptions = useRetainedFilterOptions(
         (meta?.filter_options.groups ?? []).map((option) => ({ value: String(option.value), label: option.label })),
         group,
     );
     const title = kind === 'grades' ? 'ผลการเรียนและ GPAX นักศึกษา' : kind === 'kpch' ? 'กิจกรรม กพช. นักศึกษา' : 'ผลประเมินคุณธรรมนักศึกษา';
-    const description = kind === 'grades' ? 'ตรวจ GPAX และหน่วยกิตสะสม พร้อมเปิดดูรายวิชาและผลการเรียนรายคน' : kind === 'kpch' ? 'ตรวจชั่วโมงสะสม กพช. และผลตามเกณฑ์ 200 ชั่วโมง' : 'ตรวจผลคุณธรรมล่าสุดจากตัวชี้วัด 11 รายการของแต่ละคน';
+    const description = kind === 'grades' ? 'ดู GPA รายภาคเรียน เกรดเฉลี่ยสะสม และผลการเรียนรายคน' : kind === 'kpch' ? 'ตรวจชั่วโมงสะสม กพช. และผลตามเกณฑ์ 200 ชั่วโมง' : 'ตรวจผลคุณธรรมล่าสุดจากตัวชี้วัด 11 รายการของแต่ละคน';
     const columns = useMemo<ColumnDef<StaffMetricStudent>[]>(() => [
         { accessorKey: 'code', header: 'รหัสนักศึกษา', size: 125, cell: ({ getValue }) => <span className="font-mono text-xs">{getValue<string>()}</span> },
-        { accessorKey: 'name', header: 'ชื่อ - สกุล', size: 210, cell: ({ row }) => <Link to={`/students/${row.original.code}`} title={row.original.name} className="block truncate text-[13px] font-medium text-slate-900 hover:text-brand-700">{row.original.name}</Link> },
+        { accessorKey: 'name', header: 'ชื่อ - สกุล', size: 210, cell: ({ row }) => <Link to={`/students/${encodeURIComponent(row.original.code)}${selectedTerm ? `?${new URLSearchParams({ term: selectedTerm, level: row.original.levelId ?? '' })}` : ''}`} title={row.original.name} className="block truncate text-[13px] font-medium text-slate-900 hover:text-brand-700">{row.original.name}</Link> },
         { accessorKey: 'level', header: 'ระดับชั้น', size: 95, meta: { exportFields: [{ header: 'ระดับชั้น', value: (row) => row.level }] }, cell: ({ getValue }) => <span title={getValue<string>()}>{shortEducationLevel(getValue<string>())}</span> },
         { accessorKey: 'group', header: 'กลุ่มเรียน', size: 220, meta: { exportFields: [{ header: 'กลุ่มเรียน', value: (row) => row.group }, { header: 'รหัสกลุ่มเรียน', value: (row) => row.groupCode }] }, cell: ({ row }) => <div className="min-w-0" title={`${row.original.group} · ${row.original.groupCode}`}><p className="truncate text-[13px]">{row.original.group}</p><p className="mt-0.5 font-mono text-[11px] text-slate-500">{row.original.groupCode}</p></div> },
         ...(kind === 'grades' ? [
-            { accessorKey: 'gpax', header: 'GPAX', size: 115, meta: { compactSize: 56, compactTextAlign: 'center' }, cell: ({ getValue }) => <span className="font-bold tabular-nums text-sky-700 sm:text-sm">{Number(getValue<number>()).toFixed(2)}</span> },
+            { accessorKey: 'termGpa', header: selectedTerm ? `GPA ${selectedTerm}` : 'GPA รายภาคเรียน', size: 140, meta: { compactSize: 80, compactTextAlign: 'center' }, cell: ({ getValue }) => <span className="font-bold tabular-nums text-brand-800 sm:text-sm">{getValue<number | null | undefined>()?.toFixed(2) ?? '-'}</span> },
+            { accessorKey: 'gpax', header: 'GPAX สะสม', size: 115, meta: { compactSize: 66, compactTextAlign: 'center' }, cell: ({ getValue }) => <span className="font-bold tabular-nums text-sky-700 sm:text-sm">{Number(getValue<number>()).toFixed(2)}</span> },
             { accessorKey: 'creditsEarned', header: 'หน่วยกิตสะสม', size: 150, meta: { compactSize: 72, compactHeader: 'หน่วยกิต', compactTextAlign: 'center' }, cell: ({ row }) => <span className="whitespace-nowrap font-semibold tabular-nums">{row.original.creditsEarned} / {row.original.creditsRequired}</span> },
         ] as ColumnDef<StaffMetricStudent>[] : kind === 'kpch' ? [
             { accessorKey: 'kpchHours', header: 'ชั่วโมงสะสม', size: 130, meta: { compactSize: 60, compactHeader: 'ชั่วโมง', compactTextAlign: 'center' }, cell: ({ getValue }) => <span className="font-bold tabular-nums text-amber-700 sm:text-sm">{getValue<number>()}</span> },
@@ -1270,12 +1282,19 @@ function StaffStudentMetricPage({ kind }: { kind: MetricKind }) {
             { accessorKey: 'moralResult', header: 'ผลคุณธรรมล่าสุด', size: 175, meta: { compactSize: 96, compactHeader: 'คุณธรรม', compactTextAlign: 'center' }, cell: ({ getValue }) => { const value = getValue<string>(); return <StatusBadge tone={value === 'ปรับปรุง' ? 'danger' : value === 'พอใช้' ? 'warning' : value === 'ยังไม่มีผลประเมิน' ? 'neutral' : 'success'}>{value}</StatusBadge>; } },
         ] as ColumnDef<StaffMetricStudent>[]),
         { id: 'details', header: 'รายละเอียด', size: 80, meta: { compactSize: 44, compactTextAlign: 'center' }, enableSorting: false, cell: ({ row }) => <button type="button" className="metric-detail-button" onClick={() => setSelectedStudent(row.original)} aria-label={`เปิดรายละเอียด ${row.original.name}`} title={`เปิดรายละเอียด ${row.original.name}`}><EyeViewIcon size={20} /><span className="sr-only">เปิดดู</span></button> },
-    ], [kind]);
+    ], [kind, selectedTerm]);
     const pagination = meta?.pagination;
 
     return (
         <div>
-            <PageHeader title={title} description={description} icon={kind === 'grades' ? ChartLineUp : kind === 'kpch' ? Sparkle : Heart} category="ข้อมูลนักศึกษา" illustration actions={<StatusBadge tone="success">ข้อมูลจากระบบจริง</StatusBadge>} />
+            <PageHeader title={title} description={description} icon={kind === 'grades' ? ChartLineUp : kind === 'kpch' ? Sparkle : Heart} category="ข้อมูลนักศึกษา" illustration actions={kind === 'grades' ? (
+                <Field label="ภาคเรียน">
+                    <Select value={term || selectedTerm} onChange={(_, data) => { setTerm(data.value); setPage(1); setSelectedStudent(null); }} size="large" disabled={!meta?.filter_options?.terms.length}>
+                        {!meta?.filter_options?.terms.length && <option value="">ยังไม่มีภาคเรียน</option>}
+                        {meta?.filter_options?.terms.map((option) => <option key={option.value} value={option.value}>{option.value}{option.value === meta.current_term ? ' (ล่าสุด)' : ''}</option>)}
+                    </Select>
+                </Field>
+            ) : <StatusBadge tone="success">ข้อมูลจากระบบจริง</StatusBadge>} />
             <StatGrid columns={2}>
                 <StatTile label="นักศึกษาที่พบ" value={pagination?.total ?? 0} unit="คน" detail="ตามขอบเขตและตัวกรอง" icon={Student} tone="sky" />
                 <StatTile label="กลุ่มเรียน" value={meta?.summary.groups ?? 0} unit="กลุ่ม" detail="กลุ่มในผลลัพธ์ปัจจุบัน" icon={UsersThree} />
@@ -1301,7 +1320,7 @@ function StaffStudentMetricPage({ kind }: { kind: MetricKind }) {
                 {directory.data && <DataTable data={pageRows} columns={columns} pageSize={perPage} showPagination={false} minWidth="default" responsiveMode="cards" emptyTitle="ไม่พบข้อมูลนักศึกษา" emptyDescription="ลองเปลี่ยนคำค้น ระดับ หรือกลุ่มเรียน" />}
                 {pagination && <Pagination currentPage={pagination.current_page} totalPages={pagination.last_page} totalItems={pagination.total} pageSize={perPage} itemLabel="คน" disabled={directory.isFetching} onPageChange={setPage} onPageSizeChange={setPerPage} />}
             </Panel>
-            {selectedStudent && <StaffAcademicDetailDialog kind={kind} student={selectedStudent} onClose={() => setSelectedStudent(null)} />}
+            {selectedStudent && <StaffAcademicDetailDialog kind={kind} student={selectedStudent} term={selectedTerm} onClose={() => setSelectedStudent(null)} />}
         </div>
     );
 }

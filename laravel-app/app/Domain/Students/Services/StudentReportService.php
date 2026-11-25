@@ -9,6 +9,7 @@ use App\Domain\Students\Support\AcademicTerm;
 use App\Domain\Students\Support\ExamEligibilityStatistics;
 use App\Domain\Students\Support\ExtendedStudentStatistics;
 use App\Domain\Students\Support\RegistrationStatistics;
+use App\Domain\Students\Support\RegistrationType;
 use App\Domain\Students\Support\StudentRegistrationDimensions;
 use App\Models\User;
 
@@ -367,15 +368,17 @@ final readonly class StudentReportService
         $terms = $this->academicTerms($gradesByStudent);
         $selectedTerm = $this->selectedAcademicTerm($filters, $terms);
         $term = $selectedTerm ?? '';
+        $registrationType = RegistrationType::from($filters['registration_type'] ?? 'all');
         foreach ($students as $student) {
             foreach ($this->studentGrades($gradesByStudent, $student) as $grade) {
                 if (($term !== '' && $grade->term !== $term)
+                    || ! $registrationType->matches($grade->transferred)
                     || (isset($filters['subject']) && $filters['subject'] !== '' && $grade->subjectCode !== $filters['subject'])
                     || ! $this->matchesSubjectSearch($grade->subjectCode, $grade->subjectName, $filters)) {
                     continue;
                 }
                 $key = "{$student->level}|{$grade->term}|{$grade->subjectCode}";
-                $grouped[$key] ??= ['name' => $grade->subjectName, 'code' => $grade->subjectCode, 'level' => $student->levelLabel, 'count' => 0];
+                $grouped[$key] ??= ['name' => $grade->subjectName, 'code' => $grade->subjectCode, 'level' => $student->levelLabel, 'level_id' => $student->level, 'count' => 0];
                 $grouped[$key]['count']++;
                 $groupKey = $key.'|'.$student->groupCode;
                 $groupRows[$groupKey] ??= [
@@ -397,6 +400,7 @@ final readonly class StudentReportService
             'primary' => (string) $row['name'],
             'secondary' => (string) $row['code'],
             'group' => (string) $row['level'],
+            'level_id' => $row['level_id'],
             'metric' => number_format((int) $row['count']).' คน',
             'registeredCount' => (int) $row['count'],
         ], $grouped, array_keys($grouped)));
@@ -732,6 +736,7 @@ final readonly class StudentReportService
         $selectedTerm = $this->selectedAcademicTerm($filters, $terms);
         $term = $selectedTerm ?? '';
         $subjectFilter = trim((string) ($filters['subject'] ?? ''));
+        $registrationType = $kind === 'registered-subjects' ? RegistrationType::from($filters['registration_type'] ?? 'all') : RegistrationType::All;
 
         foreach ($students as $student) {
             $registered = 0;
@@ -739,10 +744,12 @@ final readonly class StudentReportService
             $attended = 0;
             $absent = 0;
             $subjectGrade = null;
+            $subjectTransferred = false;
 
             foreach ($this->studentGrades($gradesByStudent, $student) as $grade) {
                 if (($term !== '' && $grade->term !== $term)
                     || ($subjectFilter !== '' && $grade->subjectCode !== $subjectFilter)
+                    || ! $registrationType->matches($grade->transferred)
                     || ($kind === 'grade-threshold' && ! $this->matchesSubjectType($grade, $filters))) {
                     continue;
                 }
@@ -750,6 +757,7 @@ final readonly class StudentReportService
                 $registered++;
                 if ($subjectFilter !== '') {
                     $subjectGrade = $grade->grade;
+                    $subjectTransferred = $grade->transferred;
                 }
                 if (($grade->numericGrade() ?? -1) >= 2.0) {
                     $gradeTwoOrAbove++;
@@ -800,6 +808,9 @@ final readonly class StudentReportService
                 $item['meets_grade_threshold'] = $subjectGrade !== null
                     && is_numeric($subjectGrade)
                     && (float) $subjectGrade >= 2.0;
+            }
+            if ($kind === 'registered-subjects' && $subjectFilter !== '') {
+                $item['is_transferred'] = $subjectTransferred;
             }
             $items[] = $item;
         }

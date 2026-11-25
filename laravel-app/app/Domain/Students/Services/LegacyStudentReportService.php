@@ -8,6 +8,7 @@ use App\Domain\Students\Support\ExtendedStudentStatistics;
 use App\Domain\Students\Support\LegacyStudentStatus;
 use App\Domain\Students\Support\LegacyTableSet;
 use App\Domain\Students\Support\RegistrationStatistics;
+use App\Domain\Students\Support\RegistrationType;
 use App\Domain\Students\Support\StudentRegistrationDimensions;
 use App\Models\User;
 use Illuminate\Database\DatabaseManager;
@@ -924,12 +925,16 @@ final readonly class LegacyStudentReportService
         $historyTerms = AcademicTerm::termsInRange($latestTerm, 9);
         $allTerms = $this->sortTerms(array_unique([...$terms, ...$historyTerms]));
         $selectedTerm = $this->selectedTerm($filters, $allTerms);
+        $registrationType = RegistrationType::from($filters['registration_type'] ?? 'all');
         $registrations = $selectedTerm === null
             ? []
-            : $this->registeredSubjectRows($viewer, $sets, $filters, $selectedTerm);
+            : array_values(array_filter(
+                $this->registeredSubjectRows($viewer, $sets, $filters, $selectedTerm, useDirectoryGradeOrder: true),
+                static fn (array $row): bool => $registrationType->matches($row['transferred']),
+            ));
 
         if (($filters['view'] ?? 'subject') === 'student') {
-            return $this->registeredSubjectStudents($registrations, $allTerms, $selectedTerm);
+            return $this->registeredSubjectStudents($registrations, $allTerms, $selectedTerm, ! empty($filters['subject']));
         }
 
         $grouped = [];
@@ -942,6 +947,7 @@ final readonly class LegacyStudentReportService
                 'primary' => $registration['subject_name'],
                 'secondary' => $registration['subject_code'],
                 'group' => $this->levelLabel((int) $registration['level']),
+                'level_id' => $registration['level'],
                 'count' => 0,
             ];
             $grouped[$key]['count']++;
@@ -964,6 +970,7 @@ final readonly class LegacyStudentReportService
             'primary' => $row['primary'],
             'secondary' => $row['secondary'],
             'group' => $row['group'],
+            'level_id' => $row['level_id'],
             'metric' => number_format((int) $row['count']).' คน',
             'registeredCount' => (int) $row['count'],
         ], $grouped));
@@ -1431,10 +1438,11 @@ final readonly class LegacyStudentReportService
      * @param  array<string, mixed>  $filters
      * @return list<array<string, mixed>>
      */
-    private function registeredSubjectRows(User $viewer, array $sets, array $filters, string $selectedTerm, bool $includeMethod = false): array
+    private function registeredSubjectRows(User $viewer, array $sets, array $filters, string $selectedTerm, bool $includeMethod = false, bool $useDirectoryGradeOrder = false): array
     {
         $candidates = [];
         $view = (string) ($filters['view'] ?? 'subject');
+        $termOrder = $useDirectoryGradeOrder ? 'g._perf_semestry DESC, ' : '';
 
         foreach ($sets as $set) {
             [$groupJoin, $groupName] = $this->groupJoin($set, 'st');
@@ -1492,8 +1500,8 @@ final readonly class LegacyStudentReportService
                  INNER JOIN {$student} st ON st._perf_id10 = g._perf_std10
                  LEFT JOIN {$subject} sub ON sub._perf_sub = g._perf_sub
                  {$groupJoin}
-                 WHERE ".implode(' AND ', array_filter($conditions)).'
-                 ORDER BY g._perf_std10 ASC, g._perf_sub ASC, g._id ASC',
+                 WHERE ".implode(' AND ', array_filter($conditions))."
+                 ORDER BY g._perf_std10 ASC, {$termOrder}g._perf_sub ASC, g._id ASC",
                 $bindings,
             ) as $row) {
                 $studentCode = trim((string) ($row['student_code'] ?? ''));
@@ -1530,7 +1538,7 @@ final readonly class LegacyStudentReportService
      * @param  list<array<string, mixed>>  $registrations
      * @param  list<string>  $terms
      */
-    private function registeredSubjectStudents(array $registrations, array $terms, string $selectedTerm): array
+    private function registeredSubjectStudents(array $registrations, array $terms, string $selectedTerm, bool $singleSubject): array
     {
         $students = [];
         foreach ($registrations as $registration) {
@@ -1554,6 +1562,7 @@ final readonly class LegacyStudentReportService
                 'attended_subjects' => 0,
                 'absent_subjects' => 0,
                 'success_rate' => 100.0,
+                ...($singleSubject ? ['is_transferred' => $registration['transferred']] : []),
             ];
             $students[$key]['registered_subjects']++;
         }

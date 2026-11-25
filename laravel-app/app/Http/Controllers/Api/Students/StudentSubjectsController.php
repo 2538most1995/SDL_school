@@ -3,6 +3,7 @@
 namespace App\Http\Controllers\Api\Students;
 
 use App\Domain\Students\Services\StudentAcademicService;
+use App\Domain\Students\Support\RegistrationType;
 use App\Http\Resources\Students\RegisteredSubjectResource;
 use App\Http\Resources\Students\StudentSummaryResource;
 use Illuminate\Http\JsonResponse;
@@ -17,6 +18,7 @@ final class StudentSubjectsController extends StudentsApiController
     {
         $filters = $request->validate([
             'term' => ['nullable', 'regex:/^[12]\/25\d{2}$/'],
+            'registration_type' => ['nullable', Rule::enum(RegistrationType::class)],
             'level' => ['nullable', 'string', 'max:40', Rule::in([
                 '1', '2', '3',
                 'ประถมศึกษา', 'มัธยมศึกษาตอนต้น', 'มัธยมศึกษาตอนปลาย',
@@ -28,6 +30,7 @@ final class StudentSubjectsController extends StudentsApiController
             $student,
             $filters['term'] ?? null,
             $filters['level'] ?? null,
+            isset($filters['registration_type']) ? RegistrationType::from($filters['registration_type']) : null,
         );
         abort_if($result === null, 404, 'ไม่พบข้อมูลนักศึกษา');
 

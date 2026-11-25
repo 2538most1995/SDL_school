@@ -1,3 +1,9 @@
+## GPA รายภาคเรียนและรายงานวิชาลงทะเบียน (25 พฤศจิกายน 2569)
+
+หน้า **ผลการเรียน** สำหรับครูและผู้ดูแลเลือกภาคเรียนจากชุดนำเข้า ITW ล่าสุดของอำเภอได้ ค่าเริ่มต้นคือภาคเรียนล่าสุด ตารางแสดง GPA ของภาคเรียนที่เลือกคู่กับ GPAX สะสมถึงภาคเรียนนั้น และรายละเอียดรายคนเลือกภาคเรียนอื่นหรือดูทุกภาคเรียนได้ ระบบคำนวณ GPA ถ่วงน้ำหนักตามหน่วยกิตด้วยสูตรเดียวกับรายละเอียดเดิม และแสดง `-` เมื่อไม่มีหน่วยกิตที่ใช้คำนวณ API รายชื่อรองรับ `include_term_gpa=1` เพื่อคืน `academic.term_gpa`.
+
+หน้า **วิชาลงทะเบียน** ใช้ตัวเลือกเฉพาะลงทะเบียนปกติ รวมลงทะเบียนปกติและเทียบโอน หรือเฉพาะเทียบโอน ค่าเริ่มต้นบนหน้ารายงานและในโหมด **สั่งข้อสอบ** คือรายการปกติ สรุป รายชื่อ รายวิชา และ Excel ใช้ประเภทเดียวกัน ระบบอ่านรหัส `TYP_CODE = 1` จากระเบียน ITW ที่ผ่านการเลือกรายการซ้ำเดิม ส่วน API รายงานและรายวิชารายคนรองรับ `registration_type=regular|all|transfer` และคืนทุกประเภทเมื่อไม่ได้ระบุตัวเลือก ใช้ขอบเขตอำเภอและกลุ่มเรียนของผู้ใช้ตามเส้นทางเดิม
+
 ## Compact online classroom (2026-11-14)
 
 The classroom uses a compact course/chapter/content flow. Courses show eight per display page without an inner scrolling area; chapters use expandable rows. Separate URL-backed tabs hold lessons, assigned tasks, documents/media and the additional library. Student home previews one pending task from the latest loaded task page, with an explicit all-tasks action. Activity types use contrasting icons, labels and action colors. Teacher add/import/template controls appear only when requested.

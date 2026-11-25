@@ -2,6 +2,8 @@
 
 namespace App\Http\Controllers\Api\Students;
 
+use App\Domain\Students\Models\Student;
+use App\Domain\Students\Services\StudentAcademicService;
 use App\Domain\Students\Services\StudentDirectoryService;
 use App\Http\Resources\Students\StudentDetailResource;
 use App\Http\Resources\Students\StudentSummaryResource;
@@ -11,7 +13,10 @@ use Illuminate\Validation\Rule;
 
 final class StudentDirectoryController extends StudentsApiController
 {
-    public function __construct(private readonly StudentDirectoryService $directory) {}
+    public function __construct(
+        private readonly StudentDirectoryService $directory,
+        private readonly StudentAcademicService $academics,
+    ) {}
 
     public function index(Request $request): JsonResponse
     {
@@ -22,16 +27,27 @@ final class StudentDirectoryController extends StudentsApiController
             'group' => ['nullable', 'string', 'max:120'],
             'kpch_status' => ['nullable', Rule::in(['complete', 'incomplete'])],
             'term' => ['nullable', 'regex:/^[12]\/25\d{2}$/'],
+            'include_term_gpa' => ['sometimes', 'boolean'],
             'sort' => ['nullable', Rule::in(['name', 'code', 'gpax', 'credits', 'kpch_hours'])],
             'direction' => ['nullable', Rule::in(['asc', 'desc'])],
             'page' => ['nullable', 'integer', 'min:1'],
             'per_page' => ['nullable', 'integer', 'min:1', 'max:1000'],
         ]);
         $result = $this->directory->paginate($request->user(), $filters, selectAcademicTerm: true);
+        $includeTermGpa = $request->boolean('include_term_gpa');
+        $term = $result['meta']['selected_term'];
+        $termGpas = $includeTermGpa && $term !== null ? $this->academics->termGpas($result['items'], $term) : [];
 
         return response()->json([
             'data' => array_map(
-                static fn ($student): array => (new StudentSummaryResource($student))->resolve($request),
+                static function (Student $student) use ($request, $includeTermGpa, $termGpas): array {
+                    $data = (new StudentSummaryResource($student))->resolve($request);
+                    if ($includeTermGpa) {
+                        $data['academic']['term_gpa'] = $termGpas["{$student->districtId}|{$student->level}|{$student->code}"] ?? null;
+                    }
+
+                    return $data;
+                },
                 $result['items'],
             ),
             'meta' => $this->meta($result['meta']),
