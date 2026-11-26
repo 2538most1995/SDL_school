@@ -809,7 +809,7 @@ export function ReportPage({ kind }: { kind: ReportKind }) {
                     )}
                 </FilterGrid>
                 {isExamOrder && <div id="exam-order-tools" className="mb-5 rounded-2xl border border-slate-200 bg-slate-50 p-4">
-                        <div className="flex flex-wrap items-end gap-3">
+                        <div className="table-selection flex flex-wrap items-end gap-3">
                             <label><span className="mb-2 block text-sm font-bold text-slate-700">ตัดจำนวนผู้ลงทะเบียน (%)</span><input type="number" min="0" max="100" step="0.1" value={reductionPercent} onChange={(event) => setReductionPercent(event.target.value)} className="h-11 w-32 rounded-xl border border-slate-300 bg-white px-3 text-sm" /></label>
                             <button type="button" onClick={applyReduction} disabled={registrationBusy || !validReduction || visibleCheckedSubjects.length === 0} className="h-11 rounded-xl bg-brand-700 px-4 text-sm font-bold text-white disabled:cursor-not-allowed disabled:opacity-50">ตัดเปอร์เซ็นต์ ({visibleCheckedSubjects.length} วิชา)</button>
                             <label className="inline-flex h-11 items-center gap-2 text-sm font-bold text-slate-700"><input type="checkbox" aria-label="เลือกทุกวิชาตามตัวกรอง" disabled={registrationBusy || rows.length === 0} checked={rows.length > 0 && visibleCheckedSubjects.length === rows.length} onChange={(event) => setCheckedSubjects(event.target.checked ? rows.map((row) => row.id) : [])} />เลือกทุกวิชาตามตัวกรอง</label>

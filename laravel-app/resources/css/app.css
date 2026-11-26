@@ -835,10 +835,71 @@ textarea {
 }
 
 .portal-shell :where(input, select, textarea):disabled,
-.portal-shell :where(input, textarea):read-only {
+.portal-shell :where(input, textarea)[readonly] {
     cursor: not-allowed;
     background: var(--ui-surface-subtle);
     color: var(--ui-text-muted);
+}
+
+.portal-shell :where(table, .table-selection) {
+    & input[type='checkbox']:disabled {
+        cursor: default;
+    }
+
+    & input[type='checkbox']:enabled,
+    & label:has(> input[type='checkbox']:enabled) {
+        cursor: pointer;
+    }
+
+    @media (forced-colors: none) {
+        & input[type='checkbox']:enabled:not(:indeterminate) {
+            appearance: none;
+            display: inline-grid;
+            place-items: center;
+            min-width: 1rem;
+            min-height: 1rem;
+            vertical-align: middle;
+            flex-shrink: 0;
+            border: 1px solid var(--ui-text-soft);
+            border-radius: 0.25rem;
+            background: var(--ui-surface);
+
+            &::before {
+                content: '';
+                width: 0.55rem;
+                height: 0.32rem;
+                border: solid currentColor;
+                border-width: 0 0 2px 2px;
+                transform: translateY(-1px) rotate(-45deg);
+                visibility: hidden;
+            }
+
+            @media (hover: hover) and (pointer: fine) {
+                &:not(:checked):is(:hover, label:hover > input) {
+                    border-radius: 50%;
+                    border-color: #15803d;
+                    background: #dcfce7;
+                    color: #166534;
+
+                    &::before { visibility: visible; }
+                }
+            }
+
+            &:checked {
+                border-radius: 50%;
+                border-color: #15803d;
+                background: #15803d;
+                color: white;
+
+                &::before { visibility: visible; }
+            }
+
+            &:focus-visible {
+                outline: 2px solid var(--ui-text-soft);
+                outline-offset: 2px;
+            }
+        }
+    }
 }
 
 .portal-shell label > :where(span:first-child, legend) {

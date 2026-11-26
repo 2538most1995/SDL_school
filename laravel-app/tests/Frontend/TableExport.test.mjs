@@ -1,5 +1,6 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
+import { strFromU8, unzipSync } from 'fflate';
 import * as XLSX from 'xlsx';
 import { buildTableExportSheet, studentNameExportFields, studentGroupExportFields } from '../../resources/js/lib/tableExport.ts';
 import { createExcelFileBytes } from '../../resources/js/lib/excel.ts';
@@ -33,4 +34,29 @@ test('export follows only supplied current-page row order and retains formatted 
     const ws = workbook.Sheets[workbook.SheetNames[0]];
     assert.equal(ws.B2.t, 's');
     assert.equal(ws.B2.f, undefined);
+});
+
+test('XLSX applies TH Sarabun New to headers and both data row styles', () => {
+    const files = unzipSync(createExcelFileBytes([{
+        name: 'นักศึกษา',
+        columns: ['ชื่อ - สกุล'],
+        rows: [['ผู้เรียน ตัวอย่าง'], ['นักศึกษา ทดสอบ']],
+    }]));
+    const styles = strFromU8(files['xl/styles.xml']);
+    const worksheet = strFromU8(files['xl/worksheets/sheet1.xml']);
+    const fonts = [...styles.matchAll(/<font>(.*?)<\/font>/g)].map((match) => match[1]);
+    const cellStyles = styles.match(/<cellXfs\b[^>]*>([\s\S]*?)<\/cellXfs>/)[1];
+    const fontIds = [...cellStyles.matchAll(/<xf\b[^>]*\bfontId="(\d+)"[^>]*\bapplyFont="1"/g)]
+        .map((match) => Number(match[1]));
+
+    const rowFonts = ['A1', 'A2', 'A3'].map((cell) => {
+        const styleId = worksheet.match(new RegExp(`<c r="${cell}" s="(\\d+)"`))?.[1];
+        assert.ok(styleId, `Missing style for ${cell}`);
+        return fonts[fontIds[Number(styleId)]];
+    });
+    for (const font of rowFonts) {
+        assert.match(font, /<name val="TH Sarabun New"\/>/);
+        assert.match(font, /<sz val="16"\/>/);
+    }
+    assert.match(rowFonts[0], /<b\/>/);
 });

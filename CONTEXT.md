@@ -1,3 +1,7 @@
+## ฟอนต์ของไฟล์ Excel
+
+ตัวสร้างไฟล์ XLSX ของหน้า React กำหนดหัวตารางและข้อมูลในทุกชีตเป็น TH Sarabun New ขนาด 16 พอยต์ เครื่องที่เปิดไฟล์ต้องมีฟอนต์นี้เพื่อแสดงตามที่กำหนด
+
 ## GPA รายภาคเรียนและรายงานวิชาลงทะเบียน (25 พฤศจิกายน 2569)
 
 เมนู **ข้อมูลพื้นฐาน → ผลการเรียนเฉลี่ยรายภาคเรียน** (`/semester-gpa`) สำหรับครูและผู้ดูแลเลือกภาคเรียนจากชุดนำเข้า ITW ล่าสุดของอำเภอได้ ค่าเริ่มต้นคือภาคเรียนล่าสุด ตารางแสดง GPA ของภาคเรียนที่เลือกคู่กับ GPAX สะสมถึงภาคเรียนนั้น และรายละเอียดรายคนเลือกภาคเรียนอื่นหรือดูทุกภาคเรียนได้ ระบบคำนวณ GPA ถ่วงน้ำหนักตามหน่วยกิตด้วยสูตรเดียวกับรายละเอียดเดิม และแสดง `-` เมื่อไม่มีหน่วยกิตที่ใช้คำนวณ API รายชื่อรองรับ `include_term_gpa=1` เพื่อคืน `academic.term_gpa` ส่วนเมนู **ผลการเรียน** (`/grades`) กลับมาแสดง GPAX และหน่วยกิตสะสมตามรูปแบบเดิม
@@ -286,6 +290,7 @@ Request → route → Sanctum/auth + active + district/role middleware
 
 - Staff navigation uses a white surface in light mode, a teal active menu, readable section labels and 44px controls. Its 280px desktop width matches the content offset; mobile and student drawers retain their existing visibility, inert state and role-filtered catalog. Dark mode uses dark surface tokens. Selected accent colors continue to apply to content controls; appearance settings explain that the main menu keeps the teal brand color.
 - Shared page headers, panels, summary cards and tables use lighter borders and smaller shadows. Summary cards retain actual API values, with a circular icon beside their label, and no decorative stripes, orbs or hover movement. Student navigation routes and district/group permissions are unchanged.
+- Enabled table checkboxes show a light green check on mouse hover and a solid green check when selected. The same feedback applies to the exam-order select-all control. Disabled table checkboxes use the default cursor.
 - The student directory displays student code, name, education level and learning group in separate columns. Group code, masked citizen ID and birth date remain available, and XLSX export retains seven separate data fields in the displayed row order. Small screens use cards; table action controls wrap and remain at least 44px tall. Filters, sorting, pagination, profile links and exam-schedule actions keep their existing behavior.
 - Theme button selectors follow MUI 9's separate variant/color classes so outlined and text buttons stay readable in dark mode. Avatar initials use the selected primary palette's contrast text. Excel/PDF document icons retain their fixed green/red colors and the prominent registration back button retains its handler and confirmation behavior. No API, schema or source-data changes are introduced.
 - The compact refinement adds a decorative SVG school illustration to student headers, pastel summary icons with units and a subtle icon watermark, mint table headers, tinted status pills, and expandable filter controls with an active-condition count. Collapsing filters preserves their values and query scope. Student-directory GPAX uses the existing aggregate, not a new query or a fabricated metric.
